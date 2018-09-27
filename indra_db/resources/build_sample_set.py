@@ -115,15 +115,16 @@ def build_set(n, parent_dir):
 
     # Get the pmid data from medline (med_pmid_list)
     print("Getting medline lists...")
-    med_pmid_list = []
     med = Pubmed()
-    for i in range(1, 7):
-        buf = BytesIO()
-        med.ftp.ret_file("MuId-PmId-%d.zip" % i, buf)
-        zf = zipfile.ZipFile(buf)
-        with zf.open(zf.namelist()[0]) as id_f:
-            id_str = id_f.read().decode('utf8')
-        med_pmid_list += [l.split('\t')[1] for l in id_str.splitlines()]
+    # This resource appears to have disappeared, sadly.
+    # med_pmid_list = []
+    # for i in range(1, 7):
+    #     buf = BytesIO()
+    #     med.ftp.ret_file("MuId-PmId-%d.zip" % i, buf)
+    #     zf = zipfile.ZipFile(buf)
+    #     with zf.open(zf.namelist()[0]) as id_f:
+    #         id_str = id_f.read().decode('utf8')
+    #     med_pmid_list += [l.split('\t')[1] for l in id_str.splitlines()]
 
     statementful_pmids = [
         '20949557', '23898069', '19801969', '21042724', '14675752', '25897078',
@@ -194,7 +195,8 @@ def build_set(n, parent_dir):
     examples = []
     for case in [(1,0,0), (1,1,0), (0,1,0), (1,1,1), (1,0,1)]:
         for _ in range(n):
-            example = _get_example(case, med_pmid_list, pmc_dicts, man_dicts)
+            example = _get_example(case, statementful_pmids + elsevier_pmids,
+                                   pmc_dicts, man_dicts)
             examples.append(example)
 
     # Add a few pmids that probably include some statements.

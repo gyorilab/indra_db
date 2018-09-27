@@ -42,7 +42,7 @@ script:
       export NOSEATTR="!slow,$NOSEATTR";
     fi
   # Now run all INDRA_DB tests
-  - nosetests indra -v -a $NOSEATTR
+  - nosetests indra_db -v -a $NOSEATTR
         --with-coverage --cover-inclusive --cover-package=indra
         --with-doctest --with-doctest-ignore-unicode
         --with-timer --timer-top-n 10

@@ -1,13 +1,16 @@
-[![Build Status](https://travis-ci.org/indralab/indra_db.svg?branch=travis_ci)](https://travis-ci.org/indralab/indradb) [![Documentation Status](https://readthedocs.org/projects/indra_db/badge/?version=latest)](https://indradb.readthedocs.io/en/latest/?badge=latest)
+[![Build Status](https://api.travis-ci.org/indralab/indra_db.svg?branch=master)](https://travis-ci.org/indralab/indra_db) [![Documentation Status](https://readthedocs.org/projects/indra_db/badge/?version=latest)](https://indradb.readthedocs.io/en/latest/?badge=latest
 
 # INDRA DB
 
-<img align="left" src="/doc/indra_db_logo.png?raw=True" width="300" height="224" />
+<img align="left" src="/doc/indra_db_logo.png?raw=True" width="480" height="200" />
 
-The INDRA Database a framwork for creating, maintaining, and accessing a
-database (specifically implemented for AWS RDS Postrgres 9+) of content,
-readings, and statements. Used as a backend to INDRA, the INDRA Database
-provides a systematic way of scaling the knowledge at your fingertips.
+The INDRA (Integrated Network and Dynamical Reasoning Assembler) Database is a
+framework for creating, maintaining, and accessing a database of content,
+readings, and statements. This implementation is currently designed to work
+primarily with Amazon Web Services RDS running Postrgres 9+. Used as a backend
+to INDRA, the INDRA Database provides a systematic way of scaling the knowledge
+acquired from other databases, reading, and manual input, and puts that
+knowledge at your fingertips through a direct pyton client and a REST api.
 
 ### Knowledge sources
 
@@ -22,10 +25,8 @@ with content drawn from:
 - [Elsevier](https://www.elsevier.com/) - fulltext (requires special access)
 
 We also collect information from these databases:
-- [Pathway Commons database](http://pathwaycommons.org/) or any source
-    using the [BioPAX](http://www.biopax.org/) format
-- [BEL Large Corpus](https://github.com/OpenBEL/) or any source using the
-    [BEL](https://github.com/OpenBEL/) format
+- [Pathway Commons database](http://pathwaycommons.org/)
+- [BEL Large Corpus](https://github.com/OpenBEL/)
 - [SIGNOR](https://signor.uniroma2.it/)
 
 These databases are retrieved using the tools in `indra.sources`. The statements

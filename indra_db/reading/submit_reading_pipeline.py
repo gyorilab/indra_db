@@ -5,11 +5,10 @@ function. The function is provided as a shallow wrapper for backwards
 compatibility, and may eventually be removed. The preferred method for running
 large batches via the ipython, or from a python environment, is the following:
 
->>> sub = DbReadingSubmitter('name_for_run', ['reach', 'sparser'])
->>> sub.set_options(prioritize=True)
->>> sub.submit_reading('file/location/of/ids_to_read.txt', 0, None,
->>>                     ids_per_job=1000)
->>> sub.watch_and_wait(idle_log_timeout=100, kill_on_timeout=True)
+>> sub = DbReadingSubmitter('name_for_run', ['reach', 'sparser'])
+>> sub.set_options(prioritize=True)
+>> sub.submit_reading('file/location/of/ids_to_read.txt', 0, None, ids_per_job=1000)
+>> sub.watch_and_wait(idle_log_timeout=100, kill_on_timeout=True)
 
 Additionally, this file may be run as a script. For details, run
 

@@ -1,22 +1,26 @@
 INDRA Database documentation
 ============================
 
-The INDRA Database is a framework for creating, maintaining, and accessing a
-database (specifically implemented for AWS RDS Postrgres 9+) of content,
-readings, and statements. Used as a backend to INDRA, the INDRA Database
-provides a systematic way of scaling the knowledge at your fingertips.
-
+.. mdinclude:: ../README.md
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
    license.rst
    modules/index.rst
+
+
+INDRA Database REST API
+=======================
+
+.. toctree::
+   :maxdepth: 3
+
+   rest_api_doc/readme_link.rst
 
 Indices and tables
 ==================
 
 * :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`
 

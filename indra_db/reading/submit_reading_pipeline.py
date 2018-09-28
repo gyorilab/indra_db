@@ -1,3 +1,24 @@
+""""This file acts as a script to run large batch jobs on AWS.
+
+The key components are the DbReadingSubmitter class, and the submit_db_reading
+function. The function is provided as a shallow wrapper for backwards
+compatibility, and may eventually be removed. The preferred method for running
+large batches via the ipython, or from a python environment, is the following:
+
+>>> sub = DbReadingSubmitter('name_for_run', ['reach', 'sparser'])
+>>> sub.set_options(prioritize=True)
+>>> sub.submit_reading('file/location/of/ids_to_read.txt', 0, None,
+>>>                     ids_per_job=1000)
+>>> sub.watch_and_wait(idle_log_timeout=100, kill_on_timeout=True)
+
+Additionally, this file may be run as a script. For details, run
+
+bash$ python submit_reading_pipeline.py --help
+
+In your favorite command line.
+"""
+
+
 import re
 import boto3
 import pickle
@@ -19,6 +40,20 @@ logger = logging.getLogger('indra_db_reading')
 
 
 class DbReadingSubmitter(Submitter):
+    """A class for the management of a batch of reading jobs on AWS.
+
+    Parameters
+    ----------
+    basename : str
+        The name of this batch of readings. This will be used to distinguish
+        the jobs on AWS batch, and the logs on S3.
+    readers : list[str]
+        A list of the names of readers to use in this job.
+    project_name : str
+        Optional. Used for record-keeping on AWS.
+
+    Other keyword parameters go to the `get_options` method.
+    """
     _s3_input_name = 'id_list'
     _purpose = 'db_reading'
     _job_queue = 'run_db_reading_queue'
@@ -61,6 +96,32 @@ class DbReadingSubmitter(Submitter):
     def set_options(self, force_read=False, no_stmts=False,
                     force_fulltext=False, prioritize=False,
                     max_reach_input_len=None, max_reach_space_ratio=None):
+        """Set the options for this reading job.
+
+        Parameters
+        ----------
+        force_read : bool
+            Choose whether to force the readers to read all content, even if it
+            has already been read by the same version of the reader.
+        no_stmts : bool
+            Set to True if you do not want any statements produced. The reading
+            results will be stored but not processed.
+        force_fulltext : bool
+            Only read fulltext versions of content, and do not read content if
+            only abstracts are available.
+        prioritize : bool
+            Read the best content available, and only the best content
+            available. If there is a fulltext version, ignore the abstract.
+        max_reach_input_len : int
+            The maximum number of characters to all for inputs to REACH. The
+            reader tends to hang up on larger papers, and beyond a certain
+            threshold, greater length tends to imply errors in formatting or
+            other quirks.
+        max_reach_space_ratio : float in [0,1]
+            Some content erroneously has spaces between all characters. The
+            fraction of characters that are spaces is a fast and simple way to
+            catch and avoid such problems. Recommend a value of 0.5.
+        """
         self.options['force_fulltext'] = force_fulltext
         self.options['prioritize'] = prioritize
         self.options['max_reach_input_len'] = max_reach_input_len
@@ -68,6 +129,33 @@ class DbReadingSubmitter(Submitter):
         return
 
     def watch_and_wait(self, *args, **kwargs):
+        """Watch the logs of the batch jobs and wait for all jobs to complete.
+
+        Logs are monitored, and jobs may be killed if no output is seen for a
+        given amount of time. Essential if jobs are left un-monitored (by
+        humans) for any length of time.
+
+        Parameters
+        ----------
+        poll_interval: int
+            Default 10. The number of seconds to wait between examining logs and
+            the states of the jobs.
+        idle_log_timeout : int or None,
+            Default is None. If an int, sets the number of seconds to wait
+            before declaring a job timed out. This parameter alone does not lead
+            to the deletion/stopping of stalled jobs.
+        kill_on_timeout : bool
+            Default is False. If true, and a job is deemed to have timed out,
+            kill the job.
+        stash_log_method : str or None
+            Default is None. If a string is given, logs will be saved in the
+            indicated location. Value choices are 's3' or 'local'.
+        tag_instances : bool
+            Default is False. In the past, it was necessary to tag instances
+            from the outside. THey should now be tagging themselves, however if
+            for any reason external measures are needed, this option may be set
+            to True.
+        """
         kwargs['result_record'] = self.run_record
         super(DbReadingSubmitter, self).watch_and_wait(*args, **kwargs)
         self.produce_report()

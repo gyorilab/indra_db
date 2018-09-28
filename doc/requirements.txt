@@ -5,4 +5,5 @@ ipython
 matplotlib
 future
 requests
+m2r
 

@@ -130,7 +130,7 @@ class UploadError(Exception):
     pass
 
 
-class NihFtpClient(object):
+class _NihFtpClient(object):
     """High level access to the NIH FTP repositories.
 
     Parameters
@@ -579,20 +579,20 @@ class ContentManager(object):
             )
 
 
-class NihManager(ContentManager):
+class _NihManager(ContentManager):
     """Abstract class for all the managers that use the NIH FTP service.
 
-    See `NihFtpClient` for parameters.
+    See `_NihFtpClient` for parameters.
     """
     my_path = NotImplemented
 
     def __init__(self, *args, **kwargs):
-        self.ftp = NihFtpClient(self.my_path, *args, **kwargs)
-        super(NihManager, self).__init__()
+        self.ftp = _NihFtpClient(self.my_path, *args, **kwargs)
+        super(_NihManager, self).__init__()
         return
 
 
-class Pubmed(NihManager):
+class Pubmed(_NihManager):
     "Manager for the pubmed/medline content."
     my_path = 'pubmed'
     my_source = 'pubmed'
@@ -836,11 +836,8 @@ class Pubmed(NihManager):
         return did_base or did_update
 
 
-class PmcManager(NihManager):
-    """Abstract class for uploaders of PMC content.
-
-    For Paramters, see `NihManager`.
-    """
+class PmcManager(_NihManager):
+    """Abstract class for uploaders of PMC content: PmcOA and Manuscripts."""
     my_source = NotImplemented
     tr_cols = ('pmid', 'pmcid', 'doi', 'manuscript_id',)
 
@@ -1244,7 +1241,10 @@ class PmcManager(NihManager):
 
 
 class PmcOA(PmcManager):
-    "ContentManager for the pmc open access content."
+    """ContentManager for the pmc open access content.
+
+    For further details on the API, see the parent class: PmcManager.
+    """
     my_path = 'pub/pmc'
     my_source = 'pmc_oa'
 
@@ -1275,7 +1275,10 @@ class PmcOA(PmcManager):
 
 
 class Manuscripts(PmcManager):
-    "ContentManager for the pmc manuscripts."
+    """ContentManager for the pmc manuscripts.
+
+    For further details on the API, see the parent class: PmcManager.
+    """
     my_path = 'pub/pmc/manuscript'
     my_source = 'manuscripts'
 

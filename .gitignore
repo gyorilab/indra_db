@@ -1,0 +1,57 @@
+# INDRA DB specific ignores
+junk*
+
+# Some generic ignores
+__pycache__/
+*.py[cod]
+*.so
+env/
+bin/
+build/
+_*
+
+# Other
+*.txt
+*.cx
+*.zip
+*.csv
+*.java
+*.xbel
+*.tsv
+*.ai
+*.png
+*.eps
+*.gz
+*.swp
+
+# For the cool cats using PyCharm
+.idea
+.idea/*
+
+.pytest_cache
+
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject
+
+# Django stuff:
+*.log
+*.pot
+
+# Data files
+*.rdf
+*.owl
+*.xml
+*.nxml
+*.bel
+*.json
+*.bson
+*.dat
+
+# Documents, graphs, images
+*.pdf
+*.dot
+*.bngl
+*.jpg
+

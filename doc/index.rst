@@ -1,8 +1,7 @@
-INDRA Database documentation
-============================
-
 .. mdinclude:: ../README.md
 
+Further INDRA Database documentation
+====================================
 .. toctree::
    :maxdepth: 3
 

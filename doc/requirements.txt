@@ -6,4 +6,5 @@ matplotlib
 future
 requests
 m2r
+git+https://github.com/sorgerlab/indra.git
 

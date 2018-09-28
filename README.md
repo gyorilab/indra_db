@@ -1,4 +1,4 @@
-[![Build Status](https://api.travis-ci.org/indralab/indra_db.svg?branch=master)](https://travis-ci.org/indralab/indra_db) [![Documentation Status](https://readthedocs.org/projects/indra_db/badge/?version=latest)](https://indradb.readthedocs.io/en/latest/?badge=latest
+[![Build Status](https://api.travis-ci.org/indralab/indra_db.svg?branch=master)](https://travis-ci.org/indralab/indra_db) [![Documentation Status](https://readthedocs.org/projects/indra-db/badge/?version=latest)](https://indra-db.readthedocs.io/en/latest/?badge=latest)
 
 # INDRA DB
 

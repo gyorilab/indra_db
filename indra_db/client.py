@@ -1,12 +1,21 @@
-from __future__ import absolute_import, print_function, unicode_literals
+"""This file contains tools designed to access content in the database directly.
 
-from builtins import dict, str
+All the functions defined require direct access to the database, which is in
+general restricted. For broad access, see the indra_db_rest api client in INDRA.
+
+There are two key ways of accessing statements from the INDRA Database: directly
+and using the materialize views. Only the `get_statement_jsons` functions are
+limited to using the views. Most other functions access the primary tables of
+the database and are generally slower. The `get_statement_jsons` functions are
+the most heavily optimized for fast recall, as they are the back-end to the REST
+API.
+"""
 
 import json
 import logging
 from collections import defaultdict
-from itertools import groupby, permutations, product
-from sqlalchemy import or_, desc, func, true, select, distinct
+from itertools import permutations
+from sqlalchemy import or_, desc, true, select
 
 from indra.statements import Unresolved, Evidence, get_statement_by_name
 

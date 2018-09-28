@@ -1,7 +1,10 @@
-from __future__ import absolute_import, print_function, unicode_literals
+"""This file contains low level functions used by other indra_db tools/services.
 
-import pickle
-from builtins import dict, str
+Some key functions' capabilities include:
+- getting access to/constructing DatabaseManager instances.
+- inserting statements, which are stored in multiple tables, into the database.
+- distilling and deleting statements
+"""
 
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
@@ -10,6 +13,7 @@ __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_agents',
 import re
 import json
 import zlib
+import pickle
 import logging
 from datetime import datetime
 from itertools import groupby

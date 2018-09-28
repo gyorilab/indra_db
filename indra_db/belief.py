@@ -1,5 +1,12 @@
-import logging
+"""This file contains tools to calculate belief scores for the database.
+
+Scores are calculated using INDRA's belief engine, with MockStatements and
+MockEvidence derived from shallow metadata on the database, allowing the entire
+corpus to be processed locally in RAM, in very little time.
+"""
+
 import pickle
+import logging
 
 from indra_db import get_primary_db
 

@@ -21,11 +21,11 @@ if IS_PY3:
     from indra_db.managers.content_manager import Pubmed, PmcOA, Manuscripts,\
         Elsevier
 
-if '-a' in argv:
-    attr_str = argv[argv.index('-a')+1]
-    if any([not_attr in attr_str for not_attr in
-            ('!nonpublic', '!webservice')]):
-        raise SkipTest("Every test is nonpublic and a webservice.")
+# if '-a' in argv:
+#     attr_str = argv[argv.index('-a')+1]
+#     if any([not_attr in attr_str for not_attr in
+#            ('!nonpublic', '!webservice')]):
+#         raise SkipTest("Every test is nonpublic and a webservice.")
 
 try:
     get_test_db()

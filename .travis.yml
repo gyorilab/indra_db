@@ -8,16 +8,18 @@ python:
 before_install:
   - sudo apt-get update
 install:
+  # INDRA dependencies
+  - pip install coverage python-coveralls boto3 sqlalchemy psycopg2-binary pgcopy nose-timer flask nltk reportlab
+  - pip install git+https://github.com/bgyori/paths_graph.git@networkx2
+  - pip install doctest-ignore-unicode
+  - pip install awscli
   - pip install git+https://github.com/sorgerlab/indra.git
   # INDRA-DB dependencies
   - pip install .[test]
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
-  - wget http://sorger.med.harvard.edu/data/bgyori/test_text_ref_tuples.pkl -nv
-  - wget http://sorger.med.harvard.edu/data/bgyori/test_text_content_tuples.pkl -nv
-  - wget http://sorger.med.harvard.edu/data/bgyori/test_reading_tuples.pkl -nv
-  - wget http://sorger.med.harvard.edu/data/bgyori/test_db_info_tuples.pkl -nv
-  - wget http://sorger.med.harvard.edu/data/bgyori/test_stmts_tuples.pkl -nv
+  - aws s3 cp s3://bigmech/indra-db/test_resources . --recursive
+  - pip install -U networkx>=2
   - pip list
 before_script:
   # Enable plotting on fake display
@@ -30,9 +32,9 @@ script:
   - cd $TRAVIS_BUILD_DIR
   # doctests on Travis would otherwise fail
   - export NOSEATTR="";
-  - if [[ $TRAVIS_PULL_REQUEST ]]; then
-      export NOSEATTR="!nonpublic";
-    fi
+  # - if [[ $TRAVIS_PULL_REQUEST ]]; then
+  #     export NOSEATTR="!nonpublic";
+  #   fi
   - if [[ $RUN_SLOW != "true" ]]; then
       export NOSEATTR="!slow,$NOSEATTR";
     fi

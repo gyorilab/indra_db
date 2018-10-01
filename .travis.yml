@@ -7,18 +7,22 @@ python:
   - "3.6"
 before_install:
   - sudo apt-get update
+  - sudo apt-get install unzip
+  - pip install numpy scipy sympy cython nose lxml matplotlib==1.5.0 pandas
+  - sudo pip2 install numpy
 install:
   # INDRA dependencies
   - pip install coverage python-coveralls boto3 sqlalchemy psycopg2-binary pgcopy nose-timer flask nltk reportlab
   - pip install git+https://github.com/bgyori/paths_graph.git@networkx2
   - pip install doctest-ignore-unicode
-  - pip install awscli
   - pip install git+https://github.com/sorgerlab/indra.git
   # INDRA-DB dependencies
   - pip install .[test]
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
-  - aws s3 cp s3://bigmech/indra-db/test_resources . --recursive --acl public-read
+  - curl https://s3.amazonaws.com/bigmech/indra-db/test_resources/db_pa_test_input_1M.pkl > db_pa_test_input_1M.pkl
+  - curl https://s3.amazonaws.com/bigmech/indra-db/test_resources/test_ftp.zip > test_ftp.zip
+  - unzip test_ftp.zip
   - pip install -U networkx>=2
   - pip list
 before_script:

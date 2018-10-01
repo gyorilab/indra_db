@@ -26,6 +26,7 @@ install:
   - sudo update-java-alternatives -s java-8-oracle
   - sudo apt-get install oracle-java8-set-default
   - export JAVA_HOME="/usr/lib/jvm/java-8-oracle/"
+  - pip install git+https://github.com/kivy/pyjnius.git@1cbfef
   - wget http://sorger.med.harvard.edu/data/bachman/reach-82631d-biores-e9ee36.jar -nv
   - export REACHPATH=$TRAVIS_BUILD_DIR/reach-82631d-biores-e9ee36.jar
   # INDRA dependencies

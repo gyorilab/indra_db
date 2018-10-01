@@ -304,19 +304,31 @@ def _get_agent_tuples(stmt, stmt_id):
                                  "with agents: %s."
                                  % (str(stmt), str(stmt.agent_list())))
 
+    def opt_ag_id(id_val, id_ns):
+        """Change agent ids for better search-ability and index-ability."""
+        if id_ns.upper() == 'CHEBI':
+            if id_val.startswith('CHEBI'):
+                id_val = id_val[6:]
+        return id_val
+
+    def all_agent_refs(agents):
+        """Smooth out the iteration over agents and their refs."""
+        for role, ag in agents:
+            # If no agent, or no db_refs for the agent, skip the insert
+            # that follows.
+            if ag is None or ag.db_refs is None:
+                continue
+            for ns, ag_id in ag.db_refs.items():
+                if isinstance(ag_id, list):
+                    for sub_id in ag_id:
+                        yield ns, sub_id, role
+                else:
+                    yield ns, ag_id, role
+
     # Prep the agents for copy into the database.
     agent_data = []
-    for role, ag in agents:
-        # If no agent, or no db_refs for the agent, skip the insert
-        # that follows.
-        if ag is None or ag.db_refs is None:
-            continue
-        for ns, ag_id in ag.db_refs.items():
-            if isinstance(ag_id, list):
-                for sub_id in ag_id:
-                    agent_data.append((stmt_id, ns, sub_id, role))
-            else:
-                agent_data.append((stmt_id, ns, ag_id, role))
+    for ns, ag_id, role in all_agent_refs(agents):
+        agent_data.append((stmt_id, ns, opt_ag_id(ag_id, ns), role))
     return agent_data
 
 

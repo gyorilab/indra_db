@@ -25,7 +25,7 @@ from indra.util import batch_iter, clockit
 from indra.databases import hgnc_client
 
 from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
-    unpack, _get_statement_object
+    unpack, _get_statement_object, regularize_agent_id
 
 
 class DbClientError(Exception):
@@ -239,15 +239,15 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
                          'must be specified.')
     clauses = []
     if agent_id and agent_ns == 'HGNC-SYMBOL':
-        hgnc_id = hgnc_client.get_hgnc_id(agent_id)
-        if not hgnc_id:
-            logger.warning('Invalid gene name: %s' % agent_id)
+        hgnc_symbol = agent_id
+        agent_id = hgnc_client.get_hgnc_id(hgnc_symbol)
+        if not agent_id:
+            logger.warning('Invalid gene name: %s' % hgnc_symbol)
             return []
-        clauses.extend([Agents.db_name.like('HGNC'),
-                        Agents.db_id.like(hgnc_id)])
-    elif agent_id:
-        clauses.extend([Agents.db_name.like(agent_ns),
-                        Agents.db_id.like(agent_id)])
+        agent_ns = 'HGNC'
+    agent_id = regularize_agent_id(agent_id, agent_ns)
+    clauses.extend([Agents.db_name.like(agent_ns),
+                    Agents.db_id.like(agent_id)])
     if role:
         clauses.append(Agents.role == role)
     if agent_id or role:
@@ -779,6 +779,9 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
     mk_hash_c = db.PaMeta.mk_hash.label('mk_hash')
     ev_count_c = db.PaMeta.ev_count.label('ev_count')
     for role, ag_dbid, ns in agents:
+        # Make the id match paradigms for the database.
+        ag_dbid = regularize_agent_id(ag_dbid, ns)
+
         # Create this query (for this agent)
         q = (db.session
              .query(mk_hash_c, ev_count_c)

@@ -8,7 +8,7 @@ Some key functions' capabilities include:
 
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
-           'distill_stmts']
+           'distill_stmts', 'regularize_agent_id']
 
 import re
 import json
@@ -289,6 +289,14 @@ def insert_pa_agents_directly(db, stmts, verbose=False):
     return
 
 
+def regularize_agent_id(id_val, id_ns):
+    """Change agent ids for better search-ability and index-ability."""
+    if id_ns.upper() == 'CHEBI':
+        if id_val.startswith('CHEBI'):
+            id_val = id_val[6:]
+    return id_val
+
+
 def _get_agent_tuples(stmt, stmt_id):
     """Create the tuples for copying agents into the database."""
     # Figure out how the agents are structured and assign roles.
@@ -303,13 +311,6 @@ def _get_agent_tuples(stmt, stmt_id):
         raise IndraDatabaseError("Unhandled agent structure for stmt %s "
                                  "with agents: %s."
                                  % (str(stmt), str(stmt.agent_list())))
-
-    def opt_ag_id(id_val, id_ns):
-        """Change agent ids for better search-ability and index-ability."""
-        if id_ns.upper() == 'CHEBI':
-            if id_val.startswith('CHEBI'):
-                id_val = id_val[6:]
-        return id_val
 
     def all_agent_refs(agents):
         """Smooth out the iteration over agents and their refs."""
@@ -328,7 +329,7 @@ def _get_agent_tuples(stmt, stmt_id):
     # Prep the agents for copy into the database.
     agent_data = []
     for ns, ag_id, role in all_agent_refs(agents):
-        agent_data.append((stmt_id, ns, opt_ag_id(ag_id, ns), role))
+        agent_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns), role))
     return agent_data
 
 

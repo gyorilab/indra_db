@@ -8,7 +8,7 @@ Some key functions' capabilities include:
 
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
-           'distill_stmts']
+           'distill_stmts', 'regularize_agent_id']
 
 import re
 import json
@@ -289,6 +289,16 @@ def insert_pa_agents_directly(db, stmts, verbose=False):
     return
 
 
+def regularize_agent_id(id_val, id_ns):
+    """Change agent ids for better search-ability and index-ability."""
+    new_id_val = id_val
+    if id_ns.upper() == 'CHEBI':
+        if id_val.startswith('CHEBI'):
+            new_id_val = id_val[6:]
+            logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
+    return new_id_val
+
+
 def _get_agent_tuples(stmt, stmt_id):
     """Create the tuples for copying agents into the database."""
     # Figure out how the agents are structured and assign roles.
@@ -304,19 +314,24 @@ def _get_agent_tuples(stmt, stmt_id):
                                  "with agents: %s."
                                  % (str(stmt), str(stmt.agent_list())))
 
+    def all_agent_refs(agents):
+        """Smooth out the iteration over agents and their refs."""
+        for role, ag in agents:
+            # If no agent, or no db_refs for the agent, skip the insert
+            # that follows.
+            if ag is None or ag.db_refs is None:
+                continue
+            for ns, ag_id in ag.db_refs.items():
+                if isinstance(ag_id, list):
+                    for sub_id in ag_id:
+                        yield ns, sub_id, role
+                else:
+                    yield ns, ag_id, role
+
     # Prep the agents for copy into the database.
     agent_data = []
-    for role, ag in agents:
-        # If no agent, or no db_refs for the agent, skip the insert
-        # that follows.
-        if ag is None or ag.db_refs is None:
-            continue
-        for ns, ag_id in ag.db_refs.items():
-            if isinstance(ag_id, list):
-                for sub_id in ag_id:
-                    agent_data.append((stmt_id, ns, sub_id, role))
-            else:
-                agent_data.append((stmt_id, ns, ag_id, role))
+    for ns, ag_id, role in all_agent_refs(agents):
+        agent_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns), role))
     return agent_data
 
 
@@ -383,6 +398,8 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
     verbose : bool
         If True, print extra information and a status bar while compiling
         statements for insert. Default False.
+    do_copy : bool
+        If True (default), use pgcopy to quickly insert the agents.
     direct_agent_load : bool
         If True (default), use the Statement get_hash method to get the id's of
         the Statements for insert, instead of looking up the ids of Statements
@@ -412,7 +429,7 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         db.copy('pa_statements', stmt_data, cols)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
-    if insert_pa_agents_directly:
+    if direct_agent_load:
         insert_pa_agents_directly(db, stmts, verbose=verbose)
     else:
         insert_agents(db, 'pa', verbose=verbose)

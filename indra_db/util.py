@@ -291,10 +291,12 @@ def insert_pa_agents_directly(db, stmts, verbose=False):
 
 def regularize_agent_id(id_val, id_ns):
     """Change agent ids for better search-ability and index-ability."""
+    new_id_val = id_val
     if id_ns.upper() == 'CHEBI':
         if id_val.startswith('CHEBI'):
-            id_val = id_val[6:]
-    return id_val
+            new_id_val = id_val[6:]
+            logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
+    return new_id_val
 
 
 def _get_agent_tuples(stmt, stmt_id):

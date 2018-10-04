@@ -398,6 +398,8 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
     verbose : bool
         If True, print extra information and a status bar while compiling
         statements for insert. Default False.
+    do_copy : bool
+        If True (default), use pgcopy to quickly insert the agents.
     direct_agent_load : bool
         If True (default), use the Statement get_hash method to get the id's of
         the Statements for insert, instead of looking up the ids of Statements
@@ -427,7 +429,7 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         db.copy('pa_statements', stmt_data, cols)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
-    if insert_pa_agents_directly:
+    if direct_agent_load:
         insert_pa_agents_directly(db, stmts, verbose=verbose)
     else:
         insert_agents(db, 'pa', verbose=verbose)

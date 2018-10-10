@@ -2,6 +2,7 @@ import sys
 import json
 import logging
 from functools import wraps
+from datetime import datetime
 
 from flask import Flask, request, abort, Response
 from flask_compress import Compress
@@ -15,10 +16,16 @@ from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, has_auth
 
 logger = logging.getLogger("db-api")
+logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
 Compress(app)
 CORS(app)
+
+print("Loading file")
+logger.info("INFO working.")
+logger.warning("WARNING working.")
+logger.error("ERROR working.")
 
 
 MAX_STATEMENTS = int(1e3)
@@ -67,9 +74,11 @@ REDACT_MESSAGE = '[MISSING/INVALID API KEY: limited to 200 char for Elsevier]'
 
 
 def _query_wrapper(f):
+    logger.info("Calling outer wrapper.")
     @wraps(f)
     def decorator():
-        logger.info("Got query for %s!" % f.__name__)
+        start_time = datetime.now()
+        logger.info("Got query for %s at %s!" % (f.__name__, start_time))
 
         query_dict = request.args.copy()
         offs = query_dict.pop('offset', None)
@@ -80,7 +89,11 @@ def _query_wrapper(f):
 
         api_key = query_dict.pop('api-key', None)
 
+        logger.info("Running function %s after %s seconds."
+                    % (f.__name__, (datetime.now() - start_time).total_seconds()))
         result = f(query_dict, offs, MAX_STATEMENTS, ev_limit, best_first)
+        logger.info("Finished function %s after %s seconds."
+                    % (f.__name__, (datetime.now() - start_time).total_seconds()))
 
         # Redact elsevier content for those without permission.
         if api_key is None or not has_auth(api_key):
@@ -90,6 +103,8 @@ def _query_wrapper(f):
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
+        logger.info("Finished redacting evidence for %s after %s seconds."
+                    % (f.__name__, (datetime.now() - start_time).total_seconds()))
         result['offset'] = offs
         result['evidence_limit'] = ev_limit
         result['statement_limit'] = MAX_STATEMENTS
@@ -101,9 +116,11 @@ def _query_wrapper(f):
             resp = Response(gen, mimetype='application/json')
         else:
             resp = Response(json.dumps(result), mimetype='application/json')
-        logger.info("Exiting with %d statements with %d evidence of size %f MB."
+        logger.info("Exiting with %d statements with %d evidence of size %f MB "
+                    "after %s seconds."
                     % (len(result['statements']), result['total_evidence'],
-                       sys.getsizeof(resp.data)/1e6))
+                       sys.getsizeof(resp.data)/1e6,
+                       (datetime.now() - start_time).total_seconds()))
         return resp
     return decorator
 

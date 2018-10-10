@@ -13,7 +13,7 @@ API.
 
 import json
 import logging
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from itertools import permutations
 from sqlalchemy import or_, desc, true, select
 
@@ -672,7 +672,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     proxy = db.session.connection().execute(selection)
     res = proxy.fetchall()
 
-    stmts_dict = {}
+    stmts_dict = OrderedDict()
     total_evidence = 0
     returned_evidence = 0
     for mk_hash, ev_count, raw_json_bts, pa_json_bts, pmid, src in res:

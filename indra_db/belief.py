@@ -48,6 +48,9 @@ class MockEvidence(object):
     def __init__(self, source_api, **annotations):
         self.source_api = source_api
 
+        # The belief engine uses `Evidence.epistemics.get('negated')`
+        self.epistemics = {}
+
         # Some annotations are used in indra.belief.tag_evidence_subtype.
         # TODO: optionally implement necessary annotations.
         self.annotations = annotations.copy()

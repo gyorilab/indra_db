@@ -673,6 +673,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     res = proxy.fetchall()
 
     stmts_dict = OrderedDict()
+    ev_totals = OrderedDict()
     total_evidence = 0
     returned_evidence = 0
     for mk_hash, ev_count, raw_json_bts, pa_json_bts, pmid, src in res:
@@ -683,6 +684,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         # Add a new statements if the hash is new
         if mk_hash not in stmts_dict.keys():
             total_evidence += ev_count
+            ev_totals[mk_hash] = ev_count
             stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
             stmts_dict[mk_hash]['evidence'] = []
 
@@ -714,6 +716,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         stmts_dict[mk_hash]['evidence'].append(ev_json)
 
     ret = {'statements': stmts_dict,
+           'evidence_totals': ev_totals,
            'total_evidence': total_evidence,
            'evidence_returned': returned_evidence}
     return ret

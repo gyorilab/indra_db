@@ -585,7 +585,6 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--no_wait',
-        type=bool,
         action='store_true',
         help=('Don\'t run wait_for_complete at the end of the script. '
               'NOTE: wait_for_complete should always be run, so if it is not '

@@ -17,10 +17,11 @@ if __name__ == '__main__':
     parent_read_parser.add_argument(
         choices=['read_all', 'read_new'],
         dest='task',
-        help=('Choose whether you want to read/reread everything, or only '
+        help=('Choose whether you want to try to read everything, or only '
               'read the content added since the last update. Note that '
               'content from one day before the latests update will also be '
-              'checked, to avoid content update overlap errors.')
+              'checked, to avoid content update overlap errors. Note also that '
+              'no content will be re-read in either case.')
         )
     parent_read_parser.add_argument(
         '-t', '--test',
@@ -42,12 +43,6 @@ if __name__ == '__main__':
         default=1,
         help=('Select the number of processors to use during this operation. '
               'Default is 1.')
-        )
-    parser.add_argument(
-        '--use_batch',
-        action='store_true',
-        help=('Choose to run the update on amazon batch. Note that this '
-              'option will cause the -n/--num_procs option to be ignored.')
         )
     parser.add_argument(
         '--database',
@@ -81,8 +76,8 @@ if __name__ == '__main__':
     subparsers.add_parser(
         'aws',
         parents=[parent_read_parser, aws_read_parser],
-        help=local_desc,
-        description=local_desc,
+        help=aws_desc,
+        description=aws_desc,
         formatter_class=ArgumentDefaultsHelpFormatter
         )
     args = parser.parse_args()

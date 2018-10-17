@@ -944,7 +944,7 @@ def get_relation_dict(db, groundings=None, with_evidence_count=False,
     with_evidence_count : bool
         Default is False. If True, an additional query will be made for each
         statement to get the count of supporting evidence, which is a useful
-        proxy for belief. This is currently VERY SLOW.
+        proxy for belief.
     with_support_count : bool
         Default is False. Like `with_evidence_count`, except the number of
         supporting statements is counted.

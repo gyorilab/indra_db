@@ -943,8 +943,8 @@ def get_relation_dict(db, groundings=None, with_evidence_count=False,
         If None, only HGNC is used.
     with_evidence_count : bool
         Default is False. If True, an additional query will be made for each
-        statement to get the count of supporting evidence, which is a userful
-        proxy for belief. This is currently VERY SLOW.
+        statement to get the count of supporting evidence, which is a useful
+        proxy for belief.
     with_support_count : bool
         Default is False. Like `with_evidence_count`, except the number of
         supporting statements is counted.
@@ -960,18 +960,25 @@ def get_relation_dict(db, groundings=None, with_evidence_count=False,
             ors.append(db.PAAgents.db_name.like(gdng))
         other_params.append(or_(*ors))
 
+    vals = [db.PAAgents.id, db.PAAgents.db_id, db.PAAgents.role,
+            db.PAAgents.db_name, db.PAStatements.type, db.PAStatements.mk_hash]
+
+    if with_evidence_count:
+        other_params.append(db.EvidenceCounts.mk_hash == db.PAStatements.mk_hash)
+        vals.append(db.EvidenceCounts.ev_count)
+
     # Query the database
-    results = db.select_all(
-        [db.PAAgents.id, db.PAAgents.db_id, db.PAAgents.role,
-         db.PAAgents.db_name, db.PAStatements.type, db.PAStatements.mk_hash],
-        db.PAStatements.mk_hash == db.PAAgents.stmt_mk_hash,
-        *other_params, **{'yield_per': 10000}
-        )
+    results = db.select_all(vals,
+                            db.PAStatements.mk_hash == db.PAAgents.stmt_mk_hash,
+                            *other_params, **{'yield_per': 10000})
 
     # Sort into a dict.
     stmt_dict = {}
     for res in results:
-        ag_id, ag_dbid, ag_role, ag_dbname, stmt_type, stmt_hash = res
+        if with_evidence_count:
+            ag_id, ag_dbid, ag_role, ag_dbname, stmt_type, stmt_hash, n_ev = res
+        else:
+            ag_id, ag_dbid, ag_role, ag_dbname, stmt_type, stmt_hash = res
 
         # Handle the case that this is or isn't HGNC
         if ag_dbname == 'HGNC':
@@ -984,9 +991,6 @@ def get_relation_dict(db, groundings=None, with_evidence_count=False,
         if stmt_hash not in stmt_dict.keys():
             stmt_dict[stmt_hash] = {'type': stmt_type, 'agents': [ag_tpl]}
             if with_evidence_count:
-                logger.info('Getting a count of evidence for %d' % stmt_hash)
-                n_ev = db.count(db.RawUniqueLinks,
-                                db.RawUniqueLinks.pa_stmt_mk_hash == stmt_hash)
                 stmt_dict[stmt_hash]['n_ev'] = n_ev
             if with_support_count:
                 logger.info('Getting a count of support for %d' % stmt_hash)

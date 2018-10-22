@@ -390,6 +390,7 @@ class PreassemblyManager(object):
 
         pickle_stashes = []
         last_update = self._get_latest_updatetime(db)
+        start_date = datetime.now()
         self._log("Latest update was: %s" % last_update)
 
         # Get the new statements...
@@ -432,13 +433,18 @@ class PreassemblyManager(object):
         if continuing and path.exists(new_mk_stash):
             self._log("Loading hashes for new pa statements from cache...")
             with open(new_mk_stash, 'rb') as f:
-                new_mk_set = pickle.load(f)
+                stash_dict = pickle.load(f)
+            start_date = stash_dict['start']
+            end_date = stash_dict['end']
+            new_mk_set = stash_dict['mk_set']
         else:
             new_mk_set = self._get_unique_statements(db, new_stmt_ids,
                                                      len(new_stmt_ids),
                                                      old_mk_set)
+            end_date = datetime.now()
             with open(new_mk_stash, 'wb') as f:
-                pickle.dump(new_mk_set, f)
+                pickle.dump({'start': start_date, 'end': end_date,
+                             'mk_set': new_mk_set}, f)
         if continuing:
             self._log("Original old mk set: %d" % len(old_mk_set))
             old_mk_set = old_mk_set - new_mk_set
@@ -461,33 +467,53 @@ class PreassemblyManager(object):
 
         # Now find the new support links that need to be added.
         new_support_links = set()
-        new_stmt_iter = self._pa_batch_iter(db, in_mks=new_mk_set)
+        batching_args = (self.batch_size,
+                         db.PAStatements.json,
+                         db.PAStatements.create_date > start_date,
+                         db.PAStatements.create_date < end_date)
+        npa_json_iter = db.select_all_batched(*batching_args,
+                                           order_by=db.PAStatements.create_date)
         try:
-            for i, npa_batch in enumerate(new_stmt_iter):
+            for outer_offset, npa_json_batch in npa_json_iter:
+                npa_batch = [_stmt_from_json(s_json)
+                             for s_json, in npa_json_batch]
 
                 # Compare internally
-                self._log("Getting support for new pa batch %d." % i)
+                self._log("Getting support for new pa at offset %d."
+                          % outer_offset)
                 some_support_links = self._get_support_links(npa_batch)
 
                 # Compare against the other new batch statements.
                 diff_new_mks = new_mk_set - {shash(s) for s in npa_batch}
-                other_new_stmt_iter = self._pa_batch_iter(db, in_mks=diff_new_mks)
-                for j, diff_npa_batch in enumerate(other_new_stmt_iter):
+                other_npa_json_iter = db.select_all_batched(
+                    *batching_args,
+                    order_by=db.PAStatements.create_date,
+                    skip_offset=outer_offset
+                    )
+                for inner_offset, other_npa_json_batch in other_npa_json_iter:
+                    other_npa_batch = [_stmt_from_json(s_json)
+                                       for s_json, in other_npa_json_batch]
                     split_idx = len(npa_batch)
-                    full_list = npa_batch + diff_npa_batch
-                    self._log("Comparing %d to batch %d of other new "
-                              "statements." % (i, j))
+                    full_list = npa_batch + other_npa_batch
+                    self._log("Comparing offset %d to offset %d of other new "
+                              "statements." % (outer_offset, inner_offset))
                     some_support_links |= \
                         self._get_support_links(full_list, split_idx=split_idx,
                                                 poolsize=self.n_proc)
 
                 # Compare against the existing statements.
-                old_stmt_iter = self._pa_batch_iter(db, in_mks=old_mk_set)
-                for k, opa_batch in enumerate(old_stmt_iter):
+                opa_json_iter = db.select_all_batched(
+                    self.batch_size,
+                    db.PAStatements.json,
+                    db.PAStatements.create_date < start_date
+                    )
+                for old_offset, opa_json_batch in opa_json_iter:
+                    opa_batch = [_stmt_from_json(s_json)
+                                 for s_json, in opa_json_batch]
                     split_idx = len(npa_batch)
                     full_list = npa_batch + opa_batch
-                    self._log("Comparing %d to batch of %d of old statements."
-                              % (i, k))
+                    self._log("Comparing new offset %d to offset %d of old "
+                              "statements." % (outer_offset, old_offset))
                     some_support_links |= \
                         self._get_support_links(full_list, split_idx=split_idx,
                                                 poolsize=self.n_proc)

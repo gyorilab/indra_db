@@ -960,13 +960,13 @@ class DatabaseManager(object):
         offset = 0
         remainder = batch_size
         while remainder == batch_size:
-            if skip_offset and offset == skip_offset:
+            if skip_offset is not None and offset == skip_offset:
                 offset += batch_size
                 continue
             some_res = q.limit(batch_size).offset(offset).all()
-            remainder = len(some_res)
-            offset += batch_size
             yield offset, some_res
+            offset += batch_size
+            remainder = len(some_res)
 
     def select_sample_from_table(self, number, table, *args, **kwargs):
         """Select a number of random samples from the given table.

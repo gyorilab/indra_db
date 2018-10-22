@@ -6,6 +6,7 @@ import json
 import random
 import logging
 from datetime import datetime
+from time import sleep
 
 gm_logger = logging.getLogger('grounding_mapper')
 gm_logger.setLevel(logging.WARNING)
@@ -246,7 +247,7 @@ def _str_large_set(s, max_num):
 
 def _do_old_fashioned_preassembly(stmts):
     grounded_stmts = ac.map_grounding(stmts)
-    ms_stmts = ac.map_sequence(grounded_stmts)
+    ms_stmts = ac.map_sequence(grounded_stmts, use_cache=True)
     opa_stmts = ac.run_preassembly(ms_stmts, return_toplevel=False)
     return opa_stmts
 
@@ -500,6 +501,8 @@ def _check_db_pa_supplement(num_stmts, batch_size, split=0.8, n_proc=1):
     db = _get_loaded_db(num_stmts, split=split, pam=pa_manager)
     opa_inp_stmts = _get_opa_input_stmts(db)
     start = datetime.now()
+    print('sleeping...')
+    sleep(5)
     print("Beginning supplement...")
     pa_manager.supplement_corpus(db)
     end = datetime.now()

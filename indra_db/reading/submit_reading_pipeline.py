@@ -191,9 +191,24 @@ class DbReadingSubmitter(Submitter):
             raise e
 
     def _get_results_file_tree(self, s3, s3_prefix):
-        relevant_files = s3.list_objects(Bucket=bucket_name, Prefix=s3_prefix)
+        def get_some_keys(keys, marker=None):
+            if marker:
+                relevant_files = s3.list_objects(Bucket=bucket_name,
+                                                 Prefix=s3_prefix,
+                                                 Marker=marker)
+            else:
+                relevant_files = s3.list_objects(Bucket=bucket_name,
+                                                 Prefix=s3_prefix)
+            keys.extend([entry['Key'] for entry in relevant_files['Contents']
+                         if entry['Key'] != marker])
+            return relevant_files['IsTruncated']
+
+        file_keys = []
+        marker = None
+        while get_some_keys(file_keys, marker):
+            marker = file_keys[-1]
+
         file_tree = NestedDict()
-        file_keys = [entry['Key'] for entry in relevant_files['Contents']]
         pref_path = s3_prefix.split('/')[:-1]   # avoid the trailing empty str.
         for key in file_keys:
             full_path = key.split('/')
@@ -585,7 +600,6 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--no_wait',
-        type=bool,
         action='store_true',
         help=('Don\'t run wait_for_complete at the end of the script. '
               'NOTE: wait_for_complete should always be run, so if it is not '

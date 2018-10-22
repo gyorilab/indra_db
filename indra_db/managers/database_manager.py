@@ -943,7 +943,8 @@ class DatabaseManager(object):
             return self.filter_query(tbls, *args).yield_per(yield_per)
         return self.filter_query(tbls, *args).all()
 
-    def select_all_batched(self, batch_size, tbls, *args, skip_offset=None):
+    def select_all_batched(self, batch_size, tbls, *args, skip_offset=None,
+                           order_by=None):
         """Load the results of a query in batches of size batch_size.
 
         Note that this differs from using yeild_per in that the results are not
@@ -954,10 +955,12 @@ class DatabaseManager(object):
         to the query.
         """
         q = self.filter_query(tbls, *args)
+        if order_by:
+            q = q.order_by(order_by)
         offset = 0
         remainder = batch_size
         while remainder == batch_size:
-            if offset == skip_offset:
+            if skip_offset and offset == skip_offset:
                 offset += batch_size
                 continue
             some_res = q.limit(batch_size).offset(offset).all()

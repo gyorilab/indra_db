@@ -390,7 +390,7 @@ class PreassemblyManager(object):
 
         pickle_stashes = []
         last_update = self._get_latest_updatetime(db)
-        start_date = datetime.now()
+        start_date = datetime.utcnow()
         self._log("Latest update was: %s" % last_update)
 
         # Get the new statements...
@@ -441,7 +441,7 @@ class PreassemblyManager(object):
             new_mk_set = self._get_unique_statements(db, new_stmt_ids,
                                                      len(new_stmt_ids),
                                                      old_mk_set)
-            end_date = datetime.now()
+            end_date = datetime.utcnow()
             with open(new_mk_stash, 'wb') as f:
                 pickle.dump({'start': start_date, 'end': end_date,
                              'mk_set': new_mk_set}, f)
@@ -469,8 +469,8 @@ class PreassemblyManager(object):
         new_support_links = set()
         batching_args = (self.batch_size,
                          db.PAStatements.json,
-                         db.PAStatements.create_date > start_date,
-                         db.PAStatements.create_date < end_date)
+                         db.PAStatements.create_date >= start_date,
+                         db.PAStatements.create_date <= end_date)
         npa_json_iter = db.select_all_batched(*batching_args,
                                            order_by=db.PAStatements.create_date)
         try:

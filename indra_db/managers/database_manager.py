@@ -943,6 +943,21 @@ class DatabaseManager(object):
             return self.filter_query(tbls, *args).yield_per(yield_per)
         return self.filter_query(tbls, *args).all()
 
+    def select_all_batched(self, batch_size, tbls, *args):
+        """Load the results of a query in batches of size batch_size.
+
+        Note that this differs from using yeild_per in that the results are not
+        returned as a single iterable, but as an iterator of iterables.
+        """
+        q = self.filter_query(tbls, *args)
+        offset = 0
+        remainder = batch_size
+        while remainder == batch_size:
+            some_res = q.limit(batch_size).offset(offset).all()
+            remainder = len(some_res)
+            offset += batch_size
+            yield some_res
+
     def select_sample_from_table(self, number, table, *args, **kwargs):
         """Select a number of random samples from the given table.
 

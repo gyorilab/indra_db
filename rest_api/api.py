@@ -86,7 +86,7 @@ def _query_wrapper(f):
         best_first = query_dict.pop('best_first', True)
         do_stream_str = query_dict.pop('stream', 'false')
         do_stream = True if do_stream_str == 'true' else False
-        max_stmts = min(query_dict.pop('max_stmts', MAX_STATEMENTS),
+        max_stmts = min(int(query_dict.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
 
         api_key = query_dict.pop('api-key', None)

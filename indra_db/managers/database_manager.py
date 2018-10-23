@@ -943,6 +943,31 @@ class DatabaseManager(object):
             return self.filter_query(tbls, *args).yield_per(yield_per)
         return self.filter_query(tbls, *args).all()
 
+    def select_all_batched(self, batch_size, tbls, *args, skip_offset=None,
+                           order_by=None):
+        """Load the results of a query in batches of size batch_size.
+
+        Note that this differs from using yeild_per in that the results are not
+        returned as a single iterable, but as an iterator of iterables.
+
+        Note also that the order of results, and thus the contents of offsets,
+        may vary for large queries unless an explicit order_by clause is added
+        to the query.
+        """
+        q = self.filter_query(tbls, *args)
+        if order_by:
+            q = q.order_by(order_by)
+        offset = 0
+        remainder = batch_size
+        while remainder == batch_size:
+            if skip_offset is not None and offset == skip_offset:
+                offset += batch_size
+                continue
+            some_res = q.limit(batch_size).offset(offset).all()
+            yield offset, some_res
+            offset += batch_size
+            remainder = len(some_res)
+
     def select_sample_from_table(self, number, table, *args, **kwargs):
         """Select a number of random samples from the given table.
 

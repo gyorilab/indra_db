@@ -86,12 +86,14 @@ def _query_wrapper(f):
         best_first = query_dict.pop('best_first', True)
         do_stream_str = query_dict.pop('stream', 'false')
         do_stream = True if do_stream_str == 'true' else False
+        max_stmts = min(query_dict.pop('max_stmts', MAX_STATEMENTS),
+                        MAX_STATEMENTS)
 
         api_key = query_dict.pop('api-key', None)
 
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, (datetime.now() - start_time).total_seconds()))
-        result = f(query_dict, offs, MAX_STATEMENTS, ev_limit, best_first)
+        result = f(query_dict, offs, max_stmts, ev_limit, best_first)
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, (datetime.now() - start_time).total_seconds()))
 

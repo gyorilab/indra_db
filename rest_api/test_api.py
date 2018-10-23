@@ -396,6 +396,14 @@ class DbApiTestCase(unittest.TestCase):
         return self.__test_redaction('post', 'statements/from_hashes', None,
                                      url_fmt='%s?%s', hashes=sample_hashes)
 
+    def test_max(self):
+        resp = self.__check_good_statement_query(agent0='MEK@FPLX',
+                                                 agent1='ERK@FPLX',
+                                                 type='Phosphorylation',
+                                                 max_stmts=2)
+        resp_dict = json.loads(resp.data.decode())
+        assert len(resp_dict['statements']) == 2, len(resp_dict['statements'])
+
 
 if __name__ == '__main__':
     unittest.main()

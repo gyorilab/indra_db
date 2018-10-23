@@ -154,7 +154,8 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_query_with_two_agents(self):
         """Test a query were the roles of the agents are not given."""
-        resp = self.__check_good_statement_query('agent=MAP2K1', 'agent=MAPK1',
+        resp = self.__check_good_statement_query(agent0='MAP2K1',
+                                                 agent1='MAPK1',
                                                  type='Phosphorylation')
         _check_stmt_agents(resp, agents=[
                 (None, 'HGNC', hgnc_client.get_hgnc_id('MAPK1')),
@@ -261,8 +262,8 @@ class DbApiTestCase(unittest.TestCase):
         assert size <= SIZELIMIT, size
 
     def test_complex_query(self):
-        resp = self.__check_good_statement_query('agent0=MEK@FPLX',
-                                                 'agent1=ERK@FPLX',
+        resp = self.__check_good_statement_query(agent0='MEK@FPLX',
+                                                 agent1='ERK@FPLX',
                                                  type='Complex')
         _check_stmt_agents(resp, agents=[(None, 'FPLX', 'MEK'),
                                          (None, 'FPLX', 'ERK')])
@@ -275,6 +276,14 @@ class DbApiTestCase(unittest.TestCase):
                  % (stmts_from_json([sj])[0], h, fplx_set))
 
         return
+
+    def test_max(self):
+        resp = self.__check_good_statement_query(agent0='MEK@FPLX',
+                                                 agent1='ERK@FPLX',
+                                                 type='Phosphorylation',
+                                                 max_stmts=2)
+        resp_dict = json.loads(resp.data.decode())
+        assert len(resp_dict['statements']) == 2, len(resp_dict['statements'])
 
     def test_statements_by_hashes_query(self):
         resp, dt, size = self.__time_query('post', 'statements/from_hashes',
@@ -395,14 +404,6 @@ class DbApiTestCase(unittest.TestCase):
             ]
         return self.__test_redaction('post', 'statements/from_hashes', None,
                                      url_fmt='%s?%s', hashes=sample_hashes)
-
-    def test_max(self):
-        resp = self.__check_good_statement_query(agent0='MEK@FPLX',
-                                                 agent1='ERK@FPLX',
-                                                 type='Phosphorylation',
-                                                 max_stmts=2)
-        resp_dict = json.loads(resp.data.decode())
-        assert len(resp_dict['statements']) == 2, len(resp_dict['statements'])
 
 
 if __name__ == '__main__':

@@ -316,20 +316,28 @@ class PreassemblyManager(object):
 
         # Now get the support links between all batches.
         support_links = set()
-        for i, outer_batch in enumerate(self._pa_batch_iter(db)):
+        outer_iter = db.select_all_batched(self.batch_size,
+                                           db.PAStatements.json,
+                                           order_by=db.PAStatements.mk_hash)
+        for outer_idx, outer_batch_jsons in outer_iter:
+            outer_batch = [_stmt_from_json(sj) for sj, in outer_batch_jsons]
             # Get internal support links
-            self._log('Getting internal support links outer batch %d.' % i)
+            self._log('Getting internal support links outer batch %d.'
+                      % outer_idx)
             some_support_links = self._get_support_links(outer_batch,
                                                          poolsize=self.n_proc)
-            outer_mk_hashes = {shash(s) for s in outer_batch}
 
             # Get links with all other batches
-            ib_iter = self._pa_batch_iter(db, ex_mks=outer_mk_hashes)
-            for j, inner_batch in enumerate(ib_iter):
+            inner_iter = db.select_all_batched(self.batch_size,
+                                               db.PAStatements.json,
+                                               order_by=db.PAStatements.mk_hash,
+                                               skip_idx=outer_idx)
+            for inner_idx, inner_batch_jsons in inner_iter:
+                inner_batch = [_stmt_from_json(sj) for sj, in inner_batch_jsons]
                 split_idx = len(inner_batch)
                 full_list = inner_batch + outer_batch
-                self._log('Getting support compared to other batch %d of outer'
-                          'batch %d.' % (j, i))
+                self._log('Getting support between outer batch %d and inner'
+                          'batch %d.' % (outer_idx, inner_idx))
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx,
                                             poolsize=self.n_proc)
@@ -474,13 +482,12 @@ class PreassemblyManager(object):
         npa_json_iter = db.select_all_batched(*batching_args,
                                            order_by=db.PAStatements.create_date)
         try:
-            for outer_offset, npa_json_batch in npa_json_iter:
+            for outer_idx, npa_json_batch in npa_json_iter:
                 npa_batch = [_stmt_from_json(s_json)
                              for s_json, in npa_json_batch]
 
                 # Compare internally
-                self._log("Getting support for new pa at offset %d."
-                          % outer_offset)
+                self._log("Getting support for new pa batch %d." % outer_idx)
                 some_support_links = self._get_support_links(npa_batch)
 
                 # Compare against the other new batch statements.
@@ -488,15 +495,15 @@ class PreassemblyManager(object):
                 other_npa_json_iter = db.select_all_batched(
                     *batching_args,
                     order_by=db.PAStatements.create_date,
-                    skip_offset=outer_offset
+                    skip_offset=outer_idx
                     )
-                for inner_offset, other_npa_json_batch in other_npa_json_iter:
+                for inner_idx, other_npa_json_batch in other_npa_json_iter:
                     other_npa_batch = [_stmt_from_json(s_json)
                                        for s_json, in other_npa_json_batch]
                     split_idx = len(npa_batch)
                     full_list = npa_batch + other_npa_batch
-                    self._log("Comparing offset %d to offset %d of other new "
-                              "statements." % (outer_offset, inner_offset))
+                    self._log("Comparing outer batch %d to inner batch %d of "
+                              "other new statements." % (outer_idx, inner_idx))
                     some_support_links |= \
                         self._get_support_links(full_list, split_idx=split_idx,
                                                 poolsize=self.n_proc)
@@ -507,13 +514,13 @@ class PreassemblyManager(object):
                     db.PAStatements.json,
                     db.PAStatements.create_date < start_date
                     )
-                for old_offset, opa_json_batch in opa_json_iter:
+                for opa_idx, opa_json_batch in opa_json_iter:
                     opa_batch = [_stmt_from_json(s_json)
                                  for s_json, in opa_json_batch]
                     split_idx = len(npa_batch)
                     full_list = npa_batch + opa_batch
-                    self._log("Comparing new offset %d to offset %d of old "
-                              "statements." % (outer_offset, old_offset))
+                    self._log("Comparing new batch %d to batch %d of old "
+                              "statements." % (outer_idx, opa_idx))
                     some_support_links |= \
                         self._get_support_links(full_list, split_idx=split_idx,
                                                 poolsize=self.n_proc)

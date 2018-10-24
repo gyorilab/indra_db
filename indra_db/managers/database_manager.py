@@ -1,3 +1,6 @@
+from __future__ import absolute_import, print_function, unicode_literals
+from builtins import dict, str
+
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
            'IndraDbException', 'sql_expressions']
 
@@ -21,6 +24,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.dialects.postgresql import BYTEA, INET
 
 from indra_db.exceptions import IndraDbException
+from indra.util import batch_iter
 
 try:
     import networkx as nx
@@ -1007,7 +1011,7 @@ class DatabaseManager(object):
             return self.filter_query(tbls, *args).yield_per(yield_per)
         return self.filter_query(tbls, *args).all()
 
-    def select_all_batched(self, batch_size, tbls, *args, skip_offset=None,
+    def select_all_batched(self, batch_size, tbls, *args, skip_idx=None,
                            order_by=None):
         """Load the results of a query in batches of size batch_size.
 
@@ -1021,16 +1025,10 @@ class DatabaseManager(object):
         q = self.filter_query(tbls, *args)
         if order_by:
             q = q.order_by(order_by)
-        offset = 0
-        remainder = batch_size
-        while remainder == batch_size:
-            if skip_offset is not None and offset == skip_offset:
-                offset += batch_size
-                continue
-            some_res = q.limit(batch_size).offset(offset).all()
-            yield offset, some_res
-            offset += batch_size
-            remainder = len(some_res)
+        res_iter = q.yield_per(batch_size)
+        for i, batch in enumerate(batch_iter(res_iter, batch_size)):
+            if i != skip_idx:
+                yield i, batch
 
     def select_sample_from_table(self, number, table, *args, **kwargs):
         """Select a number of random samples from the given table.

@@ -290,7 +290,7 @@ def regularize_agent_id(id_val, id_ns):
     if id_ns.upper() == 'CHEBI':
         if id_val.startswith('CHEBI'):
             new_id_val = id_val[6:]
-            logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
+            #logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
     return new_id_val
 
 

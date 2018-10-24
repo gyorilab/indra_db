@@ -495,7 +495,7 @@ class PreassemblyManager(object):
                 other_npa_json_iter = db.select_all_batched(
                     *batching_args,
                     order_by=db.PAStatements.create_date,
-                    skip_offset=outer_idx
+                    skip_idx=outer_idx
                     )
                 for inner_idx, other_npa_json_batch in other_npa_json_iter:
                     other_npa_batch = [_stmt_from_json(s_json)

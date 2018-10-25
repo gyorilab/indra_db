@@ -128,6 +128,13 @@ def _query_wrapper(f):
             content = json.dumps(result)
             mimetype = 'application/json'
 
+        if format == 'html':
+            content = format_statements(result)
+            mimetype = 'text/html'
+        else: # Return JSON for all other values of the format argument
+            content = json.dumps(result)
+            mimetype = 'application/json'
+
         if do_stream:
             # Returning a generator should stream the data.
             resp_json_bts = content

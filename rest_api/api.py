@@ -119,6 +119,7 @@ def _query_wrapper(f):
         result['offset'] = offs
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
+        result['statements_returned'] = len(result['statements'])
 
         if format == 'html':
             content = format_statements(result)
@@ -136,8 +137,9 @@ def _query_wrapper(f):
             resp = Response(content, mimetype=mimetype)
         logger.info("Exiting with %d statements with %d evidence of size %f MB "
                     "after %s seconds."
-                    % (len(result['statements']), result['total_evidence'],
-                       sys.getsizeof(resp.data)/1e6, sec_since(start_time)))
+                    % (result['statements_returned'], result['total_evidence'],
+                       sys.getsizeof(resp.data)/1e6,
+                       sec_since(start_time)))
         return resp
     return decorator
 

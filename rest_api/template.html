@@ -11,6 +11,9 @@
 
     <title>Results Browser</title>
 
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="../../assets/js/vendor/jquery.min.js"><\/script>')</script>
+
     <!-- Latest compiled and minified CSS -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 
@@ -19,10 +22,6 @@
 
     <!-- Latest compiled and minified JavaScript -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
-
-    <!-- Just for debugging purposes. Don't actually copy these 2 lines! -->
-    <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
-    <script src="../../assets/js/ie-emulation-modes-warning.js"></script>
 
     <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
     <!--[if lt IE 9]>
@@ -76,11 +75,47 @@
       </div>
       <div class="page-header">
         <a name='index'></a>
-        <h1>Index of Network Edges</h1>
+        <h1>Index of Results</h1>
       </div>
-      <p>Edges are sorted alphabetically by the upstream node.
+      <p>Statements are sorted according to amount of evidence.
 
-    <h4>About this result</h4>
+    <div class="page-header">
+        <h1>Detailed Results</h1>
+    </div>
+    {% for stmt_info in statements %}
+    <a name='{{ stmt_info['hash'] }}'></a>
+    <div class="statement">
+        <h4 class="align-middle">{{ stmt_info['english'] }}
+            <span class="badge">{{ stmt_info['evidence_returned'] }}
+                / {{ stmt_info['total_evidence'] }}</span>
+        </h4>
+    </div>
+    <div class="evidence">
+    <p><a href='#index'>Back to index</a>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Evidence</th>
+                <th>PMID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ev in stmt_info['evidence'] %}
+              <tr>
+                  <td>{{ ev['source_api'] }}</td>
+                  <td>"{{ ev['text'] }}"</td>
+                  <td><a href='https://www.ncbi.nlm.nih.gov/pubmed/{{ ev['pmid'] }}'>{{ ev['pmid'] }}</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+    </div> <!-- evidence -->
+    {% endfor %}
+
+    <div class="page-header">
+        <h4>About this result</h4>
+    </div>
     <ul>
         <li>Statements returned: {{ statements_returned }}</li>
         <li>Statement limit: {{ statement_limit }}</li>
@@ -90,23 +125,7 @@
         <li>Offset: {{ offset }}</li>
     </ul>
 
-    <!--<h4>References</h4>
-    <p>REACH citation
-    <p>Sparser citation?
-    <p>-->
-
     </div> <!-- /container -->
-
-
-    <!-- Bootstrap core JavaScript
-    ================================================== -->
-    <!-- Placed at the end of the document so the pages load faster -->
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-    <script>window.jQuery || document.write('<script src="../../assets/js/vendor/jquery.min.js"><\/script>')</script>
-    <script src="../../dist/js/bootstrap.min.js"></script>
-    <script src="../../assets/js/docs.min.js"></script>
-    <!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
-    <script src="../../assets/js/ie10-viewport-bug-workaround.js"></script>
   </body>
 </html>
 

@@ -16,6 +16,8 @@ from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_elsevier_auth, BadHashError
 
+from html_format import format_statements
+
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
 
@@ -95,9 +97,9 @@ def _query_wrapper(f):
         do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
+        format = query_dict.pop('format', 'json')
 
         api_key = query.pop('api_key', None)
-
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
@@ -118,15 +120,22 @@ def _query_wrapper(f):
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
 
+        if format == 'html':
+            content = format_statements(result)
+            mimetype = 'text/html'
+        else: # Return JSON for all other values of the format argument
+            content = json.dumps(result)
+            mimetype = 'application/json'
+
         if do_stream:
             # Returning a generator should stream the data.
-            resp_json_bts = json.dumps(result)
+            resp_json_bts = content
             gen = batch_iter(resp_json_bts, 10000)
-            resp = Response(gen, mimetype='application/json')
+            resp = Response(gen, mimetype=mimetype)
         else:
-            resp = Response(json.dumps(result), mimetype='application/json')
-        logger.info("Exiting with %d statements with %d evidence of size %f "
-                    "MB after %s seconds."
+            resp = Response(content, mimetype=mimetype)
+        logger.info("Exiting with %d statements with %d evidence of size %f MB "
+                    "after %s seconds."
                     % (len(result['statements']), result['total_evidence'],
                        sys.getsizeof(resp.data)/1e6, sec_since(start_time)))
         return resp

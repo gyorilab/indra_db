@@ -46,7 +46,10 @@ def format_evidence_text(edge, agent_list, evidence):
     return format_text
 
 
-def format_statements(stmt_json):
+def format_statements(result):
+    #stmt_json = result.pop('statements')
+    #stmt_str = json.dumps(stmt_json) if stmt_json else "No statements."
+
     """
     for subj, obj in edges:
         for stmt in stmts:
@@ -58,8 +61,5 @@ def format_statements(stmt_json):
                   'text': format_evidence_text((subj, obj), stmt.agent_list(), ev)
                })
     """
-    return f"""
-<html><head></head><body>
-<h1>Hello, API</h1>
-<pre>{json.dumps(stmt_json, indent=4)}
-</body></html>"""
+    result['statements_returned'] = len(result['statements'])
+    return template.render(**result)

@@ -79,50 +79,21 @@
         <h1>Index of Network Edges</h1>
       </div>
       <p>Edges are sorted alphabetically by the upstream node.
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Upstream Protein</th>
-                <th>Downstream Protein</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for subj, obj in edges %}
-              <tr>
-                  <td><a href="#{{ subj }}-{{obj}}">{{ subj }}</a></td>
-                  <td><a href="#{{ subj }}-{{obj}}">{{ obj }}</a></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
 
+    <h4>About this result</h4>
+    <ul>
+        <li>Statements returned: {{ statements_returned }}</li>
+        <li>Statement limit: {{ statement_limit }}</li>
+        <li>Total evidence: {{ total_evidence }}</li>
+        <li>Evidence limit: {{ evidence_limit }}</li>
+        <li>Evidence returned: {{ evidence_returned }}</li>
+        <li>Offset: {{ offset }}</li>
+    </ul>
 
-    <div class="page-header">
-        <h1>Detailed Results</h1>
-    </div>
-    {% for edge in edges %}
-    <a name='{{ edge[0] }}-{{ edge[1] }}'></a>
-    <h2>{{ edge[0] }} &rarr; {{ edge[1] }}</h2>
-    <p><a href='#index'>Back to index</a>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Source</th>
-                <th>Evidence</th>
-                <th>PMID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for ev in content[edge] %}
-              <tr>
-                  <td>{{ ev['source_api'] }}</td>
-                  <td>"{{ ev['text'] }}"</td>
-                  <td><a href='https://www.ncbi.nlm.nih.gov/pubmed/{{ ev['pmid'] }}'>{{ ev['pmid'] }}</a></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-    {% endfor %}
+    <!--<h4>References</h4>
+    <p>REACH citation
+    <p>Sparser citation?
+    <p>-->
 
     </div> <!-- /container -->
 

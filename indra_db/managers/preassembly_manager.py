@@ -79,12 +79,14 @@ from indra.util import batch_iter, clockit
 from indra.statements import Statement
 from indra.tools import assemble_corpus as ac
 from indra.preassembler import Preassembler
+from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
 
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db
 
 
 HERE = path.dirname(path.abspath(__file__))
+ipa_logger.setLevel(logging.DEBUG)
 
 
 def _handle_update_table(func):
@@ -324,8 +326,7 @@ class PreassemblyManager(object):
             # Get internal support links
             self._log('Getting internal support links outer batch %d.'
                       % outer_idx)
-            some_support_links = self._get_support_links(outer_batch,
-                                                         poolsize=self.n_proc)
+            some_support_links = self._get_support_links(outer_batch)
 
             # Get links with all other batches
             inner_iter = db.select_all_batched(self.batch_size,
@@ -339,8 +340,7 @@ class PreassemblyManager(object):
                 self._log('Getting support between outer batch %d and inner'
                           'batch %d.' % (outer_idx, inner_idx))
                 some_support_links |= \
-                    self._get_support_links(full_list, split_idx=split_idx,
-                                            poolsize=self.n_proc)
+                    self._get_support_links(full_list, split_idx=split_idx)
 
             # Add all the new support links
             support_links |= (some_support_links - existing_links)
@@ -466,35 +466,45 @@ class PreassemblyManager(object):
         if continuing and path.exists(support_link_stash):
             with open(support_link_stash, 'rb') as f:
                 status_dict = pickle.load(f)
-                existing_links = status_dict['existing links']
+                new_support_links = status_dict['existing links']
                 npa_done = status_dict['ids done']
-            self._log("Found %d existing links." % len(existing_links))
+            self._log("Found %d previously found new links."
+                      % len(new_support_links))
         else:
-            existing_links = set()
+            new_support_links = set()
             npa_done = set()
 
+        self._log("Downloading all pre-existing support links")
+        existing_links = {(a, b) for a, b in
+                          db.select_all([db.PASupportLinks.supported_mk_hash,
+                                         db.PASupportLinks.supporting_mk_hash])}
+        # Just in case...
+        new_support_links -= existing_links
+
         # Now find the new support links that need to be added.
-        new_support_links = set()
         batching_args = (self.batch_size,
                          db.PAStatements.json,
                          db.PAStatements.create_date >= start_date,
                          db.PAStatements.create_date <= end_date)
         npa_json_iter = db.select_all_batched(*batching_args,
-                                           order_by=db.PAStatements.create_date)
-        try:
-            for outer_idx, npa_json_batch in npa_json_iter:
-                npa_batch = [_stmt_from_json(s_json)
-                             for s_json, in npa_json_batch]
+                                              order_by=db.PAStatements.mk_hash)
+        for outer_idx, npa_json_batch in npa_json_iter:
+            # Create the statements from the jsons.
+            npa_batch = []
+            for s_json, in npa_json_batch:
+                s = _stmt_from_json(s_json)
+                if s.get_hash(shallow=True) not in npa_done:
+                    npa_batch.append(s)
 
-                # Compare internally
-                self._log("Getting support for new pa batch %d." % outer_idx)
-                some_support_links = self._get_support_links(npa_batch)
+            # Compare internally
+            self._log("Getting support for new pa batch %d." % outer_idx)
+            some_support_links = self._get_support_links(npa_batch)
 
+            try:
                 # Compare against the other new batch statements.
-                diff_new_mks = new_mk_set - {shash(s) for s in npa_batch}
                 other_npa_json_iter = db.select_all_batched(
                     *batching_args,
-                    order_by=db.PAStatements.create_date,
+                    order_by=db.PAStatements.mk_hash,
                     skip_idx=outer_idx
                     )
                 for inner_idx, other_npa_json_batch in other_npa_json_iter:
@@ -505,8 +515,7 @@ class PreassemblyManager(object):
                     self._log("Comparing outer batch %d to inner batch %d of "
                               "other new statements." % (outer_idx, inner_idx))
                     some_support_links |= \
-                        self._get_support_links(full_list, split_idx=split_idx,
-                                                poolsize=self.n_proc)
+                        self._get_support_links(full_list, split_idx=split_idx)
 
                 # Compare against the existing statements.
                 opa_json_iter = db.select_all_batched(
@@ -522,36 +531,21 @@ class PreassemblyManager(object):
                     self._log("Comparing new batch %d to batch %d of old "
                               "statements." % (outer_idx, opa_idx))
                     some_support_links |= \
-                        self._get_support_links(full_list, split_idx=split_idx,
-                                                poolsize=self.n_proc)
-
-                # Although there are generally few support links, copying as we
-                # go allows work to not be wasted.
+                        self._get_support_links(full_list, split_idx=split_idx)
+            finally:
+                # Stash the new support links in case we crash.
                 new_support_links |= (some_support_links - existing_links)
-                self._log("Copying batch of %d support links into db."
-                          % len(new_support_links))
-                db.copy('pa_support_links', new_support_links,
-                        ('supported_mk_hash', 'supporting_mk_hash'))
-                existing_links |= new_support_links
-                npa_done |= {s.get_hash(shallow=True) for s in npa_batch}
-                new_support_links = set()
                 with open(support_link_stash, 'wb') as f:
-                    pickle.dump({'existing links': existing_links,
+                    pickle.dump({'existing links': new_support_links,
                                  'ids done': npa_done}, f)
+            npa_done |= {s.get_hash(shallow=True) for s in npa_batch}
 
-            # Insert any remaining support links.
-            if new_support_links:
-                self._log("Copying batch final of %d support links into db."
-                          % len(new_support_links))
-                db.copy('pa_support_links', new_support_links,
-                        ('supported_mk_hash', 'supporting_mk_hash'))
-                existing_links |= new_support_links
-        except Exception:
-            logger.info("Stashing support links found so far.")
-            if new_support_links:
-                with open(support_link_stash, 'wb') as f:
-                    pickle.dump(existing_links, f)
-            raise
+        # Insert any remaining support links.
+        if new_support_links:
+            self._log("Copying %d support links into db."
+                      % len(new_support_links))
+            db.copy('pa_support_links', new_support_links,
+                    ('supported_mk_hash', 'supporting_mk_hash'))
 
         # Remove all the caches so they can't be picked up accidentally later.
         for cache in pickle_stashes:
@@ -582,10 +576,10 @@ class PreassemblyManager(object):
         return stmts
 
     @clockit
-    def _get_support_links(self, unique_stmts, **generate_id_map_kwargs):
+    def _get_support_links(self, unique_stmts, split_idx=None):
         """Find the links of refinement/support between statements."""
-        id_maps = self.pa._generate_id_maps(unique_stmts,
-                                            **generate_id_map_kwargs)
+        id_maps = self.pa._generate_id_maps(unique_stmts, poolsize=self.n_proc,
+                                            split_idx=split_idx)
         ret = set()
         for ix_pair in id_maps:
             if ix_pair[0] == ix_pair[1]:

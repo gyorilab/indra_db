@@ -27,6 +27,7 @@
     <script>
         // get a pubmed xml based on a pmid
         function getPubMedMETAxmlByPMID(pmid) {
+            var pubmed_fetch = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
             params_dict = {'db': 'pubmed',
                 'retmode': 'xml',
                 'rettype': 'docsum',
@@ -82,7 +83,7 @@
         }
 
         // Modify link hover text
-        function pmid_link_hover(pmid, link_div) {
+        function setPMIDlinkTitle(pmid, link_tag) {
             let pubmed_xml_promise = getPubMedMETAxmlByPMID(pmid);
             pubmed_xml_promise.then(function(responseXML) {
                 docsum_XML = docsum_xml = responseXML.getElementsByTagName('DocSum')[0];
@@ -101,8 +102,16 @@
                 title = pmid_meta_dict.Title
 
                 pmid_hover_string = authors + ", \"" + title + "\", " + journal + ", " + SO
-                link_div.title = pmid_hover_string;
+                link_tag.title = pmid_hover_string;
             })
+        }
+
+        function populatePMIDlinkTitles () {
+            var pmid_link_array = document.getElementsByClassName("pmid_link");
+            for (link_obj of pmid_link_array) {
+                pmid = link_obj.textContent;
+                setPMIDlinkTitle(pmid, link_obj)
+            }
         }
     </script>
     <!-- /KLAS USER SCRIPTS -->

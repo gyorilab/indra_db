@@ -238,7 +238,8 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_limit, best_first):
 
 @app.route('/statements/hash/<hash>', methods=['GET'])
 @_query_wrapper
-def get_statements_by_hash(query_dict, offs, max_stmts, ev_limit, best_first, hash_val):
+def get_statements_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
+                           hash_val):
     return get_statement_jsons_from_hashes([hash_val], max_stmts=max_stmts,
                                            offset=offs, ev_limit=ev_limit,
                                            best_first=best_first)

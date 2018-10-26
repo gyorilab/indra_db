@@ -312,7 +312,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_get_statement_by_single_hash_query(self):
         resp, dt, size = self.__time_query('get',
-            'statements/hash/-36028793042562873')
+            'statements/from_hash/-36028793042562873')
         resp_dict = json.loads(resp.data.decode('utf-8'))
         self.__check_stmts(resp_dict['statements'].values())
         assert len(resp_dict['statements']) == 1, len(resp_dict['statements'])

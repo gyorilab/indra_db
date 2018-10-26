@@ -236,10 +236,11 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/statements/hash/<hash_val>', methods=['GET'])
+@app.route('/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
-def get_statements_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
-                           hash_val):
+def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
+                          hash_val):
+    ev_limit = 10000
     return get_statement_jsons_from_hashes([hash_val], max_stmts=max_stmts,
                                            offset=offs, ev_limit=ev_limit,
                                            best_first=best_first)

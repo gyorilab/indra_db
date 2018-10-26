@@ -85,6 +85,7 @@ class DbApiTestCase(unittest.TestCase):
     def __check_good_statement_query(self, *args, **kwargs):
         check_stmts = kwargs.pop('check_stmts', True)
         time_goal = max(kwargs.pop('time_goal', TIMEGOAL), TIMEGOAL)
+        print("Checking json response.")
         query_str = '&'.join(['%s=%s' % (k, v) for k, v in kwargs.items()]
                              + list(args))
         resp, dt, size = self.__time_get_query('statements/from_agents',
@@ -100,6 +101,12 @@ class DbApiTestCase(unittest.TestCase):
                            check_stmts=check_stmts)
 
         self.__check_time(dt, time_goal)
+
+        print("Checking html response.")
+        query_str += '&format=html'
+        resp, dt, size = self.__time_get_query('statements', query_str)
+        self.__check_time(dt, time_goal)
+
         return resp
 
     def __check_stmts(self, json_stmts, check_support=False, check_stmts=False):

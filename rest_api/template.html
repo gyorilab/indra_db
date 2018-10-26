@@ -28,6 +28,7 @@
       <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
       <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
     <![endif]-->
+
   </head>
 
   <body>
@@ -103,6 +104,7 @@
             <tbody>
               {% for ev in stmt_info['evidence'] %}
               <tr>
+                  <td>&#9998;
                   <td>{{ ev['source_api'] }}</td>
                   <td>"{{ ev['text'] }}"</td>
                   <td><a href='https://www.ncbi.nlm.nih.gov/pubmed/{{ ev['pmid'] }}'>{{ ev['pmid'] }}</a></td>

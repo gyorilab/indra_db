@@ -113,6 +113,15 @@
                 setPMIDlinkTitle(pmid, link_obj)
             }
         }
+
+        var readyStateCheckInterval = setInterval(function() {
+            // options are "loading", "interactive", "complete"
+            if (document.readyState === "complete") {
+                clearInterval(readyStateCheckInterval);
+                populatePMIDlinkTitles();
+            }
+        }, 1000); // Time interval in milliseconds
+
     </script>
     <!-- /KLAS USER SCRIPTS -->
 

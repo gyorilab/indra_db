@@ -23,6 +23,90 @@
     <!-- Latest compiled and minified JavaScript -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 
+    <!-- KLAS USER SCRIPTS -->
+    <script>
+        // get a pubmed xml based on a pmid
+        function getPubMedMETAxmlByPMID(pmid) {
+            params_dict = {'db': 'pubmed',
+                'retmode': 'xml',
+                'rettype': 'docsum',
+                'id': pmid
+            };
+            PubMedMETAxml = $.ajax({
+                url: pubmed_fetch,
+                type: "POST",
+                dataType: "xml",
+                data: params_dict,
+            });
+            return PubMedMETAxml
+        };
+
+        // Get a dictionary from pubmed xml
+        function pmidXML2dict(XML) {
+            xml_dict = {};
+            for (child of XML.children) {
+                name = child.getAttribute("Name");
+                type = child.getAttribute("Type");
+                if (child.hasChildNodes() & type == "List") {
+                    // Javascript can't really do nice recursive functions...
+                    // special cases for "History" and "ArticleIds" which has unique inner Names
+                    if (name == "ArticleIds" | name == "History") {
+                        innerDict = {};
+                        for (c of child.children) {
+                            innerDict[c.getAttribute("Name")] = c.textContent;
+                        }
+                        innerItems = innerDict;
+                    } else {
+                        innerList = [];
+                        for (c of child.children) {
+                            innerList.push(c.textContent);
+                        }
+                        innerItems = innerList;
+                    }
+                    xml_dict[name] = innerItems
+                } else if (child.tagName == "Item") {
+                    // Here just get the inner strings
+                    xml_dict[name] = child.textContent;
+                } else if (child.tagName == "Id") {
+                    // Special case
+                    xml_dict["Id"] = child.textContent;
+                } else {
+                    if (!xml_dict["no_key"]) {
+                        xml_dict["no_key"] = [child.textContent]
+                    } else {
+                        xml_dict["no_key"].push(child.textContent)
+                    }
+                }
+            }
+            return xml_dict;
+        }
+
+        // Modify link hover text
+        function pmid_link_hover(pmid, link_div) {
+            let pubmed_xml_promise = getPubMedMETAxmlByPMID(pmid);
+            pubmed_xml_promise.then(function(responseXML) {
+                docsum_XML = docsum_xml = responseXML.getElementsByTagName('DocSum')[0];
+                pmid_meta_dict = pmidXML2dict(docsum_xml);
+                console.log('DEBUG: pmid_meta_dict')
+                console.log(pmid_meta_dict)
+                authorlist = pmid_meta_dict.AuthorList
+                if (authorlist.length > 3) {
+                    authors = authorlist[0] + ", ... " + authorlist[authorlist.length-1];
+                } else {
+                    authors = authorlist.join(", ");
+                }
+                // Shortened journal name is in .Source, while full name is in .FullJournalName
+                journal = pmid_meta_dict.Source
+                SO = pmid_meta_dict.SO
+                title = pmid_meta_dict.Title
+
+                pmid_hover_string = authors + ", \"" + title + "\", " + journal + ", " + SO
+                link_div.title = pmid_hover_string;
+            })
+        }
+    </script>
+    <!-- /KLAS USER SCRIPTS -->
+
     <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
     <!--[if lt IE 9]>
       <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>

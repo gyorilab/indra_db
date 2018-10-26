@@ -26,60 +26,41 @@ with open(template_path, 'rt') as f:
 
 
 
-def format_evidence_text(stmt, stmt_hash):
+def format_evidence_text(stmt):
     """Highlight subject and object in raw text strings."""
+
     ev_list = []
     for ix, ev in enumerate(stmt.evidence):
         if ev.text is None:
             format_text = '(None available)'
         else:
-            format_text = ev.text
-        """
-            indices = {}
+            indices = []
             for ix, ag in enumerate(stmt.agent_list()):
                 ag_text = ev.annotations['agents']['raw_text'][ix]
                 if ag_text is None:
                     continue
                 marker = '<span class="label label-primary">'
-                indices[ag_text] = [(m.start(), m.start() + len(ag_text))
-                                    for m in re.finditer(ag_text, ev.text)]
-                indices 
-                n = len(ag_text)
-                last = 0
-                for s in starts:
-                    in
-                    ag_start_ix = format_text.find(ag_text)
-                    ag_end_ix = ag_start_ix + len(ag_text)
-                    format_text = (format_text[0:ag_start_ix] + marker +
-                                  format_text[ag_start_ix:ag_end_ix] + '</span>' +
-                                   format_text[ag_end_ix:])
-        """
-        """
-        ag_name_list = [(ix, ag.name) for ix, ag in enumerate(agent_list)]
-        #subj_ag_index = ag_name_list.index(edge[0])
-        #obj_ag_index = ag_name_list.index(edge[1])
-        #subj_text = evidence.annotations['agents']['raw_text'][subj_ag_index]
-        #obj_text = evidence.annotations['agents']['raw_text'][obj_ag_index]
-        # TODO: highlight all instances of each gene, not just the first
-        format_text = raw_text
-        for ix, ag_text in enumerate((subj_text, obj_text)):
-            if ag_text is None:
-                continue
-            if ix == 0:
-                marker = '<span class="label label-primary">'
-            else:
-                marker = '<span class="label label-primary">'
-            ag_start_ix = format_text.find(ag_text)
-            ag_end_ix = ag_start_ix + len(ag_text)
-            format_text = (format_text[0:ag_start_ix] + marker +
-                           format_text[ag_start_ix:ag_end_ix] + '</span>' +
-                           format_text[ag_end_ix:])
-        return format_text
-        """
-        evidence_id = f"{stmt_hash}-{ix}"
+                # Build up a set of indices
+                indices += [(m.start(), m.start() + len(ag_text), ag_text)
+                            for m in re.finditer(re.escape(ag_text), ev.text)]
+            # Sort the indices by their start position
+            indices.sort(key=lambda x: x[0])
+            # Now, add the marker text for each occurrence of the strings
+            format_text = ''
+            start_pos = 0
+            tag_start = '<span class="label label-primary">'
+            tag_close = '</span>'
+            for i, j, ag_text in indices:
+                # Add the text before this agent, if any
+                format_text += ev.text[start_pos:i]
+                # Add wrapper for this entity
+                format_text += tag_start + ag_text + tag_close
+                # Now set the next start position
+                start_pos = j
+            # Add the last section of text
+            format_text += ev.text[start_pos:]
         ev_list.append({'source_api': ev.source_api,
-                        'pmid': ev.pmid, 'text': format_text,
-                        'evidence_id': evidence_id})
+                        'pmid': ev.pmid, 'text': format_text })
     return ev_list
 
 
@@ -109,7 +90,7 @@ def format_statements(result):
         stmt = stmts_from_json([stmt_json])[0] # TODO: Need to go back to stmt?
         ea = EnglishAssembler([stmt])
         english = ea.make_model()
-        ev_list = format_evidence_text(stmt, stmt_hash)
+        ev_list = format_evidence_text(stmt)
         total_evidence = result['evidence_totals'][int(stmt_hash)]
         stmts_formatted.append({
             'hash': stmt_hash,

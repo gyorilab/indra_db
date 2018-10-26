@@ -76,7 +76,7 @@ REDACT_MESSAGE = '[MISSING/INVALID API KEY: limited to 200 char for Elsevier]'
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
     @wraps(f)
-    def decorator(*args):
+    def decorator(*args, **kwargs):
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))
 
@@ -93,7 +93,7 @@ def _query_wrapper(f):
 
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, (datetime.now() - start_time).total_seconds()))
-        result = f(query_dict, offs, max_stmts, ev_limit, best_first, *args)
+        result = f(query_dict, offs, max_stmts, ev_limit, best_first, *args, **kwargs)
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, (datetime.now() - start_time).total_seconds()))
 
@@ -236,7 +236,7 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/statements/hash/<hash>', methods=['GET'])
+@app.route('/statements/hash/<hash_val>', methods=['GET'])
 @_query_wrapper
 def get_statements_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                            hash_val):

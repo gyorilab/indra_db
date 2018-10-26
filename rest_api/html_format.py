@@ -28,7 +28,7 @@ with open(template_path, 'rt') as f:
 
 def format_evidence_text(stmt):
     """Highlight subject and object in raw text strings."""
-
+    badge_list = ['primary', 'danger', 'success', 'info', 'warning']
     ev_list = []
     for ix, ev in enumerate(stmt.evidence):
         if ev.text is None:
@@ -39,9 +39,8 @@ def format_evidence_text(stmt):
                 ag_text = ev.annotations['agents']['raw_text'][ix]
                 if ag_text is None:
                     continue
-                marker = '<span class="label label-primary">'
                 # Build up a set of indices
-                indices += [(m.start(), m.start() + len(ag_text), ag_text)
+                indices += [(m.start(), m.start() + len(ag_text), ag_text, ix)
                             for m in re.finditer(re.escape(ag_text), ev.text)]
             # Sort the indices by their start position
             indices.sort(key=lambda x: x[0])
@@ -50,7 +49,10 @@ def format_evidence_text(stmt):
             start_pos = 0
             tag_start = '<span class="label label-primary">'
             tag_close = '</span>'
-            for i, j, ag_text in indices:
+            for i, j, ag_text, ag_ix in indices:
+                # Get the tag with the correct badge
+                tag_start = '<span class="label label-%s">' % badge_list[ag_ix]
+                tag_close = '</span>'
                 # Add the text before this agent, if any
                 format_text += ev.text[start_pos:i]
                 # Add wrapper for this entity

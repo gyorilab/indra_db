@@ -21,7 +21,7 @@ from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
     create_engine, inspect, LargeBinary, Boolean, DateTime, func, BigInteger
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-from sqlalchemy.dialects.postgresql import BYTEA
+from sqlalchemy.dialects.postgresql import BYTEA, INET
 
 try:
     import networkx as nx
@@ -134,6 +134,15 @@ class Displayable(object):
 
     def __str__(self):
         return self._make_str()
+
+
+class Curation(object):
+    tag = Column(String)
+    text = Column(String)
+    curator = Column(String, nullable=False)
+    source = Column(String)
+    ip = Column(INET)
+    date = Column(DateTime, default=func.now())
 
 
 class DatabaseManager(object):
@@ -327,6 +336,14 @@ class DatabaseManager(object):
         self.RawAgents = RawAgents
         self.tables[RawAgents.__tablename__] = RawAgents
 
+        class RawCuration(self.Base, Displayable, Curation):
+            __tablename__ = 'raw_curation'
+            id = Column(Integer, primary_key=True)
+            raw_hash = Column(BigInteger, ForeignKey('RawStatements.mk_hash'))
+            raw_statements = relationship(RawStatements)
+        self.RawCuration = RawCuration
+        self.tables[RawCuration.__tablename__] = RawCuration
+
         class RawUniqueLinks(self.Base, Displayable):
             __tablename__ = 'raw_unique_links'
             id = Column(Integer, primary_key=True)
@@ -370,6 +387,14 @@ class DatabaseManager(object):
             role = Column(String(20), nullable=False)
         self.PAAgents = PAAgents
         self.tables[PAAgents.__tablename__] = PAAgents
+
+        class PACuration(self.Base, Displayable, Curation):
+            __tablename__ = 'pa_curation'
+            id = Column(Integer, primary_key=True)
+            pa_hash = Column(BigInteger, ForeignKey('PAStatements.mk_hash'))
+            pa_statements = relationship(PAStatements)
+        self.PACuration = PACuration
+        self.tables[PACuration.__tablename__] = PACuration
 
         class PASupportLinks(self.Base, Displayable):
             __tablename__ = 'pa_support_links'

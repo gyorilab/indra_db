@@ -115,6 +115,27 @@ class IndraDatabaseError(Exception):
     pass
 
 
+class Displayable(object):
+    _skip_disp = []
+
+    def _make_str(self):
+        s = self.__tablename__ + ':\n'
+        for k, v in self.__dict__.items():
+            if not k.startswith('_'):
+                if k in self._skip_disp:
+                    s += '\t%s: [not shown]\n' % k
+                else:
+                    s += '\t%s: %s\n' % (k, v)
+        return s
+
+    def display(self):
+        """Display the values of this entry."""
+        print(self._make_str())
+
+    def __str__(self):
+        return self._make_str()
+
+
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -170,8 +191,7 @@ class DatabaseManager(object):
             Bytea = LargeBinary
 
         # Normal Tables --------------------------------------------------------
-
-        class TextRef(self.Base):
+        class TextRef(self.Base, Displayable):
             __tablename__ = 'text_ref'
             id = Column(Integer, primary_key=True)
             pmid = Column(String(20))
@@ -186,10 +206,11 @@ class DatabaseManager(object):
                 UniqueConstraint('pmid', 'doi'),
                 UniqueConstraint('pmcid', 'doi')
                 )
+
         self.TextRef = TextRef
         self.tables[TextRef.__tablename__] = TextRef
 
-        class SourceFile(self.Base):
+        class SourceFile(self.Base, Displayable):
             __tablename__ = 'source_file'
             id = Column(Integer, primary_key=True)
             source = Column(String(250), nullable=False)
@@ -201,7 +222,7 @@ class DatabaseManager(object):
         self.SourceFile = SourceFile
         self.tables[SourceFile.__tablename__] = SourceFile
 
-        class Updates(self.Base):
+        class Updates(self.Base, Displayable):
             __tablename__ = 'updates'
             id = Column(Integer, primary_key=True)
             init_upload = Column(Boolean, nullable=False)
@@ -211,8 +232,9 @@ class DatabaseManager(object):
         self.Updates = Updates
         self.tables[Updates.__tablename__] = Updates
 
-        class TextContent(self.Base):
+        class TextContent(self.Base, Displayable):
             __tablename__ = 'text_content'
+            _skip_disp = ['content']
             id = Column(Integer, primary_key=True)
             text_ref_id = Column(Integer,
                                  ForeignKey('text_ref.id'),
@@ -232,8 +254,9 @@ class DatabaseManager(object):
         self.TextContent = TextContent
         self.tables[TextContent.__tablename__] = TextContent
 
-        class Reading(self.Base):
+        class Reading(self.Base, Displayable):
             __tablename__ = 'reading'
+            _skip_disp = ['bytes']
             id = Column(Integer, primary_key=True)
             text_content_id = Column(Integer,
                                      ForeignKey('text_content.id'),
@@ -253,7 +276,7 @@ class DatabaseManager(object):
         self.Reading = Reading
         self.tables[Reading.__tablename__] = Reading
 
-        class ReadingUpdates(self.Base):
+        class ReadingUpdates(self.Base, Displayable):
             __tablename__ = 'reading_updates'
             id = Column(Integer, primary_key=True)
             complete_read = Column(Boolean, nullable=False)
@@ -265,7 +288,7 @@ class DatabaseManager(object):
         self.ReadingUpdates = ReadingUpdates
         self.tables[ReadingUpdates.__tablename__] = ReadingUpdates
 
-        class DBInfo(self.Base):
+        class DBInfo(self.Base, Displayable):
             __tablename__ = 'db_info'
             id = Column(Integer, primary_key=True)
             db_name = Column(String(20), nullable=False)
@@ -274,8 +297,9 @@ class DatabaseManager(object):
         self.DBInfo = DBInfo
         self.tables[DBInfo.__tablename__] = DBInfo
 
-        class RawStatements(self.Base):
+        class RawStatements(self.Base, Displayable):
             __tablename__ = 'raw_statements'
+            _skip_disp = ['json']
             id = Column(Integer, primary_key=True)
             uuid = Column(String(40), unique=True, nullable=False)
             mk_hash = Column(BigInteger, nullable=False)
@@ -290,7 +314,7 @@ class DatabaseManager(object):
         self.RawStatements = RawStatements
         self.tables[RawStatements.__tablename__] = RawStatements
 
-        class RawAgents(self.Base):
+        class RawAgents(self.Base, Displayable):
             __tablename__ = 'raw_agents'
             id = Column(Integer, primary_key=True)
             stmt_id = Column(Integer,
@@ -303,7 +327,7 @@ class DatabaseManager(object):
         self.RawAgents = RawAgents
         self.tables[RawAgents.__tablename__] = RawAgents
 
-        class RawUniqueLinks(self.Base):
+        class RawUniqueLinks(self.Base, Displayable):
             __tablename__ = 'raw_unique_links'
             id = Column(Integer, primary_key=True)
             raw_stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
@@ -313,7 +337,7 @@ class DatabaseManager(object):
         self.RawUniqueLinks = RawUniqueLinks
         self.tables[RawUniqueLinks.__tablename__] = RawUniqueLinks
 
-        class PreassemblyUpdates(self.Base):
+        class PreassemblyUpdates(self.Base, Displayable):
             __tablename__ = 'preassembly_updates'
             id = Column(Integer, primary_key=True)
             corpus_init = Column(Boolean, nullable=False)
@@ -321,8 +345,9 @@ class DatabaseManager(object):
         self.PreassemblyUpdates = PreassemblyUpdates
         self.tables[PreassemblyUpdates.__tablename__] = PreassemblyUpdates
 
-        class PAStatements(self.Base):
+        class PAStatements(self.Base, Displayable):
             __tablename__ = 'pa_statements'
+            _skip_disp = ['json']
             mk_hash = Column(BigInteger, primary_key=True)
             matches_key = Column(String, unique=True, nullable=False)
             uuid = Column(String(40), unique=True, nullable=False)
@@ -333,7 +358,7 @@ class DatabaseManager(object):
         self.PAStatements = PAStatements
         self.tables[PAStatements.__tablename__] = PAStatements
 
-        class PAAgents(self.Base):
+        class PAAgents(self.Base, Displayable):
             __tablename__ = 'pa_agents'
             id = Column(Integer, primary_key=True)
             stmt_mk_hash = Column(BigInteger,
@@ -346,7 +371,7 @@ class DatabaseManager(object):
         self.PAAgents = PAAgents
         self.tables[PAAgents.__tablename__] = PAAgents
 
-        class PASupportLinks(self.Base):
+        class PASupportLinks(self.Base, Displayable):
             __tablename__ = 'pa_support_links'
             id = Column(Integer, primary_key=True)
             supporting_mk_hash = Column(BigInteger,
@@ -358,7 +383,7 @@ class DatabaseManager(object):
         self.PASupportLinks = PASupportLinks
         self.tables[PASupportLinks.__tablename__] = PASupportLinks
 
-        class Auth(self.Base):
+        class Auth(self.Base, Displayable):
             __tablename__ = 'auth'
             id = Column(Integer, primary_key=True)
             api_key = Column(String, unique=True)
@@ -391,7 +416,7 @@ class DatabaseManager(object):
         #   FROM fast_raw_pa_link
         #   GROUP BY mk_hash
         # WITH DATA;
-        class EvidenceCounts(self.Base):
+        class EvidenceCounts(self.Base, Displayable):
             __tablename__ = 'evidence_counts'
             mk_hash = Column(BigInteger, primary_key=True)
             ev_count = Column(Integer)
@@ -409,7 +434,7 @@ class DatabaseManager(object):
         #    WHERE text_ref.id = text_content.text_ref_id
         #     AND text_content.id = reading.text_content_id;
         # WITH DATA;
-        class ReadingRefLink(self.Base):
+        class ReadingRefLink(self.Base, Displayable):
             __tablename__ = 'reading_ref_link'
             trid = Column(Integer)
             pmid = Column(String(20))
@@ -439,8 +464,9 @@ class DatabaseManager(object):
         #   WHERE raw_unique_links.raw_stmt_id = raw_statements.id
         #    AND raw_unique_links.pa_stmt_mk_hash = pa_statements.mk_hash
         # WITH DATA;
-        class FastRawPaLink(self.Base):
+        class FastRawPaLink(self.Base, Displayable):
             __tablename__ = 'fast_raw_pa_link'
+            _skip_disp = ['raw_json', 'pa_json']
             id = Column(Integer, primary_key=True)
             raw_json = Column(BYTEA)
             reading_id = Column(Integer, ForeignKey('reading_ref_link.rid'))
@@ -463,7 +489,7 @@ class DatabaseManager(object):
         #   WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash
         #    AND pa_statements.mk_hash = evidence_counts.mk_hash
         # WITH DATA;
-        class PaMeta(self.Base):
+        class PaMeta(self.Base, Displayable):
             __tablename__ = 'pa_meta'
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)

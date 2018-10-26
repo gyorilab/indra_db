@@ -107,7 +107,7 @@
                   <td>&#9998;
                   <td>{{ ev['source_api'] }}</td>
                   <td>"{{ ev['text'] }}"</td>
-                  <td><span id="{{ ev['evidence_id'] }}"><a href='https://www.ncbi.nlm.nih.gov/pubmed/{{ ev['pmid'] }}'>{{ ev['pmid'] }}</a></span></td>
+                  <td><a class="pmid_link" href='https://www.ncbi.nlm.nih.gov/pubmed/{{ ev['pmid'] }}'>{{ ev['pmid'] }}</a></td>
               </tr>
               {% endfor %}
             </tbody>

@@ -76,7 +76,7 @@ REDACT_MESSAGE = '[MISSING/INVALID API KEY: limited to 200 char for Elsevier]'
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
     @wraps(f)
-    def decorator():
+    def decorator(*args, **kwargs):
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))
 
@@ -93,7 +93,7 @@ def _query_wrapper(f):
 
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, (datetime.now() - start_time).total_seconds()))
-        result = f(query_dict, offs, max_stmts, ev_limit, best_first)
+        result = f(query_dict, offs, max_stmts, ev_limit, best_first, *args, **kwargs)
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, (datetime.now() - start_time).total_seconds()))
 
@@ -220,7 +220,7 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 
 @app.route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
-def get_statements_by_hash(query_dict, offs, max_stmts, ev_limit, best_first):
+def get_statements_by_hashes(query_dict, offs, max_stmts, ev_limit, best_first):
     hashes = request.json.get('hashes')
     if not hashes:
         logger.error("No hashes provided!")
@@ -234,6 +234,16 @@ def get_statements_by_hash(query_dict, offs, max_stmts, ev_limit, best_first):
                                              offset=offs, ev_limit=ev_limit,
                                              best_first=best_first)
     return result
+
+
+@app.route('/statements/from_hash/<hash_val>', methods=['GET'])
+@_query_wrapper
+def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
+                          hash_val):
+    ev_limit = 10000
+    return get_statement_jsons_from_hashes([hash_val], max_stmts=max_stmts,
+                                           offset=offs, ev_limit=ev_limit,
+                                           best_first=best_first)
 
 
 @app.route('/papers/', methods=['GET'])

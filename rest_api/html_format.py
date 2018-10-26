@@ -10,7 +10,7 @@ from collections import defaultdict
 from jinja2 import Template
 from indra.sources import indra_db_rest
 from indra.assemblers.english import EnglishAssembler
-from indra.statements import stmts_from_json
+from indra.statements import *
 from indra.databases import get_identifiers_url
 
 # Create a template object from the template file, load once
@@ -28,7 +28,15 @@ with open(template_path, 'rt') as f:
 
 def format_evidence_text(stmt):
     """Highlight subject and object in raw text strings."""
-    badge_list = ['primary', 'danger', 'success', 'info', 'warning']
+    def get_role(ag_ix):
+        if isinstance(stmt, Complex) or isinstance(stmt, SelfModification) or \
+           isinstance(stmt, ActiveForm) or isinstance(stmt, Conversion) or \
+           isinstance(stmt, Translocation):
+            return 'other'
+        else:
+            assert len(stmt.agent_list()) == 2
+            return 'subject' if ag_ix == 0 else 'object'
+
     ev_list = []
     for ix, ev in enumerate(stmt.evidence):
         if ev.text is None:
@@ -47,11 +55,10 @@ def format_evidence_text(stmt):
             # Now, add the marker text for each occurrence of the strings
             format_text = ''
             start_pos = 0
-            tag_start = '<span class="label label-primary">'
-            tag_close = '</span>'
             for i, j, ag_text, ag_ix in indices:
+                role = get_role(ag_ix)
                 # Get the tag with the correct badge
-                tag_start = '<span class="label label-%s">' % badge_list[ag_ix]
+                tag_start = '<span class="label label-%s">' % role
                 tag_close = '</span>'
                 # Add the text before this agent, if any
                 format_text += ev.text[start_pos:i]

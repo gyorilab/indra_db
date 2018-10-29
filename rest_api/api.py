@@ -160,7 +160,7 @@ def get_statements_query_format():
                     '\"other\".')
 
 
-@app.route('/statements/', methods=['GET'])
+@app.route('/statements/from_agents', methods=['GET'])
 @_query_wrapper
 def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get some statements constrained by query."""

@@ -1056,7 +1056,8 @@ class DatabaseManager(object):
         id_list = list({entry_id for entry_id, in id_tuples})
 
         # Sample from the list of ids
-        logger.info("Getting sample.")
+        logger.info("Getting sample of %d from %d members."
+                    % (number, len(id_list)))
         id_sample = random.sample(id_list, number)
         if hasattr(table, 'key') and table.key == 'id':
             return [(entry_id,) for entry_id in id_sample]

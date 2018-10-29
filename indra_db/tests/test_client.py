@@ -3,11 +3,11 @@ import pickle
 import random
 
 from unittest import SkipTest
+from nose.plugins.attrib import attr
+
 from indra.tests.util import IS_PY3
 if not IS_PY3:
     raise SkipTest("This test requires Python 3.")
-
-from nose.plugins.attrib import attr
 
 from indra.literature import pubmed_client as pubc
 from indra.statements import stmts_from_json
@@ -125,10 +125,12 @@ class _PrePaDatabaseTestSetup(object):
         return
 
 
-def _get_prepped_db(num_stmts):
+def _get_prepped_db(num_stmts, with_pa=False):
     dts = _PrePaDatabaseTestSetup(num_stmts)
     dts.load_background()
     dts.add_statements()
+    if with_pa:
+        dts.insert_pa_statements()
     return dts.test_db
 
 
@@ -361,3 +363,27 @@ def test_get_statement_jsons_by_mk_hash_sparser_bug():
     assert all([(ev.source_api not in ['reach', 'sparser']
                  or (hasattr(ev, 'pmid') and ev.pmid is not None))
                 for ev in ev_list])
+
+
+@attr('nonpublic')
+def test_pa_curation():
+    db = _get_prepped_db(100, with_pa=True)
+    sample = db.select_sample_from_table(2, db.PAStatements)
+    mk_hashes = {s.mk_hash for s in sample}
+    i = 0
+    for pa_hash in mk_hashes:
+        dbc.submit_curation('pa', pa_hash, tag='test1', text='This is a test.',
+                            curator='tester%d' % i, ip='192.0.2.1',
+                            source='test_app', db=db)
+        i += 1
+        dbc.submit_curation('pa', pa_hash, tag='test2',
+                            text='This is a test too.',
+                            curator='tester%d' % i, ip='192.0.2.32',
+                            source='test_app', db=db)
+        i += 1
+    res = db.select_all(db.PACuration)
+    assert len(res) == 4, "Wrong number of curations: %d" % len(res)
+    curs = dbc.get_curations('pa', tag='test1', db=db)
+    assert len(curs) == 2, len(curs)
+    curs2 = dbc.get_curations('pa', curator='tester2', db=db)
+    assert len(curs2) == 1, len(curs2)

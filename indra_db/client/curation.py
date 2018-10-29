@@ -73,4 +73,4 @@ def get_curations(level, db=None, **params):
         else:
             constraints.append(getattr(cur, key) == val)
 
-    db.select_all(cur, *constraints)
+    return db.select_all(cur, *constraints)

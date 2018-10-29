@@ -810,7 +810,7 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
                                     num_procs)
     stmts |= db_stmts
     duplicate_sids |= db_duplicates
-    logger.info("After filtering database statements: %d unique, %d duplicates."
+    logger.info("After filtering database statements: %d unique, %d duplicates"
                 % (len(stmts), len(duplicate_sids)))
     assert not linked_sids & duplicate_sids, linked_sids & duplicate_sids
 
@@ -839,7 +839,8 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
     return stmts
 
 
-def delete_raw_statements_by_id(db, raw_sids, sync_session=False, remove='all'):
+def delete_raw_statements_by_id(db, raw_sids, sync_session=False,
+                                remove='all'):
     """Delete raw statements, their agents, and their raw-unique links.
 
     It is best to batch over this function with sets of 1000 or so ids. Setting
@@ -877,3 +878,24 @@ def unpack(bts, decode=True):
     if decode:
         ret = ret.decode('utf-8')
     return ret
+
+
+def has_auth(api_key, db=None):
+    logger.info("Checking auth of secret key.")
+    if db is None:
+        db = get_primary_db()
+    return db._check_auth(api_key)
+
+
+def _get_trids(db, id_val, id_type):
+    """Return text ref IDs corresponding to any ID type and value."""
+    # Get the text ref id(s)
+    if id_type in ['trid']:
+        trids = [int(id_val)]
+    else:
+        id_types = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
+        if id_type not in id_types:
+            raise ValueError('id_type must be one of: %s' % str(id_types))
+        constraint = (getattr(db.TextRef, id_type) == id_val)
+        trids = [trid for trid, in db.select_all(db.TextRef.id, constraint)]
+    return trids

@@ -270,5 +270,10 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
+@app.route('/curation/submit/<level>/<hash_val>', methods=['POST'])
+def submit_curation(level, hash_val):
+    pass
+
+
 if __name__ == '__main__':
     app.run()

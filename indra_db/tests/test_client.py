@@ -143,12 +143,13 @@ def test_get_statements():
 
     stmts = dbc.get_statements([db.RawStatements.reading_id.isnot(None)],
                                preassembled=False, db=db)
-    pmids = {s.evidence[0].pmid for s in random.sample(stmts, 200)}
+    pmids = {s.evidence[0].pmid for s in random.sample(stmts, 100)}
     assert pmids
-    assert pmids != {None,}
+    assert pmids != {None}
     md_list = pubc.get_metadata_for_ids([pmid for pmid in pmids
                                          if pmid is not None])
-    assert len(md_list) == len(pmids), (len(md_list), len(pmids))
+    assert len(md_list) == len(pmids - {None}),\
+        (len(md_list), len(pmids - {None}))
 
     # Test getting some statements
     stmt_uuid = stmts[0].uuid

@@ -1,7 +1,3 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
-
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
            'IndraDatabaseError', 'sql_expressions']
 
@@ -199,7 +195,7 @@ class DatabaseManager(object):
         else:
             Bytea = LargeBinary
 
-        # Normal Tables --------------------------------------------------------
+        # Normal Tables -------------------------------------------------------
         class TextRef(self.Base, Displayable):
             __tablename__ = 'text_ref'
             id = Column(Integer, primary_key=True)

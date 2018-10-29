@@ -5,7 +5,7 @@ from sqlalchemy import or_
 
 from indra.statements import Unresolved, Evidence
 
-logger = logging.getLogger('db_client')
+logger = logging.getLogger('db_statements_client')
 
 from indra.util import batch_iter, clockit
 from indra.databases import hgnc_client

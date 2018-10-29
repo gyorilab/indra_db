@@ -1,14 +1,15 @@
-"""This file contains tools designed to access content in the database directly.
+"""This file contains tools designed to access content in the db directly.
 
 All the functions defined require direct access to the database, which is in
-general restricted. For broad access, see the indra_db_rest api client in INDRA.
+general restricted. For broad access, see the indra_db_rest api client in
+INDRA.
 
-There are two key ways of accessing statements from the INDRA Database: directly
-and using the materialize views. Only the `get_statement_jsons` functions are
-limited to using the views. Most other functions access the primary tables of
-the database and are generally slower. The `get_statement_jsons` functions are
-the most heavily optimized for fast recall, as they are the back-end to the REST
-API.
+There are two key ways of accessing statements from the INDRA Database:
+directly and using the materialize views. Only the `get_statement_jsons`
+functions are limited to using the views. Most other functions access the
+primary tables of the database and are generally slower. The
+`get_statement_jsons` functions are the most heavily optimized for fast
+recall, as they are the back-end to the REST API.
 """
 
 import json
@@ -32,9 +33,9 @@ class DbClientError(Exception):
     pass
 
 
-# ==============================================================================
+# =============================================================================
 # Tools for getting information off of the database (older)
-# ==============================================================================
+# =============================================================================
 
 
 def get_reader_output(db, ref_id, ref_type='tcid', reader=None,
@@ -102,10 +103,11 @@ def get_content_by_refs(db, pmid_list=None, trid_list=None, sources=None,
     db : :py:class:`DatabaseManager`
         Reference to the DB to query
     pmid_list : list[str] or None
-        A list of pmids. Default is None, in which case trid_list must be given.
-    trid_list : list[int] or None
-        A list of text ref ids. Default is None, in which case pmid list must be
+        A list of pmids. Default is None, in which case trid_list must be
         given.
+    trid_list : list[int] or None
+        A list of text ref ids. Default is None, in which case pmid list must
+        be given.
     sources : list[str] or None
         A list of sources to include (e.g. 'pmc_oa', or 'pubmed'). Default is
         None, indicating that all sources will be included.
@@ -113,8 +115,8 @@ def get_content_by_refs(db, pmid_list=None, trid_list=None, sources=None,
         A list of the formats to be included ('xml', 'text'). Default is None,
         indicating that all formats will be included.
     content_type : str
-        Select the type of content to load ('abstract' or 'fulltext'). Note that
-        not all refs will have any, or both, types of content.
+        Select the type of content to load ('abstract' or 'fulltext'). Note
+        that not all refs will have any, or both, types of content.
     unzip : Optional[bool]
         If True, the compressed output is decompressed into clear text.
         Default: True
@@ -144,10 +146,12 @@ def get_content_by_refs(db, pmid_list=None, trid_list=None, sources=None,
 
     # Do the query to get the content.
     if pmid_list is not None:
-        content_list = db.select_all([db.TextRef.pmid, db.TextContent.content],
-                                     db.TextRef.id == db.TextContent.text_ref_id,
-                                     db.TextRef.pmid.in_(pmid_list),
-                                     *clauses)
+        content_list = db.select_all(
+            [db.TextRef.pmid, db.TextContent.content],
+            db.TextRef.id == db.TextContent.text_ref_id,
+            db.TextRef.pmid.in_(pmid_list),
+            *clauses
+            )
     else:
         content_list = db.select_all([db.TextRef.id, db.TextContent.content],
                                      db.TextContent.text_ref_id.in_(trid_list),
@@ -199,8 +203,9 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
         statements. Otherwise, they will be selected from the raw statements.
         Default is True.
     with_support : bool
-        Choose whether to populate the supports and supported_by list attributes
-        of the Statement objects. Generally results in slower queries.
+        Choose whether to populate the supports and supported_by list
+        attributes of the Statement objects. Generally results in slower
+        queries.
     with_evidence : bool
         Choose whether or not to populate the evidence list attribute of the
         Statements. As with `with_support`, setting this to True will take
@@ -262,7 +267,7 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
         stmts = get_statement_essentials(clauses, count=count, db=db,
                                          preassembled=preassembled)
     else:
-        stmts = get_statements(clauses, count=count,
+        stmts = get_statements(clauses, cnt=count,
                                do_stmt_count=do_stmt_count, db=db,
                                preassembled=preassembled, fix_refs=fix_refs,
                                with_evidence=with_evidence,
@@ -277,11 +282,12 @@ def get_statements_by_paper(id_val, id_type='pmid', count=1000, db=None,
     Parameters
     ----------
     id_val : int or str
-        The value of the id for the paper whose statements you wish to retrieve.
+        The value of the id for the paper whose statements you wish to
+        retrieve.
     id_type : str
-        The type of id used (default is pmid). Options include pmid, pmcid, doi,
-        pii, url, or manuscript_id. Note that pmid is generally the best means
-        of getting a paper.
+        The type of id used (default is pmid). Options include pmid, pmcid,
+        doi, pii, url, or manuscript_id. Note that pmid is generally the
+        best means of getting a paper.
     count : int
         Number of statements to retrieve in each batch (passed to
         :py:func:`get_statements`).
@@ -318,7 +324,7 @@ def get_statements_by_paper(id_val, id_type='pmid', count=1000, db=None,
                 db.RawStatements.id == db.RawUniqueLinks.raw_stmt_id,
                 db.PAStatements.mk_hash == db.RawUniqueLinks.pa_stmt_mk_hash
                 ]
-        stmts.extend(get_statements(clauses, count=count, db=db,
+        stmts.extend(get_statements(clauses, cnt=count, db=db,
                                     preassembled=preassembled,
                                     do_stmt_count=do_stmt_count))
     return stmts
@@ -347,8 +353,8 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
         statements. Otherwise, they will be selected from the raw statements.
         Default is True.
     with_support : bool
-        Choose whether to populate the supports and supported_by list attributes
-        of the Statement objects. General results in slower queries.
+        Choose whether to populate the supports and supported_by list
+        attributes of the Statement objects. General results in slower queries.
     with_evidence : bool
         Choose whether or not to populate the evidence list attribute of the
         Statements. As with `with_support`, setting this to True will take
@@ -365,6 +371,7 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
     -------
     list of Statements from the database corresponding to the query.
     """
+    cnt = count
     if db is None:
         db = get_primary_db()
 
@@ -377,8 +384,8 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
             logger.info("Counting statements...")
             num_stmts = q.count()
             logger.info("Total of %d statements" % num_stmts)
-        db_stmts = q.yield_per(count)
-        for subset in batch_iter(db_stmts, count):
+        db_stmts = q.yield_per(cnt)
+        for subset in batch_iter(db_stmts, cnt):
             stmts.extend(get_raw_stmts_frm_db_list(db, subset, with_sids=False,
                                                    fix_refs=fix_refs))
             if do_stmt_count:
@@ -396,14 +403,14 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
                 ]
             pa_raw_stmt_pairs = \
                 db.select_all([db.PAStatements, db.RawStatements],
-                              *clauses, yield_per=count)
+                              *clauses, yield_per=cnt)
             stmt_dict = _process_pa_statement_res_wev(db, pa_raw_stmt_pairs,
-                                                      count=count,
+                                                      count=cnt,
                                                       fix_refs=fix_refs)
         else:
             # Get just pa statements without their supporting raw statement(s).
-            pa_stmts = db.select_all(db.PAStatements, *clauses, yield_per=count)
-            stmt_dict = _process_pa_statement_res_nev(db, pa_stmts, count=count)
+            pa_stmts = db.select_all(db.PAStatements, *clauses, yield_per=cnt)
+            stmt_dict = _process_pa_statement_res_nev(db, pa_stmts, count=cnt)
 
         # Populate the supports/supported by fields.
         if with_support:
@@ -416,7 +423,8 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
 
 
 @clockit
-def _process_pa_statement_res_wev(db, stmt_iterable, count=1000, fix_refs=True):
+def _process_pa_statement_res_wev(db, stmt_iterable, count=1000,
+                                  fix_refs=True):
     # Iterate over the batches to create the statement objects.
     stmt_dict = {}
     ev_dict = {}
@@ -502,18 +510,20 @@ def get_evidence(pa_stmt_list, db=None, fix_refs=True, use_views=True):
 
     if use_views:
         if fix_refs:
-            raw_links = db.select_all([db.FastRawPaLink.mk_hash,
-                                       db.FastRawPaLink.raw_json,
-                                       db.FastRawPaLink.reading_id],
-                                      db.FastRawPaLink.mk_hash.in_(stmt_dict.keys()))
+            raw_links = db.select_all(
+                [db.FastRawPaLink.mk_hash, db.FastRawPaLink.raw_json,
+                 db.FastRawPaLink.reading_id],
+                db.FastRawPaLink.mk_hash.in_(stmt_dict.keys())
+                )
             rel_refs = ['pmid', 'rid']
             ref_cols = [getattr(db.ReadingRefLink, k) for k in rel_refs]
         else:
-            raw_links = db.select_all([db.FastRawPaLink.mk_hash,
-                                       db.FastRawPaLink.raw_json],
-                                      db.FastRawPaLink.mk_hash.in_(stmt_dict.keys()))
+            raw_links = db.select_all(
+                [db.FastRawPaLink.mk_hash, db.FastRawPaLink.raw_json],
+                db.FastRawPaLink.mk_hash.in_(stmt_dict.keys())
+                )
         rid_ref_dict = {}
-        unknown_rid_rs_dict = defaultdict(list)
+        myst_rid_rs_dict = defaultdict(list)
         for info in raw_links:
             if fix_refs:
                 mk_hash, raw_json, rid = info
@@ -529,17 +539,17 @@ def get_evidence(pa_stmt_list, db=None, fix_refs=True, use_views=True):
             if fix_refs:
                 ref_dict = rid_ref_dict.get(rid)
                 if ref_dict is None:
-                    unknown_rid_rs_dict[rid].append(ev)
-                    if len(unknown_rid_rs_dict) >= 1000:
+                    myst_rid_rs_dict[rid].append(ev)
+                    if len(myst_rid_rs_dict) >= 1000:
                         ref_data_list = db.select_all(
                             ref_cols,
-                            db.ReadingRefLink.rid.in_(unknown_rid_rs_dict.keys())
-                        )
+                            db.ReadingRefLink.rid.in_(myst_rid_rs_dict.keys())
+                            )
                         for pmid, rid in ref_data_list:
                             rid_ref_dict[rid] = pmid
-                            for ev in unknown_rid_rs_dict[rid]:
+                            for ev in myst_rid_rs_dict[rid]:
                                 ev.pmid = pmid
-                        unknown_rid_rs_dict.clear()
+                        myst_rid_rs_dict.clear()
                 else:
                     ev.pmid = rid_ref_dict[rid]
     else:
@@ -582,7 +592,7 @@ def get_statements_from_hashes(statement_hashes, preassembled=True, db=None,
 
 def get_support(statements, db=None, recursive=False):
     """Populate the supports and supported_by lists of the given statements."""
-    # TODO: Allow recursive mode (argument should probably be an integer level).
+    # TODO: Allow recursive mode (argument should probably be an integer level)
     if db is None:
         db = get_primary_db()
 
@@ -616,19 +626,19 @@ def _get_trids(db, id_val, id_type):
     """Return text ref IDs corresponding to any ID type and value."""
     # Get the text ref id(s)
     if id_type in ['trid']:
-        trid_list = [int(id_val)]
+        trids = [int(id_val)]
     else:
         id_types = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
         if id_type not in id_types:
             raise ValueError('id_type must be one of: %s' % str(id_types))
         constraint = (getattr(db.TextRef, id_type) == id_val)
-        trid_list = [trid for trid, in db.select_all(db.TextRef.id, constraint)]
-    return trid_list
+        trids = [trid for trid, in db.select_all(db.TextRef.id, constraint)]
+    return trids
 
 
-# ==============================================================================
+# =============================================================================
 # Tools for getting statement jsons (or less) using efficient queries. (Newer)
-# ==============================================================================
+# =============================================================================
 
 
 @clockit
@@ -740,8 +750,8 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
             ('object', '11998', 'HGNC')
             ('subject', 'MAP2K1', 'TEXT')
 
-        Note that you will get the logical AND of the conditions given, in other
-        words, each Statement will satisfy all constraints.
+        Note that you will get the logical AND of the conditions given, in
+        other words, each Statement will satisfy all constraints.
     stmt_type : str or None
         The type of statement to retrieve, e.g. 'Phosphorylation'. If None, no
         type restriction is imposed.
@@ -788,7 +798,8 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         # Create this query (for this agent)
         q = (db.session
              .query(mk_hash_c, ev_count_c)
-             .filter(db.PaMeta.db_id.like(ag_dbid), db.PaMeta.db_name.like(ns)))
+             .filter(db.PaMeta.db_id.like(ag_dbid),
+                     db.PaMeta.db_name.like(ns)))
         if stmt_type is not None:
             q = q.filter(db.PaMeta.type.like(stmt_type))
 
@@ -964,21 +975,25 @@ def get_relation_dict(db, groundings=None, with_evidence_count=False,
             db.PAAgents.db_name, db.PAStatements.type, db.PAStatements.mk_hash]
 
     if with_evidence_count:
-        other_params.append(db.EvidenceCounts.mk_hash == db.PAStatements.mk_hash)
+        other_params.append(
+            db.EvidenceCounts.mk_hash == db.PAStatements.mk_hash
+            )
         vals.append(db.EvidenceCounts.ev_count)
 
     # Query the database
-    results = db.select_all(vals,
-                            db.PAStatements.mk_hash == db.PAAgents.stmt_mk_hash,
-                            *other_params, **{'yield_per': 10000})
+    results = db.select_all(
+        vals,
+        db.PAStatements.mk_hash == db.PAAgents.stmt_mk_hash,
+        *other_params, **{'yield_per': 10000}
+        )
 
     # Sort into a dict.
     stmt_dict = {}
     for res in results:
         if with_evidence_count:
-            ag_id, ag_dbid, ag_role, ag_dbname, stmt_type, stmt_hash, n_ev = res
+            ag_id, ag_dbid, ag_role, ag_dbname, st_type, stmt_hash, n_ev = res
         else:
-            ag_id, ag_dbid, ag_role, ag_dbname, stmt_type, stmt_hash = res
+            ag_id, ag_dbid, ag_role, ag_dbname, st_type, stmt_hash = res
 
         # Handle the case that this is or isn't HGNC
         if ag_dbname == 'HGNC':
@@ -989,16 +1004,18 @@ def get_relation_dict(db, groundings=None, with_evidence_count=False,
 
         # Add the tuple to the dict in the appropriate manner.
         if stmt_hash not in stmt_dict.keys():
-            stmt_dict[stmt_hash] = {'type': stmt_type, 'agents': [ag_tpl]}
+            stmt_dict[stmt_hash] = {'type': st_type, 'agents': [ag_tpl]}
             if with_evidence_count:
                 stmt_dict[stmt_hash]['n_ev'] = n_ev
             if with_support_count:
                 logger.info('Getting a count of support for %d' % stmt_hash)
-                n_sup = db.count(db.PASupportLinks,
-                               db.PASupportLinks.supported_mk_hash == stmt_hash)
+                n_sup = db.count(
+                    db.PASupportLinks,
+                    db.PASupportLinks.supported_mk_hash == stmt_hash
+                    )
                 stmt_dict[stmt_hash]['n_sup'] = n_sup
         else:
-            assert stmt_dict[stmt_hash]['type'] == stmt_type
+            assert stmt_dict[stmt_hash]['type'] == st_type
             stmt_dict[stmt_hash]['agents'].append(ag_tpl)
 
     # Only return the entries with at least 2 agents.
@@ -1009,18 +1026,18 @@ def export_relation_dict_to_tsv(relation_dict, out_base, out_types=None):
     """Export a relation dict (from get_relation_dict) to a tsv.
 
     Available output types are:
-    - "full_tsv" : get a tsv with directed pairs of entities (e.g. HGNC symbols),
-        the type of relation (e.g. Phosphorylation) and the hash of the
-        preassembled statement. Columns are agent_1, agent_2 (where agent_1
-        affects agent_2), type, hash.
-    - "short_tsv" : like the above, but without the hashes, so only one instance
-        of each pair and type trio occurs. However, the information cannot be
-        traced. Columns are agent_1, agent_2, type, where agent_1 affects
-        agent_2.
+    - "full_tsv" : get a tsv with directed pairs of entities (e.g. HGNC 
+        symbols), the type of relation (e.g. Phosphorylation) and the hash 
+        of the preassembled statement. Columns are agent_1, agent_2 (where 
+        agent_1 affects agent_2), type, hash.
+    - "short_tsv" : like the above, but without the hashes, so only one
+        instance of each pair and type trio occurs. However, the information
+        cannot be traced. Columns are agent_1, agent_2, type, where agent_1 
+        affects agent_2.
     - "pairs_tsv" : like the above, but without the relation type. Similarly,
-        each row is unique. In addition, the agents are undirected. Thus this is
-        purely a list of pairs of related entities. The columns are just agent_1
-        and agent_2, where nothing is implied by the ordering.
+        each row is unique. In addition, the agents are undirected. Thus this
+        is purely a list of pairs of related entities. The columns are just
+        agent_1 and agent_2, where nothing is implied by the ordering.
 
     Parameters
     ----------
@@ -1048,7 +1065,8 @@ def export_relation_dict_to_tsv(relation_dict, out_base, out_types=None):
     # Open the tsv files.
     tsv_files = {}
     for output_type in out_types:
-        tsv_files[output_type] = open('%s_%s.tsv' % (out_base, output_type), 'w')
+        tsv_files[output_type] = open('%s_%s.tsv' % (out_base, output_type),
+                                      'w')
 
     # Write the tsv files.
     short_set = set()

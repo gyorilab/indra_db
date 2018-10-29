@@ -8,7 +8,7 @@ Some key functions' capabilities include:
 
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
-           'distill_stmts', 'regularize_agent_id']
+           'distill_stmts', 'regularize_agent_id', 'has_auth']
 
 import re
 import json

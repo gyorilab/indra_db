@@ -12,8 +12,9 @@ from indra.statements import make_statement_camel
 from indra.databases import hgnc_client
 from indra.util import batch_iter
 
+from indra_db.util import has_auth
 from indra_db.client import get_statement_jsons_from_agents, \
-    get_statement_jsons_from_hashes, get_statement_jsons_from_papers, has_auth, \
+    get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation
 
 logger = logging.getLogger("db-api")

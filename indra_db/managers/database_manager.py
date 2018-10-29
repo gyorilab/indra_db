@@ -339,8 +339,7 @@ class DatabaseManager(object):
         class RawCuration(self.Base, Displayable, Curation):
             __tablename__ = 'raw_curation'
             id = Column(Integer, primary_key=True)
-            raw_hash = Column(BigInteger, ForeignKey('RawStatements.mk_hash'))
-            raw_statements = relationship(RawStatements)
+            raw_hash = Column(BigInteger)
         self.RawCuration = RawCuration
         self.tables[RawCuration.__tablename__] = RawCuration
 
@@ -391,7 +390,7 @@ class DatabaseManager(object):
         class PACuration(self.Base, Displayable, Curation):
             __tablename__ = 'pa_curation'
             id = Column(Integer, primary_key=True)
-            pa_hash = Column(BigInteger, ForeignKey('PAStatements.mk_hash'))
+            pa_hash = Column(BigInteger, ForeignKey('pa_statements.mk_hash'))
             pa_statements = relationship(PAStatements)
         self.PACuration = PACuration
         self.tables[PACuration.__tablename__] = PACuration

@@ -39,7 +39,7 @@ class DbAPIError(Exception):
 
 def __process_agent(agent_param):
     """Get the agent id and namespace from an input param."""
-    if not agent_param.endswith('TEXT'):
+    if not agent_param.endswith('@TEXT'):
         param_parts = agent_param.split('@')
         if len(param_parts) == 2:
             ag, ns = param_parts
@@ -280,7 +280,10 @@ def submit_curation_endpoint(level, hash_val):
     ip = request.remote_addr
     text = data.get('text')
     curator = data.get('curator')
-    submit_curation(level, hash_val, tag, text, curator, ip, source_api)
+    is_test = 'test' in request.args
+    if not is_test:
+        assert tag is not 'test'
+        submit_curation(level, hash_val, tag, text, curator, ip, source_api)
     return
 
 

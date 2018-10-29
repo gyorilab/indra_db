@@ -2,7 +2,7 @@ from indra_db.util import get_primary_db
 
 
 def submit_curation(level, hash_val, tag, text, curator, ip,
-                    source='direct_client', db=None):
+                    source='direct_client', api_key=None, db=None):
     """Submit a curation for a given preassembled or raw extraction.
 
     Parameters
@@ -24,6 +24,9 @@ def submit_curation(level, hash_val, tag, text, curator, ip,
         The name of the access point through which the curation was performed.
         The default is 'direct_client', meaning this function was used
         directly. Any higher-level application should identify itself here.
+    api_key : str
+        If you have one, this can help identify you as a curator, and may lend
+        extra weight to your curation(s).
     db : DatabaseManager
         A database manager object used to access the database.
     """
@@ -36,6 +39,9 @@ def submit_curation(level, hash_val, tag, text, curator, ip,
 
     inp = {'tag': tag, 'text': text, 'curator': curator, 'ip': ip,
            'source': source}
+
+    if api_key is not None:
+        inp['auth_id'] = db._get_auth_id(api_key)
 
     if level == 'pa':
         cur = db.PACuration

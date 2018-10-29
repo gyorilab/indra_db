@@ -136,6 +136,7 @@ class Curation(object):
     tag = Column(String)
     text = Column(String)
     curator = Column(String, nullable=False)
+    auth_id = Column(Integer)
     source = Column(String)
     ip = Column(INET)
     date = Column(DateTime, default=func.now())
@@ -566,6 +567,12 @@ class DatabaseManager(object):
             return False
         else:
             return True
+
+    def _get_auth_id(self, api_key):
+        res = self.select_one(self.__Auth.id, self.__Auth.api_key == api_key)
+        if res is None:
+            return
+        return res[0]
 
     def _add_auth(self, new_api_key):
         """Add a new api key to the database."""

@@ -272,7 +272,7 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/curation/submit/<level>/<hash_val>', methods=['POST'])
+@app.route('curation/submit/<level>/<hash_val>', methods=['POST'])
 def submit_curation_endpoint(level, hash_val):
     data = request.json.copy()
     source_api = data.pop('source', 'DB REST API')
@@ -280,10 +280,12 @@ def submit_curation_endpoint(level, hash_val):
     ip = request.remote_addr
     text = data.get('text')
     curator = data.get('curator')
+    api_key = request.args.get('api-key', None)
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'
-        submit_curation(level, hash_val, tag, text, curator, ip, source_api)
+        submit_curation(level, hash_val, tag, text, curator, ip, source_api,
+                        api_key)
     return
 
 

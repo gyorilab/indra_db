@@ -46,3 +46,31 @@ def submit_curation(level, hash_val, tag, text, curator, ip,
 
     db.insert(cur, **inp)
     return
+
+
+def get_curations(level, db=None, **params):
+    """Get all curations for a certain level given certain criteria."""
+    if db is None:
+        db = get_primary_db()
+
+    if level not in ['pa', 'raw']:
+        raise ValueError('Level must be either "pa" or "raw", but got "%s".'
+                         % level)
+    if level == 'pa':
+        cur = db.PACuration
+        hash_key = 'pa_hash'
+    else:
+        cur = db.RawCuration
+        hash_key = 'raw_hash'
+
+    constraints = []
+    for key, val in params.items():
+        if key == 'hash_val':
+            key = hash_key
+        if isinstance(val, list) or isinstance(val, set) \
+           or isinstance(val, tuple):
+            constraints.append(getattr(cur, key).in_(val))
+        else:
+            constraints.append(getattr(cur, key) == val)
+
+    db.select_all(cur, *constraints)

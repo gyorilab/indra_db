@@ -13,7 +13,8 @@ from indra.databases import hgnc_client
 from indra.util import batch_iter
 
 from indra_db.client import get_statement_jsons_from_agents, \
-    get_statement_jsons_from_hashes, get_statement_jsons_from_papers, has_auth
+    get_statement_jsons_from_hashes, get_statement_jsons_from_papers, has_auth, \
+    submit_curation
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -271,8 +272,15 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 
 
 @app.route('/curation/submit/<level>/<hash_val>', methods=['POST'])
-def submit_curation(level, hash_val):
-    pass
+def submit_curation_endpoint(level, hash_val):
+    data = request.json.copy()
+    source_api = data.pop('source', 'DB REST API')
+    tag = data.get('tag')
+    ip = request.remote_addr
+    text = data.get('text')
+    curator = data.get('curator')
+    submit_curation(level, hash_val, tag, text, curator, ip, source_api)
+    return
 
 
 if __name__ == '__main__':

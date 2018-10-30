@@ -8,15 +8,15 @@ from flask import Flask, request, abort, Response
 from flask_compress import Compress
 from flask_cors import CORS
 
-from indra.statements import make_statement_camel
-from indra.databases import hgnc_client
 from indra.util import batch_iter
+from indra.databases import hgnc_client
+from indra.assemblers.html import HtmlAssembler
+from indra.statements import make_statement_camel, stmts_from_json
 
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_elsevier_auth, BadHashError
 
-from rest_api.html_format import format_statements
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -122,7 +122,11 @@ def _query_wrapper(f):
         result['statements_returned'] = len(result['statements'])
 
         if format == 'html':
-            content = format_statements(result)
+            stmts_json = result.pop('statements')
+            stmts_formatted = []
+            stmts = stmts_from_json(stmts_json.values())
+            html_assembler = HtmlAssembler(stmts, result)
+            content = html_assembler.make_model()
             mimetype = 'text/html'
         else: # Return JSON for all other values of the format argument
             content = json.dumps(result)

@@ -60,7 +60,7 @@ class DbApiTestCase(unittest.TestCase):
     def __time_get_query(self, end_point, query_str):
         return self.__time_query('get', end_point, query_str)
 
-    def __time_query(self, method, end_point, query_str=None, url_fmt='/%s/?%s',
+    def __time_query(self, method, end_point, query_str=None, url_fmt='/%s?%s',
                      **data):
         start_time = datetime.now()
         if query_str is not None:
@@ -87,7 +87,8 @@ class DbApiTestCase(unittest.TestCase):
         time_goal = max(kwargs.pop('time_goal', TIMEGOAL), TIMEGOAL)
         query_str = '&'.join(['%s=%s' % (k, v) for k, v in kwargs.items()]
                              + list(args))
-        resp, dt, size = self.__time_get_query('statements', query_str)
+        resp, dt, size = self.__time_get_query('statements/from_agents',
+                                               query_str)
         assert resp.status_code == 200, \
             ('Got error code %d: \"%s\".'
              % (resp.status_code, resp.data.decode()))
@@ -124,7 +125,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_blank_response(self):
         """Test the response to an empty request."""
-        resp, dt, size = self.__time_get_query('statements', '')
+        resp, dt, size = self.__time_get_query('statements/from_agents', '')
         assert resp.status_code == 400, \
             ('Got unexpected response with code %d: %s.'
              % (resp.status_code, resp.data.decode()))
@@ -240,7 +241,7 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def test_query_with_bad_hgnc(self):
-        resp, dt, size = self.__time_get_query('statements',
+        resp, dt, size = self.__time_get_query('statements/from_agents',
                                                ('subject=MEK&object=ERK'
                                                 '&type=Phosphorylation'))
         assert resp.status_code != 200, "Got good status code."
@@ -248,7 +249,7 @@ class DbApiTestCase(unittest.TestCase):
         assert size <= SIZELIMIT, size
 
     def test_famplex_query(self):
-        resp, dt, size = self.__time_get_query('statements',
+        resp, dt, size = self.__time_get_query('statements/from_agents',
                                                ('object=PPP1C@FPLX'
                                                 '&subject=CHEBI:44658@CHEBI'
                                                 '&type=Inhibition'))
@@ -330,7 +331,8 @@ class DbApiTestCase(unittest.TestCase):
 
     def __test_basic_paper_query(self, id_val, id_type, min_num_results=1):
         query_str = 'id=%s&type=%s' % (id_val, id_type)
-        resp, dt, size = self.__time_get_query('papers', query_str)
+        resp, dt, size = self.__time_get_query('statements/from_papers',
+                                               query_str)
         self.__check_time(dt)
         assert size <= SIZELIMIT, size
         assert resp.status_code == 200, str(resp)
@@ -345,7 +347,8 @@ class DbApiTestCase(unittest.TestCase):
         self.__test_basic_paper_query(pmid, 'pmid')
 
         # Now check without pmid specified (should be assumed.)
-        resp, _, _ = self.__time_get_query('papers', 'id=%s' % pmid)
+        resp, _, _ = self.__time_get_query('statements/from_papers',
+                                           'id=%s' % pmid)
         assert resp.status_code == 200, str(resp)
 
     def test_pmcid_paper_query(self):
@@ -407,11 +410,12 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def test_redaction_on_agents_query(self):
-        return self.__test_redaction('get', 'statements',
+        return self.__test_redaction('get', 'statements/from_agents',
                                      'agent1=STAT5@FPLX&agent2=CRKL')
 
     def test_redaction_on_paper_query(self):
-        return self.__test_redaction('get', 'papers', 'id=20914619&type=tcid')
+        return self.__test_redaction('get', 'statements/from_papers',
+                                     'id=20914619&type=tcid')
 
     def test_redaction_on_hash_query(self):
         sample_hashes = [
@@ -425,7 +429,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_curation_submission(self):
         # This can only test the surface layer endpoint.
-        self.__time_query('post', 'curation/pa/12345?test', tag='test',
+        self.__time_query('post', 'curation/submit/pa/12345?test', tag='test',
                           curator='tester', text='This is text.')
 
 

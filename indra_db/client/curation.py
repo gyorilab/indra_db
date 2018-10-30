@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger("db_curation_client")
+
 from indra_db.util import get_primary_db
 from indra_db.exceptions import NoAuthError
 
@@ -53,8 +57,10 @@ def submit_curation(level, hash_val, tag, text, curator, ip, api_key,
         cur = db.RawCuration
         inp['raw_hash'] = hash_val
 
-    db.insert(cur, **inp)
-    return
+    logger.info("Adding curation: %s" % str(inp))
+
+    dbid = db.insert(cur, **inp)
+    return level, dbid
 
 
 def get_curations(level, db=None, **params):

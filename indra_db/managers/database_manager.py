@@ -4,6 +4,7 @@ __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
 import re
 import random
 import logging
+from uuid import uuid4
 from io import BytesIO
 from numbers import Number
 from datetime import datetime
@@ -589,10 +590,12 @@ class DatabaseManager(object):
             return False
         return auth.elsevier_access
 
-    def _add_auth(self, new_api_key, name, elsevier_access=False):
+    def _add_auth(self, name, elsevier_access=False):
         """Add a new api key to the database."""
-        return self.insert(self.__Auth, api_key=new_api_key, name=name,
+        new_uuid = str(uuid4())
+        dbid = self.insert(self.__Auth, api_key=new_uuid, name=name,
                            elsevier_access=elsevier_access)
+        return dbid, new_uuid
 
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."

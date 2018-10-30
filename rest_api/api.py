@@ -250,7 +250,7 @@ def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                                            best_first=best_first)
 
 
-@app.route('statements/from_papers', methods=['GET'])
+@app.route('/statements/from_papers', methods=['GET'])
 @_query_wrapper
 def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get and preassemble statements from a paper given by pmid."""
@@ -274,7 +274,7 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('curation/submit/<level>/<hash_val>', methods=['POST'])
+@app.route('/curation/submit/<level>/<hash_val>', methods=['POST'])
 def submit_curation_endpoint(level, hash_val):
     data = request.json.copy()
     source_api = data.pop('source', 'DB REST API')

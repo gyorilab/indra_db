@@ -589,9 +589,10 @@ class DatabaseManager(object):
             return False
         return auth.elsevier_access
 
-    def _add_auth(self, new_api_key):
+    def _add_auth(self, new_api_key, name, elsevier_access=False):
         """Add a new api key to the database."""
-        return self.insert(self.__Auth, api_key=new_api_key)
+        return self.insert(self.__Auth, api_key=new_api_key, name=name,
+                           elsevier_access=elsevier_access)
 
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."

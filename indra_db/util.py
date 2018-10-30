@@ -8,7 +8,7 @@ Some key functions' capabilities include:
 
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
-           'distill_stmts', 'regularize_agent_id', 'has_auth']
+           'distill_stmts', 'regularize_agent_id']
 
 import re
 import json
@@ -26,8 +26,8 @@ from indra.util import batch_iter, clockit
 from indra.statements import Complex, SelfModification, ActiveForm,\
     stmts_from_json, Conversion, Translocation, Statement
 
-from indra_db.managers.database_manager import DatabaseManager,\
-    IndraDatabaseError
+from indra_db.managers.database_manager import DatabaseManager
+from indra_db.exceptions import IndraDbException
 from indra_db.config import get_databases as get_defaults
 
 logger = logging.getLogger('db_util')
@@ -79,7 +79,7 @@ def get_primary_db(force_new=False):
     if 'primary' in defaults.keys():
         primary_host = defaults['primary']
     else:
-        raise IndraDatabaseError("No primary host available in defaults file.")
+        raise IndraDbException("No primary host available in defaults file.")
 
     global __PRIMARY_DB
     if __PRIMARY_DB is None or force_new:
@@ -152,7 +152,7 @@ def get_statements_without_agents(db, prefix, *other_stmt_clauses, **kwargs):
             stmt_tbl_obj.id == agent_tbl_obj.stmt_id
         )
     else:
-        raise IndraDatabaseError("Unrecognized prefix: %s." % prefix)
+        raise IndraDbException("Unrecognized prefix: %s." % prefix)
     stmts_wo_agents_q = (db.filter_query(stmt_tbl_obj, *other_stmt_clauses)
                          .except_(stmts_w_agents_q))
 
@@ -197,8 +197,8 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
     """
     verbose = kwargs.pop('verbose', False)
     if len(kwargs):
-        raise IndraDatabaseError("Unrecognized keyword argument(s): %s."
-                                 % kwargs)
+        raise IndraDbException("Unrecognized keyword argument(s): %s."
+                               % kwargs)
 
     agent_tbl_obj = db.tables[prefix + '_agents']
 
@@ -310,9 +310,9 @@ def _get_agent_tuples(stmt, stmt_id):
     elif len(ag_list) == 2:
         agents = {('SUBJECT', ag_list[0]), ('OBJECT', ag_list[1])}
     else:
-        raise IndraDatabaseError("Unhandled agent structure for stmt %s "
+        raise IndraDbException("Unhandled agent structure for stmt %s "
                                  "with agents: %s."
-                                 % (str(stmt), str(stmt.agent_list())))
+                               % (str(stmt), str(stmt.agent_list())))
 
     def all_agent_refs(agents):
         """Smooth out the iteration over agents and their refs."""
@@ -878,13 +878,6 @@ def unpack(bts, decode=True):
     if decode:
         ret = ret.decode('utf-8')
     return ret
-
-
-def has_auth(api_key, db=None):
-    logger.info("Checking auth of secret key.")
-    if db is None:
-        db = get_primary_db()
-    return db._check_auth(api_key)
 
 
 def _get_trids(db, id_val, id_type):

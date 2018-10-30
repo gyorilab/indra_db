@@ -12,10 +12,9 @@ from indra.statements import make_statement_camel
 from indra.databases import hgnc_client
 from indra.util import batch_iter
 
-from indra_db.util import has_auth
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation
+    submit_curation, _has_elsevier_auth
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -75,6 +74,10 @@ def get_source(ev_json):
 REDACT_MESSAGE = '[MISSING/INVALID API KEY: limited to 200 char for Elsevier]'
 
 
+def sec_since(t):
+    return (datetime.now() - t).total_seconds()
+
+
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
     @wraps(f)
@@ -82,25 +85,25 @@ def _query_wrapper(f):
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))
 
-        query_dict = request.args.copy()
-        offs = query_dict.pop('offset', None)
-        ev_limit = query_dict.pop('ev_limit', 10)
-        best_first = query_dict.pop('best_first', True)
-        do_stream_str = query_dict.pop('stream', 'false')
+        query = request.args.copy()
+        offs = query.pop('offset', None)
+        ev_lim = query.pop('ev_limit', 10)
+        best_first = query.pop('best_first', True)
+        do_stream_str = query.pop('stream', 'false')
         do_stream = True if do_stream_str == 'true' else False
-        max_stmts = min(int(query_dict.pop('max_stmts', MAX_STATEMENTS)),
+        max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
 
-        api_key = query_dict.pop('api-key', None)
+        api_key = query.pop('api-key', None)
 
         logger.info("Running function %s after %s seconds."
-                    % (f.__name__, (datetime.now() - start_time).total_seconds()))
-        result = f(query_dict, offs, max_stmts, ev_limit, best_first, *args, **kwargs)
+                    % (f.__name__, sec_since(start_time)))
+        result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
         logger.info("Finished function %s after %s seconds."
-                    % (f.__name__, (datetime.now() - start_time).total_seconds()))
+                    % (f.__name__, sec_since(start_time)))
 
         # Redact elsevier content for those without permission.
-        if api_key is None or not has_auth(api_key):
+        if api_key is None or not _has_elsevier_auth(api_key):
             for stmt_json in result['statements'].values():
                 for ev_json in stmt_json['evidence']:
                     if get_source(ev_json) == 'elsevier':
@@ -108,9 +111,9 @@ def _query_wrapper(f):
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
         logger.info("Finished redacting evidence for %s after %s seconds."
-                    % (f.__name__, (datetime.now() - start_time).total_seconds()))
+                    % (f.__name__, sec_since(start_time)))
         result['offset'] = offs
-        result['evidence_limit'] = ev_limit
+        result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
 
         if do_stream:
@@ -120,11 +123,10 @@ def _query_wrapper(f):
             resp = Response(gen, mimetype='application/json')
         else:
             resp = Response(json.dumps(result), mimetype='application/json')
-        logger.info("Exiting with %d statements with %d evidence of size %f MB "
-                    "after %s seconds."
+        logger.info("Exiting with %d statements with %d evidence of size %f "
+                    "MB after %s seconds."
                     % (len(result['statements']), result['total_evidence'],
-                       sys.getsizeof(resp.data)/1e6,
-                       (datetime.now() - start_time).total_seconds()))
+                       sys.getsizeof(resp.data)/1e6, sec_since(start_time)))
         return resp
     return decorator
 

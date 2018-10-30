@@ -1,8 +1,9 @@
 from indra_db.util import get_primary_db
+from indra_db.exceptions import NoAuthError
 
 
-def submit_curation(level, hash_val, tag, text, curator, ip,
-                    source='direct_client', api_key=None, db=None):
+def submit_curation(level, hash_val, tag, text, curator, ip, api_key,
+                    source='direct_client', db=None):
     """Submit a curation for a given preassembled or raw extraction.
 
     Parameters
@@ -40,8 +41,10 @@ def submit_curation(level, hash_val, tag, text, curator, ip,
     inp = {'tag': tag, 'text': text, 'curator': curator, 'ip': ip,
            'source': source}
 
-    if api_key is not None:
-        inp['auth_id'] = db._get_auth_id(api_key)
+    auth = db._get_auth_info(api_key)
+    if auth is None:
+        raise NoAuthError(api_key, 'curation')
+    inp['auth_id'] = auth[0]
 
     if level == 'pa':
         cur = db.PACuration

@@ -1,5 +1,5 @@
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
-           'IndraDatabaseError', 'sql_expressions']
+           'IndraDbException', 'sql_expressions']
 
 import re
 import random
@@ -18,6 +18,8 @@ from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.dialects.postgresql import BYTEA, INET
+
+from indra_db.exceptions import IndraDbException
 
 try:
     import networkx as nx
@@ -107,8 +109,10 @@ class formats(_map_class):
     JSON = 'json'
 
 
-class IndraDatabaseError(Exception):
-    pass
+class IndraTableError(IndraDbException):
+    def __init__(self, table, issue):
+        msg = 'Error in table %s: %s' % (table, issue)
+        super(IndraTableError, self).__init__(self, msg)
 
 
 class Displayable(object):
@@ -407,7 +411,9 @@ class DatabaseManager(object):
         class Auth(self.Base, Displayable):
             __tablename__ = 'auth'
             id = Column(Integer, primary_key=True)
+            name = Column(String, unique=True)
             api_key = Column(String, unique=True)
+            elsevier_access = Column(Boolean, default=False)
         self.__Auth = Auth
 
         # Materialized Views
@@ -556,23 +562,32 @@ class DatabaseManager(object):
         """Create the auth table."""
         self.__Auth.__table__.create(bind=self.engine)
 
-    def _check_auth(self, api_key):
+    def _get_auth(self, api_key):
+        res = self.select_all(self.__Auth, self.__Auth.api_key == api_key)
+        if len(res) > 1:
+            raise IndraTableError("auth",
+                                  "Multiple matches for api_key: %s" % res)
+        if not res:
+            return None
+        return res[0]
+
+    def _get_auth_info(self, api_key):
         """Check if an api key is valid."""
         if api_key is None:
             return False
-        matches = self.filter_query(self.__Auth,
-                                    self.__Auth.api_key == api_key).all()
-        assert len(matches) <= 1, "Multiple matches found."
-        if len(matches) == 0:
-            return False
+        auth = self._get_auth(api_key)
+        if auth is None:
+            return None
         else:
-            return True
+            return auth.id, auth.name
 
-    def _get_auth_id(self, api_key):
-        res = self.select_one(self.__Auth.id, self.__Auth.api_key == api_key)
-        if res is None:
-            return
-        return res[0]
+    def _has_elsevier_auth(self, api_key):
+        if api_key is None:
+            return False
+        auth = self._get_auth(api_key)
+        if auth is None:
+            return False
+        return auth.elsevier_access
 
     def _add_auth(self, new_api_key):
         """Add a new api key to the database."""
@@ -677,7 +692,7 @@ class DatabaseManager(object):
             logger.debug('Got session.')
             self.session = DBSession()
             if self.session is None:
-                raise IndraDatabaseError("Failed to grab session.")
+                raise IndraDbException("Failed to grab session.")
 
     def get_tables(self):
         "Get a list of available tables."
@@ -749,9 +764,9 @@ class DatabaseManager(object):
                 link = self._get_foreign_key_constraint(fk_path[i+1],
                                                         fk_path[i])
             if link is None:
-                raise IndraDatabaseError("There is no foreign key in %s "
+                raise IndraDbException("There is no foreign key in %s "
                                          "pointing to %s."
-                                         % (table_name_1, table_name_2))
+                                       % (table_name_1, table_name_2))
             links.append(link)
         return links
 
@@ -877,7 +892,7 @@ class DatabaseManager(object):
                           or isinstance(element, datetime)):
                         new_entry.append(element)
                     else:
-                        raise IndraDatabaseError(
+                        raise IndraDbException(
                             "Don't know what to do with element of type %s."
                             "Should be str, bytes, datetime, None, or a "
                             "number." % type(element)
@@ -902,7 +917,7 @@ class DatabaseManager(object):
             elif isinstance(tbls[0], str):
                 query_args = [self.tables[tbl] for tbl in tbls]
             else:
-                raise IndraDatabaseError(
+                raise IndraDbException(
                     'Unrecognized table specification type: %s.' %
                     type(tbls[0])
                     )
@@ -912,7 +927,7 @@ class DatabaseManager(object):
             elif isinstance(tbls, str):
                 query_args = [self.tables[tbls]]
             else:
-                raise IndraDatabaseError(
+                raise IndraDbException(
                     'Unrecognized table specification type: %s.' %
                     type(tbls)
                     )
@@ -1044,7 +1059,7 @@ class DatabaseManager(object):
             if table in self.tables.keys() or table in self.m_views.keys():
                 true_table = getattr(self, table)
             else:
-                raise IndraDatabaseError("Invalid table name: %s." % table)
+                raise IndraDbException("Invalid table name: %s." % table)
         elif hasattr(table, 'class_'):
             # This is technically an attribute of a table.
             true_table = table.class_
@@ -1052,8 +1067,8 @@ class DatabaseManager(object):
             # This is an actual table object
             true_table = table
         else:
-            raise IndraDatabaseError("Unrecognized table: %s of type %s"
-                                     % (table, type(table)))
+            raise IndraDbException("Unrecognized table: %s of type %s"
+                                   % (table, type(table)))
 
         # Get all ids for this table given query filters
         logger.info("Getting all relevant ids.")

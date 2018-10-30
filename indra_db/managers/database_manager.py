@@ -575,7 +575,7 @@ class DatabaseManager(object):
     def _get_auth_info(self, api_key):
         """Check if an api key is valid."""
         if api_key is None:
-            return False
+            return None
         auth = self._get_auth(api_key)
         if auth is None:
             return None

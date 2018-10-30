@@ -423,6 +423,11 @@ class DbApiTestCase(unittest.TestCase):
         return self.__test_redaction('post', 'statements/from_hashes', None,
                                      url_fmt='%s?%s', hashes=sample_hashes)
 
+    def test_curation_submission(self):
+        # This can only test the surface layer endpoint.
+        self.__time_query('post', 'curation/pa/12345?test', tag='test',
+                          curator='tester', text='This is text.')
+
 
 if __name__ == '__main__':
     unittest.main()

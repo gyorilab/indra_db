@@ -26,8 +26,8 @@ from indra.util import batch_iter, clockit
 from indra.statements import Complex, SelfModification, ActiveForm,\
     stmts_from_json, Conversion, Translocation, Statement
 
-from indra_db.managers.database_manager import DatabaseManager,\
-    IndraDatabaseError
+from indra_db.managers.database_manager import DatabaseManager
+from indra_db.exceptions import IndraDbException
 from indra_db.config import get_databases as get_defaults
 
 logger = logging.getLogger('db_util')
@@ -79,7 +79,7 @@ def get_primary_db(force_new=False):
     if 'primary' in defaults.keys():
         primary_host = defaults['primary']
     else:
-        raise IndraDatabaseError("No primary host available in defaults file.")
+        raise IndraDbException("No primary host available in defaults file.")
 
     global __PRIMARY_DB
     if __PRIMARY_DB is None or force_new:
@@ -152,7 +152,7 @@ def get_statements_without_agents(db, prefix, *other_stmt_clauses, **kwargs):
             stmt_tbl_obj.id == agent_tbl_obj.stmt_id
         )
     else:
-        raise IndraDatabaseError("Unrecognized prefix: %s." % prefix)
+        raise IndraDbException("Unrecognized prefix: %s." % prefix)
     stmts_wo_agents_q = (db.filter_query(stmt_tbl_obj, *other_stmt_clauses)
                          .except_(stmts_w_agents_q))
 
@@ -197,8 +197,8 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
     """
     verbose = kwargs.pop('verbose', False)
     if len(kwargs):
-        raise IndraDatabaseError("Unrecognized keyword argument(s): %s."
-                                 % kwargs)
+        raise IndraDbException("Unrecognized keyword argument(s): %s."
+                               % kwargs)
 
     agent_tbl_obj = db.tables[prefix + '_agents']
 
@@ -310,9 +310,9 @@ def _get_agent_tuples(stmt, stmt_id):
     elif len(ag_list) == 2:
         agents = {('SUBJECT', ag_list[0]), ('OBJECT', ag_list[1])}
     else:
-        raise IndraDatabaseError("Unhandled agent structure for stmt %s "
+        raise IndraDbException("Unhandled agent structure for stmt %s "
                                  "with agents: %s."
-                                 % (str(stmt), str(stmt.agent_list())))
+                               % (str(stmt), str(stmt.agent_list())))
 
     def all_agent_refs(agents):
         """Smooth out the iteration over agents and their refs."""
@@ -810,7 +810,7 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
                                     num_procs)
     stmts |= db_stmts
     duplicate_sids |= db_duplicates
-    logger.info("After filtering database statements: %d unique, %d duplicates."
+    logger.info("After filtering database statements: %d unique, %d duplicates"
                 % (len(stmts), len(duplicate_sids)))
     assert not linked_sids & duplicate_sids, linked_sids & duplicate_sids
 
@@ -839,7 +839,8 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
     return stmts
 
 
-def delete_raw_statements_by_id(db, raw_sids, sync_session=False, remove='all'):
+def delete_raw_statements_by_id(db, raw_sids, sync_session=False,
+                                remove='all'):
     """Delete raw statements, their agents, and their raw-unique links.
 
     It is best to batch over this function with sets of 1000 or so ids. Setting
@@ -877,3 +878,17 @@ def unpack(bts, decode=True):
     if decode:
         ret = ret.decode('utf-8')
     return ret
+
+
+def _get_trids(db, id_val, id_type):
+    """Return text ref IDs corresponding to any ID type and value."""
+    # Get the text ref id(s)
+    if id_type in ['trid']:
+        trids = [int(id_val)]
+    else:
+        id_types = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
+        if id_type not in id_types:
+            raise ValueError('id_type must be one of: %s' % str(id_types))
+        constraint = (getattr(db.TextRef, id_type) == id_val)
+        trids = [trid for trid, in db.select_all(db.TextRef.id, constraint)]
+    return trids

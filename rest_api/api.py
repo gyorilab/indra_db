@@ -271,12 +271,19 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
         abort(Response("No ids in request!", 400))
 
     # Format the ids.
-    ids_inp = [(typ, int(val) if typ in ['trid', 'tcid'] else val)
-               for val, typ in ids.items()]
+    id_tpls = set()
+    for id_dict in ids:
+        val = id_dict['id']
+        typ = id_dict['type']
+
+        # Turn tcids and trids into integers.
+        id_val = int(val) if typ in ['tcid', 'trid'] else val
+
+        id_tpls.add((typ, id_val))
 
     # Now get the statements.
-    logger.info('Getting statements for %d papers.' % len(ids_inp))
-    result = get_statement_jsons_from_papers(ids_inp, max_stmts=max_stmts,
+    logger.info('Getting statements for %d papers.' % len(id_tpls))
+    result = get_statement_jsons_from_papers(id_tpls, max_stmts=max_stmts,
                                              offset=offs, ev_limit=ev_limit,
                                              best_first=best_first)
     return result

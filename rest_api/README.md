@@ -1,23 +1,43 @@
 # INDRA Database REST API
 
-One feature of INDRA is the ability to create and maintain a database of
-INDRA Statements. This web API allows accessing Statements in a database by
-searching Statements matching a given set of query paramerters and returning
-the Statements in a JSON serialized form.
+The INDRA Database software has been developed to create and maintain a
+database of text references, content, reading results, and ultimately INDRA
+Statements extracted from those reading results. The software also manages
+the generation and update process of cleaning, deduplicating, and finding
+relations between the raw Statement extractions, into what are called
+pre-assembled Statements. All INDRA Statements can be represented as JSON, 
+which is the format returned by the API.
+
+This web API provides the code necessary to support a REST service which
+allows access to the pre-assembled Statements in a database. The system is
+still under heavy development so capabilities are always expanding, but as
+of this writing, the API supports:
+- `statements/from_agents`, getting Statements by agents, using various ids
+ or names, by statement type (e.g. Phosphorylation), or
+ - `statements/from_hash` and `statements/from_hashes`, getting Statements by
+statement hash, either singly or in batches, and
+- `statements/from_papers`, getting Statements using the paper ids from
+which they were extracted, and
+- `curation/submit/<level>/<hash>` you can also curate Statements, helping us
+improve the quality and accuracy of our content.
+
+As mentioned, the service is changing rapidly, and this documentation may at
+times be out of date. For the latest, check github or contact us.
 
 You need the following information to access a running web service:
 - The address of the web service (below shown with the placeholder
-host.of.api.com)
-- (for some implementations) An API key which needs to be sent in the header of each request to the
+`host.of.api.com`)
+- An API key which needs to be sent in the header of each request to the
 service, or any other credentials that are implemented.
 
 If you want to use our implementation of the web API, you can contact us for
-the path and the API key.
+the path and an API key.
 
-The service in `api.py` is implemented using the Flask Python package.
-The means of hosting this api are left to the user.
-We have had success with [Zappa](https://github.com/Miserlou/Zappa) and AWS,
-and recommend it for a quick and efficient way to get the API up and running.
+The code to support the REST service can be found in `api.py`, implemented
+using the Flask Python package. The means of hosting this api are left to
+the user. We have had success using [Zappa](https://github.com/Miserlou/Zappa)
+and AWS Lambda, and recommend it for a quick and efficient way to get the API
+up and running.
 
 ## Search parameters
 

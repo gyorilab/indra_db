@@ -88,7 +88,9 @@ def _query_wrapper(f):
         query = request.args.copy()
         offs = query.pop('offset', None)
         ev_lim = query.pop('ev_limit', 10)
-        best_first = query.pop('best_first', True)
+        best_first_str = query.pop('best_first', 'true')
+        best_first = True if best_first_str.lower() == 'true' \
+                             or best_first_str else False
         do_stream_str = query.pop('stream', 'false')
         do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),

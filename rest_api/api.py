@@ -87,7 +87,7 @@ def _query_wrapper(f):
 
         query = request.args.copy()
         offs = query.pop('offset', None)
-        ev_lim = query.pop('ev_limit', 10)
+        ev_lim = query.pop('ev_limit', None)
         best_first_str = query.pop('best_first', 'true')
         best_first = True if best_first_str.lower() == 'true' \
                              or best_first_str else False
@@ -171,6 +171,8 @@ def get_statements_query_format():
 def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get some statements constrained by query."""
     logger.info("Getting query details.")
+    if ev_limit is None:
+        ev_limit = 10
     try:
         # Get the agents without specified locations (subject or object).
         free_agents = [__process_agent(ag)
@@ -193,11 +195,11 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     # Fix the case, if we got a statement type.
     act = None if act_raw is None else make_statement_camel(act_raw)
 
-    # If there was something else in the query, there shouldn't be, so someone's
-    # probably confused.
+    # If there was something else in the query, there shouldn't be, so
+    # someone's probably confused.
     if query_dict:
-        abort(Response("Unrecognized query options; %s." % list(query_dict.keys()),
-                       400))
+        abort(Response("Unrecognized query options; %s."
+                       % list(query_dict.keys()), 400))
         return
 
     # Make sure we got SOME agents. We will not simply return all
@@ -226,7 +228,9 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 
 @app.route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
-def get_statements_by_hashes(query_dict, offs, max_stmts, ev_limit, best_first):
+def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
+    if ev_lim is None:
+        ev_lim = 20
     hashes = request.json.get('hashes')
     if not hashes:
         logger.error("No hashes provided!")
@@ -237,7 +241,7 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_limit, best_first):
                        400))
 
     result = get_statement_jsons_from_hashes(hashes, max_stmts=max_stmts,
-                                             offset=offs, ev_limit=ev_limit,
+                                             offset=offs, ev_limit=ev_lim,
                                              best_first=best_first)
     return result
 
@@ -246,7 +250,8 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_limit, best_first):
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                           hash_val):
-    ev_limit = 10000
+    if ev_limit is None:
+        ev_limit = 10000
     return get_statement_jsons_from_hashes([hash_val], max_stmts=max_stmts,
                                            offset=offs, ev_limit=ev_limit,
                                            best_first=best_first)

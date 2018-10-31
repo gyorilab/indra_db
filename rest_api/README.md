@@ -60,7 +60,7 @@ options to control the size of the response:
  "false" to get statements in an arbitrary order. This can also speed up a 
  query. You may however find you get a lot of low-quality content.
 
-###<a name="from-agents"></a>Get Statements by Agents (and Type): `api.host/statements/from_agents`
+###<a name="from-agents"></a> Get Statements by Agents (and Type): `api.host/statements/from_agents`
 
 This endpoint allows you to get statements filtering by their agents and 
 the type of Statement. The query parameters are as follows:
@@ -105,7 +105,7 @@ the type of Statement. The query parameters are as follows:
    Note that this field is not case sensitive, so `type=phosphorylation` would
    give the same result.
 
-###<a name="from-hash"></a>Get a Statement and it's Evidence by Hash: `api.host/statements/from_hash`
+###<a name="from-hash"></a> Get a Statement and it's Evidence by Hash: `api.host/statements/from_hash`
 
 ## Usage examples
 

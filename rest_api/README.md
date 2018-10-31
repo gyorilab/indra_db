@@ -48,11 +48,11 @@ options to control the size of the response:
 - **`max_stmts`**: Set the maximum number of statements you wish to receive.
  The REST API maximum is 1000, which cannot be overridden by this argument
  (to prevent request timeouts).
-- **`ev_limit`**: By default, only 10 pieces of Evidence will be included
- with each statement. A single statement can have upwards of 10,000 pieces of
- evidence, so this allows queries to be run reliably. There is no limitation
- on this value, so use with caution. Setting too high a value may cause a 
- request to time or be too large to return.
+- **`ev_limit`**: The default varies, but in general the amount of Evidence 
+ returned for each statement is limited. A single statement can have upwards of
+ 10,000 pieces of evidence, so this allows queries to be run reliably. There
+ is no limitation on this value, so use with caution. Setting too high a value
+ may cause a request to time out or be too large to return.
 - **`best_first`**: This is set to "true" by default, so statements with the
  most evidence are returned first. These are generally the most reliable, 
  however they are also generally the most canonical. Set this parameter to 

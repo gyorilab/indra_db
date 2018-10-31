@@ -14,8 +14,9 @@ still under heavy development so capabilities are always expanding, but as
 of this writing, the API supports:
 - [`statements/from_agents`](#from-agents), getting Statements by agents, using
  various ids or names, by statement type (e.g. Phosphorylation), or
-- [`statements/from_hash`](#from-hash) and `statements/from_hashes`, getting
- Statements by Statement hash, either singly or in batches, and
+- [`statements/from_hash`](#from-hash) and
+ [`statements/from_hashes`](#from-hashes), getting Statements by Statement 
+ hash, either singly or in batches, and
 - `statements/from_papers`, getting Statements using the paper ids from
  which they were extracted, and
 - `curation/submit/<level>/<hash>` you can also curate Statements, helping us
@@ -60,17 +61,21 @@ options to control the size and order of the response:
  query. You may however find you get a lot of low-quality content.
 
 The output of the statement endpoint is JSON. Specifically, the endpoints 
-all return a json dict of the following form:
+all return a json dict of the following form (with many made-up but reasonable
+numbers):
 ```python
 {
-  "statements": {
+  "statements": {  # Dict of statement JSONs keyed by hash
     "12345234234": {...},  # Statement JSON 1
     "-246809323482": {...},  # Statement JSON 2
     ...},
   "offset": 2000,  # offset of SQL query
   "evidence_limit": 10,  # evidence limit used
   "statement_limit": 1000,  # REST API Limit
-  "evidence_totals": {...}, # dict of available evidence for each statement keyed by hash
+  "evidence_totals": {  # dict of available evidence for each statement keyed by hash
+    "12345234234": 7657,
+    "-246809323482": 870,
+    ...},
   "total_evidence": 163708, # The total amount of evidence available
   "evidence_returned": 10000  # The total amount of evidence returned
 }
@@ -80,7 +85,7 @@ JSONs keyed by a shallow statement hash (see [here](#from-hash) for more
 details on these hashes).
 
 <a name="from-agents"></a>
-### Get Statements by Agents (and Type): `api.host/statements/from_agents`
+### Get Statements by agents (and type): `GET api.host/statements/from_agents`
 
 This endpoint allows you to get statements filtering by their agents and 
 the type of Statement. The query parameters are as follows:
@@ -126,7 +131,7 @@ the type of Statement. The query parameters are as follows:
    give the same result.
 
 <a name="from-hash"></a> 
-### Get a Statement and it's Evidence by Hash: `api.host/statements/from_hash`
+### Get a Statement and it's Evidence by hash: `GET api.host/statements/from_hash`
 
 INDRA Statement objects have a method, `get_hash`, which produces hash from 
 the content of the Statement. A shallow hash only considers the meaning of 
@@ -134,6 +139,28 @@ the statement (agents, type, modifications, etc.), whereas a deeper hash also
 considers the list of evidence available for that Statement. The shallow hash
 is what is used in this application, as it has the same uniqueness 
 properties used in deduplication.
+
+This endpoint has no extra parameters, but rather takes an extention to the 
+path. So, to look up the hash 123456789, you would use 
+`statements/from_hash/123456789`.
+
+Because this only returns one statement, the default evidence limit is 
+extremely generous, set to 10,000. Thus you are most likely to get all the 
+evidence for a given statement this way. As described above, the evidence 
+limit can also be raised, at the risk of a timed out request.
+
+<a name="from-hashes"></a>
+### Get a Statement from many hashes: `POST api.host/statements/from_hashes`
+
+Like the previous endpoint, this endpoint uses hashes to retrieve Statements,
+however instead of only being allowed one at a time, a bach of 
+hashes may be sent as json data. Because data is sent, this is a POST request,
+even though you are in practice "getting" information. There are no special 
+parameters for this endpoint. The json data should be formatted as:
+```json
+{"hashes": [12345, 246810]}
+```
+with up to 1,000 hashes given in the list.
 
 ## Usage examples
 

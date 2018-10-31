@@ -22,7 +22,8 @@ processing systems at scale:
 with content drawn from:
 - [PubMed](https://www.ncbi.nlm.nih.gov/pubmed/) - ~28 million abstracts
 - [PubMed Central](/www.ncbi.nlm.nih.gov/pmc/) - ~5 million fulltext
-- [Elsevier](https://www.elsevier.com/) - fulltext (requires special access)
+- [Elsevier](https://www.elsevier.com/) - ~0.7 million fulltext 
+(requires special access)
 
 We also collect information from these databases:
 - [Pathway Commons database](http://pathwaycommons.org/)

@@ -13,22 +13,21 @@ allows access to the pre-assembled Statements in a database. The system is
 still under heavy development so capabilities are always expanding, but as
 of this writing, the API supports:
 - [`statements/from_agents`](#from-agents), getting Statements by agents, using
-various ids or names, by statement type (e.g. Phosphorylation), or
- - `statements/from_hash` and `statements/from_hashes`, getting Statements by
-statement hash, either singly or in batches, and
+ various ids or names, by statement type (e.g. Phosphorylation), or
+- [`statements/from_hash`](#from-hash) and `statements/from_hashes`, getting
+ Statements by Statement hash, either singly or in batches, and
 - `statements/from_papers`, getting Statements using the paper ids from
-which they were extracted, and
+ which they were extracted, and
 - `curation/submit/<level>/<hash>` you can also curate Statements, helping us
-improve the quality and accuracy of our content.
+ improve the quality and accuracy of our content.
 
 As mentioned, the service is changing rapidly, and this documentation may at
 times be out of date. For the latest, check github or contact us.
 
 You need the following information to access a running web service:
-- The address of the web service (below shown with the placeholder
-`api.host`)
+- The address of the web service (below shown with the placeholder `api.host`)
 - An API key which needs to be sent in the header of each request to the
-service, or any other credentials that are implemented.
+ service, or any other credentials that are implemented.
 
 If you want to use our implementation of the web API, you can contact us for
 the path and an API key.
@@ -60,7 +59,8 @@ options to control the size of the response:
  "false" to get statements in an arbitrary order. This can also speed up a 
  query. You may however find you get a lot of low-quality content.
 
-###<a name="from-agents"></a> Get Statements by Agents (and Type): `api.host/statements/from_agents`
+<a name="from-agents"></a>
+### Get Statements by Agents (and Type): `api.host/statements/from_agents`
 
 This endpoint allows you to get statements filtering by their agents and 
 the type of Statement. The query parameters are as follows:
@@ -105,7 +105,8 @@ the type of Statement. The query parameters are as follows:
    Note that this field is not case sensitive, so `type=phosphorylation` would
    give the same result.
 
-###<a name="from-hash"></a> Get a Statement and it's Evidence by Hash: `api.host/statements/from_hash`
+<a name="from-hash"></a> 
+### Get a Statement and it's Evidence by Hash: `api.host/statements/from_hash`
 
 ## Usage examples
 

@@ -257,25 +257,26 @@ def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                                            best_first=best_first)
 
 
-@app.route('/statements/from_papers', methods=['GET'])
+@app.route('/statements/from_papers', methods=['POST'])
 @_query_wrapper
 def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
-    """Get and preassemble statements from a paper given by pmid."""
-    # Get the paper id.
-    id_val = query_dict.get('id')
-    if id_val is None:
-        logger.error("No id provided!")
-        abort(Response("No id in request!", 400))
+    """Get Statements from a papers with the given ids."""
+    if ev_limit is None:
+        ev_limit = 10
 
-    # Get the id type, if given.
-    id_type = query_dict.get('type', 'pmid')
+    # Get the paper id.
+    ids = request.json.get('ids')
+    if not ids:
+        logger.error("No ids provided!")
+        abort(Response("No ids in request!", 400))
+
+    # Format the ids.
+    ids_inp = [(typ, int(val) if typ in ['trid', 'tcid'] else val)
+               for val, typ in ids.items()]
 
     # Now get the statements.
-    logger.info('Getting statements for %s=%s...' % (id_type, id_val))
-    if id_type in ['trid', 'tcid']:
-        id_val = int(id_val)
-    result = get_statement_jsons_from_papers([(id_type, id_val)],
-                                             max_stmts=max_stmts,
+    logger.info('Getting statements for %d papers.' % len(ids_inp))
+    result = get_statement_jsons_from_papers(ids_inp, max_stmts=max_stmts,
                                              offset=offs, ev_limit=ev_limit,
                                              best_first=best_first)
     return result

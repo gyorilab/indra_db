@@ -38,13 +38,13 @@ the user. We have had success using [Zappa](https://github.com/Miserlou/Zappa)
 and AWS Lambda, and recommend it for a quick and efficient way to get the API
 up and running.
 
-## The Endpoints
+## The Statement Endpoints
 
 For all queries, an API key is required, which is passed as a parameter
 `api-key` to any/all queries. Below is detailed documentation for the
-different endpoints of the API. In addition, all endpoints that return
-statements (i.e. those with the root `/statements`), have the following
-options to control the size of the response:
+different endpoints of the API that return statements (i.e. those with the root
+`/statements`). All endpoints that return statements have the following
+options to control the size and order of the response:
 - **`max_stmts`**: Set the maximum number of statements you wish to receive.
  The REST API maximum is 1000, which cannot be overridden by this argument
  (to prevent request timeouts).
@@ -58,6 +58,26 @@ options to control the size of the response:
  however they are also generally the most canonical. Set this parameter to 
  "false" to get statements in an arbitrary order. This can also speed up a 
  query. You may however find you get a lot of low-quality content.
+
+The output of the statement endpoint is JSON. Specifically, the endpoints 
+all return a json dict of the following form:
+```json
+{
+  "statements": {
+    "12345234234": <Statement JSON 1>,
+    "-246809323482": <Statement JSON 2>,
+    ...},
+  "offset": <offset of SQL query>,
+  "evidence_limit": <evidence limit used>,
+  "statement_limit": <REST API Limit>,
+  "evidence_totals": <evidence avilable for each statement>,
+  "total_evidence": <total evidence available for all returned statements>,
+  "evidence_returned": <total evidence returned>
+}
+```
+where the `"statements"` element contains a dictionary of INDRA Statement
+JSONs keyed by a shallow statement hash (see [here](#from-hash) for more
+details on these hashes).
 
 <a name="from-agents"></a>
 ### Get Statements by Agents (and Type): `api.host/statements/from_agents`
@@ -107,6 +127,13 @@ the type of Statement. The query parameters are as follows:
 
 <a name="from-hash"></a> 
 ### Get a Statement and it's Evidence by Hash: `api.host/statements/from_hash`
+
+INDRA Statement objects have a method, `get_hash`, which produces hash from 
+the content of the Statement. A shallow hash only considers the meaning of 
+the statement (agents, type, modifications, etc.), whereas a deeper hash also
+considers the list of evidence available for that Statement. The shallow hash
+is what is used in this application, as it has the same uniqueness 
+properties used in deduplication.
 
 ## Usage examples
 

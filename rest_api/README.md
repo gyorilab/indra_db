@@ -131,7 +131,7 @@ the type of Statement. The query parameters are as follows:
    give the same result.
 
 <a name="from-hash"></a> 
-### Get a Statement and it's Evidence by hash: `GET api.host/statements/from_hash`
+### Get a Statement by hash: `GET api.host/statements/from_hash`
 
 INDRA Statement objects have a method, `get_hash`, which produces hash from 
 the content of the Statement. A shallow hash only considers the meaning of 
@@ -150,7 +150,7 @@ evidence for a given statement this way. As described above, the evidence
 limit can also be raised, at the risk of a timed out request.
 
 <a name="from-hashes"></a>
-### Get a Statement from many hashes: `POST api.host/statements/from_hashes`
+### Get Statements from many hashes: `POST api.host/statements/from_hashes`
 
 Like the previous endpoint, this endpoint uses hashes to retrieve Statements,
 however instead of only being allowed one at a time, a bach of 
@@ -161,6 +161,22 @@ parameters for this endpoint. The json data should be formatted as:
 {"hashes": [12345, 246810]}
 ```
 with up to 1,000 hashes given in the list.
+
+<a name="from-papers"></a>
+### Get Statements from paper ids: `POST api.host/statements/from_papers`
+
+Using this endpoint, you can pretend you have a fleet of text extraction tools
+that run in seconds! Specifically, you can get the INDRA Statements with 
+evidence from a given list of papers by passing one of the ids of those papers.
+As with the above method, the fact that data (paper ids) is send requires 
+this to be a POST request. The papers ids should be formatted as:
+```json
+{"ids": [{"id": "12345", "type": "pmid"},
+         {"id": "234525", "type": "tcid"},
+         {"id": "PMC23423", "type": "pmcid"}]}
+```
+a list of dicts, each containing id type and and id value.
+
 
 ## Usage examples
 

@@ -17,10 +17,10 @@ of this writing, the API supports:
 - [`statements/from_hash`](#from-hash) and
  [`statements/from_hashes`](#from-hashes), getting Statements by Statement 
  hash, either singly or in batches, and
-- `statements/from_papers`, getting Statements using the paper ids from
- which they were extracted, and
-- `curation/submit/<level>/<hash>` you can also curate Statements, helping us
- improve the quality and accuracy of our content.
+- [`statements/from_papers`](#from-papers), getting Statements using the paper 
+ ids from which they were extracted, and
+- [`curation/submit/<level>/<hash>`](#curation) you can also curate Statements, 
+ helping us improve the quality and accuracy of our content.
 
 As mentioned, the service is changing rapidly, and this documentation may at
 times be out of date. For the latest, check github or contact us.
@@ -131,7 +131,7 @@ the type of Statement. The query parameters are as follows:
    give the same result.
 
 <a name="from-hash"></a> 
-### Get a Statement by hash: `GET api.host/statements/from_hash`
+### Get a Statement by hash: `GET api.host/statements/from_hash/<hash>`
 
 INDRA Statement objects have a method, `get_hash`, which produces hash from 
 the content of the Statement. A shallow hash only considers the meaning of 
@@ -177,6 +177,15 @@ this to be a POST request. The papers ids should be formatted as:
 ```
 a list of dicts, each containing id type and and id value.
 
+
+<a name="curation"></a>
+## Curation
+
+A recent feature of the INDRA Database allows the collection of curation 
+information pertaining to both pre-assembled and raw Statments. The REST API
+provide an endpoint to submit these curations.
+
+### Curate statements: `POST api.host/curation/submit/<level>/<hash>`
 
 ## Usage examples
 

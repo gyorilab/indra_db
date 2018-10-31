@@ -61,18 +61,18 @@ options to control the size and order of the response:
 
 The output of the statement endpoint is JSON. Specifically, the endpoints 
 all return a json dict of the following form:
-```json
+```python
 {
   "statements": {
-    "12345234234": <Statement JSON 1>,
-    "-246809323482": <Statement JSON 2>,
+    "12345234234": {...},  # Statement JSON 1
+    "-246809323482": {...},  # Statement JSON 2
     ...},
-  "offset": <offset of SQL query>,
-  "evidence_limit": <evidence limit used>,
-  "statement_limit": <REST API Limit>,
-  "evidence_totals": <evidence avilable for each statement>,
-  "total_evidence": <total evidence available for all returned statements>,
-  "evidence_returned": <total evidence returned>
+  "offset": 2000,  # offset of SQL query
+  "evidence_limit": 10,  # evidence limit used
+  "statement_limit": 1000,  # REST API Limit
+  "evidence_totals": {...}, # dict of available evidence for each statement keyed by hash
+  "total_evidence": 163708, # The total amount of evidence available
+  "evidence_returned": 10000  # The total amount of evidence returned
 }
 ```
 where the `"statements"` element contains a dictionary of INDRA Statement

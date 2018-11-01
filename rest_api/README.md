@@ -192,36 +192,40 @@ automatic extractions, there can often be errors. For this reason, we always
 provide the sentences from which a Statement was extracted (if we extracted
 it, some of our content comes from other curated databases), as well as
 provenance to lead back to the content (abstract, full text, etc.) that was
-read, all so that you can use your own judgement regarding the validity and
-relevance of a Statement.
+read, which allows you to use your own judgement regarding the validity of
+a Statement.
 
 If you find something wrong with a Statement, you can use this curation
 endpoint to record your observation. This will not necessarily have any
 immediate effect on the output, however, over time it will help us improve the
 readers we use, our methods for extracting Statements from those reader
-outputs, and could help us filter erroneous content.
+outputs, could help us filter erroneous content, and will help us improve our
+pre-assembly algorithms.
 
 ### Curate statements: `POST api.host/curation/submit/<level>/<hash>`
 
 If you wish to curate a Statement, you must first decide whether you are
-curating the piece of knowledge, or a particular extraction. This is the 
-"level" of your curation:
+curating the Statement as generally incorrect, or whether a particular
+sentence supports a given Statement. This is the "level" of your curation:
 - **pa**: At this level, you are curating the knowledge in a
  ***p**re-**a**ssembled* Statement. For example, if a Statement
  indicates that "differentiation binds apoptosis", regardless of whether the
  reader(s) made a valid extraction, it is clearly wrong.
 - **raw**: At this level, you are curating a particular *raw* extraction, in
- other words stating that an automatic reader made an error. For example the
- sentence "IR causes cell death", where IR is Ionizing Radiation, is instead
- extracted as "'Insulin Receptor' causes cell death". This would be an example
- of a grounding error, and although it may happen often enough to provide 
- large amounts of evidence, it is an extraction error.
+ other words stating that an automatic reader made an error. Even more
+ explicitly, you can judge whether the sentence supports the extracted
+ Statement. For example the (hypothetical) sentence "KRAS was found to actively
+ inhibit BRAF" does not support the Statement "KRAS activates BRAF". As another
+ example (here a grounding error), would be that the sentence "IR causes cell
+ death", where IR is Ionizing Radiation does not support the extraction "'Insulin
+ Receptor' causes cell death".
 
 The two different levels also have different hashes. At the *pa* level, the 
 hashes discussed [above](#from-hash) are used, as they are calculated from the 
-knowledge contained in the statement, independent of extraction. At the *raw*
-level, a different hash, the `source_hash` is used. Within a statement JSON,
-there is a key "evidence", with a list of Evidence JSON, which includes an 
+knowledge contained in the statement, independent of the evidence. At the *raw*
+level, a different hash, the `source_hash` is used, which identifies a specific
+piece of evidence, without considering the Statement extracted. Within a statement
+JSON, there is a key "evidence", with a list of Evidence JSON, which includes an 
 entry for "source_hash":
 ```python
 {"evidence": [{"source_hash": 98687578576598, ...}, ...], ...}

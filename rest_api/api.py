@@ -96,7 +96,7 @@ def _query_wrapper(f):
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
 
-        api_key = query.pop('api-key', None)
+        api_key = query.pop('api_key', None)
 
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))

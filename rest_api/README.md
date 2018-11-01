@@ -392,7 +392,7 @@ stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
                             ev_limit=3)
 ```
 
-### Example 3:
+#### Example 3:
 Note the use of the `@FPLX` suffix to denote the namespace used in identifying
 the agent to query for things that inhibit MEK, using curl:
 ```bash
@@ -411,10 +411,16 @@ stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
 
 #### Example 4:
 Query for a statement with the hash -1072112758478440, retrieving at most 1000
-evidence:
+evidence, using curl:
 ```bash
 curl -X GET "http://api.host/statements/from_hash/-1072112758478440?api_key=12345&ev_limit=1000"
 ```
+or INDRA's client:
+```python
+stmts = idbr.get_statements_by_hash([-1072112758478440], ev_limit=1000)
+```
+Note that client does not actually use the same endpoint here, but rather uses
+the `/from_hashes` endpoint.
 
 #### Example 5:
 Get the statements from a paper with the pmid 22174878, and
@@ -430,5 +436,22 @@ file, call it `papers.json` with the following:
 ```
 and post it to the REST API with curl:
 ```bash
-curl -X POST "http://api.host/statements/from_papers?api_key=12345" -H "Content-Type: application/json" -d @papers.json
+curl -X POST "http://api.host/statements/from_papers?api_key=12345" -d @papers.json -H "Content-Type: application/json"
+```
+or just use INDRA's client:
+```python
+stmts = idbr.get_statments_for_paper([('pmid', '22174878'),
+                                      ('doi', '10.1259/0007-1285-34-407-693')])
+```
+
+#### Example 6:
+Curate a Statement at the pre-assembled (pa) level for a Statement with hash
+-1072112758478440, using curl:
+```bash
+curl -X POST "http://api.host/curation/submit/pa/-1072112758478440?api_key=12345" -d '{"tag": "correct", "text": "This Statement is OK.", "curator": "Alice"}' -H "Content-Type: application/json"
+```
+or INDRA's client:
+```python
+idbr.submit_curation('pa', -1072112758478440, 'correct', 
+                     'This Statement is OK.', 'Alice')
 ```

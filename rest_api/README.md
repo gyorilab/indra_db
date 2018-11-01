@@ -85,7 +85,7 @@ JSONs keyed by a shallow statement hash (see [here](#from-hash) for more
 details on these hashes). You can look at the
 [JSON schema](https://github.com/sorgerlab/indra/blob/master/indra/resources/statements_schema.json)
 on github for details on the Statement JSON. To learn more about INDRA
-Statement, you can read the
+Statements, you can read the
 [documentation](https://indra.readthedocs.io/en/latest/modules/statements.html).
 
 <a name="from-agents"></a>
@@ -338,7 +338,7 @@ directly with INDRA tools.
 You can use python to get JSON Statements for the same query:
 ```python
 import requests
-resp = requests.get('https://api.host/statements/from_agents',
+resp = requests.get('http://api.host/statements/from_agents',
                     params={'subject': 'MAP2K1',
                             'object': 'MAPK1',
                             'type': 'phosphorylation',
@@ -380,7 +380,7 @@ from indra.statements import stmts_from_json
 from indra.sources import indra_db_rest as idbr
 
 # With requests
-resp = requests.get('https://api.host/statements/from_agents',
+resp = requests.get('http://api.host/statements/from_agents',
                     params={'agent0': 'SMURF2', 'agent1': 'SMAD',
                             'api_key': 12345, 'max_stmts': 10,
                             'ev_limit': 3})
@@ -392,14 +392,31 @@ stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
                             ev_limit=3)
 ```
 
-#### Example 3 (curl):
+### Example 3:
+Note the use of the `@FPLX` suffix to denote the namespace used in identifying
+the agent to query for things that inhibit MEK, using curl:
+```bash
+curl -X GET "http://api.host/statements/from_agents?object=MEK@FPLX&type=inhibition&api_key=12345"
+```
+Python requests:
+```python
+resp = requests.get('http://api.host/statements/from_agents',
+                    params={'agent': 'MEK@FPLX', 'type': 'inhibition', 
+                            'api_key': 12345})
+```
+and INDRA's client:
+```python
+stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
+```
+
+#### Example 4:
 Query for a statement with the hash -1072112758478440, retrieving at most 1000
 evidence:
 ```bash
 curl -X GET "http://api.host/statements/from_hash/-1072112758478440?api_key=12345&ev_limit=1000"
 ```
 
-#### Example 4 (curl):
+#### Example 5:
 Get the statements from a paper with the pmid 22174878, and
 another paper with the doi 10.1259/0007-1285-34-407-693, first create the json
 file, call it `papers.json` with the following:

@@ -137,10 +137,12 @@ INDRA Statement objects have a method, `get_hash`, which produces hash from
 the content of the Statement. A shallow hash only considers the meaning of 
 the statement (agents, type, modifications, etc.), whereas a deeper hash also
 considers the list of evidence available for that Statement. The shallow hash
-is what is used in this application, as it has the same uniqueness 
-properties used in deduplication.
+is what is used in this application, as it has the same uniqueness properties
+used in deduplication. As mentioned above, the Statements are returned keyed by
+their hash. In addition, if you construct a Statement in python, you may get
+its hash and quickly find any evidence for that Statement in the database.
 
-This endpoint has no extra parameters, but rather takes an extention to the 
+This endpoint has no extra parameters, but rather takes an extension to the 
 path. So, to look up the hash 123456789, you would use 
 `statements/from_hash/123456789`.
 
@@ -190,7 +192,7 @@ read, all so that you can use your own judgement regarding the validity and
 relevance of a Statement.
 
 If you find something wrong with a Statement, you can use this curation
-endpoint to record your observation. This will not necessarily have any 
+endpoint to record your observation. This will not necessarily have any
 immediate effect on the output, however, over time it will help us improve the
 readers we use, our methods for extracting Statements from those reader
 outputs, and could help us filter erroneous content.
@@ -198,12 +200,31 @@ outputs, and could help us filter erroneous content.
 ### Curate statements: `POST api.host/curation/submit/<level>/<hash>`
 
 If you wish to curate a Statement, you must first decide whether you are
-curating the piece of knowledge, for example "differentiation binds apoptosis",
-which would be at the "pa" level (short for pre-assembled), or if you are
-curating a particular extraction, for example the sentence "IR causes cell 
-death", where IR is Ionizing Radiation, is instead extracted as "'Insulin 
-Receptor' causes cell death". This would be an example of a grounding error,
-and although it may happen often, it is at the extraction, "raw", level.
+curating the piece of knowledge, or a particular extraction. This is the 
+"level" of your curation:
+- **pa**: At this level, you are curating the knowledge in a
+ ***p**re-**a**ssembled* Statement. For example, if a Statement
+ indicates that "differentiation binds apoptosis", regardless of whether the
+ reader(s) made a valid extraction, it is clearly wrong.
+- **raw**: At this level, you are curating a particular *raw* extraction, in
+ other words stating that an automatic reader made an error. For example the
+ sentence "IR causes cell death", where IR is Ionizing Radiation, is instead
+ extracted as "'Insulin Receptor' causes cell death". This would be an example
+ of a grounding error, and although it may happen often enough to provide 
+ large amounts of evidence, it is an extraction error.
+
+The two different levels also have different hashes. At the *pa* level, the 
+hashes discussed [above](#get-hash) are used, as they are calculated from the 
+knowledge contained in the statement, independent of extraction. At the *raw*
+level, a different hash, the `source_hash` is used. Within a statement JSON,
+there is a key "evidence", with a list of Evidence JSON, which includes an 
+entry for "source_hash":
+```python
+{"evidence": [{"source_hash": 98687578576598, ...}, ...], ...}
+```
+Once you know the level ("pa" or "raw"), and you have the correct hash (the 
+shallow pre-assembly hash or the source hash), you can curate a statement by
+POSTing a request with JSON data to the endpoint, as shown in the heading.
 
 
 ## Usage examples

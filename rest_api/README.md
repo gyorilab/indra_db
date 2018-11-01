@@ -181,11 +181,30 @@ a list of dicts, each containing id type and and id value.
 <a name="curation"></a>
 ## Curation
 
-A recent feature of the INDRA Database allows the collection of curation 
-information pertaining to both pre-assembled and raw Statments. The REST API
-provide an endpoint to submit these curations.
+Because the mechanisms represented by our Statements come in large part from
+automatic extractions, there can often be errors. For this reason, we always
+provide the sentences from which a Statement was extracted (if we extracted
+it, some of our content comes from other curated databases), as well as
+provenance to lead back to the content (abstract, full text, etc.) that was
+read, all so that you can use your own judgement regarding the validity and
+relevance of a Statement.
+
+If you find something wrong with a Statement, you can use this curation
+endpoint to record your observation. This will not necessarily have any 
+immediate effect on the output, however, over time it will help us improve the
+readers we use, our methods for extracting Statements from those reader
+outputs, and could help us filter erroneous content.
 
 ### Curate statements: `POST api.host/curation/submit/<level>/<hash>`
+
+If you wish to curate a Statement, you must first decide whether you are
+curating the piece of knowledge, for example "differentiation binds apoptosis",
+which would be at the "pa" level (short for pre-assembled), or if you are
+curating a particular extraction, for example the sentence "IR causes cell 
+death", where IR is Ionizing Radiation, is instead extracted as "'Insulin 
+Receptor' causes cell death". This would be an example of a grounding error,
+and although it may happen often, it is at the extraction, "raw", level.
+
 
 ## Usage examples
 

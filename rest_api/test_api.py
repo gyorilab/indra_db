@@ -330,9 +330,9 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def __test_basic_paper_query(self, id_val, id_type, min_num_results=1):
-        query_str = 'id=%s&type=%s' % (id_val, id_type)
-        resp, dt, size = self.__time_get_query('statements/from_papers',
-                                               query_str)
+        id_list = [{'id': id_val, 'type': id_type}]
+        resp, dt, size = self.__time_query('post', 'statements/from_papers',
+                                           ids=id_list)
         self.__check_time(dt)
         assert size <= SIZELIMIT, size
         assert resp.status_code == 200, str(resp)
@@ -345,11 +345,6 @@ class DbApiTestCase(unittest.TestCase):
     def test_pmid_paper_query(self):
         pmid = '27014235'
         self.__test_basic_paper_query(pmid, 'pmid')
-
-        # Now check without pmid specified (should be assumed.)
-        resp, _, _ = self.__time_get_query('statements/from_papers',
-                                           'id=%s' % pmid)
-        assert resp.status_code == 200, str(resp)
 
     def test_pmcid_paper_query(self):
         json_dict = self.__test_basic_paper_query('PMC5770457', 'pmcid')
@@ -414,8 +409,9 @@ class DbApiTestCase(unittest.TestCase):
                                      'agent1=STAT5@FPLX&agent2=CRKL')
 
     def test_redaction_on_paper_query(self):
-        return self.__test_redaction('get', 'statements/from_papers',
-                                     'id=20914619&type=tcid')
+        ids = [{'id': '20914619', 'type': 'tcid'}]
+        return self.__test_redaction('post', 'statements/from_papers', None,
+                                     url_fmt='%s?%s', ids=ids)
 
     def test_redaction_on_hash_query(self):
         sample_hashes = [

@@ -82,7 +82,11 @@ numbers):
 ```
 where the `"statements"` element contains a dictionary of INDRA Statement
 JSONs keyed by a shallow statement hash (see [here](#from-hash) for more
-details on these hashes).
+details on these hashes). You can look at the
+[JSON schema](https://github.com/sorgerlab/indra/blob/master/indra/resources/statements_schema.json)
+on github for details on the Statement JSON. To learn more about INDRA Statement,
+you can read the
+[documentation](https://indra.readthedocs.io/en/latest/modules/statements.html).
 
 <a name="from-agents"></a>
 ### Get Statements by agents (and type): `GET api.host/statements/from_agents`
@@ -214,7 +218,7 @@ curating the piece of knowledge, or a particular extraction. This is the
  large amounts of evidence, it is an extraction error.
 
 The two different levels also have different hashes. At the *pa* level, the 
-hashes discussed [above](#get-hash) are used, as they are calculated from the 
+hashes discussed [above](#from-hash) are used, as they are calculated from the 
 knowledge contained in the statement, independent of extraction. At the *raw*
 level, a different hash, the `source_hash` is used. Within a statement JSON,
 there is a key "evidence", with a list of Evidence JSON, which includes an 

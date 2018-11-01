@@ -329,6 +329,7 @@ Pretty printed for readability:
 ```
 </p>
 </details>
+<br>  
 
 *Example 2*: Query for any kind of interaction between SMURF2 and SMAD2:
 ```bash

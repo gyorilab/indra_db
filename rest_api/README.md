@@ -264,8 +264,10 @@ for making calls to this web API.
 ```bash
 curl -X GET "http://api.host/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation&api_key=12345"
 ```
-<details><summary>This will return the following JSON (pretty printed here for 
-readability):<summary><p>
+<details><summary>This will return the following JSON:</summary>
+Pretty printed for readability:
+<p>
+
 ```json
 {
   "statements": {
@@ -325,7 +327,8 @@ readability):<summary><p>
   "statement_limit": 1000
 }
 ```
-</p></details>
+</p>
+</details>
 
 *Example 2*: Query for any kind of interaction between SMURF2 and SMAD2:
 ```bash

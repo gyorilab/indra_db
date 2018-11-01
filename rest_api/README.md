@@ -355,7 +355,8 @@ For those familiar with pre-assembled INDRA Statements, note that the
 populated.
 
 INDRA also supports a client to this API, which is documented in detail
-elsewhere, however using that client, the above query is simply:
+[elsewhere](https://indra.readthedocs.io/en/latest/modules/sources/indra_db_rest/index.html),
+however using that client, the above query is simply:
 ```python
 from indra.sources import indra_db_rest as idbr
 stmts = idbr.get_statements(subject='MAP2K1', object='MAPK1', stmt_type='phosphorylation')

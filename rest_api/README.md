@@ -256,16 +256,16 @@ demonstrates some of the crucial features discussed above.
 In the examples, we assume the path to the web API is `https://api.host/`, and
 that the API key is `12345`.
 
-### Curl
+#### Example 1:
 `curl` is a command line tool on Linux and Mac, making it a convenient tool
 for making calls to this web API.
 
-*Example 1*: Query Statements about "MAP2K1 phosphorylates MAPK1"
+Using `curl` to query Statements about "MAP2K1 phosphorylates MAPK1":
 ```bash
 curl -X GET "http://api.host/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation&api_key=12345"
 ```
-<details><summary>This will return the following JSON:</summary>
-Pretty printed for readability:
+<details><summary>returns the following JSON:</summary>
+
 <p>
 
 ```json
@@ -329,20 +329,78 @@ Pretty printed for readability:
 ```
 </p>
 </details>
-<br>  
+<br>
 
-*Example 2*: Query for any kind of interaction between SMURF2 and SMAD2:
+Python is another convenient way to use this web API, and has the important
+advantage that Statements returned from the service can directly be used
+directly with INDRA tools.
+
+You can use python to get JSON Statements for the same query:
+```python
+import requests
+resp = requests.get('https://api.host/statements/from_agents',
+                    params={'subject': 'MAP2K1',
+                            'object': 'MAPK1',
+                            'type': 'phosphorylation',
+                            'api_key': 12345})
+stmts_json = resp.json()
+```
+which can now be turned into INDRA Statement objects using `stmt_from_json`:
+```python
+from indra.statements import stmts_from_json
+stmts = stmts_from_json(stmts_json)
+```
+For those familiar with pre-assembled INDRA Statements, note that the
+`supports` and `supported_by` lists of the python Statement objects are not 
+populated.
+
+INDRA also supports a client to this API, which is documented in detail
+elsewhere, however using that client, the above query is simply:
+```python
+from indra.sources import indra_db_rest as idbr
+stmts = idbr.get_statements(subject='MAP2K1', object='MAPK1', stmt_type='phosphorylation')
+```
+Where the URL and API key are located n a config file. A key advantage of this
+client is that queries that return more than 1000 statement are paged behind
+the scenes, so that all the statements which match the query are retrived with
+a single command.
+
+
+#### Example 2:
+Use curl to query for any kind of interaction between SMURF2 and SMAD2, 
+returning at most 10 statements with 3 evidence each:
 ```bash
-curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345"
+curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&max_stmts=10&ev_limit=3"
+```
+As above, in python this could be handled using the `requests` module, or with
+the client:
+```python
+import requests
+from indra.statements import stmts_from_json
+from indra.sources import indra_db_rest as idbr
+
+# With requests
+resp = requests.get('https://api.host/statements/from_agents',
+                    params={'agent0': 'SMURF2', 'agent1': 'SMAD',
+                            'api_key': 12345, 'max_stmts': 10,
+                            'ev_limit': 3})
+stmts_json = resp.json()
+stmts = stmts_from_json(stmts_json)
+
+# With the client
+stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
+                            ev_limit=3)
 ```
 
-*Example 3*: Query for a statement with the hash -1072112758478440, retrieving
-at most 1000 evidence.:
+#### Example 3 (curl):
+Query for a statement with the hash -1072112758478440, retrieving at most 1000
+evidence:
 ```bash
 curl -X GET "http://api.host/statements/from_hash/-1072112758478440?api_key=12345&ev_limit=1000"
 ```
 
-*Example 4*: Get the statements from a paper with the pmid 22174878, and
+#### Example 4 (curl):
+Get the statements from a paper with the pmid 22174878, and
 another paper with the doi 10.1259/0007-1285-34-407-693, first create the json
 file, call it `papers.json` with the following:
 ```json
@@ -355,66 +413,5 @@ file, call it `papers.json` with the following:
 ```
 and post it to the REST API with curl:
 ```bash
-curl -X POST "http://api.host/statements/from_papers" -H "Content-Type: application/json" -d @papers.json
+curl -X POST "http://api.host/statements/from_papers?api_key=12345" -H "Content-Type: application/json" -d @papers.json
 ```
-
-### Python
-Python is a convenient way to use this web API and has the important
-advantage that Statements returned from the service can directly be used
-by INDRA in the same environment. If again we want Statements that are
-relevant for "MEK phosphorylates ERK", you can get the Statement JSONs
-as follows:
-```python
-import requests
-resp = requests.get('https://api.host/statements/',
-                    headers={'x-api-key': '12345'},
-                    params={'subject': 'MAP2K1',
-                            'object': 'MAPK1',
-                            'type': 'phosphorylation'})
-stmts_json = resp.json()
-```
-You can also instantiate INDRA Statement objects by calling `stmts_from_json`
-from `indra.statements` as :
-```python
-from indra.statements import stmts_from_json
-stmts = stmts_from_json(stmts_json)
-```
-As with the `curl` example, if there is no API key required, you simply omit
-that keyword argument `headers={'x-api-key': '12345'}` from the example above.
-For those familiar with useing preassembled INDRA Statements, note that the
-`supports` and `supported_by` lists of the python Statement objects can
-have instances of `Unresolved` Statements, which are placeholders
-of referenced Statements that are not included and resolved in detail in
-the response.
-
-Now suppose you want to query for interactions between SMURF2 and SMAD2 but
-without specifying their specific roles.
-This requires specifying two `agent*` parameters with the request which cannot
-be represented with a Python `dict` as was used in the previous example.
-The agent arguments can be set directly as a string in the `params`
-keyword argument:
-```python
-resp = requests.get('https://api.host/statements/',
-                    headers={'x-api-key': '12345'},
-                    params=u'agent0=SMAD2&agent1=SMURF2')
-```
-
-### INDRA
-Completing the circle of life, you can also access the REST API using a client
-implemented in INDRA, specifically `indra.sources.indra_db_rest`. The URL and
-API Key (if applicable) are configured in INDRA's config file (usually 
-`~/.config/indra/config.ini`), and once added, you can get Statements by
- simply running
-```python
-from indra.sources import indra_db_rest as dbr
-stmts = dbr.get_statements('MEK@FPLX', 'ERK@FPLX', stmt_type='Phosphorylation')
-```
-This API also handles more complex functionality such as implementing paging to
-resolve queries that result in large amounts of content.
-
-### Browser
-You can only use a browser if there is no API key required to use the API.
-If that is the case, you can simply enter the link:
-`https://api.host/statements/?subject=MAP2K1&object=MAPK1`
-into your browser's address bar to ge the JSON response which can
-be saved.

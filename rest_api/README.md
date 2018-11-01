@@ -84,8 +84,8 @@ where the `"statements"` element contains a dictionary of INDRA Statement
 JSONs keyed by a shallow statement hash (see [here](#from-hash) for more
 details on these hashes). You can look at the
 [JSON schema](https://github.com/sorgerlab/indra/blob/master/indra/resources/statements_schema.json)
-on github for details on the Statement JSON. To learn more about INDRA Statement,
-you can read the
+on github for details on the Statement JSON. To learn more about INDRA
+Statement, you can read the
 [documentation](https://indra.readthedocs.io/en/latest/modules/statements.html).
 
 <a name="from-agents"></a>
@@ -93,7 +93,7 @@ you can read the
 
 This endpoint allows you to get statements filtering by their agents and 
 the type of Statement. The query parameters are as follows:
-- **`subject`**, **`object`**: The HGNC gene symbol of the subject or
+- **subject**, **object**: The HGNC gene symbol of the subject or
  object of the Statement. **Note**: only one of each of `subject` and 
  `object` will be accepted per query.
   - Example 1: if looking for Statements where MAP2K1 is a subject
@@ -105,7 +105,7 @@ the type of Statement. The query parameters are as follows:
   - Example 3: you can specify the agent id namespace by appending
    `@<namespace>` to the agent id in the parameter, e.g. `subject=6871@HGNC`.
 
-- **`agent*`**: This parameter is used if the specific role of the agent
+- **agent***: This parameter is used if the specific role of the agent
  (subject or object) is irrelevant, or the distinction doesn't apply to the
  type of Statement of interest (e.g. Complex, Translocation, ActiveForm).
  **Note**: You can include as many `agent*` queries as you like, however you
@@ -127,7 +127,7 @@ the type of Statement. The query parameters are as follows:
    agents uniquely keyed. Thus `agent1=MEK@FPLX` and `agent0=ERK@FPLX` will
    give exactly the same result.
 
-- **`type`**: This parameter can be used to specify what type of Statement
+- **type**: This parameter can be used to specify what type of Statement
  of interest (e.g. Phosphorylation, Activation, Complex).
   - Example: To answer the question "Does MAP2K1 phosphorylate MAPK1?"
    the parameter `type=Phosphorylation` can be included in your query.
@@ -207,7 +207,7 @@ pre-assembly algorithms.
 If you wish to curate a Statement, you must first decide whether you are
 curating the Statement as generally incorrect, or whether a particular
 sentence supports a given Statement. This is the "level" of your curation:
-- **pa**: At this level, you are curating the knowledge in a
+- __pa__: At this level, you are curating the knowledge in a
  ***p**re-**a**ssembled* Statement. For example, if a Statement
  indicates that "differentiation binds apoptosis", regardless of whether the
  reader(s) made a valid extraction, it is clearly wrong.
@@ -217,23 +217,33 @@ sentence supports a given Statement. This is the "level" of your curation:
  Statement. For example the (hypothetical) sentence "KRAS was found to actively
  inhibit BRAF" does not support the Statement "KRAS activates BRAF". As another
  example (here a grounding error), would be that the sentence "IR causes cell
- death", where IR is Ionizing Radiation does not support the extraction "'Insulin
- Receptor' causes cell death".
+ death", where IR is Ionizing Radiation does not support the extraction
+ "'Insulin Receptor' causes cell death".
 
 The two different levels also have different hashes. At the *pa* level, the 
 hashes discussed [above](#from-hash) are used, as they are calculated from the 
 knowledge contained in the statement, independent of the evidence. At the *raw*
 level, a different hash, the `source_hash` is used, which identifies a specific
-piece of evidence, without considering the Statement extracted. Within a statement
-JSON, there is a key "evidence", with a list of Evidence JSON, which includes an 
-entry for "source_hash":
+piece of evidence, without considering the Statement extracted. Within a
+Statement JSON, there is a key "evidence", with a list of Evidence JSON, which
+includes an entry for "source_hash":
 ```python
 {"evidence": [{"source_hash": 98687578576598, ...}, ...], ...}
 ```
 Once you know the level ("pa" or "raw"), and you have the correct hash (the 
 shallow pre-assembly hash or the source hash), you can curate a statement by
-POSTing a request with JSON data to the endpoint, as shown in the heading.
-
+POSTing a request with JSON data to the endpoint, as shown in the heading. The
+JSON data should contain the following fields:
+- **tag**: A very short word or phrase categorizing the error, for example 
+ "grounding" for a grounding error.
+- **text**: A brief description of what you think is most wrong.
+- **curator**: Your name, initials, email, or other way to identify yourself.
+ Whichever you choose, please be consistent.
+ 
+Note that you can also indicate that a Statement is _correct_. In particular,
+if you find that a Statement has some evidence that supports the Statement and
+some that does not, curating examples of both is valuable. In general, flagging
+correct Statements can be just as valuable as flagging incorrect Statements.
 
 ## Usage examples
 

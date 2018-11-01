@@ -42,7 +42,7 @@ up and running.
 ## The Statement Endpoints
 
 For all queries, an API key is required, which is passed as a parameter
-`api-key` to any/all queries. Below is detailed documentation for the
+`api_key` to any/all queries. Below is detailed documentation for the
 different endpoints of the API that return statements (i.e. those with the root
 `/statements`). All endpoints that return statements have the following
 options to control the size and order of the response:
@@ -247,41 +247,112 @@ correct Statements can be just as valuable as flagging incorrect Statements.
 
 ## Usage examples
 
-The web service accepts standard GET requests, and any client that can
-send such requests can be used to interact with the service. Note, however,
-that access directly via a browser can be complicated by the
-use of API keys which have to be included in the request header. Here we
-provide usage examples with the `curl` command line tool and `python`.
+The web service accepts standard HTTP requests, and any client that can
+send such requests can be used to interact with the service. Here we
+provide usage examples with the `curl` command line tool and `python` of 
+some of the endpoints. This is by no means a comprehensive list, but rather 
+demonstrates some of the crucial features discussed above.
 
-In the examples, let's assume the path to the web API is
-`https://api.host/`, and that the API key is `12345`.
+In the examples, we assume the path to the web API is `https://api.host/`, and
+that the API key is `12345`.
 
 ### Curl
 `curl` is a command line tool on Linux and Mac, making it a convenient tool
 for making calls to this web API.
 
-Example 1: Using `curl`, a query for "MAP2K1 phophorylates MAPK1" can be sent
-as:
+*Example 1*: Query Statements about "MAP2K1 phosphorylates MAPK1"
 ```bash
-curl -i -H "x-api-key:12345" -X GET "https://api.host/statements/?subject=MAP2K1&object=MAPK1&type=phosphorylation"
+curl -X GET "http://api.host/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation&api_key=12345"
 ```
-which will return a JSON list of Statements. Note that if there is no API key,
-you can simply remove `-H "x-api-key:12345"` from the command.
+<details><summary>This will return the following JSON (pretty printed here for 
+readability):<summary><p>
+```json
+{
+  "statements": {
+    "-1072112758478440": {
+      "id": "5c3dff5f-6660-4494-96d2-0142076e9b2f",
+      "enz": {
+        "name": "MAP2K1",
+        "db_refs": {
+          "UP": "Q02750",
+          "HGNC": "6840"
+        },
+        "sbo": "http://identifiers.org/sbo/SBO:0000460"
+      },
+      "sbo": "http://identifiers.org/sbo/SBO:0000216",
+      "evidence": [
+        {
+          "source_api": "reach",
+          "epistemics": {
+            "section_type": null,
+            "direct": true
+          },
+          "text": "Thus, free non visual arrestins moderately facilitate the phosphorylation of ERK2 by MEK1.",
+          "pmid": "22174878",
+          "annotations": {
+            "agents": {
+              "raw_text": [
+                "MEK1",
+                "ERK2"
+              ]
+            },
+            "content_source": "pmc_oa",
+            "prior_uuids": [
+              "55afb6fc-5649-4315-94bc-3ce0651fc1d3"
+            ],
+            "found_by": "Phosphorylation_syntax_1a_noun"
+          }
+        }
+      ],
+      "type": "Phosphorylation",
+      "sub": {
+        "name": "MAPK1",
+        "db_refs": {
+          "UP": "P28482",
+          "HGNC": "6871"
+        },
+        "sbo": "http://identifiers.org/sbo/SBO:0000015"
+      }
+    }
+  },
+  "offset": null,
+  "total_evidence": 106,
+  "evidence_totals": {
+    "-1072112758478440": 106
+  },
+  "evidence_returned": 1,
+  "evidence_limit": "1",
+  "statement_limit": 1000
+}
+```
+</p></details>
 
-Example 2: If we instead want to know if there is any support for the
-proposition there is some kind of interaction between SMURF2 and SMAD2,
-your `curl` query would be:
+*Example 2*: Query for any kind of interaction between SMURF2 and SMAD2:
 ```bash
-curl -i -H "x-api-key:12345" -X GET "https://api.host/statements/?
-agent=SMURF2&agent=SMAD2"
-```
-Or, if you are using our implementation of the REST service, you would
-need to use
-```bash
-curl -i -H "x-api-key:12345" -X GET "https://api.host/statements/?
-agent0=SMURF2&agentbondjamesbond=SMAD2"
+curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345"
 ```
 
+*Example 3*: Query for a statement with the hash -1072112758478440, retrieving
+at most 1000 evidence.:
+```bash
+curl -X GET "http://api.host/statements/from_hash/-1072112758478440?api_key=12345&ev_limit=1000"
+```
+
+*Example 4*: Get the statements from a paper with the pmid 22174878, and
+another paper with the doi 10.1259/0007-1285-34-407-693, first create the json
+file, call it `papers.json` with the following:
+```json
+{
+  "ids": [
+    {"id": "22174878", "type": "pmid"},
+    {"id": "10.1259/0007-1285-34-407-693", "type": "doi"}
+  ]
+}
+```
+and post it to the REST API with curl:
+```bash
+curl -X POST "http://api.host/statements/from_papers" -H "Content-Type: application/json" -d @papers.json
+```
 
 ### Python
 Python is a convenient way to use this web API and has the important

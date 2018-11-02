@@ -342,7 +342,7 @@ class DatabaseManager(object):
         class RawCuration(self.Base, Displayable, Curation):
             __tablename__ = 'raw_curation'
             id = Column(Integer, primary_key=True)
-            raw_hash = Column(BigInteger)
+            source_hash = Column(BigInteger)
         self.RawCuration = RawCuration
         self.tables[RawCuration.__tablename__] = RawCuration
 

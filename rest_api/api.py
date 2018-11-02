@@ -297,7 +297,7 @@ def submit_curation_endpoint(level, hash_val):
     ip = request.remote_addr
     text = request.json.get('text')
     curator = request.json.get('curator')
-    api_key = request.args.get('api-key', None)
+    api_key = request.args.get('api_key', None)
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'

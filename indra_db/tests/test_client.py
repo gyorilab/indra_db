@@ -1,4 +1,5 @@
 import os
+import json
 import pickle
 import random
 
@@ -10,7 +11,7 @@ if not IS_PY3:
     raise SkipTest("This test requires Python 3.")
 
 from indra.literature import pubmed_client as pubc
-from indra.statements import stmts_from_json
+from indra.statements import stmts_from_json, Statement
 
 from indra_db import util as dbu
 from indra_db import client as dbc
@@ -35,6 +36,9 @@ class _PrePaDatabaseTestSetup(object):
             self.stmt_tuples = self.test_data['raw_statements']['tuples']
 
         self.used_stmt_tuples = set()
+        self.test_db._init_auth()
+        _, api_key = self.test_db._add_auth('tester')
+        self.tester_key = api_key
         return
 
     def get_available_stmt_tuples(self):
@@ -88,8 +92,14 @@ class _PrePaDatabaseTestSetup(object):
 
     def insert_the_statements(self, input_tuples):
         print("Loading %d statements..." % len(input_tuples))
-        self.test_db.copy('raw_statements', [t for t in input_tuples],
-                          self.test_data['raw_statements']['cols'])
+        cols = self.test_data['raw_statements']['cols'] + ('source_hash',)
+        new_input_tuples = []
+        for t in input_tuples:
+            s = Statement._from_json(json.loads(t[-1].decode('utf-8')))
+            t += (s.evidence[0].get_source_hash(),)
+            new_input_tuples.append(t)
+
+        self.test_db.copy('raw_statements', new_input_tuples, cols)
         print("Inserting agents...")
         dbu.insert_agents(self.test_db, 'raw')
         return
@@ -131,13 +141,13 @@ def _get_prepped_db(num_stmts, with_pa=False):
     dts.add_statements()
     if with_pa:
         dts.insert_pa_statements()
-    return dts.test_db
+    return dts.test_db, dts.tester_key
 
 
 @attr('nonpublic', 'slow')
 def test_get_statements():
     num_stmts = 10000
-    db = _get_prepped_db(num_stmts)
+    db, _ = _get_prepped_db(num_stmts)
 
     # Test getting all statements
     stmts = dbc.get_statements([], preassembled=False, db=db)
@@ -173,7 +183,7 @@ def test_get_statements():
 def test_get_statements_by_grot():
     """Test get statements by gene-role-type."""
     num_stmts = 10000
-    db = _get_prepped_db(num_stmts)
+    db, _ = _get_prepped_db(num_stmts)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', preassembled=False,
                                                  db=db)
@@ -194,7 +204,7 @@ def test_get_statements_by_grot():
 
 @attr('nonpublic')
 def test_get_content_by_refs():
-    db = _get_prepped_db(100)
+    db, _ = _get_prepped_db(100)
     tcid = db.select_one(db.TextContent.id)[0]
     reading_dict = dbc.get_reader_output(db, tcid)
     assert reading_dict
@@ -367,16 +377,16 @@ def test_get_statement_jsons_by_mk_hash_sparser_bug():
 
 @attr('nonpublic')
 def test_pa_curation():
-    db = _get_prepped_db(100, with_pa=True)
+    db, key = _get_prepped_db(100, with_pa=True)
     sample = db.select_sample_from_table(2, db.PAStatements)
     mk_hashes = {s.mk_hash for s in sample}
     i = 0
     for pa_hash in mk_hashes:
-        dbc.submit_curation('pa', pa_hash, tag='test1', text='This is a test.',
-                            curator='tester%d' % i, ip='192.0.2.1',
-                            source='test_app', db=db)
+        dbc.submit_curation('pa', pa_hash, api_key=key, tag='test1',
+                            text='This is a test.', curator='tester%d' % i,
+                            ip='192.0.2.1', source='test_app', db=db)
         i += 1
-        dbc.submit_curation('pa', pa_hash, tag='test2',
+        dbc.submit_curation('pa', pa_hash, api_key=key, tag='test2',
                             text='This is a test too.',
                             curator='tester%d' % i, ip='192.0.2.32',
                             source='test_app', db=db)
@@ -387,3 +397,40 @@ def test_pa_curation():
     assert len(curs) == 2, len(curs)
     curs2 = dbc.get_curations('pa', curator='tester2', db=db)
     assert len(curs2) == 1, len(curs2)
+
+
+@attr('nonpublic')
+def test_raw_curation():
+    db, key = _get_prepped_db(100)
+    N_samp = 2
+    sample = db.select_sample_from_table(N_samp, db.RawStatements)
+    source_hashes = {s.source_hash for s in sample}
+    i = 0
+    for src_hash in source_hashes:
+        dbc.submit_curation('raw', src_hash, api_key=key, tag='test1',
+                            text='Testing', curator='tester%d' % i,
+                            ip='192.0.2.32', source='test_app', db=db)
+        i += 1
+        dbc.submit_curation('raw', src_hash, api_key=key, tag='test2',
+                            text='Testing more.', curator='tester%d' % i,
+                            ip='192.0.2.35', source='test_app', db=db)
+        i += 1
+    res = db.select_all(db.RawCuration)
+    assert len(res) == N_samp*2, len(res)
+    curs = dbc.get_curations('raw', tag='test1', db=db)
+    assert len(curs) == 2, len(curs)
+    curs2 = dbc.get_curations('raw', ip='192.0.2.35', db=db)
+    assert len(curs2) == 2, len(curs2)
+
+
+@attr('nonpublic')
+def test_source_hash():
+    db, _ = _get_prepped_db(100)
+    res = db.select_all(db.RawStatements)
+    pairs = [(dbu._get_statement_object(db_raw), db_raw.source_hash)
+             for db_raw in res]
+    for stmt, sh in pairs:
+        sh_rec = stmt.evidence[0].get_source_hash()
+        assert sh_rec == sh,\
+            "Recreated source hash %s does not match database sourch hash %s."\
+            % (sh_rec, sh)

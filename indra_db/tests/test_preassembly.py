@@ -560,9 +560,9 @@ def test_db_preassembly_small():
     _check_preassembly_with_database(200, 40)
 
 
-@attr('nonpublic', 'slow')
-def test_db_preassembly_large():
-    _check_preassembly_with_database(11721, 2017)
+# @attr('nonpublic', 'slow')
+# def test_db_preassembly_large():
+#     _check_preassembly_with_database(11721, 2017)
 
 
 # @attr('nonpublic', 'slow')
@@ -580,9 +580,9 @@ def test_db_incremental_preassembly_small():
     _check_db_pa_supplement(200, 40)
 
 
-@attr('nonpublic', 'slow')
-def test_db_incremental_preassembly_large():
-    _check_db_pa_supplement(11721, 2017)
+# @attr('nonpublic', 'slow')
+# def test_db_incremental_preassembly_large():
+#     _check_db_pa_supplement(11721, 2017)
 
 
 # @attr('nonpublic', 'slow')

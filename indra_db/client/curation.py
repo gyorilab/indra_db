@@ -55,7 +55,7 @@ def submit_curation(level, hash_val, tag, text, curator, ip, api_key,
         inp['pa_hash'] = hash_val
     else:
         cur = db.RawCuration
-        inp['raw_hash'] = hash_val
+        inp['source_hash'] = hash_val
 
     logger.info("Adding curation: %s" % str(inp))
 
@@ -76,7 +76,7 @@ def get_curations(level, db=None, **params):
         hash_key = 'pa_hash'
     else:
         cur = db.RawCuration
-        hash_key = 'raw_hash'
+        hash_key = 'source_hash'
 
     constraints = []
     for key, val in params.items():

@@ -355,7 +355,8 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     """
     # Preparing the statements for copying
     stmt_data = []
-    cols = ('uuid', 'mk_hash', 'db_info_id', 'type', 'json', 'indra_version')
+    cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
+            'indra_version')
     if verbose:
         print("Loading:", end='', flush=True)
     for i, stmt in enumerate(stmts):
@@ -366,6 +367,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
             stmt_rec = (
                 new_stmt.uuid,
                 new_stmt.get_hash(),
+                new_stmt.evidence[0].get_source_hash(),
                 db_ref_id,
                 new_stmt.__class__.__name__,
                 json.dumps(new_stmt.to_json()).encode('utf8'),

@@ -32,7 +32,7 @@ if __name__ == '__main__':
               "use pre-existing readings. Default is 'unread'.")
         )
     parser.add_argument(
-        '-s', '--stmt_mode',
+        '-S', '--stmt_mode',
         choices=['all', 'unread', 'none'],
         default='all',
         help=("Choose which readings should produce statements. If 'all', all "
@@ -94,7 +94,7 @@ if __name__ == '__main__':
         help='Use only the best full text available.',
         action='store_true'
         )
-    parser.add_argumet(
+    parser.add_argument(
         '--max_reach_space_ratio',
         type=float,
         help='Set the maximum ratio of spaces to non-spaces for REACH input.',

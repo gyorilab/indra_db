@@ -314,6 +314,7 @@ class DatabaseManager(object):
             id = Column(Integer, primary_key=True)
             uuid = Column(String(40), unique=True, nullable=False)
             mk_hash = Column(BigInteger, nullable=False)
+            source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
             db_info = relationship(DBInfo)
             reading_id = Column(Integer, ForeignKey('reading.id'))
@@ -341,7 +342,7 @@ class DatabaseManager(object):
         class RawCuration(self.Base, Displayable, Curation):
             __tablename__ = 'raw_curation'
             id = Column(Integer, primary_key=True)
-            raw_hash = Column(BigInteger)
+            source_hash = Column(BigInteger)
         self.RawCuration = RawCuration
         self.tables[RawCuration.__tablename__] = RawCuration
 

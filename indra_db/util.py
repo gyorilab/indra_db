@@ -190,9 +190,6 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         using the `yeild_per` feature of sqlalchemy queries.
     """
     verbose = kwargs.get('verbose', False)
-    if len(kwargs):
-        raise IndraDbException("Unrecognized keyword argument(s): %s."
-                               % kwargs)
 
     agent_tbl_obj = db.tables[prefix + '_agents']
 

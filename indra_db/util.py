@@ -182,9 +182,6 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         Select which stage of statements for which you wish to insert agents.
         The choices are 'pa' for preassembled statements or 'raw' for raw
         statements.
-    *other_stmt_clauses : sqlalchemy clauses
-        Further arguments, such as `db.Statements.db_ref == 1' are used to
-        restrict the scope of statements whose agents may be added.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -192,7 +189,7 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         To conserve memory, statements are loaded in batches of `num_per_yeild`
         using the `yeild_per` feature of sqlalchemy queries.
     """
-    verbose = kwargs.pop('verbose', False)
+    verbose = kwargs.get('verbose', False)
     if len(kwargs):
         raise IndraDbException("Unrecognized keyword argument(s): %s."
                                % kwargs)
@@ -201,7 +198,7 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
 
     if stmts_wo_agents is None:
         stmts_wo_agents, num_stmts = \
-            get_statements_without_agents(db, prefix, verbose=verbose)
+            get_statements_without_agents(db, prefix, **kwargs)
     else:
         num_stmts = None
 

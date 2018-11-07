@@ -19,6 +19,7 @@ from datetime import datetime
 from itertools import groupby
 from functools import partial
 from multiprocessing.pool import Pool
+from sqlalchemy import exists
 
 from indra.util.nested_dict import NestedDict
 from indra.util.get_version import get_version
@@ -142,19 +143,15 @@ def get_statements_without_agents(db, prefix, *other_stmt_clauses, **kwargs):
     logger.info("Getting %s that lack %s in the database."
                 % (stmt_tbl_obj.__tablename__, agent_tbl_obj.__tablename__))
     if prefix == 'pa':
-        stmts_w_agents_q = db.filter_query(
-            stmt_tbl_obj,
-            stmt_tbl_obj.mk_hash == agent_tbl_obj.stmt_mk_hash
-        )
+        agents_link = (stmt_tbl_obj.mk_hash == agent_tbl_obj.stmt_mk_hash)
     elif prefix == 'raw':
-        stmts_w_agents_q = db.filter_query(
-            stmt_tbl_obj,
-            stmt_tbl_obj.id == agent_tbl_obj.stmt_id
-        )
+        agents_link = (stmt_tbl_obj.id == agent_tbl_obj.stmt_id)
     else:
         raise IndraDbException("Unrecognized prefix: %s." % prefix)
-    stmts_wo_agents_q = (db.filter_query(stmt_tbl_obj, *other_stmt_clauses)
-                         .except_(stmts_w_agents_q))
+    stmts_wo_agents_q = (db.session
+                           .query(stmt_tbl_obj)
+                           .filter(*other_stmt_clauses)
+                           .filter(~exists().where(agents_link)))
 
     # Start printing some data
     if verbose:

@@ -425,7 +425,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_curation_submission(self):
         # This can only test the surface layer endpoint.
-        self.__time_query('post', 'curation/submit/pa/12345?test', tag='test',
+        self.__time_query('post', 'curation/submit/12345?test', tag='test',
                           curator='tester', text='This is text.')
 
 

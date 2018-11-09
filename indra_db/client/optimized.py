@@ -104,9 +104,9 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         # TODO: Remove this eventually. This is a patch!
         if 'source_hash' not in ev_json.keys():
             s = str(ev_json.get('source_api')) + str(ev_json.get('source_id'))
-            if ev_json['text'] and isinstance(ev_json['text'], str):
+            if ev_json.get('text') and isinstance(ev_json['text'], str):
                 s += ev_json['text']
-            elif ev_json['pmid'] and isinstance(ev_json['pmid'], str):
+            elif ev_json.get('pmid') and isinstance(ev_json['pmid'], str):
                 s += ev_json['pmid']
             ev_json['source_hash'] = _make_hash(s, 16)
 

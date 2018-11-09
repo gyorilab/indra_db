@@ -137,16 +137,6 @@ class Displayable(object):
         return self._make_str()
 
 
-class Curation(object):
-    tag = Column(String)
-    text = Column(String)
-    curator = Column(String, nullable=False)
-    auth_id = Column(Integer)
-    source = Column(String)
-    ip = Column(INET)
-    date = Column(DateTime, default=func.now())
-
-
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -339,13 +329,6 @@ class DatabaseManager(object):
         self.RawAgents = RawAgents
         self.tables[RawAgents.__tablename__] = RawAgents
 
-        class RawCuration(self.Base, Displayable, Curation):
-            __tablename__ = 'raw_curation'
-            id = Column(Integer, primary_key=True)
-            source_hash = Column(BigInteger)
-        self.RawCuration = RawCuration
-        self.tables[RawCuration.__tablename__] = RawCuration
-
         class RawUniqueLinks(self.Base, Displayable):
             __tablename__ = 'raw_unique_links'
             id = Column(Integer, primary_key=True)
@@ -390,13 +373,21 @@ class DatabaseManager(object):
         self.PAAgents = PAAgents
         self.tables[PAAgents.__tablename__] = PAAgents
 
-        class PACuration(self.Base, Displayable, Curation):
-            __tablename__ = 'pa_curation'
+        class Curation(self.Base, Displayable):
+            __tablename__ = 'curation'
             id = Column(Integer, primary_key=True)
             pa_hash = Column(BigInteger, ForeignKey('pa_statements.mk_hash'))
             pa_statements = relationship(PAStatements)
-        self.PACuration = PACuration
-        self.tables[PACuration.__tablename__] = PACuration
+            source_hash = Column(BigInteger)
+            tag = Column(String)
+            text = Column(String)
+            curator = Column(String, nullable=False)
+            auth_id = Column(Integer)
+            source = Column(String)
+            ip = Column(INET)
+            date = Column(DateTime, default=func.now())
+        self.Curation = Curation
+        self.tables[Curation.__tablename__] = Curation
 
         class PASupportLinks(self.Base, Displayable):
             __tablename__ = 'pa_support_links'

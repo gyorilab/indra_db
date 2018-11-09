@@ -382,45 +382,21 @@ def test_pa_curation():
     mk_hashes = {s.mk_hash for s in sample}
     i = 0
     for pa_hash in mk_hashes:
-        dbc.submit_curation('pa', pa_hash, api_key=key, tag='test1',
+        dbc.submit_curation(pa_hash, api_key=key, tag='test1',
                             text='This is a test.', curator='tester%d' % i,
                             ip='192.0.2.1', source='test_app', db=db)
         i += 1
-        dbc.submit_curation('pa', pa_hash, api_key=key, tag='test2',
+        dbc.submit_curation(pa_hash, api_key=key, tag='test2',
                             text='This is a test too.',
                             curator='tester%d' % i, ip='192.0.2.32',
                             source='test_app', db=db)
         i += 1
-    res = db.select_all(db.PACuration)
+    res = db.select_all(db.Curation)
     assert len(res) == 4, "Wrong number of curations: %d" % len(res)
-    curs = dbc.get_curations('pa', tag='test1', db=db)
+    curs = dbc.get_curations(tag='test1', db=db)
     assert len(curs) == 2, len(curs)
-    curs2 = dbc.get_curations('pa', curator='tester2', db=db)
+    curs2 = dbc.get_curations(curator='tester2', db=db)
     assert len(curs2) == 1, len(curs2)
-
-
-@attr('nonpublic')
-def test_raw_curation():
-    db, key = _get_prepped_db(100)
-    N_samp = 2
-    sample = db.select_sample_from_table(N_samp, db.RawStatements)
-    source_hashes = {s.source_hash for s in sample}
-    i = 0
-    for src_hash in source_hashes:
-        dbc.submit_curation('raw', src_hash, api_key=key, tag='test1',
-                            text='Testing', curator='tester%d' % i,
-                            ip='192.0.2.32', source='test_app', db=db)
-        i += 1
-        dbc.submit_curation('raw', src_hash, api_key=key, tag='test2',
-                            text='Testing more.', curator='tester%d' % i,
-                            ip='192.0.2.35', source='test_app', db=db)
-        i += 1
-    res = db.select_all(db.RawCuration)
-    assert len(res) == N_samp*2, len(res)
-    curs = dbc.get_curations('raw', tag='test1', db=db)
-    assert len(curs) == 2, len(curs)
-    curs2 = dbc.get_curations('raw', ip='192.0.2.35', db=db)
-    assert len(curs2) == 2, len(curs2)
 
 
 @attr('nonpublic')

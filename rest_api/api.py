@@ -289,9 +289,10 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/curation/submit/<level>/<hash_val>', methods=['POST'])
-def submit_curation_endpoint(level, hash_val):
-    logger.info("Adding curation for %s statement %s." % (level, hash_val))
+@app.route('/curation/submit/<hash_val>', methods=['POST'])
+def submit_curation_endpoint(hash_val):
+    logger.info("Adding curation for statement %s." % (hash_val))
+    ev_hash = request.json.get('ev_hash')
     source_api = request.json.pop('source', 'DB REST API')
     tag = request.json.get('tag')
     ip = request.remote_addr
@@ -301,9 +302,9 @@ def submit_curation_endpoint(level, hash_val):
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'
-        level, dbid = submit_curation(level, hash_val, tag, text, curator, ip,
-                                      api_key, source_api)
-        res = {'result': 'success', 'ref': {'level': level, 'id': dbid}}
+        dbid = submit_curation(hash_val, tag, curator, ip, api_key, text,
+                               source_hash, source_api)
+        res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}
     logger.info("Got result: %s" % str(res))

@@ -3,7 +3,7 @@ import logging
 from collections import OrderedDict
 from sqlalchemy import or_, desc, true, select
 
-from indra.statements import get_statement_by_name
+from indra.statements import get_statement_by_name, _make_hash
 
 logger = logging.getLogger('db_optimized_client')
 
@@ -100,6 +100,15 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
 
         if ref_dict['source']:
             ev_json['annotations']['content_source'] = ref_dict['source']
+
+        # TODO: Remove this eventually. This is a patch!
+        if 'source_hash' not in ev_json.keys():
+            s = str(ev_json.get('source_api')) + str(ev_json.get('source_id'))
+            if ev_json['text'] and isinstance(ev_json['text'], str):
+                s += ev_json['text']
+            elif ev_json['pmid'] and isinstance(ev_json['pmid'], str):
+                s += ev_json['pmid']
+            ev_json['source_hash'] = _make_hash(s, 16)
 
         stmts_dict[mk_hash]['evidence'].append(ev_json)
 

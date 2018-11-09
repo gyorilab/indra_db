@@ -45,7 +45,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
 
     selection = (select([mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count,
                          json_content_al.c.raw_json, json_content_al.c.pa_json,
-                         db.ReadingRefLink.pmid, db.ReadingRefLink.source])
+                         db.ReadingRefLink, db.ReadingRefLink.source])
                  .select_from(stmts_q))
     logger.debug("Executing sql to get statements:\n%s" % str(selection))
 
@@ -56,7 +56,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     ev_totals = OrderedDict()
     total_evidence = 0
     returned_evidence = 0
-    for mk_hash, ev_count, raw_json_bts, pa_json_bts, pmid, src in res:
+    for mk_hash, ev_count, raw_json_bts, pa_json_bts, refs, src in res:
         returned_evidence += 1
         raw_json = json.loads(raw_json_bts.decode('utf-8'))
         ev_json = raw_json['evidence'][0]
@@ -69,8 +69,8 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
             stmts_dict[mk_hash]['evidence'] = []
 
         # Fix the pmid
-        if pmid:
-            ev_json['pmid'] = pmid
+        if refs:
+            ev_json['pmid'] = refs.pmid
 
         # Add agents' raw text to annotations.
         raw_text = []
@@ -89,6 +89,11 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         if 'prior_uuids' not in ev_json['annotations'].keys():
             ev_json['annotations']['prior_uuids'] = []
         ev_json['annotations']['prior_uuids'].append(raw_json['id'])
+        if 'text_refs' not in ev_json.keys():
+            ev_json['text_refs'] = {}
+        ref_dict = {k: v for k, v in ref.__dict__.items()
+                    if not k.startswith('_')}
+        ev_json['text_refs'].update(ref_dict)
 
         if src:
             ev_json['annotations']['content_source'] = src

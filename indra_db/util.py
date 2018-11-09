@@ -19,6 +19,7 @@ from datetime import datetime
 from itertools import groupby
 from functools import partial
 from multiprocessing.pool import Pool
+from sqlalchemy import exists
 
 from indra.util.nested_dict import NestedDict
 from indra.util.get_version import get_version
@@ -130,7 +131,7 @@ def get_db(db_label):
 
 @clockit
 def get_statements_without_agents(db, prefix, *other_stmt_clauses, **kwargs):
-    """Get a generator for db orm statement objects which do not have agents."""
+    """Get a generator for orm statement objects which do not have agents."""
     num_per_yield = kwargs.pop('num_per_yield', 100)
     verbose = kwargs.pop('verbose', False)
 
@@ -142,19 +143,15 @@ def get_statements_without_agents(db, prefix, *other_stmt_clauses, **kwargs):
     logger.info("Getting %s that lack %s in the database."
                 % (stmt_tbl_obj.__tablename__, agent_tbl_obj.__tablename__))
     if prefix == 'pa':
-        stmts_w_agents_q = db.filter_query(
-            stmt_tbl_obj,
-            stmt_tbl_obj.mk_hash == agent_tbl_obj.stmt_mk_hash
-        )
+        agents_link = (stmt_tbl_obj.mk_hash == agent_tbl_obj.stmt_mk_hash)
     elif prefix == 'raw':
-        stmts_w_agents_q = db.filter_query(
-            stmt_tbl_obj,
-            stmt_tbl_obj.id == agent_tbl_obj.stmt_id
-        )
+        agents_link = (stmt_tbl_obj.id == agent_tbl_obj.stmt_id)
     else:
         raise IndraDbException("Unrecognized prefix: %s." % prefix)
-    stmts_wo_agents_q = (db.filter_query(stmt_tbl_obj, *other_stmt_clauses)
-                         .except_(stmts_w_agents_q))
+    stmts_wo_agents_q = (db.session
+                           .query(stmt_tbl_obj)
+                           .filter(*other_stmt_clauses)
+                           .filter(~exists().where(agents_link)))
 
     # Start printing some data
     if verbose:
@@ -173,9 +170,9 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
 
     Note: This method currently works for both Statements and PAStatements and
     their corresponding agents (Agents and PAAgents). However, if you already
-    have preassembled INDRA Statement objects that you know don't have agents in
-    the database, you can use `insert_pa_agents_directly` to insert the agents
-    much faster.
+    have preassembled INDRA Statement objects that you know don't have agents
+    in the database, you can use `insert_pa_agents_directly` to insert the
+    agents much faster.
 
     Parameters
     ----------
@@ -185,9 +182,6 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         Select which stage of statements for which you wish to insert agents.
         The choices are 'pa' for preassembled statements or 'raw' for raw
         statements.
-    *other_stmt_clauses : sqlalchemy clauses
-        Further arguments, such as `db.Statements.db_ref == 1' are used to
-        restrict the scope of statements whose agents may be added.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -195,16 +189,13 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         To conserve memory, statements are loaded in batches of `num_per_yeild`
         using the `yeild_per` feature of sqlalchemy queries.
     """
-    verbose = kwargs.pop('verbose', False)
-    if len(kwargs):
-        raise IndraDbException("Unrecognized keyword argument(s): %s."
-                               % kwargs)
+    verbose = kwargs.get('verbose', False)
 
     agent_tbl_obj = db.tables[prefix + '_agents']
 
     if stmts_wo_agents is None:
         stmts_wo_agents, num_stmts = \
-            get_statements_without_agents(db, prefix, verbose=verbose)
+            get_statements_without_agents(db, prefix, **kwargs)
     else:
         num_stmts = None
 
@@ -224,7 +215,7 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
     agent_data = []
     for i, db_stmt in enumerate(stmts_wo_agents):
         # Convert the database statement entry object into an indra statement.
-        stmt = stmts_from_json([json.loads(db_stmt.json.decode())])[0]
+        stmt = _get_statement_object(db_stmt)
 
         if prefix == 'pa':
             stmt_id = db_stmt.mk_hash
@@ -244,6 +235,10 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
     else:  # prefix == 'raw'
         cols = ('stmt_id', 'db_name', 'db_id', 'role')
+    for row in agent_data:
+        if None in row:
+            logger.warning("Found None in agent input:\n\t%s\n\t%s"
+                           % (cols, row))
     db.copy(agent_tbl_obj.__tablename__, agent_data, cols)
     return
 
@@ -331,7 +326,11 @@ def _get_agent_tuples(stmt, stmt_id):
     # Prep the agents for copy into the database.
     agent_data = []
     for ns, ag_id, role in all_agent_refs(agents):
-        agent_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns), role))
+        if ag_id is not None:
+            agent_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
+                               role))
+        else:
+            logger.warning("Found agent for %s with None value." % ns)
     return agent_data
 
 

@@ -19,7 +19,7 @@ of this writing, the API supports:
  hash, either singly or in batches, and
 - [`statements/from_papers`](#from-papers), getting Statements using the paper 
  ids from which they were extracted, and
-- [`curation/submit/<level>/<hash>`](#curation) you can also curate Statements, 
+- [`curation/submit/<hash>`](#curation) you can also curate Statements, 
  helping us improve the quality and accuracy of our content.
 
 As mentioned, the service is changing rapidly, and this documentation may at
@@ -202,16 +202,16 @@ readers we use, our methods for extracting Statements from those reader
 outputs, could help us filter erroneous content, and will help us improve our
 pre-assembly algorithms.
 
-### Curate statements: `POST api.host/curation/submit/<level>/<hash>`
+### Curate statements: `POST api.host/curation/submit/<hash>`
 
 If you wish to curate a Statement, you must first decide whether you are
 curating the Statement as generally incorrect, or whether a particular
 sentence supports a given Statement. This is the "level" of your curation:
-- __pa__: At this level, you are curating the knowledge in a
- ***p**re-**a**ssembled* Statement. For example, if a Statement
+- **pa**: At this level, you are curating the knowledge in a
+ _p_re-_a_ssembled Statement. For example, if a Statement
  indicates that "differentiation binds apoptosis", regardless of whether the
  reader(s) made a valid extraction, it is clearly wrong.
-- **raw**: At this level, you are curating a particular *raw* extraction, in
+- **raw**: At this level, you are curating a particular raw extraction, in
  other words stating that an automatic reader made an error. Even more
  explicitly, you can judge whether the sentence supports the extracted
  Statement. For example the (hypothetical) sentence "KRAS was found to actively
@@ -223,15 +223,15 @@ sentence supports a given Statement. This is the "level" of your curation:
 The two different levels also have different hashes. At the *pa* level, the 
 hashes discussed [above](#from-hash) are used, as they are calculated from the 
 knowledge contained in the statement, independent of the evidence. At the *raw*
-level, a different hash, the `source_hash` is used, which identifies a specific
-piece of evidence, without considering the Statement extracted. Within a
-Statement JSON, there is a key "evidence", with a list of Evidence JSON, which
-includes an entry for "source_hash":
+level, a different hash must be included: the `source_hash`, which identifies
+a specific piece of evidence, without considering the Statement extracted.
+Within a Statement JSON, there is a key "evidence", with a list of Evidence
+JSON, which includes an entry for "source_hash":
 ```python
 {"evidence": [{"source_hash": 98687578576598, ...}, ...], ...}
 ```
-Once you know the level ("pa" or "raw"), and you have the correct hash (the 
-shallow pre-assembly hash or the source hash), you can curate a statement by
+Once you know the level, and you have the correct hash(es) (the shallow
+pre-assembly hash and/or the source hash), you can curate a statement by
 POSTing a request with JSON data to the endpoint, as shown in the heading. The
 JSON data should contain the following fields:
 - **tag**: A very short word or phrase categorizing the error, for example 
@@ -449,7 +449,7 @@ stmts = idbr.get_statments_for_paper([('pmid', '22174878'),
 Curate a Statement at the pre-assembled (pa) level for a Statement with hash
 -1072112758478440, using curl:
 ```bash
-curl -X POST "http://api.host/curation/submit/pa/-1072112758478440?api_key=12345" -d '{"tag": "correct", "text": "This Statement is OK.", "curator": "Alice"}' -H "Content-Type: application/json"
+curl -X POST "http://api.host/curation/submit/-1072112758478440?api_key=12345" -d '{"tag": "correct", "text": "This Statement is OK.", "curator": "Alice"}' -H "Content-Type: application/json"
 ```
 or INDRA's client:
 ```python

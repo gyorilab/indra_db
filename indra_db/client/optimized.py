@@ -43,9 +43,11 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
                .outerjoin(db.ReadingRefLink,
                           db.ReadingRefLink.rid == json_content_al.c.rid))
 
+    ref_link_keys = [k for k in db.ReadingRefLink.__dict__.keys()
+                     if not k.startswith('_')]
     selection = (select([mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count,
-                         json_content_al.c.raw_json, json_content_al.c.pa_json,
-                         db.ReadingRefLink, db.ReadingRefLink.source])
+                         json_content_al.c.raw_json, json_content_al.c.pa_json]
+                        + [getattr(db.ReadingRefLink, k) for k in ref_link_keys])
                  .select_from(stmts_q))
     logger.debug("Executing sql to get statements:\n%s" % str(selection))
 
@@ -56,7 +58,10 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     ev_totals = OrderedDict()
     total_evidence = 0
     returned_evidence = 0
-    for mk_hash, ev_count, raw_json_bts, pa_json_bts, refs, src in res:
+    logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
+    for row in res:
+        mk_hash, ev_count, raw_json_bts, pa_json_bts = row[:4]
+        ref_dict = {ref_link_keys[i]: row[4+i] for i in range(len(ref_link_keys))}
         returned_evidence += 1
         raw_json = json.loads(raw_json_bts.decode('utf-8'))
         ev_json = raw_json['evidence'][0]
@@ -69,8 +74,8 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
             stmts_dict[mk_hash]['evidence'] = []
 
         # Fix the pmid
-        if refs:
-            ev_json['pmid'] = refs.pmid
+        if ref_dict['pmid']:
+            ev_json['pmid'] = ref_dict['pmid']
 
         # Add agents' raw text to annotations.
         raw_text = []
@@ -91,12 +96,10 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         ev_json['annotations']['prior_uuids'].append(raw_json['id'])
         if 'text_refs' not in ev_json.keys():
             ev_json['text_refs'] = {}
-        ref_dict = {k: v for k, v in ref.__dict__.items()
-                    if not k.startswith('_')}
         ev_json['text_refs'].update(ref_dict)
 
-        if src:
-            ev_json['annotations']['content_source'] = src
+        if ref_dict['source']:
+            ev_json['annotations']['content_source'] = ref_dict['source']
 
         stmts_dict[mk_hash]['evidence'].append(ev_json)
 

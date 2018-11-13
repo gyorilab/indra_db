@@ -365,7 +365,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
             new_stmt.evidence.append(ev)
             stmt_rec = (
                 new_stmt.uuid,
-                new_stmt.get_hash(),
+                new_stmt.get_hash(shallow=False),
                 new_stmt.evidence[0].get_source_hash(),
                 db_ref_id,
                 new_stmt.__class__.__name__,
@@ -530,7 +530,7 @@ def _get_reading_statement_dict(db, clauses=None, get_full_stmts=True):
         _set_evidence_text_ref(stmt, tr)
 
         # Hash the compbined stmt and evidence matches key.
-        stmt_hash = stmt.get_hash()
+        stmt_hash = stmt.get_hash(shallow=False)
 
         # For convenience get the endpoint statement dict
         s_dict = stmt_nd[tr.id][src][tcid][reader][rv][rid]

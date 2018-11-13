@@ -208,7 +208,7 @@ If you wish to curate a Statement, you must first decide whether you are
 curating the Statement as generally incorrect, or whether a particular
 sentence supports a given Statement. This is the "level" of your curation:
 - **pa**: At this level, you are curating the knowledge in a
- _p_re-_a_ssembled Statement. For example, if a Statement
+ **p**re-**a**ssembled Statement. For example, if a Statement
  indicates that "differentiation binds apoptosis", regardless of whether the
  reader(s) made a valid extraction, it is clearly wrong.
 - **raw**: At this level, you are curating a particular raw extraction, in

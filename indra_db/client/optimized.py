@@ -58,7 +58,11 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     ev_totals = OrderedDict()
     total_evidence = 0
     returned_evidence = 0
-    logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
+    if res:
+        logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
+    else:
+        logger.debug("res is empty.")
+
     for row in res:
         mk_hash, ev_count, raw_json_bts, pa_json_bts = row[:4]
         ref_dict = {ref_link_keys[i]: row[4+i] for i in range(len(ref_link_keys))}

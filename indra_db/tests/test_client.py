@@ -301,6 +301,13 @@ def test_nfkb_anomaly():
 
 
 @attr('nonpublic')
+def test_null_response():
+    res = dbc.get_statement_jsons_from_hashes([0])
+    assert isinstance(res, dict), type(res)
+    assert len(res['statements']) == 0, len(res['statements'])
+
+
+@attr('nonpublic')
 def test_get_statement_jsons_by_paper_id():
     paper_refs = [('pmid', '27769048'),
                   ('doi', '10.3389/FIMMU.2017.00781'),

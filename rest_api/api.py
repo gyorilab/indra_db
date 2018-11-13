@@ -303,7 +303,7 @@ def submit_curation_endpoint(hash_val):
     if not is_test:
         assert tag is not 'test'
         dbid = submit_curation(hash_val, tag, curator, ip, api_key, text,
-                               source_hash, source_api)
+                               ev_hash, source_api)
         res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}

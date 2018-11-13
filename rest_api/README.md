@@ -453,6 +453,5 @@ curl -X POST "http://api.host/curation/submit/-1072112758478440?api_key=12345" -
 ```
 or INDRA's client:
 ```python
-idbr.submit_curation('pa', -1072112758478440, 'correct', 
-                     'This Statement is OK.', 'Alice')
+idbr.submit_curation(-1072112758478440, 'correct', 'This Statement is OK.', 'Alice')
 ```

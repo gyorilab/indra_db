@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 
 from indra.util.get_version import get_git_info
 from indra.util.nested_dict import NestedDict
+from indra.util.aws import get_s3_file_tree
 from indra.tools.reading.util.reporter import Reporter
 from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
     create_read_parser, Submitter
@@ -189,35 +190,6 @@ class DbReadingSubmitter(Submitter):
         except Exception as e:
             logger.error('Failed to parse \"%s\".' % time_str)
             raise e
-
-    def _get_results_file_tree(self, s3, s3_prefix):
-        def get_some_keys(keys, marker=None):
-            if marker:
-                relevant_files = s3.list_objects(Bucket=bucket_name,
-                                                 Prefix=s3_prefix,
-                                                 Marker=marker)
-            else:
-                relevant_files = s3.list_objects(Bucket=bucket_name,
-                                                 Prefix=s3_prefix)
-            keys.extend([entry['Key'] for entry in relevant_files['Contents']
-                         if entry['Key'] != marker])
-            return relevant_files['IsTruncated']
-
-        file_keys = []
-        marker = None
-        while get_some_keys(file_keys, marker):
-            marker = file_keys[-1]
-
-        file_tree = NestedDict()
-        pref_path = s3_prefix.split('/')[:-1]   # avoid the trailing empty str.
-        for key in file_keys:
-            full_path = key.split('/')
-            relevant_path = full_path[len(pref_path):]
-            curr = file_tree
-            for step in relevant_path:
-                curr = curr[step]
-            curr['key'] = key
-        return file_tree
 
     def _get_txt_file_dict(self, file_bytes):
         line_list = file_bytes.decode('utf-8').splitlines()
@@ -483,7 +455,7 @@ class DbReadingSubmitter(Submitter):
         logger.info("Producing batch report for %s, from prefix %s."
                     % (self.basename, s3_prefix))
         s3 = boto3.client('s3')
-        file_tree = self._get_results_file_tree(s3, s3_prefix)
+        file_tree = get_s3_file_tree(s3, bucket_name, s3_prefix)
         logger.info("Found %d relevant files." % len(file_tree))
         stat_files = {
             'git_info.txt': (self._handle_git_info, self._report_git_info),

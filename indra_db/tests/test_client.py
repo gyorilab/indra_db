@@ -407,6 +407,19 @@ def test_pa_curation():
 
 
 @attr('nonpublic')
+def test_bad_hash_curation():
+    db, key = _get_prepped_db(100, with_pa=True)
+    try:
+        dbc.submit_curation(0, api_key=key, tag='test', text='text',
+                            curator='tester', ip='192.0.2.1', db=db)
+    except dbc.BadHashError:
+        return
+    except Exception as e:
+        assert False, "Excepted for the wrong reason: %s" % str(e)
+    assert False, "Didn't get an error."
+
+
+@attr('nonpublic')
 def test_source_hash():
     db, _ = _get_prepped_db(100)
     res = db.select_all(db.RawStatements)

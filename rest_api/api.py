@@ -97,7 +97,7 @@ def _query_wrapper(f):
         do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
-        format = query_dict.pop('format', 'json')
+        format = query.pop('format', 'json')
 
         api_key = query.pop('api_key', None)
         logger.info("Running function %s after %s seconds."

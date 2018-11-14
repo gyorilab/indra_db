@@ -14,7 +14,7 @@ from indra.util import batch_iter
 
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation, _has_elsevier_auth
+    submit_curation, _has_elsevier_auth, BadHashError
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -302,8 +302,11 @@ def submit_curation_endpoint(hash_val):
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'
-        dbid = submit_curation(hash_val, tag, curator, ip, api_key, text,
-                               ev_hash, source_api)
+        try:
+            dbid = submit_curation(hash_val, tag, curator, ip, api_key, text,
+                                   ev_hash, source_api)
+        except BadHashError as e:
+            abort(Response("Invalid hash: %s." % e.mk_hash, 400))
         res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}

@@ -1,9 +1,19 @@
 import logging
+import re
+
+from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger("db_curation_client")
 
 from indra_db.util import get_primary_db
-from indra_db.exceptions import NoAuthError
+from indra_db.exceptions import NoAuthError, IndraDbException
+
+
+class BadHashError(IndraDbException):
+    def __init__(self, mk_hash):
+        self.bad_hash = mk_hash
+        msg = 'The matches-key hash %s is not valid.' % mk_hash
+        super(BadHashError, self).__init__(msg)
 
 
 def submit_curation(hash_val, tag, curator, ip, api_key, text=None,
@@ -12,9 +22,6 @@ def submit_curation(hash_val, tag, curator, ip, api_key, text=None,
 
     Parameters
     ----------
-    level : 'pa' or 'raw'
-        This indicates the level of curation, whether at the single extraction/
-        sentence level ('raw'), or a the de-duplicated, logical level ('pa').
     hash_val : int
         The hash corresponding to the statement.
     tag : str
@@ -51,7 +58,22 @@ def submit_curation(hash_val, tag, curator, ip, api_key, text=None,
 
     logger.info("Adding curation: %s" % str(inp))
 
-    dbid = db.insert(db.Curation, **inp)
+    try:
+        dbid = db.insert(db.Curation, **inp)
+    except IntegrityError as e:
+        logger.error("Got a bad entry.")
+        msg = e.args[0]
+        detail_line = msg.splitlines()[1]
+        m = re.match("DETAIL: .*?\(pa_hash\)=\((\d+)\).*?not present.*?pa.*?",
+                     detail_line)
+        if m is None:
+            raise e
+        else:
+            h = m.groups()[0]
+            assert int(h) == int(hash_val), \
+                "Erred hash %s does not match input hash %s." % (h, hash_val)
+            logger.error("Bad hash: %s" % h)
+            raise BadHashError(h)
     return dbid
 
 

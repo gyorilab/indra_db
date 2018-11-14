@@ -94,10 +94,12 @@ def make_raw_statement_set_for_distillation():
             # The above only applies if the evidence was specified to be the
             # same, otherwise it assumed the evidence, and therefore the hash,
             # is different.
+            last_hash = stmts[-1].get_hash(shallow=False)
+            sec_last_hash = stmts[-2].get_hash(shallow=False)
             if ev_num is not None:
-                assert stmts[-1].get_hash() == stmts[-2].get_hash()
+                assert last_hash == sec_last_hash
             else:
-                assert stmts[-1].get_hash() != stmts[-2].get_hash()
+                assert last_hash != sec_last_hash
 
         # Populate the provenance for the dict.
         rv = db_util.reader_versions[reader][rv_idx]
@@ -107,18 +109,19 @@ def make_raw_statement_set_for_distillation():
         # identical, and they will all have the same hash. Else, the hash is
         # different and the statements need to be iterated over.
         if ev_num is not None:
-            s_hash = stmts[-1].get_hash()
+            s_hash = stmts[-1].get_hash(shallow=False)
 
-            # Check to see if we have a matching statment yet.
+            # Check to see if we have a matching statement yet.
             if r_dict.get(s_hash) is None:
                 r_dict[s_hash] = set()
 
             # Set the value
-            d[trid][src][tcid][reader][rv][rid][stmts[-1].get_hash()] |= \
+            last_hash = stmts[-1].get_hash(shallow=False)
+            d[trid][src][tcid][reader][rv][rid][last_hash] |= \
                 {(stmts.index(s), s) for s in stmts[-copies:]}
         else:
             for s in stmts[-copies:]:
-                s_hash = s.get_hash()
+                s_hash = s.get_hash(shallow=False)
                 if r_dict.get(s_hash) is None:
                     r_dict[s_hash] = set()
                 d[trid][src][tcid][reader][rv][rid][s_hash].add(
@@ -380,7 +383,7 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
         uuid = s.uuid
         print('-'*100)
         print('uuid: %s\nhash: %s\nshallow hash: %s'
-              % (s.uuid, s.get_hash(), shash(s)))
+              % (s.uuid, s.get_hash(shallow=False), shash(s)))
         print('-'*100)
         db_pas = db.select_one(db.PAStatements,
                                db.PAStatements.mk_hash == shash(s))

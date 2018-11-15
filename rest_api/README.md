@@ -411,6 +411,27 @@ stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
 ```
 
 #### Example 4:
+
+##### HTML curation interface
+By appending `&format=html` to the web api address and entering it in your browser you will be taken to an HTML based, 
+user friendly interface.  
+```
+http://api.host/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
+```
+The interface loads the queried statements and let's you curate statements on the level of individual evidences for 
+each statement. You will be linked out to various source databases (depending on availability).
+
+###### Curation best practices
+
+
+
+###### Submit curation
+Before you submit a curation, make sure you have entered a valid API key in the API key field and your name 
+(or other identifier such as an email address) at the top of the page. When you have entered the necessary 
+information, click the 'Submit' button. A status message will show up once a submission has been sent indicating if 
+the submission was successful or not.     
+
+#### Example 5:
 Query for a statement with the hash -1072112758478440, retrieving at most 1000
 evidence, using curl:
 ```bash
@@ -423,7 +444,7 @@ stmts = idbr.get_statements_by_hash([-1072112758478440], ev_limit=1000)
 Note that client does not actually use the same endpoint here, but rather uses
 the `/from_hashes` endpoint.
 
-#### Example 5:
+#### Example 6:
 Get the statements from a paper with the pmid 22174878, and
 another paper with the doi 10.1259/0007-1285-34-407-693, first create the json
 file, call it `papers.json` with the following:
@@ -445,7 +466,7 @@ stmts = idbr.get_statments_for_paper([('pmid', '22174878'),
                                       ('doi', '10.1259/0007-1285-34-407-693')])
 ```
 
-#### Example 6:
+#### Example 7:
 Curate a Statement at the pre-assembled (pa) level for a Statement with hash
 -1072112758478440, using curl:
 ```bash

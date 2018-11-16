@@ -368,16 +368,19 @@ a single command.
 
 
 #### Example 2:
-By setting the `format` parameter to `html` in the web API address, an HTML document that presents a graphical user 
-interface when displayed in a web browser will be returned. The example below queries for statements where BRCA1 is 
-subject and BRCA2 is object:
+By setting the `format` parameter to `html` in the web API address, an HTML 
+document that presents a graphical user interface when displayed in a web 
+browser will be returned. The example below queries for statements where 
+BRCA1 is subject and BRCA2 is object:
 ```url
 http://api.host/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
 ```
-The interface loads the queried statements and lets you curate statements on the level of individual evidences for 
-each statement. Links to various source databases (depending on availability) are available for each piece of evidence 
+The interface loads the queried statements and lets you curate statements on 
+the level of individual evidences for each statement. Links to various source 
+databases (depending on availability) are available for each piece of evidence 
 to facilitate accurate curation. Find out more about the HTML interface in the 
-[HTML assemlber documentation](link_to_future_HTML_assembler_docc) and the [manual](link to manual on readthedocs). 
+[HTML assemlber documentation](link_to_future_HTML_assembler_docc) and the 
+[manual](link to manual on readthedocs). 
 
 << Move to manual and `HTML_assembler` docs >>
 ###### Curating a statement

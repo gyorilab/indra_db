@@ -368,8 +368,9 @@ a single command.
 
 
 #### Example 2:
-By appending `&format=html` to the web api address and entering it in your browser you will be taken to an HTML based, 
-user friendly interface. The example below queries for statements where BRCA1 is subject and BRCA2 is object:
+By setting the `format` parameter to `html` in the web API address, an HTML document that presents a graphical user 
+interface when displayed in a web browser will be returned. The example below queries for statements where BRCA1 is 
+subject and BRCA2 is object:
 ```url
 http://api.host/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
 ```
@@ -378,7 +379,8 @@ each statement. Links to various source databases (depending on availability) ar
 to facilitate accurate curation. Find out more about the HTML interface in the 
 [HTML assemlber documentation](link_to_future_HTML_assembler_docc) and the [manual](link to manual on readthedocs). 
 
-###### Curating a statement << Moce to manual and `HTML_assembler` docs >>
+<< Move to manual and `HTML_assembler` docs >>
+###### Curating a statement
 To start curating a statement, click the pen icon on the far left side of the statement. This will produce a row below 
 the statement with a dropdown menu, a text box and a submit button. The dropdown menu contains common errors and also 
 the possibility to mark the statement as 'correct'. If none of the types fit, select the `other...` option, and 
@@ -396,7 +398,7 @@ the server has processed the submission, indicating if the submission was succes
 ###### Curation best practices
 Text here.
 
-<< Moce to manual and `HTML_assembler` docs >>
+<< Move to manual and `HTML_assembler` docs >>
 
 #### Example 3:
 Use curl to query for any kind of interaction between SMURF2 and SMAD2, 

@@ -366,7 +366,7 @@ stmts = idbr.get_statements(subject='MAP2K1', object='MAPK1', stmt_type='phospho
 ```
 Where the URL and API key are located n a config file. A key advantage of this
 client is that queries that return more than 1000 statement are paged behind
-the scenes, so that all the statements which match the query are retrived with
+the scenes, so that all the statements which match the query are retrieved with
 a single command.
 
 
@@ -382,7 +382,7 @@ The interface loads the queried statements and lets you curate statements on
 the level of individual evidences for each statement. Links to various source 
 databases (depending on availability) are available for each piece of evidence 
 to facilitate accurate curation. Find out more about the HTML interface in the 
-[HTML assemlber documentation](link_to_future_HTML_assembler_docc) and the 
+[HTML assembler documentation](link_to_future_HTML_assembler_docc) and the 
 [manual](link to manual on readthedocs).
 
 #### Example 3:

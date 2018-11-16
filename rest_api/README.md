@@ -59,6 +59,9 @@ options to control the size and order of the response:
  however they are also generally the most canonical. Set this parameter to 
  "false" to get statements in an arbitrary order. This can also speed up a 
  query. You may however find you get a lot of low-quality content.
+- **`format`**: Set this option to `html` to receive an HTML document that 
+ when opened in a web browser shows a graphical user interface for 
+ curating statements at the evidence level.
 
 The output of the statement endpoint is JSON. Specifically, the endpoints 
 all return a json dict of the following form (with many made-up but reasonable

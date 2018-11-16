@@ -368,7 +368,7 @@ a single command.
 
 
 #### Example 2:
-By setting the `format` parameter to `html` in the web API address, an HTML 
+By setting the `format` option to `html` in the web API address, an HTML 
 document that presents a graphical user interface when displayed in a web 
 browser will be returned. The example below queries for statements where 
 BRCA1 is subject and BRCA2 is object:

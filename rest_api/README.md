@@ -368,49 +368,6 @@ a single command.
 
 
 #### Example 2:
-Use curl to query for any kind of interaction between SMURF2 and SMAD2, 
-returning at most 10 statements with 3 evidence each:
-```bash
-curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&max_stmts=10&ev_limit=3"
-```
-As above, in python this could be handled using the `requests` module, or with
-the client:
-```python
-import requests
-from indra.statements import stmts_from_json
-from indra.sources import indra_db_rest as idbr
-
-# With requests
-resp = requests.get('http://api.host/statements/from_agents',
-                    params={'agent0': 'SMURF2', 'agent1': 'SMAD',
-                            'api_key': 12345, 'max_stmts': 10,
-                            'ev_limit': 3})
-stmts_json = resp.json()
-stmts = stmts_from_json(stmts_json)
-
-# With the client
-stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
-                            ev_limit=3)
-```
-
-#### Example 3:
-Note the use of the `@FPLX` suffix to denote the namespace used in identifying
-the agent to query for things that inhibit MEK, using curl:
-```bash
-curl -X GET "http://api.host/statements/from_agents?object=MEK@FPLX&type=inhibition&api_key=12345"
-```
-Python requests:
-```python
-resp = requests.get('http://api.host/statements/from_agents',
-                    params={'agent': 'MEK@FPLX', 'type': 'inhibition', 
-                            'api_key': 12345})
-```
-and INDRA's client:
-```python
-stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
-```
-
-#### Example 4:
 
 ###### Web curation interface
 By appending `&format=html` to the web api address and entering it in your browser you will be taken to an HTML based, 
@@ -439,6 +396,50 @@ the server has processed the submission, indicating if the submission was succes
 
 ###### Curation best practices
 Text here.
+
+
+#### Example 3:
+Use curl to query for any kind of interaction between SMURF2 and SMAD2, 
+returning at most 10 statements with 3 evidence each:
+```bash
+curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&max_stmts=10&ev_limit=3"
+```
+As above, in python this could be handled using the `requests` module, or with
+the client:
+```python
+import requests
+from indra.statements import stmts_from_json
+from indra.sources import indra_db_rest as idbr
+
+# With requests
+resp = requests.get('http://api.host/statements/from_agents',
+                    params={'agent0': 'SMURF2', 'agent1': 'SMAD',
+                            'api_key': 12345, 'max_stmts': 10,
+                            'ev_limit': 3})
+stmts_json = resp.json()
+stmts = stmts_from_json(stmts_json)
+
+# With the client
+stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
+                            ev_limit=3)
+```
+
+#### Example 4:
+Note the use of the `@FPLX` suffix to denote the namespace used in identifying
+the agent to query for things that inhibit MEK, using curl:
+```bash
+curl -X GET "http://api.host/statements/from_agents?object=MEK@FPLX&type=inhibition&api_key=12345"
+```
+Python requests:
+```python
+resp = requests.get('http://api.host/statements/from_agents',
+                    params={'agent': 'MEK@FPLX', 'type': 'inhibition', 
+                            'api_key': 12345})
+```
+and INDRA's client:
+```python
+stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
+```
 
 #### Example 5:
 Query for a statement with the hash -1072112758478440, retrieving at most 1000

@@ -412,24 +412,33 @@ stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
 
 #### Example 4:
 
-##### HTML curation interface
+###### Web curation interface
 By appending `&format=html` to the web api address and entering it in your browser you will be taken to an HTML based, 
-user friendly interface.  
-```
+user friendly interface. The example below queries for statements where BRCA1 is subject and BRCA2 is object:
+```url
 http://api.host/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
 ```
-The interface loads the queried statements and let's you curate statements on the level of individual evidences for 
-each statement. You will be linked out to various source databases (depending on availability).
+The interface loads the queried statements and lets you curate statements on the level of individual evidences for 
+each statement. Links to various source databases (depending on availability) are available for each piece of evidence 
+to facilitate accurate curation.
+
+###### Curating a statement
+To start curating a statement, click the pen icon on the far left side of the statement. This will produce a row below 
+the statement with a dropdown menu, a text box and a submit button. The dropdown menu contains common errors and also 
+the possibility to mark the statement as 'correct'. If none of the types fit, select the `other...` option, and 
+describe the error with one or a few words in the provided textbox.
+
+###### Submitting a curation
+To submit a curation, there are three minimum requirements:
+1. A valid API key (at the top of the page)
+2. A curator identifier, such as name or email (at the top of the page)
+3. A selection in the dropdown menu (by the curated statement)
+
+When you have entered the necessary information, click the 'Submit' button. A status message will appear once a 
+the server has processed the submission, indicating if the submission was successful or which problem arose if not.
 
 ###### Curation best practices
-
-
-
-###### Submit curation
-Before you submit a curation, make sure you have entered a valid API key in the API key field and your name 
-(or other identifier such as an email address) at the top of the page. When you have entered the necessary 
-information, click the 'Submit' button. A status message will show up once a submission has been sent indicating if 
-the submission was successful or not.     
+Text here.
 
 #### Example 5:
 Query for a statement with the hash -1072112758478440, retrieving at most 1000

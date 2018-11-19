@@ -46,6 +46,9 @@ For all queries, an API key is required, which is passed as a parameter
 different endpoints of the API that return statements (i.e. those with the root
 `/statements`). All endpoints that return statements have the following
 options to control the size and order of the response:
+- **`format`**: The endpoint is capable of returning both HTML and JSON content
+ by setting the format parameter to "html" or "json", respectively. See the 
+ [section on output formats](#output-formats) below.
 - **`max_stmts`**: Set the maximum number of statements you wish to receive.
  The REST API maximum is 1000, which cannot be overridden by this argument
  (to prevent request timeouts).
@@ -59,13 +62,16 @@ options to control the size and order of the response:
  however they are also generally the most canonical. Set this parameter to 
  "false" to get statements in an arbitrary order. This can also speed up a 
  query. You may however find you get a lot of low-quality content.
-- **`format`**: Set this option to `html` to receive an HTML document that 
- when opened in a web browser shows a graphical user interface for 
- curating statements at the evidence level.
 
-The output of the statement endpoint is JSON. Specifically, the endpoints 
-all return a json dict of the following form (with many made-up but reasonable
-numbers):
+<a name="output-formats"></a>
+### The output formats
+The output format is controlled by the **`format`** option described above, 
+with options to return JSON or HTML.
+
+**JSON:** The default value, intended for programmatic use, is "json". The 
+JSON
+that is returned is of the following form (with many made-up but reasonable
+numbers filled in):
 ```python
 {
   "statements": {  # Dict of statement JSONs keyed by hash
@@ -90,6 +96,15 @@ details on these hashes). You can look at the
 on github for details on the Statement JSON. To learn more about INDRA
 Statements, you can read the
 [documentation](https://indra.readthedocs.io/en/latest/modules/statements.html).
+
+**HTML:** The other `format` parameter option, designed for easier manual 
+usage, is "html". The service will then return an HTML document that, when
+opened in a web browser, provides a graphical user interface for viewing and
+curating statements at the evidence level. The web page also allows you to
+easily query for more evidence for a given statement. Documentation for the
+html output (produced by INDRA's HTML assembler) can be found
+[here](https://indra.readthedocs.io/en/latest/modules/assemblers/index.html).
+
 
 <a name="from-agents"></a>
 ### Get Statements by agents (and type): `GET api.host/statements/from_agents`
@@ -204,6 +219,9 @@ immediate effect on the output, however, over time it will help us improve the
 readers we use, our methods for extracting Statements from those reader
 outputs, could help us filter erroneous content, and will help us improve our
 pre-assembly algorithms.
+
+Further instruction on curation best practices can be found
+[here](https://indra.readthedocs.io/en/latest/tutorials/index.html).
 
 ### Curate statements: `POST api.host/curation/submit/<hash>`
 

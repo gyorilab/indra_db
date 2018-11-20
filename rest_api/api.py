@@ -123,9 +123,9 @@ def _query_wrapper(f):
 
         if format == 'html':
             stmts_json = result.pop('statements')
-            stmts_formatted = []
+            ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
-            html_assembler = HtmlAssembler(stmts, result)
+            html_assembler = HtmlAssembler(stmts, result, ev_totals)
             content = html_assembler.make_model()
             mimetype = 'text/html'
         else: # Return JSON for all other values of the format argument
@@ -139,8 +139,8 @@ def _query_wrapper(f):
             resp = Response(gen, mimetype=mimetype)
         else:
             resp = Response(content, mimetype=mimetype)
-        logger.info("Exiting with %d statements with %d evidence of size %f MB "
-                    "after %s seconds."
+        logger.info("Exiting with %d statements with %d evidence of size "
+                    "%f MB after %s seconds."
                     % (result['statements_returned'], result['total_evidence'],
                        sys.getsizeof(resp.data)/1e6,
                        sec_since(start_time)))

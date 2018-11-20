@@ -68,7 +68,6 @@ class DbApiTestCase(unittest.TestCase):
         else:
             url = end_point
         meth_func = getattr(self.app, method)
-        start_time = datetime.now()
         if data:
             resp = meth_func(url, data=json.dumps(data),
                              headers={'content-type': 'application/json'})
@@ -77,33 +76,16 @@ class DbApiTestCase(unittest.TestCase):
         t_delta = datetime.now() - start_time
         dt = t_delta.seconds + t_delta.microseconds/1e6
         print(dt)
-        return resp, dt
-
-    def __time_query(self, method, end_point, query_str=None, url_fmt='/%s/?%s',
-                     **data):
-        print("Checking json response.")
-        if query_str is not None:
-            url = url_fmt % (end_point, query_str)
-        else:
-            url = end_point
-        resp, dt = self.__query(method, url, data)
         size = int(resp.headers['Content-Length'])
         raw_size = sys.getsizeof(resp.data)
         print("Raw size: {raw:f}/{lim:f}, Compressed size: {comp:f}/{lim:f}."
               .format(raw=raw_size/1e6, lim=SIZELIMIT/1e6, comp=size/1e6))
-
-        print("Checking html response.")
-        if '?' in url:
-            url += '&format=html'
-        else:
-            url += '?format=html'
-        html_resp, dt = self.__query(method, url, data)
-        self.__check_time(dt)
         return resp, dt, size
 
     def __check_good_statement_query(self, *args, **kwargs):
         check_stmts = kwargs.pop('check_stmts', True)
         time_goal = max(kwargs.pop('time_goal', TIMEGOAL), TIMEGOAL)
+        print("Checking json response.")
         query_str = '&'.join(['%s=%s' % (k, v) for k, v in kwargs.items()]
                              + list(args))
         resp, dt, size = self.__time_get_query('statements/from_agents',
@@ -117,7 +99,15 @@ class DbApiTestCase(unittest.TestCase):
              % (size/1e6, SIZELIMIT/1e6))
         self.__check_stmts(resp_dict['statements'].values(),
                            check_stmts=check_stmts)
+
         self.__check_time(dt, time_goal)
+
+        print("Checking html response.")
+        query_str += '&format=html'
+        _, dt, size = self.__time_get_query('statements/from_agents',
+                                            query_str)
+        self.__check_time(dt, time_goal)
+
         return resp
 
     def __check_stmts(self, json_stmts, check_support=False, check_stmts=False):

@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import logging
@@ -80,10 +81,45 @@ def sec_since(t):
     return (datetime.now() - t).total_seconds()
 
 
+class LogTracker(object):
+    log_path = '.rest_api_tracker.log'
+
+    def __init__(self):
+        self.root_logger = logging.getLogger()
+        with open(self.log_path, 'w') as f:
+            pass  # This will clear the file.
+        fh = logging.FileHandler(self.log_path)
+        formatter = logging.Formatter('%(levelname)s: %(name)s %(message)s')
+        fh.setFormatter(formatter)
+        fh.setLevel(logging.WARNING)
+        self.root_logger.addHandler(fh)
+        return
+
+    def get_messages(self):
+        with open(self.log_path, 'r') as f:
+            ret = f.read().splitlines()
+        return ret
+
+    def get_level_stats(self):
+        msg_list = self.get_messages()
+        ret = {}
+        for msg in msg_list:
+            level = msg.split(':')[0]
+            if level not in ret.keys():
+                ret[level] = 0
+            ret[level] += 1
+        return ret
+
+    def __del__(self):
+        os.remove(self.log_path)
+
+
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
+
     @wraps(f)
     def decorator(*args, **kwargs):
+        tracker = LogTracker()
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))
 
@@ -127,8 +163,17 @@ def _query_wrapper(f):
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals)
             content = html_assembler.make_model()
+            if tracker.get_messages():
+                level_stats = ['%d %ss' % (n, lvl.lower())
+                               for lvl, n in tracker.get_level_stats().items()]
+                msg = ' '.join(level_stats)
+                new_header = ('<h4 color="red">CAUTION: %s occurred when '
+                              'creating this page. Please contact the '
+                              'developers.</h4>' % msg)
+                content = content.replace('<body>', '<body>\n  ' + new_header)
             mimetype = 'text/html'
-        else: # Return JSON for all other values of the format argument
+        else:  # Return JSON for all other values of the format argument
+            result.update(tracker.get_level_stats())
             content = json.dumps(result)
             mimetype = 'application/json'
 

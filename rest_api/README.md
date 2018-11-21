@@ -46,6 +46,9 @@ For all queries, an API key is required, which is passed as a parameter
 different endpoints of the API that return statements (i.e. those with the root
 `/statements`). All endpoints that return statements have the following
 options to control the size and order of the response:
+- **`format`**: The endpoint is capable of returning both HTML and JSON content
+ by setting the format parameter to "html" or "json", respectively. See the 
+ [section on output formats](#output-formats) below.
 - **`max_stmts`**: Set the maximum number of statements you wish to receive.
  The REST API maximum is 1000, which cannot be overridden by this argument
  (to prevent request timeouts).
@@ -60,9 +63,15 @@ options to control the size and order of the response:
  "false" to get statements in an arbitrary order. This can also speed up a 
  query. You may however find you get a lot of low-quality content.
 
-The output of the statement endpoint is JSON. Specifically, the endpoints 
-all return a json dict of the following form (with many made-up but reasonable
-numbers):
+<a name="output-formats"></a>
+### The output formats
+The output format is controlled by the **`format`** option described above, 
+with options to return JSON or HTML.
+
+**JSON:** The default value, intended for programmatic use, is "json". The 
+JSON
+that is returned is of the following form (with many made-up but reasonable
+numbers filled in):
 ```python
 {
   "statements": {  # Dict of statement JSONs keyed by hash
@@ -87,6 +96,15 @@ details on these hashes). You can look at the
 on github for details on the Statement JSON. To learn more about INDRA
 Statements, you can read the
 [documentation](https://indra.readthedocs.io/en/latest/modules/statements.html).
+
+**HTML:** The other `format` parameter option, designed for easier manual 
+usage, is "html". The service will then return an HTML document that, when
+opened in a web browser, provides a graphical user interface for viewing and
+curating statements at the evidence level. The web page also allows you to
+easily query for more evidence for a given statement. Documentation for the
+html output (produced by INDRA's HTML assembler) can be found
+[here](https://indra.readthedocs.io/en/latest/modules/assemblers/index.html).
+
 
 <a name="from-agents"></a>
 ### Get Statements by agents (and type): `GET api.host/statements/from_agents`
@@ -201,6 +219,9 @@ immediate effect on the output, however, over time it will help us improve the
 readers we use, our methods for extracting Statements from those reader
 outputs, could help us filter erroneous content, and will help us improve our
 pre-assembly algorithms.
+
+Further instruction on curation best practices can be found
+[here](https://indra.readthedocs.io/en/latest/tutorials/index.html).
 
 ### Curate statements: `POST api.host/curation/submit/<hash>`
 
@@ -363,11 +384,27 @@ stmts = idbr.get_statements(subject='MAP2K1', object='MAPK1', stmt_type='phospho
 ```
 Where the URL and API key are located n a config file. A key advantage of this
 client is that queries that return more than 1000 statement are paged behind
-the scenes, so that all the statements which match the query are retrived with
+the scenes, so that all the statements which match the query are retrieved with
 a single command.
 
 
 #### Example 2:
+By setting the `format` option to `html` in the web API address, an HTML 
+document that presents a graphical user interface when displayed in a web 
+browser will be returned. The example below queries for statements where 
+BRCA1 is subject and BRCA2 is object:
+```url
+http://api.host/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
+```
+The interface loads the queried statements and lets you curate statements on 
+the level of individual evidences for each statement. Links to various source 
+databases (depending on availability) are available for each piece of evidence 
+to facilitate accurate curation. Find out more about the HTML interface in the 
+[HTML assembler documentation](https://indra.readthedocs.io/en/latest/modules/assemblers/index.html) 
+and for instructions on how to use it, see the 
+[manual](https://indra.readthedocs.io/en/latest/tutorials/index.html).
+
+#### Example 3:
 Use curl to query for any kind of interaction between SMURF2 and SMAD2, 
 returning at most 10 statements with 3 evidence each:
 ```bash
@@ -393,7 +430,7 @@ stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
                             ev_limit=3)
 ```
 
-#### Example 3:
+#### Example 4:
 Note the use of the `@FPLX` suffix to denote the namespace used in identifying
 the agent to query for things that inhibit MEK, using curl:
 ```bash
@@ -410,7 +447,7 @@ and INDRA's client:
 stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
 ```
 
-#### Example 4:
+#### Example 5:
 Query for a statement with the hash -1072112758478440, retrieving at most 1000
 evidence, using curl:
 ```bash
@@ -423,7 +460,7 @@ stmts = idbr.get_statements_by_hash([-1072112758478440], ev_limit=1000)
 Note that client does not actually use the same endpoint here, but rather uses
 the `/from_hashes` endpoint.
 
-#### Example 5:
+#### Example 6:
 Get the statements from a paper with the pmid 22174878, and
 another paper with the doi 10.1259/0007-1285-34-407-693, first create the json
 file, call it `papers.json` with the following:
@@ -445,7 +482,7 @@ stmts = idbr.get_statments_for_paper([('pmid', '22174878'),
                                       ('doi', '10.1259/0007-1285-34-407-693')])
 ```
 
-#### Example 6:
+#### Example 7:
 Curate a Statement at the pre-assembled (pa) level for a Statement with hash
 -1072112758478440, using curl:
 ```bash

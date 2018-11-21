@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import logging
@@ -8,13 +9,15 @@ from flask import Flask, request, abort, Response
 from flask_compress import Compress
 from flask_cors import CORS
 
-from indra.statements import make_statement_camel
-from indra.databases import hgnc_client
 from indra.util import batch_iter
+from indra.databases import hgnc_client
+from indra.assemblers.html import HtmlAssembler
+from indra.statements import make_statement_camel, stmts_from_json
 
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_elsevier_auth, BadHashError
+
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -78,10 +81,42 @@ def sec_since(t):
     return (datetime.now() - t).total_seconds()
 
 
+class LogTracker(object):
+    log_path = '.rest_api_tracker.log'
+
+    def __init__(self):
+        os.remove(self.log_path)
+        root_logger = logging.getLogger()
+        fh = logging.FileHandler(self.log_path)
+        formatter = logging.Formatter('%(levelname)s: %(name)s %(message)s')
+        fh.setFormatter(formatter)
+        fh.setLevel(logging.WARNING)
+        root_logger.addHandler(fh)
+        self.root_logger = root_logger
+        return
+
+    def get_messages(self):
+        with open(self.log_path, 'r') as f:
+            ret = f.read().splitlines()
+        return ret
+
+    def get_level_stats(self):
+        msg_list = self.get_messages()
+        ret = {}
+        for msg in msg_list:
+            level = msg.split(':')[0]
+            if level not in ret.keys():
+                ret[level] = 0
+            ret[level] += 1
+        return ret
+
+
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
+
     @wraps(f)
     def decorator(*args, **kwargs):
+        tracker = LogTracker()
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))
 
@@ -95,9 +130,9 @@ def _query_wrapper(f):
         do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
+        format = query.pop('format', 'json')
 
         api_key = query.pop('api_key', None)
-
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
@@ -117,18 +152,38 @@ def _query_wrapper(f):
         result['offset'] = offs
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
+        result['statements_returned'] = len(result['statements'])
+
+        if format == 'html':
+            stmts_json = result.pop('statements')
+            ev_totals = result.pop('evidence_totals')
+            stmts = stmts_from_json(stmts_json.values())
+            html_assembler = HtmlAssembler(stmts, result, ev_totals,
+                                           title='INDRA DB REST Results')
+            content = html_assembler.make_model()
+            if tracker.get_messages():
+                level_stats = ['%d %ss' % (n, lvl.lower())
+                               for lvl, n in tracker.get_level_stats().items()]
+                msg = ' '.join(level_stats)
+                content = html_assembler.append_warning(msg)
+            mimetype = 'text/html'
+        else:  # Return JSON for all other values of the format argument
+            result.update(tracker.get_level_stats())
+            content = json.dumps(result)
+            mimetype = 'application/json'
 
         if do_stream:
             # Returning a generator should stream the data.
-            resp_json_bts = json.dumps(result)
+            resp_json_bts = content
             gen = batch_iter(resp_json_bts, 10000)
-            resp = Response(gen, mimetype='application/json')
+            resp = Response(gen, mimetype=mimetype)
         else:
-            resp = Response(json.dumps(result), mimetype='application/json')
-        logger.info("Exiting with %d statements with %d evidence of size %f "
-                    "MB after %s seconds."
-                    % (len(result['statements']), result['total_evidence'],
-                       sys.getsizeof(resp.data)/1e6, sec_since(start_time)))
+            resp = Response(content, mimetype=mimetype)
+        logger.info("Exiting with %d statements with %d evidence of size "
+                    "%f MB after %s seconds."
+                    % (result['statements_returned'], result['total_evidence'],
+                       sys.getsizeof(resp.data)/1e6,
+                       sec_since(start_time)))
         return resp
     return decorator
 

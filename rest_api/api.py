@@ -85,7 +85,8 @@ class LogTracker(object):
     log_path = '.rest_api_tracker.log'
 
     def __init__(self):
-        os.remove(self.log_path)
+        if os.path.exists(self.log_path):
+            os.remove(self.log_path)
         root_logger = logging.getLogger()
         fh = logging.FileHandler(self.log_path)
         formatter = logging.Formatter('%(levelname)s: %(name)s %(message)s')

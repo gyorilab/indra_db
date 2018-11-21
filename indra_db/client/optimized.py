@@ -100,7 +100,9 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         ev_json['annotations']['prior_uuids'].append(raw_json['id'])
         if 'text_refs' not in ev_json.keys():
             ev_json['text_refs'] = {}
-        ev_json['text_refs'].update(ref_dict)
+        ev_json['text_refs'].update({k.upper(): v
+                                     for k, v in ref_dict.items()
+                                     if v is not None})
 
         if ref_dict['source']:
             ev_json['annotations']['content_source'] = ref_dict['source']

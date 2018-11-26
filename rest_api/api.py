@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import logging
+from io import StringIO
 from functools import wraps
 from datetime import datetime
 
@@ -85,20 +86,20 @@ class LogTracker(object):
     log_path = '.rest_api_tracker.log'
 
     def __init__(self):
-        if os.path.exists(self.log_path):
-            os.remove(self.log_path)
         root_logger = logging.getLogger()
-        fh = logging.FileHandler(self.log_path)
+        self.stream = StringIO()
+        sh = logging.StreamHandler(self.stream)
         formatter = logging.Formatter('%(levelname)s: %(name)s %(message)s')
-        fh.setFormatter(formatter)
-        fh.setLevel(logging.WARNING)
-        root_logger.addHandler(fh)
+        sh.setFormatter(formatter)
+        sh.setLevel(logging.WARNING)
+        root_logger.addHandler(sh)
         self.root_logger = root_logger
         return
 
     def get_messages(self):
-        with open(self.log_path, 'r') as f:
-            ret = f.read().splitlines()
+        conts = self.stream.getvalue()
+        print(conts)
+        ret = conts.splitlines()
         return ret
 
     def get_level_stats(self):

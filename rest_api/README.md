@@ -221,7 +221,7 @@ outputs, could help us filter erroneous content, and will help us improve our
 pre-assembly algorithms.
 
 Further instruction on curation best practices can be found
-[here](https://indra.readthedocs.io/en/latest/tutorials/index.html).
+[here](https://indra.readthedocs.io/en/latest/tutorials/html_curation.html#curation-guidelines).
 
 ### Curate statements: `POST api.host/curation/submit/<hash>`
 

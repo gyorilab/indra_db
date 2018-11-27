@@ -161,7 +161,8 @@ def _query_wrapper(f):
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
-                                           title='INDRA DB REST Results')
+                                           title='INDRA DB REST Results',
+                                           db_rest_url=request.url_root[:-1])
             content = html_assembler.make_model()
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())

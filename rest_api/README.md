@@ -221,7 +221,7 @@ outputs, could help us filter erroneous content, and will help us improve our
 pre-assembly algorithms.
 
 Further instruction on curation best practices can be found
-[here](https://indra.readthedocs.io/en/latest/tutorials/index.html).
+[here](https://indra.readthedocs.io/en/latest/tutorials/html_curation.html#curation-guidelines).
 
 ### Curate statements: `POST api.host/curation/submit/<hash>`
 
@@ -400,9 +400,9 @@ The interface loads the queried statements and lets you curate statements on
 the level of individual evidences for each statement. Links to various source 
 databases (depending on availability) are available for each piece of evidence 
 to facilitate accurate curation. Find out more about the HTML interface in the 
-[HTML assembler documentation](https://indra.readthedocs.io/en/latest/modules/assemblers/index.html) 
+[HTML assembler documentation](https://indra.readthedocs.io/en/latest/modules/assemblers/html_assembler.html) 
 and for instructions on how to use it, see the 
-[manual](https://indra.readthedocs.io/en/latest/tutorials/index.html).
+[manual](https://indra.readthedocs.io/en/latest/tutorials/html_curation.html).
 
 #### Example 3:
 Use curl to query for any kind of interaction between SMURF2 and SMAD2, 

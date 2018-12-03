@@ -11,7 +11,7 @@ from indra.util import batch_iter, clockit
 from indra.databases import hgnc_client
 
 from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
-    _get_statement_object, regularize_agent_id
+    _get_statement_object, regularize_agent_id, _get_trids
 from indra_db.client.datasets import get_statement_essentials
 
 

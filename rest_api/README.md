@@ -366,7 +366,7 @@ resp = requests.get('http://api.host/statements/from_agents',
                             'api_key': 12345})
 stmts_json = resp.json()
 ```
-which can now be turned into INDRA Statement objects using `stmt_from_json`:
+which can now be turned into INDRA Statement objects using `stmts_from_json`:
 ```python
 from indra.statements import stmts_from_json
 stmts = stmts_from_json(stmts_json.values())
@@ -423,7 +423,7 @@ resp = requests.get('http://api.host/statements/from_agents',
                             'api_key': 12345, 'max_stmts': 10,
                             'ev_limit': 3})
 stmts_json = resp.json()
-stmts = stmts_from_json(stmts_json)
+stmts = stmts_from_json(stmts_json.values())
 
 # With the client
 stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,

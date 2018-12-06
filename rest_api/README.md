@@ -369,7 +369,7 @@ stmts_json = resp.json()
 which can now be turned into INDRA Statement objects using `stmt_from_json`:
 ```python
 from indra.statements import stmts_from_json
-stmts = stmts_from_json(stmts_json)
+stmts = stmts_from_json(stmts_json.values())
 ```
 For those familiar with pre-assembled INDRA Statements, note that the
 `supports` and `supported_by` lists of the python Statement objects are not 

@@ -255,7 +255,7 @@ def get_statement_jsons_from_papers(paper_refs, db=None, **kwargs):
     for id_type, paper_id in paper_refs:
         tbl_attr = getattr(db.ReadingRefLink, id_type)
         if id_type in ['trid', 'tcid']:
-            conditions.append(tbl_attr == paper_id)
+            conditions.append(tbl_attr == int(paper_id))
         else:
             conditions.append(tbl_attr.like(paper_id))
     q = q.filter(or_(*conditions))
@@ -276,6 +276,7 @@ def get_statement_jsons_from_hashes(mk_hashes, db=None, **kwargs):
     """Get statement jsons using the appropriate hashes."""
     if db is None:
         db = get_primary_db()
+    mk_hash_ints = [int(h) for h in mk_hashes]
     mk_hashes_q = (db.session.query(db.PaMeta.mk_hash, db.PaMeta.ev_count)
-                   .filter(db.PaMeta.mk_hash.in_(mk_hashes)))
+                   .filter(db.PaMeta.mk_hash.in_(mk_hash_ints)))
     return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, **kwargs)

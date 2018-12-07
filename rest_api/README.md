@@ -364,12 +364,12 @@ resp = requests.get('http://api.host/statements/from_agents',
                             'object': 'MAPK1',
                             'type': 'phosphorylation',
                             'api_key': 12345})
-stmts_json = resp.json()
+resp_json = resp.json()
 ```
 which can now be turned into INDRA Statement objects using `stmts_from_json`:
 ```python
 from indra.statements import stmts_from_json
-stmts = stmts_from_json(stmts_json.values())
+stmts = stmts_from_json(resp_json['statements'].values())
 ```
 For those familiar with pre-assembled INDRA Statements, note that the
 `supports` and `supported_by` lists of the python Statement objects are not 
@@ -422,8 +422,8 @@ resp = requests.get('http://api.host/statements/from_agents',
                     params={'agent0': 'SMURF2', 'agent1': 'SMAD',
                             'api_key': 12345, 'max_stmts': 10,
                             'ev_limit': 3})
-stmts_json = resp.json()
-stmts = stmts_from_json(stmts_json.values())
+resp_json = resp.json()
+stmts = stmts_from_json(resp_json['statements'].values())
 
 # With the client
 stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,

@@ -11,7 +11,7 @@ from indra.util import batch_iter, clockit
 from indra.databases import hgnc_client
 
 from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
-    _get_statement_object, regularize_agent_id
+    _get_statement_object, regularize_agent_id, _get_trids
 from indra_db.client.datasets import get_statement_essentials
 
 
@@ -174,7 +174,7 @@ def get_statements_by_paper(id_val, id_type='pmid', count=1000, db=None,
                 db.RawStatements.id == db.RawUniqueLinks.raw_stmt_id,
                 db.PAStatements.mk_hash == db.RawUniqueLinks.pa_stmt_mk_hash
                 ]
-        stmts.extend(get_statements(clauses, cnt=count, db=db,
+        stmts.extend(get_statements(clauses, count=count, db=db,
                                     preassembled=preassembled,
                                     do_stmt_count=do_stmt_count))
     return stmts

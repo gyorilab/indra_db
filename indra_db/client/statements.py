@@ -101,8 +101,9 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
             return []
         agent_ns = 'HGNC'
     agent_id = regularize_agent_id(agent_id, agent_ns)
-    clauses.extend([Agents.db_name.like(agent_ns),
-                    Agents.db_id.like(agent_id)])
+    if agent_id and agent_ns:
+        clauses.extend([Agents.db_name.like(agent_ns),
+                        Agents.db_id.like(agent_id)])
     if role:
         clauses.append(Agents.role == role)
     if agent_id or role:

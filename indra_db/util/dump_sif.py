@@ -1,8 +1,7 @@
 import pickle
-from itertools import combinations, permutations
+from itertools import permutations
 from collections import OrderedDict
 import pandas as pd
-from sqlalchemy import or_
 from indra_db import util as dbu
 from indra.databases import hgnc_client, go_client, mesh_client
 
@@ -16,6 +15,7 @@ ns_priority_list = (
     'PUBCHEM',
 )
 
+
 def format_agent(db_nm, db_id):
     if db_nm == 'FPLX':
         return db_id
@@ -26,7 +26,7 @@ def format_agent(db_nm, db_id):
         return go_client.get_go_label(norm_go_id)
     elif db_nm == 'MESH':
         return mesh_client.get_mesh_name(db_id)
-    return f'{db_nm}:{db_id}'
+    return '{db_nm}:{db_id}'.format(db_nm=db_nm, db_id=db_id)
 
 
 def load_db_content(pkl_filename, reload, ns_list):
@@ -36,7 +36,7 @@ def load_db_content(pkl_filename, reload, ns_list):
         print("Querying the database for statement metadata...")
         results = []
         for ns in ns_list:
-            print(f"Querying for {ns}")
+            print("Querying for {ns}".format(ns=ns))
             res = db.select_all([db.PaMeta.mk_hash, db.PaMeta.db_name,
                                  db.PaMeta.db_id, db.PaMeta.role,
                                  db.PaMeta.ev_count, db.PaMeta.type],
@@ -49,7 +49,7 @@ def load_db_content(pkl_filename, reload, ns_list):
         print("Loading database content from %s" % pkl_filename)
         with open(pkl_filename, 'rb') as f:
             results = pickle.load(f)
-    print(f"{len(results)} stmts loaded")
+    print("{len} stmts loaded".format(len=len(results)))
     return results
 
 
@@ -68,7 +68,6 @@ def make_dataframe(pkl_filename, reconvert, db_content):
         # to multiple rows
 
         # Organize by pairs of genes, counting evidence.
-        pair_dict = {}
         rows = []
         print("Converting to pairwise entries...")
         for hash, info_dict in stmt_info.items():
@@ -117,10 +116,6 @@ def make_dataframe(pkl_filename, reconvert, db_content):
                         ('evidence_count', info_dict['ev_count']),
                         ('hash', hash)])
                 rows.append(row)
-                #pair_key = tuple(pair)
-                #if pair_key not in pair_dict.keys():
-                #    pair_dict[pair_key] = 0
-                #pair_dict[pair_key] += info_dict['ev_count']
 
         df = pd.DataFrame.from_dict(rows)
 

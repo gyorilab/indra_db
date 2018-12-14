@@ -101,8 +101,9 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
             return []
         agent_ns = 'HGNC'
     agent_id = regularize_agent_id(agent_id, agent_ns)
-    clauses.extend([Agents.db_name.like(agent_ns),
-                    Agents.db_id.like(agent_id)])
+    if agent_id and agent_ns:
+        clauses.extend([Agents.db_name.like(agent_ns),
+                        Agents.db_id.like(agent_id)])
     if role:
         clauses.append(Agents.role == role)
     if agent_id or role:
@@ -260,7 +261,7 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
         else:
             # Get just pa statements without their supporting raw statement(s).
             pa_stmts = db.select_all(db.PAStatements, *clauses, yield_per=cnt)
-            stmt_dict = _process_pa_statement_res_nev(db, pa_stmts, count=cnt)
+            stmt_dict = _process_pa_statement_res_nev(pa_stmts, count=cnt)
 
         # Populate the supports/supported by fields.
         if with_support:

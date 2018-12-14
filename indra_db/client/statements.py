@@ -260,7 +260,7 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
         else:
             # Get just pa statements without their supporting raw statement(s).
             pa_stmts = db.select_all(db.PAStatements, *clauses, yield_per=cnt)
-            stmt_dict = _process_pa_statement_res_nev(db, pa_stmts, count=cnt)
+            stmt_dict = _process_pa_statement_res_nev(pa_stmts, count=cnt)
 
         # Populate the supports/supported by fields.
         if with_support:

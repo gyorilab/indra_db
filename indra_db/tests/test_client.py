@@ -203,6 +203,15 @@ def test_get_statements_by_grot():
 
 
 @attr('nonpublic')
+def test_get_statments_grot_wo_evidence():
+    num_stmts = 1000
+    db, _ = _get_prepped_db(num_stmts)
+
+    stmts = dbc.get_statements_by_gene_role_type('MAP2K1', with_evidence=False)
+    assert stmts, stmts
+
+
+@attr('nonpublic')
 def test_get_content_by_refs():
     db, _ = _get_prepped_db(100)
     tcid = db.select_one(db.TextContent.id)[0]

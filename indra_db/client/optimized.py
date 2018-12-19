@@ -3,7 +3,7 @@ import logging
 from collections import OrderedDict
 from sqlalchemy import or_, desc, true, select
 
-from indra.statements import get_statement_by_name, _make_hash
+from indra.statements import get_statement_by_name, make_hash
 
 logger = logging.getLogger('db_optimized_client')
 
@@ -114,7 +114,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
                 s += ev_json['text']
             elif ev_json.get('pmid') and isinstance(ev_json['pmid'], str):
                 s += ev_json['pmid']
-            ev_json['source_hash'] = _make_hash(s, 16)
+            ev_json['source_hash'] = make_hash(s, 16)
 
         stmts_dict[mk_hash]['evidence'].append(ev_json)
 

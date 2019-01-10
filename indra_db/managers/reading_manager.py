@@ -239,7 +239,7 @@ class BulkAwsReadingManager(BulkReadingManager):
                                 read_all_fulltext=False,
                                 project_name=self.project_name)
         logger.info("Waiting for complete...")
-        sub.watch_and_wait(idle_log_timeout=1200, kill_on_log_timeout=True,
+        sub.watch_and_wait(idle_log_timeout=1200, kill_on_timeout=True,
                            stash_log_method='s3')
         return
 

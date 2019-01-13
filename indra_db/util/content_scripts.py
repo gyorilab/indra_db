@@ -1,4 +1,4 @@
-import defaultdict
+from collections import defaultdict
 
 import indra_db.util as dbu
 

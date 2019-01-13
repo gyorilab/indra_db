@@ -3,7 +3,7 @@ from collections import defaultdict
 import indra_db.util as dbu
 
 
-def get_statements_with_agent_text_like(pattern):
+def get_statements_with_agent_text_like(pattern, filter_genes=False):
     """Get statement ids with agent with rawtext matching pattern
 
 
@@ -12,6 +12,10 @@ def get_statements_with_agent_text_like(pattern):
     pattern : str
         a pattern understood by sqlalchemy's like operator.
         For example '__' for two letter agents
+
+    filter_genes : Optional[bool]
+       if True, only considers agents matching the pattern for which there
+       is an HGNC grounding
 
     Returns
     -------
@@ -22,24 +26,25 @@ def get_statements_with_agent_text_like(pattern):
     """
     db = dbu.get_primary_db()
     # get all stmts with at least one hgnc grounded agent
-    hgnc_stmts = db.select_all(db.RawAgents.stmt_id,
-                               db.RawAgents.db_name == 'HGNC',
-                               db.RawAgents.stmt_id.isnot(None))
-    hgnc_stmts = set(stmt_id[0] for stmt_id in hgnc_stmts)
-    text_dict = db.select_all([db.RawAgents.stmt_id,
-                               db.RawAgents.db_id],
-                              db.RawAgents.db_name == 'TEXT',
-                              db.RawAgents.db_id.like(pattern),
-                              db.RawAgents.stmt_id.isnot(None))
-    hgnc_rawtexts = set()
-    for stmt_id, db_id in text_dict:
-        if stmt_id not in hgnc_stmts:
-            continue
+    if filter_genes:
+        hgnc_stmts = db.select_all(db.RawAgents.stmt_id,
+                                   db.RawAgents.db_name == 'HGNC',
+                                   db.RawAgents.stmt_id.isnot(None))
+        hgnc_stmts = set(stmt_id[0] for stmt_id in hgnc_stmts)
+        text_dict = db.select_all([db.RawAgents.stmt_id,
+                                   db.RawAgents.db_id],
+                                  db.RawAgents.db_name == 'TEXT',
+                                  db.RawAgents.db_id.like(pattern),
+                                  db.RawAgents.stmt_id.isnot(None))
+        hgnc_rawtexts = set()
+        for stmt_id, db_id in text_dict:
+            if stmt_id not in hgnc_stmts:
+                continue
         hgnc_rawtexts.add(db_id)
 
     result_dict = defaultdict(list)
     for stmt_id, db_id in text_dict:
-        if db_id in hgnc_rawtexts:
+        if not filter_genes or db_id in hgnc_rawtexts:
             result_dict[db_id].append(stmt_id)
     return dict(result_dict)
 

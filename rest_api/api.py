@@ -182,11 +182,11 @@ def _query_wrapper(f):
             resp = Response(gen, mimetype=mimetype)
         else:
             resp = Response(content, mimetype=mimetype)
-        logger.info("Exiting with %d statements with %d evidence of size "
+        logger.info("Exiting with %d statements with %d/%d evidence of size "
                     "%f MB after %s seconds."
-                    % (result['statements_returned'], result['total_evidence'],
-                       sys.getsizeof(resp.data)/1e6,
-                       sec_since(start_time)))
+                    % (result['statements_returned'],
+                       result['evidence_returned'], result['total_evidence'],
+                       sys.getsizeof(resp.data)/1e6, sec_since(start_time)))
         return resp
     return decorator
 

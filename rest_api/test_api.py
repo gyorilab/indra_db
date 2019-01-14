@@ -305,10 +305,10 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def test_statements_by_hashes_large_query(self):
-        # TODO: Figure out a way to query hashes that isn't excruciatingly slow.
+        # TODO: Figure out a way to query hashes that is faster.
         # Get a set of hashes.
         db = get_primary_db()
-        res = db.select_sample_from_table(1000, db.EvidenceCounts)
+        res = db.select_sample_from_table(MAX_STATEMENTS, db.EvidenceCounts)
         hash_cnt_dict = {ev_cts.mk_hash: ev_cts.ev_count for ev_cts in res}
 
         # Run the test.

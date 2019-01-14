@@ -3,7 +3,7 @@ from collections import defaultdict
 import indra_db.util as dbu
 
 
-def get_statements_with_agent_text_like(pattern, filter_genes=False):
+def get_stmts_with_agent_text_like(pattern, filter_genes=False):
     """Get statement ids with agent with rawtext matching pattern
 
 
@@ -25,17 +25,18 @@ def get_statements_with_agent_text_like(pattern, filter_genes=False):
         the pattern.
     """
     db = dbu.get_primary_db()
-    # get all stmts with at least one hgnc grounded agent
+
+    text_dict = db.select_all([db.RawAgents.stmt_id,
+                               db.RawAgents.db_id],
+                              db.RawAgents.db_name == 'TEXT',
+                              db.RawAgents.db_id.like(pattern),
+                              db.RawAgents.stmt_id.isnot(None))
+
     if filter_genes:
         hgnc_stmts = db.select_all(db.RawAgents.stmt_id,
                                    db.RawAgents.db_name == 'HGNC',
                                    db.RawAgents.stmt_id.isnot(None))
         hgnc_stmts = set(stmt_id[0] for stmt_id in hgnc_stmts)
-        text_dict = db.select_all([db.RawAgents.stmt_id,
-                                   db.RawAgents.db_id],
-                                  db.RawAgents.db_name == 'TEXT',
-                                  db.RawAgents.db_id.like(pattern),
-                                  db.RawAgents.stmt_id.isnot(None))
         hgnc_rawtexts = set()
         for stmt_id, db_id in text_dict:
             if stmt_id not in hgnc_stmts:

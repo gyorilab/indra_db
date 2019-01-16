@@ -286,10 +286,14 @@ def insert_pa_agents_directly(db, stmts, verbose=False):
 
 def regularize_agent_id(id_val, id_ns):
     """Change agent ids for better search-ability and index-ability."""
-    new_id_val = id_val
-    if id_ns.upper() == 'CHEBI':
-        if id_val.startswith('CHEBI'):
-            new_id_val = id_val[6:]
+    ns_abbrevs = [('CHEBI', ':'), ('GO', ':'), ('HMDB', ''), ('PF', ''),
+                  ('IP', '')]
+    for ns, div in ns_abbrevs:
+    if id_ns.upper() == ns and id_val.startswith(ns):
+            new_id_val = id_val[len(ns) + len(div)]
+            break
+    else:
+        return id_val
             #logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
     return new_id_val
 

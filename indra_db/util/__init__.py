@@ -306,7 +306,7 @@ def _get_agent_tuples(stmt, stmt_id):
         agents = {('SUBJECT', ag_list[0]), ('OBJECT', ag_list[1])}
     else:
         raise IndraDbException("Unhandled agent structure for stmt %s "
-                                 "with agents: %s."
+                               "with agents: %s."
                                % (str(stmt), str(stmt.agent_list())))
 
     def all_agent_refs(agents):
@@ -322,6 +322,7 @@ def _get_agent_tuples(stmt, stmt_id):
                         yield ns, sub_id, role
                 else:
                     yield ns, ag_id, role
+            yield 'NAME', ag.name, role
 
     # Prep the agents for copy into the database.
     agent_data = []

@@ -211,8 +211,9 @@ class PreassemblyManager(object):
         num_batches = num_stmts/self.batch_size
         for i, stmt_tpl_batch in self._raw_sid_stmt_iter(db, raw_sids, True):
             self._log("Processing batch %d/%d of %d/%d statements."
-                       % (i, num_batches, len(stmt_tpl_batch), num_stmts))
-            # Get a list of statements, and generate a mapping from uuid to sid.
+                      % (i, num_batches, len(stmt_tpl_batch), num_stmts))
+
+            # Get a list of statements and generate a mapping from uuid to sid.
             stmts = []
             uuid_sid_dict = {}
             for sid, stmt in stmt_tpl_batch:
@@ -227,6 +228,7 @@ class PreassemblyManager(object):
                 self._condense_statements(cleaned_stmts, mk_done, new_mk_set,
                                           uuid_sid_dict)
 
+            # Insert the statements and their links.
             self._log("Insert new statements into database...")
             insert_pa_stmts(db, new_unique_stmts)
             self._log("Insert new raw_unique links into the database...")
@@ -252,6 +254,15 @@ class PreassemblyManager(object):
 
             # Add the evidence to the dict.
             evidence_links[h].add(uuid_sid_dict[s.uuid])
+
+            # Add any db refs to the agents.
+            unique_ag_list = new_unique_stmts[h].agent_list()
+            for i, new_ag in enumerate(s.agent_list()):
+                unique_ag = unique_ag_list[i]
+                for dbn, dbi in new_ag.db_refs.items():
+                    if dbn not in unique_ag.db_refs:
+                        unique_ag.db_refs[dbn] = dbi
+
         return new_unique_stmts, evidence_links
 
     @_handle_update_table

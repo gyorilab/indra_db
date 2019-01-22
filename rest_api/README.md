@@ -380,7 +380,8 @@ INDRA also supports a client to this API, which is documented in detail
 however using that client, the above query is simply:
 ```python
 from indra.sources import indra_db_rest as idbr
-stmts = idbr.get_statements(subject='MAP2K1', object='MAPK1', stmt_type='phosphorylation')
+processor = idbr.get_statements(subject='MAP2K1', object='MAPK1', stmt_type='phosphorylation')
+stmts = processor.statements
 ```
 Where the URL and API key are located n a config file. A key advantage of this
 client is that queries that return more than 1000 statement are paged behind
@@ -427,7 +428,7 @@ stmts = stmts_from_json(resp_json['statements'].values())
 
 # With the client
 stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
-                            ev_limit=3)
+                            ev_limit=3, simple_response=True)
 ```
 
 #### Example 4:

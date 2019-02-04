@@ -289,12 +289,13 @@ def regularize_agent_id(id_val, id_ns):
     ns_abbrevs = [('CHEBI', ':'), ('GO', ':'), ('HMDB', ''), ('PF', ''),
                   ('IP', '')]
     for ns, div in ns_abbrevs:
-    if id_ns.upper() == ns and id_val.startswith(ns):
+        if id_ns.upper() == ns and id_val.startswith(ns):
             new_id_val = id_val[len(ns) + len(div)]
             break
     else:
         return id_val
-            #logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
+
+    # logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
     return new_id_val
 
 

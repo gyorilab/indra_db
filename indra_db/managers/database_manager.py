@@ -69,7 +69,12 @@ try:
     CAN_COPY = True
 except ImportError:
     print("WARNING: pgcopy unavailable. Bulk copies will be slow.")
-    CopyManager = None
+
+    class CopyManager(object):
+        def __init__(self, conn, table, cols):
+            raise NotImplementedError("CopyManager could not be imported from"
+                                      "pgcopy.")
+
     CAN_COPY = False
 
 
@@ -846,7 +851,7 @@ class DatabaseManager(object):
                     len(entry_list))
         return
 
-    def copy(self, tbl_name, data, cols=None):
+    def copy(self, tbl_name, data, cols=None, lazy=False):
         "Use pg_copy to copy over a large amount of data."
         logger.info("Received request to copy %d entries into %s." %
                     (len(data), tbl_name))
@@ -877,9 +882,7 @@ class DatabaseManager(object):
                         cols += (col.name,)
                         data = [datum + (now,) for datum in data]
 
-            # Now actually do the copy
-            conn = self.engine.raw_connection()
-            mngr = CopyManager(conn, tbl_name, cols)
+            # Format the data for the copy.
             data_bts = []
             for entry in data:
                 new_entry = []
@@ -898,7 +901,15 @@ class DatabaseManager(object):
                             "number." % type(element)
                             )
                 data_bts.append(tuple(new_entry))
-            mngr.copy(data_bts, BytesIO)
+
+            # Actually do the copy.
+            conn = self.engine.raw_connection()
+            if lazy:
+                mngr = LazyCopyManager(conn, tbl_name, cols)
+                mngr.copy(data_bts, BytesIO)
+            else:
+                mngr = CopyManager(conn, tbl_name, cols)
+                mngr.copy(data_bts, BytesIO)
             conn.commit()
         else:
             # TODO: use bulk insert mappings?
@@ -1084,3 +1095,30 @@ class DatabaseManager(object):
         "Check whether an entry/entries matching given specs live in the db."
         q = self.filter_query(tbls, *args)
         return self.session.query(q.exists()).first()[0]
+
+
+class LazyCopyManager(CopyManager):
+    """A copy manager that ignores entries which violate constraints."""
+    def copystream(self, datastream):
+        cmd_fmt = ('CREATE TEMP TABLE "{schema}"."tmp_{table}" '
+                   'ON COMMIT DROP '
+                   'AS SELECT * FROM "{schema}"."{table}" '
+                   'WITH NO DATA; '
+                   '\n'
+                   'COPY "{schema}"."tmp_{table}" ("{cols}") '
+                   '\n'
+                   'FROM STDIN WITH BINARY; '
+                   'INSERT INTO "{schema}"."{table}" '
+                   'SELECT * '
+                   'FROM "{schema}"."tmp_{table}" '
+                   'ON CONFLICT DO NOTHING;')
+        columns = '", "'.join(self.cols)
+        sql = cmd_fmt.format(schema=self.schema, table=self.table,
+                             cols=columns)
+        cursor = self.conn.cursor()
+        try:
+            cursor.copy_expert(sql, datastream)
+        except Exception as e:
+            templ = "error doing lazy binary copy into {0}.{1}:\n{2}"
+            e.message = templ.format(self.schema, self.table, e)
+            raise e

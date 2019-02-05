@@ -616,6 +616,40 @@ def test_db_lazy_insert():
 
 
 @attr('nonpublic')
+def test_lazy_copier_unique_constraints():
+    db = get_test_db()
+    db._clear(force=True)
+
+    N = int(10**6)
+    S = int(10**8)
+    fake_mids_a = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
+    fake_mids_b = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
+
+    assert len(fake_mids_a | fake_mids_b) < len(fake_mids_a) + len(fake_mids_b)
+
+    start = datetime.now()
+    db.copy('text_ref', fake_mids_a, ('manuscript_id',))
+    print("First load:", datetime.now() - start)
+
+    try:
+        db.copy('text_ref', fake_mids_b, ('manuscript_id',))
+        assert False, "Vanilla copy succeeded when it should have failed."
+    except Exception as e:
+        db.session.rollback()
+        pass
+
+    start = datetime.now()
+    db.copy('text_ref', fake_mids_b, ('manuscript_id',), lazy=True)
+    print("Lazy copy:", datetime.now() - start)
+
+    mid_results = [mid for mid, in db.select_all(db.TextRef.manuscript_id)]
+    assert len(mid_results) == len(set(mid_results)), \
+        (len(mid_results), len(set(mid_results)))
+
+    return
+
+
+@attr('nonpublic')
 def test_db_preassembly_small():
     _check_preassembly_with_database(200, 40)
 

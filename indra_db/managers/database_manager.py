@@ -433,6 +433,7 @@ class DatabaseManager(object):
         #   3. pa_meta
         # The following can be built at any time and in any order:
         #   - reading_ref_link
+        #   - raw_stmt_src
         # Note that the order of views below is determined not by the above
         # order but by constraints imposed by use-case.
 
@@ -530,6 +531,24 @@ class DatabaseManager(object):
             ev_count = Column(Integer)
         self.PaMeta = PaMeta
         self.m_views[PaMeta.__tablename__] = PaMeta
+
+        # raw_stmt_src
+        # ------------
+        # CREATE MATERIALIZED VIEW public.raw_stmt_src AS
+        #   SELECT raw_statements.id AS sid, reading.reader AS src
+        #    FROM raw_statements, reading
+        #    WHERE reading.id = raw_statements.reading_id
+        #  UNION
+        #   SELECT raw_statements.id AS sid, db_info.db_name AS src
+        #    FROM raw_statements, db_info
+        #    WHERE db_info.id = raw_statements.db_info_id
+        # WITH DATA;
+        class RawStmtSrc(self.Base, Displayable):
+            __tablename__ = 'raw_stmt_src'
+            sid = Column(Integer, primary_key=True)
+            src = Column(String)
+        self.RawStmtSrc = RawStmtSrc
+        self.m_views[RawStmtSrc.__tablename__] = RawStmtSrc
 
         # Here is the form of a query to create a table with counts of each
         # source, sorted by pa statement hash.

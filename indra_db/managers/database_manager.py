@@ -531,6 +531,21 @@ class DatabaseManager(object):
         self.PaMeta = PaMeta
         self.m_views[PaMeta.__tablename__] = PaMeta
 
+        # Here is the form of a query to create a table with counts of each
+        # source, sorted by pa statement hash.
+        #
+        # SELECT * FROM
+        # crosstab(
+        #     'SELECT mk_hash, sid, src FROM raw_stmt_src
+        #      LEFT JOIN fast_raw_pa_link ON sid = id ORDER BY mk_hash
+        #      LIMIT 1000;')
+        # AS
+        # final_result(mk_hash BIGINT,
+        #              REACH BIGINT,
+        #              SPARSER BIGINT,
+        #              biopax BIGINT)
+        # LIMIT 10;
+
         self.engine = create_engine(host)
 
         # There are some useful shortcuts that can be used if

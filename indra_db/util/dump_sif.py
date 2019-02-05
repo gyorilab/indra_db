@@ -1,3 +1,4 @@
+import sys
 import pickle
 from itertools import permutations
 from collections import OrderedDict
@@ -14,6 +15,10 @@ ns_priority_list = (
     'CHEBI',
     'PUBCHEM',
 )
+
+
+# All namespaces used here should be included in the ns_priority_list, above
+ns_list = ('HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
 
 
 def format_agent(db_nm, db_id):
@@ -128,17 +133,25 @@ def make_dataframe(pkl_filename, reconvert, db_content):
 
 
 if __name__ == '__main__':
-    # All namespaces used here should be included in the ns_priority_list,
-    # above
-    ns_list = ('HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
-    db_content = load_db_content('networks/db_dump_results.pkl', True, ns_list)
-    df = make_dataframe('networks/stmt_df.pkl', True, db_content)
+
+    usage = 'Usage: dump_sif.py <db_dump_pkl> <dataframe_pkl> <csv_file>'
+    if len(sys.argv) < 4:
+        print(usage)
+        sys.exit(1)
+
+    dump_file = sys.argv[1]
+    df_file = sys.argv[2]
+    csv_file = sys.argv[3]
+
+    db_content = load_db_content(dump_file, True, ns_list)
+    df = make_dataframe(df_file, True, db_content)
     # Convert the database query result into a set of pairwise relationships
     # Aggregate rows by genes and stmt type
+    print("Saving to CSV...")
     filt_df = df.filter(items=['agA_ns', 'agA_id', 'agA_name',
                                'agB_ns', 'agB_id', 'agB_name',
                                'stmt_type', 'evidence_count'])
     type_counts = filt_df.groupby(by=['agA_ns', 'agA_id', 'agA_name',
                                       'agB_ns', 'agB_id', 'agB_name',
                                       'stmt_type']).sum()
-    type_counts.to_csv('networks/stmts_by_pair_type.csv')
+    type_counts.to_csv(csv_file)

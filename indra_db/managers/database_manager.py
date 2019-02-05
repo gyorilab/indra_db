@@ -1100,21 +1100,22 @@ class DatabaseManager(object):
 class LazyCopyManager(CopyManager):
     """A copy manager that ignores entries which violate constraints."""
     def copystream(self, datastream):
-        cmd_fmt = ('CREATE TEMP TABLE "{schema}"."tmp_{table}" '
+        cmd_fmt = ('CREATE TEMP TABLE "tmp_{table}" '
                    'ON COMMIT DROP '
-                   'AS SELECT * FROM "{schema}"."{table}" '
+                   'AS SELECT "{cols}" FROM "{schema}"."{table}" '
                    'WITH NO DATA; '
                    '\n'
-                   'COPY "{schema}"."tmp_{table}" ("{cols}") '
-                   '\n'
+                   'COPY "tmp_{table}" ("{cols}") '
                    'FROM STDIN WITH BINARY; '
-                   'INSERT INTO "{schema}"."{table}" '
-                   'SELECT * '
-                   'FROM "{schema}"."tmp_{table}" '
+                   '\n'
+                   'INSERT INTO "{schema}"."{table}" ("{cols}") '
+                   'SELECT "{cols}" '
+                   'FROM "tmp_{table}" '
                    'ON CONFLICT DO NOTHING;')
         columns = '", "'.join(self.cols)
         sql = cmd_fmt.format(schema=self.schema, table=self.table,
                              cols=columns)
+        print(sql)
         cursor = self.conn.cursor()
         try:
             cursor.copy_expert(sql, datastream)

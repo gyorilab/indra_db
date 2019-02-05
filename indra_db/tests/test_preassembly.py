@@ -8,6 +8,8 @@ import logging
 from datetime import datetime
 from time import sleep
 
+from indra_db.util import get_test_db
+
 gm_logger = logging.getLogger('grounding_mapper')
 gm_logger.setLevel(logging.WARNING)
 
@@ -556,6 +558,61 @@ def test_statement_distillation_large():
 # @attr('nonpublic', 'slow')
 # def test_statement_distillation_extra_large():
 #     _check_statement_distillation(1001721)
+
+
+@attr('nonpublic')
+def test_db_lazy_insert():
+    db = get_test_db()
+    db._clear(force=True)
+
+    N = int(10**5)
+    S = int(10**8)
+    fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
+    fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
+                    for i in range(N)}
+
+    expected = {id: pmid for id, pmid in fake_pmids_b}
+    for id, pmid in fake_pmids_a:
+        expected[id] = pmid
+
+    start = datetime.now()
+    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
+    print("First load:", datetime.now() - start)
+
+    try:
+        db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
+        assert False, "Vanilla copy succeeded when it should have failed."
+    except Exception as e:
+        db.session.rollback()
+        pass
+
+    # Try adding more text refs lazily. Overlap is guaranteed.
+    start = datetime.now()
+    db.copy('text_ref', fake_pmids_b, ('id', 'pmid'), lazy=True)
+    print("Lazy copy:", datetime.now() - start)
+
+    refs = db.select_all([db.TextRef.id, db.TextRef.pmid])
+    result = {id: pmid for id, pmid in refs}
+    assert result.keys() == expected.keys()
+    passed = True
+    for id, pmid in expected.items():
+        if result[id] != pmid:
+            print(id, pmid)
+            passed = False
+    assert passed, "Result did not match expected."
+
+    # As a benchmark, see how long this takes the "old fashioned" way.
+    db._clear(force=True)
+    start = datetime.now()
+    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
+    print('Second load:', datetime.now() - start)
+
+    start = datetime.now()
+    current_ids = {trid for trid, in db.select_all(db.TextRef.id)}
+    clean_fake_pmids_b = {t for t in fake_pmids_b if t[0] not in current_ids}
+    db.copy('text_ref', clean_fake_pmids_b, ('id', 'pmid'))
+    print('Old fashioned copy:', datetime.now() - start)
+    return
 
 
 @attr('nonpublic')

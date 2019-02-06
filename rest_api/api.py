@@ -1,8 +1,9 @@
-import os
 import sys
 import json
 import logging
+from os import path
 from io import StringIO
+from jinja2 import Template
 from functools import wraps
 from datetime import datetime
 
@@ -38,6 +39,14 @@ MAX_STATEMENTS = int(1e3)
 
 class DbAPIError(Exception):
     pass
+
+
+# Create a template object from the template file, load once
+template_path = path.join(path.dirname(path.abspath(__file__)),
+                          'template.html')
+with open(template_path, 'rt') as f:
+    template_str = f.read()
+    template = Template(template_str)
 
 
 def __process_agent(agent_param):
@@ -191,26 +200,34 @@ def _query_wrapper(f):
     return decorator
 
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def welcome():
     logger.info("Got request for welcome info.")
-    return Response("Welcome the the INDRA database webservice!\n"
-                    "\n"
-                    "Use modes:\n"
-                    "----------\n"
-                    "/            - (you are here) Welcome page.\n"
-                    "/statements  - Get detailed instructions for querying "
-                    "statements.\n"
-                    "/statements/?<query_string> - Get a list of statement "
-                    "jsons."
-                    "\n")
+    content = """
+        <p>Access any one of the following endpoints:</p>
+        <ul style="list-style-type:none;">
+            <li><a href="statements">Look for statements</a></li>
+            <li><a href="curation">Curate a statement</a></li>
+        </ul>
+    """
+    return Response(template.render(content=content))
 
 
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
-    with open('statements_landing.html', 'r') as f:
-        resp_content = f.read()
-    return Response(resp_content)
+    content = """
+      <form action="from_agents">
+        subject: <input type="text" name="subject" value="MEK@FPLX">
+        object: <input type="text" name="object" value="ERK@FPLX">
+        type: <input type="text" name="type" value="Phosphorylation">
+        <select name="format">
+          <option value="html">HTML</option>
+          <option value="json">JSON</option>
+        </select>
+        <input type="submit" value="Submit">
+      </form>
+      """
+    return Response(template.render(content=content))
 
 
 @app.route('/statements/from_agents', methods=['GET'])
@@ -334,6 +351,11 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
                                              offset=offs, ev_limit=ev_limit,
                                              best_first=best_first)
     return result
+
+
+@app.route('/curation', methods=['GET'])
+def describe_curation():
+    return Response()
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])

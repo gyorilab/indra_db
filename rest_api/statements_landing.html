@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<div class="heading" id="heading" align="center">
+  <h2 align="center">The INDRA Database</h2>
+  <p>Access the latest knowledge processed from reading the literature and as extracted and distilled by INDRA.</p>
+</div>
+<div class="form" id="binary_lookup" align="center">
+  <form action="https://db.indra.bio/statements/from_agents">
+    subject: <input type="text" name="subject" value="MEK@FPLX">
+    object: <input type="text" name="object" value="ERK@FPLX">
+    type: <input type="text" name="type" value="Phosphorylation">
+    <select name="format">
+      <option value="html">HTML</option>
+      <option value="json">JSON</option>
+    </select>
+    <input type="submit" value="Submit">
+  </form>
+</div>
+
+</body>
+</html>

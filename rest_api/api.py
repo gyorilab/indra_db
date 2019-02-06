@@ -355,7 +355,12 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 
 @app.route('/curation', methods=['GET'])
 def describe_curation():
-    return Response()
+    content = """
+        <p>Apologies, there is currently no form for entering a curation 
+        online. Feel free to search for your statement <a href='../statements'>
+        here</a>, and curate your the statement in the result.</p>
+    """
+    return Response(template.render(content=content))
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])

@@ -322,6 +322,11 @@ class DatabaseManager(object):
             indra_version = Column(String(100), nullable=False)
             json = Column(Bytea, nullable=False)
             create_date = Column(DateTime, default=func.now())
+            __table_args__ = (
+                UniqueConstraint(
+                    'mk_hash', 'reading_id', 'db_info_id'
+                ),
+            )
         self.RawStatements = RawStatements
         self.tables[RawStatements.__tablename__] = RawStatements
 
@@ -419,13 +424,13 @@ class DatabaseManager(object):
         self.__Auth = Auth
 
         # Materialized Views
-        # ----------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # We use materialized views to allow fast and efficient load of data,
-        # and to add a layer of separation between the processes of updating the
-        # content of the database and accessing the content of the database.
-        # However, it is not practical to have the views created through
-        # sqlalchemy: instead they are generated and updated manually (or by
-        # other non-sqlalchemy scripts).
+        # and to add a layer of separation between the processes of updating
+        # the content of the database and accessing the content of the
+        # database. However, it is not practical to have the views created
+        # through sqlalchemy: instead they are generated and updated manually
+        # (or by other non-sqlalchemy scripts).
         #
         # The following views must be built in this specific order:
         #   1. fast_raw_pa_link
@@ -885,7 +890,7 @@ class DatabaseManager(object):
                     len(entry_list))
         return
 
-    def copy(self, tbl_name, data, cols=None, lazy=False):
+    def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False):
         "Use pg_copy to copy over a large amount of data."
         logger.info("Received request to copy %d entries into %s." %
                     (len(data), tbl_name))
@@ -939,7 +944,8 @@ class DatabaseManager(object):
             # Actually do the copy.
             conn = self.engine.raw_connection()
             if lazy:
-                mngr = LazyCopyManager(conn, tbl_name, cols)
+                mngr = LazyCopyManager(conn, tbl_name, cols,
+                                       push_conflict=push_conflict)
                 mngr.copy(data_bts, BytesIO)
             else:
                 mngr = CopyManager(conn, tbl_name, cols)
@@ -1133,6 +1139,11 @@ class DatabaseManager(object):
 
 class LazyCopyManager(CopyManager):
     """A copy manager that ignores entries which violate constraints."""
+    def __init__(self, conn, table, cols, push_conflict=False):
+        super(LazyCopyManager, self).__init__(conn, table, cols)
+        self.push_conflict = push_conflict
+        return
+
     def copystream(self, datastream):
         cmd_fmt = ('CREATE TEMP TABLE "tmp_{table}" '
                    'ON COMMIT DROP '
@@ -1144,10 +1155,15 @@ class LazyCopyManager(CopyManager):
                    '\n'
                    'INSERT INTO "{schema}"."{table}" ("{cols}") '
                    'SELECT "{cols}" '
-                   'FROM "tmp_{table}" '
-                   'ON CONFLICT DO NOTHING;')
-        columns = '", "'.join(self.cols)
-        sql = cmd_fmt.format(schema=self.schema, table=self.table,
+                   'FROM "tmp_{table}" ')
+        if self.push_conflict:
+            update = ', '.join('{col} = EXCLUDED.{col}')
+            cmd_fmt += 'ON CONFLICT DO UPDATE SET %s;' % update
+        else:
+            cmd_fmt += 'ON CONFLICT DO NOTHING;'
+        columns = '", "'.join(col.replace('"', '') for col in self.cols)
+        sql = cmd_fmt.format(schema=self.schema.replace('"', ''),
+                             table=self.table.replace('"', ''),
                              cols=columns)
         print(sql)
         cursor = self.conn.cursor()

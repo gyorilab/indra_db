@@ -216,7 +216,7 @@ def welcome():
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
     content = """
-      <form action="from_agents">
+      <form action="/statements/from_agents">
         subject: <input type="text" name="subject" value="MEK@FPLX">
         object: <input type="text" name="object" value="ERK@FPLX">
         type: <input type="text" name="type" value="Phosphorylation">
@@ -357,7 +357,7 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 def describe_curation():
     content = """
         <p>Apologies, there is currently no form for entering a curation 
-        online. Feel free to search for your statement <a href='../statements'>
+        online. Feel free to search for your statement <a href='statements'>
         here</a>, and curate your the statement in the result.</p>
     """
     return Response(template.render(content=content))

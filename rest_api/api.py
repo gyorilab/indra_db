@@ -208,20 +208,9 @@ def welcome():
 
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
-    return Response('To get a list of statements, include a query after '
-                    '/statements/ with the following keys:\n\n'
-                    'type : the type of interaction (e.g. Phosphorylation)\n'
-                    'namespace : select the namespace in which agents are '
-                    'identified.\n'
-                    '[subject, object, agent] : the agents, indicated by '
-                    'their role. Note that at least one agent is needed in '
-                    'a query. If agent is use, that agent will be matched to '
-                    'any argument in the statement.\n\n'
-                    'For example: /statements/?subject=MAP2K1&object=MAPK1'
-                    '&type=Phosphorylation'
-                    'Most statements have a subject and an object, but unary '
-                    'and n-ary statements should have agents specified by '
-                    '\"other\".')
+    with open('statements_landing.html', 'r') as f:
+        resp_content = f.read()
+    return Response(resp_content)
 
 
 @app.route('/statements/from_agents', methods=['GET'])

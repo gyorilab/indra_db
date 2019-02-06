@@ -239,7 +239,7 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         if None in row:
             logger.warning("Found None in agent input:\n\t%s\n\t%s"
                            % (cols, row))
-    db.copy(agent_tbl_obj.__tablename__, agent_data, cols)
+    db.copy(agent_tbl_obj.__tablename__, agent_data, cols, lazy=True)
     return
 
 
@@ -280,7 +280,7 @@ def insert_pa_agents_directly(db, stmts, verbose=False):
         print()
 
     cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
-    db.copy('pa_agents', agent_data, cols)
+    db.copy('pa_agents', agent_data, cols, lazy=True)
     return
 
 
@@ -383,7 +383,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
             print('|', end='', flush=True)
     if verbose:
         print(" Done loading %d statements." % len(stmts))
-    db.copy('raw_statements', stmt_data, cols)
+    db.copy('raw_statements', stmt_data, cols, lazy=True)
     stmts_to_add_agents, num_stmts = \
         get_statements_without_agents(db, 'raw',
                                       db.RawStatements.db_info_id == db_ref_id)

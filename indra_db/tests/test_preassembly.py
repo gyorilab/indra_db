@@ -620,7 +620,7 @@ def test_lazy_copier_unique_constraints():
     db = get_test_db()
     db._clear(force=True)
 
-    N = int(10**6)
+    N = int(10**5)
     S = int(10**8)
     fake_mids_a = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
     fake_mids_b = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
@@ -647,6 +647,49 @@ def test_lazy_copier_unique_constraints():
         (len(mid_results), len(set(mid_results)))
 
     return
+
+
+@attr('nonpublic')
+def test_lazy_copier_update():
+    db = get_test_db()
+    db._clear(force=True)
+
+    N = int(10**5)
+    S = int(10**8)
+    fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
+    fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
+                    for i in range(N)}
+
+    expected = {id: pmid for id, pmid in fake_pmids_a}
+    for id, pmid in fake_pmids_b:
+        expected[id] = pmid
+
+    start = datetime.now()
+    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
+    print("First load:", datetime.now() - start)
+
+    try:
+        db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
+        assert False, "Vanilla copy succeeded when it should have failed."
+    except Exception as e:
+        db.session.rollback()
+        pass
+
+    # Try adding more text refs lazily. Overlap is guaranteed.
+    start = datetime.now()
+    db.copy('text_ref', fake_pmids_b, ('id', 'pmid'), lazy=True,
+            push_conflict=True)
+    print("Lazy copy:", datetime.now() - start)
+
+    refs = db.select_all([db.TextRef.id, db.TextRef.pmid])
+    result = {id: pmid for id, pmid in refs}
+    assert result.keys() == expected.keys()
+    passed = True
+    for id, pmid in expected.items():
+        if result[id] != pmid:
+            print(id, pmid)
+            passed = False
+    assert passed, "Result did not match expected."
 
 
 @attr('nonpublic')

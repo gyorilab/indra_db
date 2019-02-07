@@ -419,10 +419,9 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
         print('='*100)
 
 
-# ==============================================================================
+# =============================================================================
 # Generic test definitions
-# ==============================================================================
-
+# =============================================================================
 
 @needs_py3
 def _check_statement_distillation(num_stmts):
@@ -445,8 +444,8 @@ def _check_statement_distillation(num_stmts):
 def _check_preassembly_with_database(num_stmts, batch_size, n_proc=1):
     db = _get_loaded_db(num_stmts)
 
-    # Now test the set of preassembled (pa) statements from the database against
-    # what we get from old-fashioned preassembly (opa).
+    # Now test the set of preassembled (pa) statements from the database
+    # against what we get from old-fashioned preassembly (opa).
     opa_inp_stmts = _get_opa_input_stmts(db)
 
     # Get the set of raw statements.

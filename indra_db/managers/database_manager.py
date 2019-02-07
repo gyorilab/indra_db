@@ -1214,11 +1214,11 @@ class LazyCopyManager(CopyManager):
         if self.push_conflict:
             update = ', '.join('{0} = EXCLUDED.{0}'.format(c)
                                for c in self.cols)
-            cmd_fmt += 'ON CONSTRAINT %s DO UPDATE SET %s;' % (self.constraint,
-                                                               update)
+            cmd_fmt += 'ON CONSTRAINT "%s" DO UPDATE SET %s;' \
+                       % (self.constraint, update)
         else:
             if self.constraint:
-                cmd_fmt += 'ON CONSTRAINT %s ' % self.constraint
+                cmd_fmt += 'ON CONSTRAINT "%s" ' % self.constraint
             cmd_fmt += 'DO NOTHING;'
         columns = '", "'.join(self.cols)
         sql = cmd_fmt.format(schema=self.schema,

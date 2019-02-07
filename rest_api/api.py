@@ -1,12 +1,13 @@
-import os
 import sys
 import json
 import logging
+from os import path
 from io import StringIO
+from jinja2 import Template
 from functools import wraps
 from datetime import datetime
 
-from flask import Flask, request, abort, Response
+from flask import Flask, request, abort, Response, redirect
 from flask_compress import Compress
 from flask_cors import CORS
 
@@ -34,6 +35,7 @@ logger.error("ERROR working.")
 
 
 MAX_STATEMENTS = int(1e3)
+TITLE = "The INDRA Database"
 
 
 class DbAPIError(Exception):
@@ -161,7 +163,7 @@ def _query_wrapper(f):
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
-                                           title='INDRA DB REST Results',
+                                           title=TITLE,
                                            db_rest_url=request.url_root[:-1])
             content = html_assembler.make_model()
             if tracker.get_messages():
@@ -191,37 +193,20 @@ def _query_wrapper(f):
     return decorator
 
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def welcome():
     logger.info("Got request for welcome info.")
-    return Response("Welcome the the INDRA database webservice!\n"
-                    "\n"
-                    "Use modes:\n"
-                    "----------\n"
-                    "/            - (you are here) Welcome page.\n"
-                    "/statements  - Get detailed instructions for querying "
-                    "statements.\n"
-                    "/statements/?<query_string> - Get a list of statement "
-                    "jsons."
-                    "\n")
+    return redirect('statements', code=302)
 
 
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
-    return Response('To get a list of statements, include a query after '
-                    '/statements/ with the following keys:\n\n'
-                    'type : the type of interaction (e.g. Phosphorylation)\n'
-                    'namespace : select the namespace in which agents are '
-                    'identified.\n'
-                    '[subject, object, agent] : the agents, indicated by '
-                    'their role. Note that at least one agent is needed in '
-                    'a query. If agent is use, that agent will be matched to '
-                    'any argument in the statement.\n\n'
-                    'For example: /statements/?subject=MAP2K1&object=MAPK1'
-                    '&type=Phosphorylation'
-                    'Most statements have a subject and an object, but unary '
-                    'and n-ary statements should have agents specified by '
-                    '\"other\".')
+    # Create a template object from the template file, load once
+    page_path = path.join(path.dirname(path.abspath(__file__)),
+                          'search_statements.html')
+    with open(page_path, 'rt') as f:
+        page_html = f.read()
+    return Response(page_html)
 
 
 @app.route('/statements/from_agents', methods=['GET'])
@@ -345,6 +330,11 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
                                              offset=offs, ev_limit=ev_limit,
                                              best_first=best_first)
     return result
+
+
+@app.route('/curation', methods=['GET'])
+def describe_curation():
+    return redirect('/statements', code=302)
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])

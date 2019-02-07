@@ -669,7 +669,7 @@ def upload_statements(stmt_data_list, db=None):
     logger.info("Uploading %d statements to the database." %
                 len(stmt_data_list))
     db.copy('raw_statements', [s.make_tuple() for s in stmt_data_list],
-            StatementData.get_cols())
+            StatementData.get_cols(), lazy=True, push_conflict=True)
 
     logger.info("Uploading agents to the database.")
     reading_id_set = set([sd.reading_id for sd in stmt_data_list])

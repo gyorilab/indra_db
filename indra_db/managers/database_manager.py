@@ -954,10 +954,28 @@ class DatabaseManager(object):
             # Actually do the copy.
             conn = self.engine.raw_connection()
             if lazy:
+                # We need a constraint for if we are going to update on-
+                # conflict, so if we didn't get a constraint, we can try to
+                # guess it.
                 if push_conflict and constraint is None:
-                    tbl_args = self.tables[tbl_name].__table_args__
-                    constraints = [c for c in tbl_args
-                                   if isinstance(c, UniqueConstraint)]
+                    tbl = self.tables[tbl_name]
+
+                    # Look for table arguments that are constraints, and
+                    # moreover that involve a subset of the columns being
+                    # copied. If the column isn't in the input data, it can't
+                    # possibly violate a constraint. It is also because of this
+                    # line of code that constraints MUST be named. This process
+                    # will not catch foreign key constraints, which may not
+                    # even apply.
+                    constraints = [c.name for c in tbl.__table_args__
+                                   if isinstance(c, UniqueConstraint)
+                                   and set(c.columns.keys()) < set(cols)]
+
+                    # Include the primary key in the list, if applicable.
+                    if inspect(tbl).primary_key[0].name in cols:
+                        constraints.append(tbl_name + '_pkey')
+
+                    # Hopefully at this point there is
                     if len(constraints) > 1:
                         raise ValueError("Cannot infer constraint. Only "
                                          "one constraint is allowed, and "
@@ -965,9 +983,14 @@ class DatabaseManager(object):
                                          "possibilities. Please specify a "
                                          "single constraint.")
                     elif len(constraints) == 1:
-                        constraint = constraints[0].name
+                        constraint = constraints[0]
                     else:
-                        constraint = tbl_name + '_pkey'
+                        raise ValueError("Could not infer a relevant "
+                                         "constraint. If no columns have "
+                                         "constraints on them, the lazy "
+                                         "option is unnecessary. Note that I "
+                                         "cannot guess a foreign key "
+                                         "constraint.")
 
                 mngr = LazyCopyManager(conn, tbl_name, cols,
                                        push_conflict=push_conflict,

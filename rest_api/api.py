@@ -7,7 +7,7 @@ from jinja2 import Template
 from functools import wraps
 from datetime import datetime
 
-from flask import Flask, request, abort, Response
+from flask import Flask, request, abort, Response, redirect
 from flask_compress import Compress
 from flask_cors import CORS
 
@@ -35,18 +35,11 @@ logger.error("ERROR working.")
 
 
 MAX_STATEMENTS = int(1e3)
+TITLE = "The INDRA Database"
 
 
 class DbAPIError(Exception):
     pass
-
-
-# Create a template object from the template file, load once
-template_path = path.join(path.dirname(path.abspath(__file__)),
-                          'template.html')
-with open(template_path, 'rt') as f:
-    template_str = f.read()
-    template = Template(template_str)
 
 
 def __process_agent(agent_param):
@@ -170,7 +163,7 @@ def _query_wrapper(f):
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
-                                           title='INDRA DB REST Results',
+                                           title=TITLE,
                                            db_rest_url=request.url_root[:-1])
             content = html_assembler.make_model()
             if tracker.get_messages():
@@ -203,31 +196,17 @@ def _query_wrapper(f):
 @app.route('/', methods=['GET'])
 def welcome():
     logger.info("Got request for welcome info.")
-    content = """
-        <p>Access any one of the following endpoints:</p>
-        <ul style="list-style-type:none;">
-            <li><a href="statements">Look for statements</a></li>
-            <li><a href="curation">Curate a statement</a></li>
-        </ul>
-    """
-    return Response(template.render(content=content))
+    return redirect('statements', code=302)
 
 
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
-    content = """
-      <form action="/statements/from_agents">
-        subject: <input type="text" name="subject" value="MEK@FPLX">
-        object: <input type="text" name="object" value="ERK@FPLX">
-        type: <input type="text" name="type" value="Phosphorylation">
-        <select name="format">
-          <option value="html">HTML</option>
-          <option value="json">JSON</option>
-        </select>
-        <input type="submit" value="Submit">
-      </form>
-      """
-    return Response(template.render(content=content))
+    # Create a template object from the template file, load once
+    page_path = path.join(path.dirname(path.abspath(__file__)),
+                          'search_statements.html')
+    with open(page_path, 'rt') as f:
+        page_html = f.read()
+    return Response(page_html)
 
 
 @app.route('/statements/from_agents', methods=['GET'])
@@ -355,12 +334,7 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 
 @app.route('/curation', methods=['GET'])
 def describe_curation():
-    content = """
-        <p>Apologies, there is currently no form for entering a curation 
-        online. Feel free to search for your statement <a href='statements'>
-        here</a>, and curate your the statement in the result.</p>
-    """
-    return Response(template.render(content=content))
+    return redirect('/statements', code=302)
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])

@@ -383,7 +383,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
             print('|', end='', flush=True)
     if verbose:
         print(" Done loading %d statements." % len(stmts))
-    db.copy('raw_statements', stmt_data, cols, lazy=True)
+    db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
     stmts_to_add_agents, num_stmts = \
         get_statements_without_agents(db, 'raw',
                                       db.RawStatements.db_info_id == db_ref_id)

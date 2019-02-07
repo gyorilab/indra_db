@@ -4,112 +4,15 @@ database. This may also be run as a script; for details run:
 """
 from __future__ import absolute_import, print_function, unicode_literals
 from builtins import dict, str
-import logging
-import random
+
 import pickle
-from math import log10, floor, ceil
+import random
+import logging
 from datetime import datetime
+from math import log10, floor, ceil
+
 from indra.tools.reading.util.script_tools import get_parser, make_statements,\
                                              StatementData
-
-logger = logging.getLogger('make_db_readings')
-if __name__ == '__main__':
-    parser = get_parser(
-        'A tool to read and process content from the database.',
-        ('A file containing a list of ids of the form <id_type>:<id>. '
-         'Note that besided the obvious id types (pmid, pmcid, doi, etc.), '
-         'you may use trid and tcid to indicate text ref and text content '
-         'ids, respectively. Note that these are specific to the database, '
-         'and should thus be used with care.')
-        )
-    parser.add_argument(
-        '-m', '--reading_mode',
-        choices=['all', 'unread', 'none'],
-        default='unread',
-        help=("Set the reading mode. If 'all', read everything, if "
-              "'unread', only read content that does not have pre-existing "
-              "readings of the same reader and version, if 'none', only "
-              "use pre-existing readings. Default is 'unread'.")
-        )
-    parser.add_argument(
-        '-S', '--stmt_mode',
-        choices=['all', 'unread', 'none'],
-        default='all',
-        help=("Choose which readings should produce statements. If 'all', all "
-              "readings that are produced or retrieved will be used to produce "
-              "statements. If 'unread', only produce statements from "
-              "previously unread content. If 'none', do not produce any "
-              "statements (only readings will be produced).")
-        )
-    parser.add_argument(
-        '-t', '--temp',
-        default='.',
-        help='Select the location of the temp file.'
-        )
-    parser.add_argument(
-        '-o', '--output',
-        dest='name',
-        help=('Pickle all results and save in files labelled as '
-              '<NAME>_<output_type>.pkl.'),
-        default=None
-        )
-    parser.add_argument(
-        '-b', '--inner_batch',
-        dest='b_in',
-        help=('Choose the size of the inner batches, which is the number of '
-              'text content entires loaded at a given time, and the number of '
-              'entries that are read at a time by a reader. The default is '
-              '1,000.'),
-        default=1000,
-        type=int
-        )
-    parser.add_argument(
-        '-B', '--outer_batch',
-        dest='b_out',
-        default=10000,
-        type=int,
-        help=('Select the number of ids to read per outer level batch. This '
-              'determines the number of readings/statements uploaded/pickled '
-              'at a time, and thus also limits the amount of RAM that will be '
-              'used. A larger outer batch means more RAM. The default is '
-              '10,000.')
-        )
-    parser.add_argument(
-        '--no_reading_upload',
-        help='Choose not to upload the reading output to the database.',
-        action='store_true'
-        )
-    parser.add_argument(
-        '--no_statement_upload',
-        help='Choose not to upload the statements to the databse.',
-        action='store_true'
-        )
-    parser.add_argument(
-        '--force_fulltext',
-        help='Make the reader only read full text from the database.',
-        action='store_true'
-        )
-    parser.add_argument(
-        '--use_best_fulltext',
-        help='Use only the best full text available.',
-        action='store_true'
-        )
-    parser.add_argument(
-        '--max_reach_space_ratio',
-        type=float,
-        help='Set the maximum ratio of spaces to non-spaces for REACH input.',
-        default=None
-    )
-    parser.add_argument(
-        '--max_reach_input_len',
-        type=int,
-        help='Set the maximum length of content that REACH will read.',
-        default=None
-    )
-    args = parser.parse_args()
-    if args.debug and not args.quiet:
-        logger.setLevel(logging.DEBUG)
-
 from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
     Content
@@ -117,6 +20,8 @@ from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
 from indra_db import get_primary_db, formats, texttypes
 from indra_db import sql_expressions as sql
 from indra_db.util import insert_agents
+
+logger = logging.getLogger('make_db_readings')
 
 
 class ReadDBError(Exception):
@@ -810,10 +715,108 @@ def produce_statements(output_list, enrich=True, no_upload=False,
 # =============================================================================
 # Main for script use
 # =============================================================================
+def make_parser():
+    parser = get_parser(
+        'A tool to read and process content from the database.',
+        ('A file containing a list of ids of the form <id_type>:<id>. '
+         'Note that besided the obvious id types (pmid, pmcid, doi, etc.), '
+         'you may use trid and tcid to indicate text ref and text content '
+         'ids, respectively. Note that these are specific to the database, '
+         'and should thus be used with care.')
+    )
+    parser.add_argument(
+        '-m', '--reading_mode',
+        choices=['all', 'unread', 'none'],
+        default='unread',
+        help=("Set the reading mode. If 'all', read everything, if "
+              "'unread', only read content that does not have pre-existing "
+              "readings of the same reader and version, if 'none', only "
+              "use pre-existing readings. Default is 'unread'.")
+    )
+    parser.add_argument(
+        '-S', '--stmt_mode',
+        choices=['all', 'unread', 'none'],
+        default='all',
+        help=("Choose which readings should produce statements. If 'all', all "
+              "readings that are produced or retrieved will be used to produce "
+              "statements. If 'unread', only produce statements from "
+              "previously unread content. If 'none', do not produce any "
+              "statements (only readings will be produced).")
+    )
+    parser.add_argument(
+        '-t', '--temp',
+        default='.',
+        help='Select the location of the temp file.'
+    )
+    parser.add_argument(
+        '-o', '--output',
+        dest='name',
+        help=('Pickle all results and save in files labelled as '
+              '<NAME>_<output_type>.pkl.'),
+        default=None
+    )
+    parser.add_argument(
+        '-b', '--inner_batch',
+        dest='b_in',
+        help=('Choose the size of the inner batches, which is the number of '
+              'text content entires loaded at a given time, and the number of '
+              'entries that are read at a time by a reader. The default is '
+              '1,000.'),
+        default=1000,
+        type=int
+    )
+    parser.add_argument(
+        '-B', '--outer_batch',
+        dest='b_out',
+        default=10000,
+        type=int,
+        help=('Select the number of ids to read per outer level batch. This '
+              'determines the number of readings/statements uploaded/pickled '
+              'at a time, and thus also limits the amount of RAM that will be '
+              'used. A larger outer batch means more RAM. The default is '
+              '10,000.')
+    )
+    parser.add_argument(
+        '--no_reading_upload',
+        help='Choose not to upload the reading output to the database.',
+        action='store_true'
+    )
+    parser.add_argument(
+        '--no_statement_upload',
+        help='Choose not to upload the statements to the databse.',
+        action='store_true'
+    )
+    parser.add_argument(
+        '--force_fulltext',
+        help='Make the reader only read full text from the database.',
+        action='store_true'
+    )
+    parser.add_argument(
+        '--use_best_fulltext',
+        help='Use only the best full text available.',
+        action='store_true'
+    )
+    parser.add_argument(
+        '--max_reach_space_ratio',
+        type=float,
+        help='Set the maximum ratio of spaces to non-spaces for REACH input.',
+        default=None
+    )
+    parser.add_argument(
+        '--max_reach_input_len',
+        type=int,
+        help='Set the maximum length of content that REACH will read.',
+        default=None
+    )
+    return parser
 
 
 if __name__ == "__main__":
     # Process the arguments. =================================================
+    parser = make_parser()
+    args = parser.parse_args()
+    if args.debug and not args.quiet:
+        logger.setLevel(logging.DEBUG)
 
     # Get the ids.
     with open(args.input_file, 'r') as f:

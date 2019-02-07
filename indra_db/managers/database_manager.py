@@ -899,7 +899,8 @@ class DatabaseManager(object):
                     len(entry_list))
         return
 
-    def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False):
+    def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False,
+             constraint=None):
         "Use pg_copy to copy over a large amount of data."
         logger.info("Received request to copy %d entries into %s." %
                     (len(data), tbl_name))
@@ -953,6 +954,21 @@ class DatabaseManager(object):
             # Actually do the copy.
             conn = self.engine.raw_connection()
             if lazy:
+                if push_conflict and constraint is None:
+                    tbl_args = self.tables[tbl_name].__table_args__
+                    constraints = [c for c in tbl_args
+                                   if isinstance(c, UniqueConstraint)]
+                    if len(constraints) > 1:
+                        raise ValueError("Cannot infer constraint. Only "
+                                         "one constraint is allowed, and "
+                                         "there are multiple "
+                                         "possibilities. Please specify a "
+                                         "single constraint.")
+                    elif len(constraints) == 1:
+                        constraint = constraints[0].name
+                    else:
+                        constraint = tbl_name + '_pkey'
+
                 mngr = LazyCopyManager(conn, tbl_name, cols,
                                        push_conflict=push_conflict,
                                        constraint=constraint)

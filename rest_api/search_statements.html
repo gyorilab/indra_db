@@ -30,16 +30,20 @@
         function addField(name) {
             var container = document.getElementById(name + "-choices");
             var input = document.createElement("input");
-            var n = 0;
-            while (document.getElementById(name + n.toString() + '-input')) {
-                n += 1;
+            var suffix = '';
+            if (document.getElementById(name + '-input')) {
+                var n = 0;
+                while (document.getElementById(name + n.toString() + '-input')) {
+                    n += 1;
+                }
+                suffix = n.toString()
             }
-            input.id=name+n.toString() + '-input';
-            input.type="text";
-            input.name=name;
+            input.id = name + suffix + '-input';
+            input.type = "text";
+            input.name = name + suffix;
             container.appendChild(input);
             var button = document.createElement("button");
-            button.id=input.id + '-button'
+            button.id = input.id + '-button'
             button.appendChild(document.createTextNode('\u2718'));
             button.onclick = function() { removeField(input.id, container.id, button.id); };
             container.appendChild(button);

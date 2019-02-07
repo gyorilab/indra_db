@@ -213,8 +213,8 @@ class DatabaseManager(object):
             create_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             __table_args__ = (
-                UniqueConstraint('pmid', 'doi'),
-                UniqueConstraint('pmcid', 'doi')
+                UniqueConstraint('pmid', 'doi', name='pmid-doi'),
+                UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
                 )
 
         self.TextRef = TextRef
@@ -227,7 +227,7 @@ class DatabaseManager(object):
             name = Column(String(250), nullable=False)
             load_date = Column(DateTime, default=func.now())
             __table_args__ = (
-                UniqueConstraint('source', 'name'),
+                UniqueConstraint('source', 'name', name='source-name'),
                 )
         self.SourceFile = SourceFile
         self.tables[SourceFile.__tablename__] = SourceFile
@@ -257,9 +257,8 @@ class DatabaseManager(object):
             insert_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             __table_args__ = (
-                UniqueConstraint(
-                    'text_ref_id', 'source', 'format', 'text_type'
-                    ),
+                UniqueConstraint('text_ref_id', 'source', 'format',
+                                 'text_type', name='content-uniqueness'),
                 )
         self.TextContent = TextContent
         self.tables[TextContent.__tablename__] = TextContent
@@ -279,9 +278,8 @@ class DatabaseManager(object):
             create_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             __table_args__ = (
-                UniqueConstraint(
-                    'text_content_id', 'reader', 'reader_version'
-                    ),
+                UniqueConstraint('text_content_id', 'reader', 'reader_version',
+                                 name='reading-uniqueness'),
                 )
         self.Reading = Reading
         self.tables[Reading.__tablename__] = Reading
@@ -323,10 +321,9 @@ class DatabaseManager(object):
             json = Column(Bytea, nullable=False)
             create_date = Column(DateTime, default=func.now())
             __table_args__ = (
-                UniqueConstraint(
-                    'mk_hash', 'reading_id', 'db_info_id'
-                ),
-            )
+                UniqueConstraint('mk_hash', 'reading_id', 'db_info_id',
+                                 name='raw-statement-uniqueness'),
+                )
         self.RawStatements = RawStatements
         self.tables[RawStatements.__tablename__] = RawStatements
 
@@ -340,6 +337,10 @@ class DatabaseManager(object):
             db_name = Column(String(40), nullable=False)
             db_id = Column(String, nullable=False)
             role = Column(String(20), nullable=False)
+            __table_args = (
+                UniqueConstraint('stmt_id', 'db_name', 'db_id', 'role',
+                                 name='raw-agents-uniqueness'),
+                )
         self.RawAgents = RawAgents
         self.tables[RawAgents.__tablename__] = RawAgents
 
@@ -350,6 +351,10 @@ class DatabaseManager(object):
                                  nullable=False)
             pa_stmt_mk_hash = Column(BigInteger, ForeignKey('pa_statements.mk_hash'),
                                      nullable=False)
+            __table_args = (
+                UniqueConstraint('raw_stmt_id', 'pa_stmt_mk_hash',
+                                 name='stmt-link-uniqueness'),
+                )
         self.RawUniqueLinks = RawUniqueLinks
         self.tables[RawUniqueLinks.__tablename__] = RawUniqueLinks
 
@@ -384,6 +389,10 @@ class DatabaseManager(object):
             db_name = Column(String(40), nullable=False)
             db_id = Column(String, nullable=False)
             role = Column(String(20), nullable=False)
+            __table_args__ = (
+                UniqueConstraint('stmt_mk_hash', 'db_name', 'db_id', 'role',
+                                 name='pa-agent-uniqueness'),
+                )
         self.PAAgents = PAAgents
         self.tables[PAAgents.__tablename__] = PAAgents
 
@@ -945,7 +954,8 @@ class DatabaseManager(object):
             conn = self.engine.raw_connection()
             if lazy:
                 mngr = LazyCopyManager(conn, tbl_name, cols,
-                                       push_conflict=push_conflict)
+                                       push_conflict=push_conflict,
+                                       constraint=constraint)
                 mngr.copy(data_bts, BytesIO)
             else:
                 mngr = CopyManager(conn, tbl_name, cols)

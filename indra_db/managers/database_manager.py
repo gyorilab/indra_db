@@ -1149,9 +1149,14 @@ class DatabaseManager(object):
 
 class LazyCopyManager(CopyManager):
     """A copy manager that ignores entries which violate constraints."""
-    def __init__(self, conn, table, cols, push_conflict=False):
+    def __init__(self, conn, table, cols, push_conflict=False,
+                 constraint=None):
         super(LazyCopyManager, self).__init__(conn, table, cols)
+        if push_conflict and constraint is None:
+            raise ValueError("A constraint is required if you are updating "
+                             "on-conflict.")
         self.push_conflict = push_conflict
+        self.constraint = constraint
         return
 
     def copystream(self, datastream):
@@ -1166,14 +1171,18 @@ class LazyCopyManager(CopyManager):
                    'INSERT INTO "{schema}"."{table}" ("{cols}") '
                    'SELECT "{cols}" '
                    'FROM "tmp_{table}" ')
+        cmd_fmt += 'ON CONFLICT '
         if self.push_conflict:
-            update = ', '.join('{col} = EXCLUDED.{col}')
-            cmd_fmt += 'ON CONFLICT DO UPDATE SET %s;' % update
+            update = ', '.join('{0} = EXCLUDED.{0}'.format(c)
+                               for c in self.cols)
+            cmd_fmt += '(%s) DO UPDATE SET %s;' % (self.constraint, update)
         else:
-            cmd_fmt += 'ON CONFLICT DO NOTHING;'
-        columns = '", "'.join(col.replace('"', '') for col in self.cols)
-        sql = cmd_fmt.format(schema=self.schema.replace('"', ''),
-                             table=self.table.replace('"', ''),
+            if self.constraint:
+                cmd_fmt += '(%s) ' % self.constraint
+            cmd_fmt += 'DO NOTHING;'
+        columns = '", "'.join(self.cols)
+        sql = cmd_fmt.format(schema=self.schema,
+                             table=self.table,
                              cols=columns)
         print(sql)
         cursor = self.conn.cursor()

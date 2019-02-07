@@ -99,7 +99,9 @@ class _PrePaDatabaseTestSetup(object):
             t += (s.evidence[0].get_source_hash(),)
             new_input_tuples.append(t)
 
-        self.test_db.copy('raw_statements', new_input_tuples, cols)
+        self.test_db.copy('raw_statements', new_input_tuples, cols, lazy=True,
+                          push_conflict=True,
+                          constraint='raw-statement-uniqueness')
         print("Inserting agents...")
         dbu.insert_agents(self.test_db, 'raw')
         return

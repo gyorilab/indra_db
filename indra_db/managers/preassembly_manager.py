@@ -79,8 +79,8 @@ from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
 
-from indra_db.util import insert_pa_stmts, distill_stmts, get_db
-
+from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
+    _get_agent_tuples
 
 HERE = path.dirname(path.abspath(__file__))
 ipa_logger.setLevel(logging.DEBUG)
@@ -199,7 +199,8 @@ class PreassemblyManager(object):
                 yield [(sid, _stmt_from_json(s_json)) for sid, s_json in subres]
 
     @clockit
-    def _get_unique_statements(self, db, raw_sids, num_stmts, mk_done=None):
+    def _extract_and_push_unique_statements(self, db, raw_sids, num_stmts,
+                                            mk_done=None):
         """Get the unique Statements from the raw statements."""
         self._log("There are %d distilled raw statement ids to preassemble."
                   % len(raw_sids))
@@ -224,16 +225,19 @@ class PreassemblyManager(object):
             cleaned_stmts = self._clean_statements(stmts)
 
             # Use the shallow hash to condense unique statements.
-            new_unique_stmts, evidence_links = \
+            new_unique_stmts, evidence_links, agent_tuples = \
                 self._condense_statements(cleaned_stmts, mk_done, new_mk_set,
                                           uuid_sid_dict)
 
             # Insert the statements and their links.
             self._log("Insert new statements into database...")
-            insert_pa_stmts(db, new_unique_stmts)
+            insert_pa_stmts(db, new_unique_stmts, ignore_agents=True)
             self._log("Insert new raw_unique links into the database...")
             db.copy('raw_unique_links', flatten_evidence_dict(evidence_links),
                     ('pa_stmt_mk_hash', 'raw_stmt_id'))
+            db.copy('raw_agents', agent_tuples,
+                    ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+
         self._log("Added %d new pa statements into the database."
                     % len(new_mk_set))
         return new_mk_set
@@ -244,6 +248,7 @@ class PreassemblyManager(object):
         self._log("Condense into unique statements...")
         new_unique_stmts = []
         evidence_links = defaultdict(lambda: set())
+        agent_tuples = set()
         for s in cleaned_stmts:
             h = shash(s)
 
@@ -256,14 +261,9 @@ class PreassemblyManager(object):
             evidence_links[h].add(uuid_sid_dict[s.uuid])
 
             # Add any db refs to the agents.
-            unique_ag_list = new_unique_stmts[h].agent_list()
-            for i, new_ag in enumerate(s.agent_list()):
-                unique_ag = unique_ag_list[i]
-                for dbn, dbi in new_ag.db_refs.items():
-                    if dbn not in unique_ag.db_refs:
-                        unique_ag.db_refs[dbn] = dbi
+            agent_tuples |= set(_get_agent_tuples(s, h))
 
-        return new_unique_stmts, evidence_links
+        return new_unique_stmts, evidence_links, agent_tuples
 
     @_handle_update_table
     def create_corpus(self, db, continuing=False, dups_file=None):
@@ -310,7 +310,7 @@ class PreassemblyManager(object):
                           % len(done_pa_ids))
 
         # Get the set of unique statements
-        self._get_unique_statements(db, stmt_ids, len(stmt_ids), done_pa_ids)
+        self._extract_and_push_unique_statements(db, stmt_ids, len(stmt_ids), done_pa_ids)
 
         # If we are continuing, check for support links that were already found.
         if continuing:
@@ -454,9 +454,9 @@ class PreassemblyManager(object):
             end_date = stash_dict['end']
             new_mk_set = stash_dict['mk_set']
         else:
-            new_mk_set = self._get_unique_statements(db, new_stmt_ids,
-                                                     len(new_stmt_ids),
-                                                     old_mk_set)
+            new_mk_set = self._extract_and_push_unique_statements(db, new_stmt_ids,
+                                                                  len(new_stmt_ids),
+                                                                  old_mk_set)
             end_date = datetime.utcnow()
             with open(new_mk_stash, 'wb') as f:
                 pickle.dump({'start': start_date, 'end': end_date,

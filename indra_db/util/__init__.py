@@ -392,7 +392,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
 
 
 def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
-                    direct_agent_load=True):
+                    direct_agent_load=True, ignore_agents=False):
     """Insert pre-assembled statements, and any affiliated agents.
 
     Parameters
@@ -436,10 +436,11 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         db.copy('pa_statements', stmt_data, cols)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
-    if direct_agent_load:
-        insert_pa_agents_directly(db, stmts, verbose=verbose)
-    else:
-        insert_agents(db, 'pa', verbose=verbose)
+    if not ignore_agents:
+        if direct_agent_load:
+            insert_pa_agents_directly(db, stmts, verbose=verbose)
+        else:
+            insert_agents(db, 'pa', verbose=verbose)
     return
 
 
@@ -611,12 +612,14 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
                 # already grouped into sets of duplicates keyed by the
                 # Statement and Evidence matches key hashes. We only want one
                 # of each.
+                # TODO: This will soon, hopefully, be unnecessary.
                 stmt_set_itr = (stmt_set for r_dict in rv_dict[best_rv].values()
                                 for stmt_set in r_dict.values())
                 if ignore_duplicates:
                     some_stmt_tpls = {stmt_tpl for stmt_set in stmt_set_itr
                                       for stmt_tpl in stmt_set}
                 else:
+                    logger.warning("FOUND DUPLICATES!!!!")
                     some_stmt_tpls, some_duplicate_tpls = \
                         _detect_exact_duplicates(stmt_set_itr, linked_sids)
 

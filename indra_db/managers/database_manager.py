@@ -445,9 +445,10 @@ class DatabaseManager(object):
         #   1. fast_raw_pa_link
         #   2. evidence_counts
         #   3. pa_meta
+        #   4. raw_stmt_src
+        #   5. pa_stmt_src
         # The following can be built at any time and in any order:
         #   - reading_ref_link
-        #   - raw_stmt_src
         # Note that the order of views below is determined not by the above
         # order but by constraints imposed by use-case.
 
@@ -564,20 +565,36 @@ class DatabaseManager(object):
         self.RawStmtSrc = RawStmtSrc
         self.m_views[RawStmtSrc.__tablename__] = RawStmtSrc
 
-        # Here is the form of a query to create a table with counts of each
-        # source, sorted by pa statement hash.
-        #
-        # SELECT * FROM
-        # crosstab(
-        #     'SELECT mk_hash, sid, src FROM raw_stmt_src
-        #      LEFT JOIN fast_raw_pa_link ON sid = id ORDER BY mk_hash
-        #      LIMIT 1000;')
-        # AS
-        # final_result(mk_hash BIGINT,
-        #              REACH BIGINT,
-        #              SPARSER BIGINT,
-        #              biopax BIGINT)
-        # LIMIT 10;
+        # pa_stmt_src
+        # -----------
+        # CREATE MATERIALIZED VIEW public.pa_stmt_src AS
+        # SELECT *
+        #  FROM crosstab(
+        #   'SELECT mk_hash, src, count(sid)
+        #     FROM raw_stmt_src JOIN fast_raw_pa_link ON sid = id
+        #     GROUP BY (mk_hash, src)'
+        #   ) final_result(
+        #       mk_hash bigint,
+        #       "REACH" bigint,
+        #       "SPARSER" bigint,
+        #       biopax bigint,
+        #       biogrid bigint,
+        #       tas bigint,
+        #       signor bigint,
+        #       bel bigint)
+        # WITH DATA;
+        class PaStmtSrc(self.Base, Displayable):
+            __tablename__ = 'pa_stmt_src'
+            mk_hash = Column(BigInteger, primary_key=True)
+            REACH = Column(BigInteger)
+            SPARSER = Column(BigInteger)
+            biopax = Column(BigInteger)
+            biogrid = Column(BigInteger)
+            tas = Column(BigInteger)
+            signor = Column(BigInteger)
+            bel = Column(BigInteger)
+        self.PaStmtSrc = PaStmtSrc
+        self.m_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
         self.engine = create_engine(host)
 

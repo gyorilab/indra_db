@@ -146,6 +146,10 @@ class Displayable(object):
         return self._make_str()
 
 
+class MaterializedView(Displayable):
+    __definition__ = NotImplemented
+
+
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -456,33 +460,24 @@ class DatabaseManager(object):
 
         self.m_views = {}
 
-        # evidence_counts
-        # ---------------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #  SELECT count(id) AS ev_count, mk_hash
-        #   FROM fast_raw_pa_link
-        #   GROUP BY mk_hash
-        # WITH DATA;
-        class EvidenceCounts(self.Base, Displayable):
+        class EvidenceCounts(self.Base, MaterializedView):
             __tablename__ = 'evidence_counts'
+            ___definition__ = ('SELECT count(id) AS ev_count, mk_hash '
+                               'FROM fast_raw_pa_link '
+                               'GROUP BY mk_hash')
             mk_hash = Column(BigInteger, primary_key=True)
             ev_count = Column(Integer)
         self.EvidenceCounts = EvidenceCounts
         self.m_views[EvidenceCounts.__tablename__] = EvidenceCounts
 
-        # reading_ref_link
-        # ----------------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #   SELECT text_ref.pmid, text_ref.pmcid, text_ref.id AS trid,
-        #     text_ref.doi, text_ref.pii, text_ref.url, text_ref.manuscript_id,
-        #     text_content.id AS tcid, text_content.source, reading.id AS rid,
-        #     reading.reader
-        #    FROM text_ref, reading, text_content
-        #    WHERE text_ref.id = text_content.text_ref_id
-        #     AND text_content.id = reading.text_content_id;
-        # WITH DATA;
-        class ReadingRefLink(self.Base, Displayable):
+        class ReadingRefLink(self.Base, MaterializedView):
             __tablename__ = 'reading_ref_link'
+            __definition__ = ('SELECT pmid, pmcid, tr.id AS trid, doi, '
+                              'pii, url, manuscript_id, tc.id AS tcid, '
+                              'source, r.id AS rid, reader '
+                              'FROM text_ref AS tr JOIN text_content AS tc '
+                              'ON tr.id = tc.text_ref_id JOIN reading AS r '
+                              'ON tc.id = r.text_content_id')
             trid = Column(Integer)
             pmid = Column(String(20))
             pmcid = Column(String(20))
@@ -497,22 +492,16 @@ class DatabaseManager(object):
         self.ReadingRefLink = ReadingRefLink
         self.m_views[ReadingRefLink.__tablename__] = ReadingRefLink
 
-        # fast_raw_pa_link
-        # ----------------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #  SELECT raw_statements.id,
-        #    raw_statements.json AS raw_json,
-        #    raw_statements.reading_id,
-        #    raw_statements.db_info_id,
-        #    pa_statements.mk_hash,
-        #    pa_statements.json AS pa_json,
-        #    pa_statements.type
-        #   FROM raw_statements, pa_statements, raw_unique_links
-        #   WHERE raw_unique_links.raw_stmt_id = raw_statements.id
-        #    AND raw_unique_links.pa_stmt_mk_hash = pa_statements.mk_hash
-        # WITH DATA;
-        class FastRawPaLink(self.Base, Displayable):
+        class FastRawPaLink(self.Base, MaterializedView):
             __tablename__ = 'fast_raw_pa_link'
+            __definition__ = ('SELECT id, raw.json AS raw_json, '
+                              'raw.reading_id, raw.db_info_id, '
+                              'pa.mk_hash, pa.json AS pa_json, pa.type '
+                              'FROM raw_statements AS raw, '
+                              'pa_statements AS pa, '
+                              'raw_unique_links AS link'
+                              'WHERE link.raw_stmt_id = raw.id '
+                              'AND link.pa_stmt_mk_hash = pa.mk_hash')
             _skip_disp = ['raw_json', 'pa_json']
             id = Column(Integer, primary_key=True)
             raw_json = Column(BYTEA)
@@ -526,18 +515,15 @@ class DatabaseManager(object):
         self.FastRawPaLink = FastRawPaLink
         self.m_views[FastRawPaLink.__tablename__] = FastRawPaLink
 
-        # pa_meta
-        # -------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #  SELECT pa_agents.db_name, pa_agents.db_id, pa_agents.id AS ag_id,
-        #    pa_agents.role, pa_statements.type, pa_statements.mk_hash,
-        #    evidence_counts.ev_count
-        #   FROM pa_agents,pa_statements,evidence_counts
-        #   WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash
-        #    AND pa_statements.mk_hash = evidence_counts.mk_hash
-        # WITH DATA;
-        class PaMeta(self.Base, Displayable):
+        class PaMeta(self.Base, MaterializedView):
             __tablename__ = 'pa_meta'
+            __definition__ = ('SELECT pa_agents.db_name, pa_agents.db_id, '
+                              'pa_agents.id AS ag_id, pa_agents.role, '
+                              'pa_statements.type, pa_statements.mk_hash, '
+                              'evidence_counts.ev_count '
+                              'FROM pa_agents, pa_statements,evidence_counts '
+                              'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
+                              'AND pa_statements.mk_hash = evidence_counts.mk_hash')
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)
             db_id = Column(String)
@@ -549,44 +535,33 @@ class DatabaseManager(object):
         self.PaMeta = PaMeta
         self.m_views[PaMeta.__tablename__] = PaMeta
 
-        # raw_stmt_src
-        # ------------
-        # CREATE MATERIALIZED VIEW public.raw_stmt_src AS
-        #   SELECT raw_statements.id AS sid, reading.reader AS src
-        #    FROM raw_statements, reading
-        #    WHERE reading.id = raw_statements.reading_id
-        #  UNION
-        #   SELECT raw_statements.id AS sid, db_info.db_name AS src
-        #    FROM raw_statements, db_info
-        #    WHERE db_info.id = raw_statements.db_info_id
-        # WITH DATA;
-        class RawStmtSrc(self.Base, Displayable):
+        class RawStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'raw_stmt_src'
+            __definition__ = ('SELECT raw_statements.id AS sid, '
+                              'reading.reader AS src '
+                              'FROM raw_statements, reading '
+                              'WHERE reading.id = raw_statements.reading_id '
+                              'UNION '
+                              'SELECT raw_statements.id AS sid, '
+                              'db_info.db_name AS src '
+                              'FROM raw_statements, db_info '
+                              'WHERE db_info.id = raw_statements.db_info_id')
             sid = Column(Integer, primary_key=True)
             src = Column(String)
         self.RawStmtSrc = RawStmtSrc
         self.m_views[RawStmtSrc.__tablename__] = RawStmtSrc
 
-        # pa_stmt_src
-        # -----------
-        # CREATE MATERIALIZED VIEW public.pa_stmt_src AS
-        # SELECT *
-        #  FROM crosstab(
-        #   'SELECT mk_hash, src, count(sid)
-        #     FROM raw_stmt_src JOIN fast_raw_pa_link ON sid = id
-        #     GROUP BY (mk_hash, src)'
-        #   ) final_result(
-        #       mk_hash bigint,
-        #       "REACH" bigint,
-        #       "SPARSER" bigint,
-        #       biopax bigint,
-        #       biogrid bigint,
-        #       tas bigint,
-        #       signor bigint,
-        #       bel bigint)
-        # WITH DATA;
-        class PaStmtSrc(self.Base, Displayable):
+        class PaStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'pa_stmt_src'
+            __definition__ = ("SELECT * FROM crosstab("
+                              "'SELECT mk_hash, src, count(sid) "
+                              "  FROM raw_stmt_src "
+                              "   JOIN fast_raw_pa_link ON sid = id"
+                              "  GROUP BY (mk_hash, src)' "
+                              " ) final_result(mk_hash bigint, "
+                              "    \"REACH\" bigint, \"SPARSER\" bigint, "
+                              "    biopax bigint, biogrid bigint, tas bigint, "
+                              "    signor bigint, bel bigint)")
             mk_hash = Column(BigInteger, primary_key=True)
             REACH = Column(BigInteger)
             SPARSER = Column(BigInteger)
@@ -1024,6 +999,41 @@ class DatabaseManager(object):
             logger.warning("You are not using postgresql or do not have "
                            "pgcopy, so this will likely be very slow.")
             self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
+
+    def create_materialized_view(self, table, with_data=True):
+        """Create a materialize view."""
+        if isinstance(table, str):
+            table = self.m_views[table]
+
+        if not isinstance(table, MaterializedView):
+            raise IndraDbException("Table used to create a materialized view "
+                                   "must be of type MaterializedView.")
+
+        sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
+              % (table.__tablename__, table.__definition__,
+                 '' if with_data else "NO")
+        conn = self.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+        return
+
+    def refresh_materialized_view(self, table, with_data=True):
+        """Refresh the given materialized view."""
+        if isinstance(table, str):
+            table = self.m_views[table]
+
+        if not isinstance(table, MaterializedView):
+            raise IndraDbException("Table used to refresh a materialized view "
+                                   "must be of type MaterializedView.")
+
+        sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
+              % (table.__tablename__, '' if with_data else 'NO')
+        conn = self.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+        return
 
     def filter_query(self, tbls, *args):
         "Query a table and filter results."

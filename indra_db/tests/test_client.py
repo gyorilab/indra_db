@@ -93,7 +93,7 @@ class _PrePaDatabaseTestSetup(object):
     def insert_the_statements(self, input_tuples):
         print("Loading %d statements..." % len(input_tuples))
         cols = self.test_data['raw_statements']['cols'] + ('source_hash',)
-        new_input_tuples = []
+        new_input_tuples = {}
         for t in input_tuples:
             # Add the source hash.
             s = Statement._from_json(json.loads(t[-1].decode('utf-8')))
@@ -109,10 +109,12 @@ class _PrePaDatabaseTestSetup(object):
                 t_list[cols.index('mk_hash')] = h
                 t = tuple(t_list)
 
-            new_input_tuples.append(t)
+            new_input_tuples[(t[cols.index('mk_hash')],
+                              t[cols.index('reading_id')],
+                              t[cols.index('db_info_id')])] = t
 
-        self.test_db.copy('raw_statements', new_input_tuples, cols, lazy=True,
-                          push_conflict=True,
+        self.test_db.copy('raw_statements', new_input_tuples.values(), cols,
+                          lazy=True, push_conflict=True,
                           constraint='reading_raw_statement_uniqueness')
         print("Inserting agents...")
         dbu.insert_agents(self.test_db, 'raw')

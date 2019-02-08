@@ -95,13 +95,25 @@ class _PrePaDatabaseTestSetup(object):
         cols = self.test_data['raw_statements']['cols'] + ('source_hash',)
         new_input_tuples = []
         for t in input_tuples:
+            # Add the source hash.
             s = Statement._from_json(json.loads(t[-1].decode('utf-8')))
             t += (s.evidence[0].get_source_hash(),)
+
+            # Replace the matches-key hash.
+            h = s.get_hash(shallow=False, refresh=True)
+            h_idx = cols.index('mk_hash')
+            if t[h_idx] != h:
+                if s.__class__.__name__ != 'Conversion':
+                    print(s, t[h_idx], h)
+                t_list = list(t)
+                t_list[cols.index('mk_hash')] = h
+                t = tuple(t_list)
+
             new_input_tuples.append(t)
 
         self.test_db.copy('raw_statements', new_input_tuples, cols, lazy=True,
                           push_conflict=True,
-                          constraint='raw-statement-uniqueness')
+                          constraint='reading_raw_statement_uniqueness')
         print("Inserting agents...")
         dbu.insert_agents(self.test_db, 'raw')
         return

@@ -14,7 +14,7 @@ if __name__ == '__main__':
     # here prevents a long wait just to fined out you entered a command wrong.
     from argparse import ArgumentParser
     parser = ArgumentParser(
-        description='Manage content on INDRA\'s database.'
+        description='Manage preassembly of raw statements into pa statements.'
         )
     parser.add_argument(
         choices=['create', 'update'],
@@ -55,8 +55,7 @@ if __name__ == '__main__':
         help=('Select a database from the names given in the config or '
               'environment, for example primary is INDRA_DB_PRIMAY in the '
               'config file and INDRADBPRIMARY in the environment. The default '
-              'is \'primary\'. Note that this is overwridden by use of the '
-              '--test flag if \'test\' is not a part of the name given.')
+              'is \'primary\'.')
         )
     parser.add_argument(
         '--store_duplicates',

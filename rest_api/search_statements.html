@@ -27,7 +27,7 @@
 
     <!-- Toggle a hidden element -->
     <script>
-        function addField(name) {
+        function addField(name, max) {
             var container = document.getElementById(name + "-choices");
             var input = document.createElement("input");
             var suffix = '';
@@ -36,7 +36,11 @@
                 while (document.getElementById(name + n.toString() + '-input')) {
                     n += 1;
                 }
-                suffix = n.toString()
+                if (n <= max) {
+                    suffix = n.toString();
+                } else {
+                    return;  // abort
+                }
             }
             input.id = name + suffix + '-input';
             input.type = "text";
@@ -55,7 +59,6 @@
             container.removeChild(input);
             container.removeChild(button);
         }
-            
 
     </script>
 
@@ -139,19 +142,19 @@ nav {
       <form action="/statements/from_agents">
         <table>
             <tr>
-                <td id="type" class="field" onclick="addField('type')">Select a type</td>
+                <td id="type" class="field" onclick="addField('type', 1)">Select a type</td>
                 <td id="type-choices" value=""></td>
             </tr>
             <tr>
-                <td id="subject" class="field" onclick="addField('subject')">Choose the subject</td>
+                <td id="subject" class="field" onclick="addField('subject', 1)">Choose the subject</td>
                 <td id="subject-choices"></td>
             </tr>
             <tr>
-                <td id="object" class="field" onclick="addField('object')">Choose the object</td>
+                <td id="object" class="field" onclick="addField('object', 1)">Choose the object</td>
                 <td id="object-choices"></td>
             </tr>
             <tr>
-                <td id="agent" class="field" onclick="addField('agent')">Choose an agent</td>
+                <td id="agent" class="field" onclick="addField('agent', 50)">Choose an agent</td>
                 <td id="agent-choices"></td>
             </tr>
         </table>

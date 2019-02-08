@@ -16,9 +16,12 @@ The following can be built at any time and in any order:
 Note that the order of views below is determined not by the above
 order but by constraints imposed by use-case.
 """
+import logging
 from argparse import ArgumentParser
 
 from indra_db.util import get_db
+
+logger = logging.getLogger("materialized_views")
 
 ORDERED_VIEWS = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
                  'raw_stmt_src', 'pa_stmt_src']
@@ -27,18 +30,22 @@ OTHER_VIEWS = {'reading_ref_link'}
 
 def create_views(db):
     """Create the materialized views."""
-    for view in ORDERED_VIEWS:
+    for i, view in enumerate(ORDERED_VIEWS):
+        logger.info('%d. Creating %s view...' % (i, view))
         db.create_materialized_view(view)
     for view in ORDERED_VIEWS:
+        logger.info('- Creating %s view...' % view)
         db.create_materialized_view(view)
     return
 
 
 def refresh_views(db):
     """Update the materialized views."""
-    for view in ORDERED_VIEWS:
+    for i, view in enumerate(ORDERED_VIEWS):
+        logger.info('%d. Refreshing %s view...' % (i, view))
         db.refresh_materialized_view(view)
     for view in OTHER_VIEWS:
+        logger.info('- Refreshing %s view...' % view)
         db.refresh_materialized_view(view)
     return
 

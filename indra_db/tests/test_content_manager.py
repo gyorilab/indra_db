@@ -84,6 +84,7 @@ def get_db_with_ftp_content():
 def test_create_tables():
     "Test the create_tables feature"
     db = get_db()
+    db.drop_tables(force=True)
     db.create_tables()
     assert_contents_equal(db.get_active_tables(), db.get_tables())
 

@@ -138,7 +138,7 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     ----------
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are adding agents.
-    batch_id : list or None
+    batch_id : int
         Every set of new raw statements must be given an id unique to that copy
         That id is used to get the set of statements that need agents added.
     verbose : bool
@@ -155,6 +155,7 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
                          db.RawStatements.batch_id == batch_id)
     if verbose:
         num_stmts = q.count()
+        print("Loading:", end='', flush=True)
 
     db_stmts = q.yield_per(num_per_yield)
 

@@ -4,6 +4,8 @@ import pickle
 import random
 
 from unittest import SkipTest
+from uuid import uuid4
+
 from nose.plugins.attrib import attr
 
 from indra.tests.util import IS_PY3
@@ -92,8 +94,12 @@ class _PrePaDatabaseTestSetup(object):
 
     def insert_the_statements(self, input_tuples):
         print("Loading %d statements..." % len(input_tuples))
-        cols = self.test_data['raw_statements']['cols'] + ('source_hash',)
+        cols = self.test_data['raw_statements']['cols'] \
+            + ('source_hash', 'batch_id')
         new_input_tuples = {}
+
+        batch_id = hash(uuid4())
+
         for t in input_tuples:
             # Add the source hash.
             s = Statement._from_json(json.loads(t[-1].decode('utf-8')))
@@ -108,6 +114,7 @@ class _PrePaDatabaseTestSetup(object):
                 t_list = list(t)
                 t_list[cols.index('mk_hash')] = h
                 t = tuple(t_list)
+            t += (batch_id,)
 
             new_input_tuples[(t[cols.index('mk_hash')],
                               t[cols.index('reading_id')],
@@ -117,7 +124,7 @@ class _PrePaDatabaseTestSetup(object):
                           lazy=True, push_conflict=True,
                           constraint='reading_raw_statement_uniqueness')
         print("Inserting agents...")
-        dbu.insert_raw_agents(self.test_db)
+        dbu.insert_raw_agents(self.test_db, batch_id)
         return
 
     def add_statements(self):

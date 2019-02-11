@@ -6,7 +6,7 @@ Some key functions' capabilities include:
 - distilling and deleting statements
 """
 
-__all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_agents',
+__all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_raw_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
            'distill_stmts', 'regularize_agent_id']
 
@@ -130,24 +130,19 @@ def get_db(db_label):
 
 
 @clockit
-def get_statements_without_refs(db, prefix, ref, *other_stmt_clauses, **kwargs):
+def get_statements_without_refs(db, ref, *other_stmt_clauses, **kwargs):
     """Get a generator for orm statement objects which do not have agents."""
     num_per_yield = kwargs.pop('num_per_yield', 100)
     verbose = kwargs.pop('verbose', False)
 
     # Get the objects for either raw or pa statements.
-    stmt_tbl_obj = db.tables[prefix + '_statements']
-    ref_tbl_obj = db.tables[prefix + '_' + ref]
+    stmt_tbl_obj = db.tables['raw_statements']
+    ref_tbl_obj = db.tables['raw_' + ref]
 
     # Build a dict mapping stmt UUIDs to statement IDs
     logger.info("Getting %s that lack %s in the database."
                 % (stmt_tbl_obj.__tablename__, ref_tbl_obj.__tablename__))
-    if prefix == 'pa':
-        refs_link = (stmt_tbl_obj.mk_hash == ref_tbl_obj.stmt_mk_hash)
-    elif prefix == 'raw':
-        refs_link = (stmt_tbl_obj.id == ref_tbl_obj.stmt_id)
-    else:
-        raise IndraDbException("Unrecognized prefix: %s." % prefix)
+    refs_link = (stmt_tbl_obj.id == ref_tbl_obj.stmt_id)
     stmts_wo_refs_q = (db.session
                        .query(stmt_tbl_obj)
                        .filter(*other_stmt_clauses)
@@ -164,11 +159,10 @@ def get_statements_without_refs(db, prefix, ref, *other_stmt_clauses, **kwargs):
     return stmts_wo_refs_q.yield_per(num_per_yield), num_stmts
 
 
-def _iterate_over_db_ref_stmts(db, prefix, ref, verbose, stmts_wo_refs,
-                               **kwargs):
+def _iterate_over_db_ref_stmts(db, ref, verbose, stmts_wo_refs, **kwargs):
     if stmts_wo_refs is None:
         stmts_wo_refs, num_stmts = \
-            get_statements_without_refs(db, prefix, ref, **kwargs)
+            get_statements_without_refs(db, ref, **kwargs)
     else:
         num_stmts = None
 
@@ -188,13 +182,7 @@ def _iterate_over_db_ref_stmts(db, prefix, ref, verbose, stmts_wo_refs,
     for i, db_stmt in enumerate(stmts_wo_refs):
         # Convert the database statement entry object into an indra statement.
         stmt = _get_statement_object(db_stmt)
-
-        if prefix == 'pa':
-            stmt_id = db_stmt.mk_hash
-        else:  # prefix == 'raw'
-            stmt_id = db_stmt.id
-
-        yield stmt_id, stmt
+        yield db_stmt.id, stmt
 
         # Optionally print another tick on the progress bar.
         if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
@@ -206,23 +194,13 @@ def _iterate_over_db_ref_stmts(db, prefix, ref, verbose, stmts_wo_refs,
 
 
 @clockit
-def insert_agents(db, prefix, stmts_wo_agents=None, verbose=False, **kwargs):
+def insert_raw_agents(db, stmts_wo_agents=None, verbose=False, **kwargs):
     """Insert agents for statements that don't have any agents.
-
-    Note: This method currently works for both Statements and PAStatements and
-    their corresponding agents (Agents and PAAgents). However, if you already
-    have preassembled INDRA Statement objects that you know don't have agents
-    in the database, you can use `insert_pa_agents_directly` to insert the
-    agents much faster.
 
     Parameters
     ----------
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are adding agents.
-    prefix : str
-        Select which stage of statements for which you wish to insert agents.
-        The choices are 'pa' for preassembled statements or 'raw' for raw
-        statements.
     stmts_wo_agents : list[<database statement entries>]
         A list of sql alchemy database entry objects for Raw or PA statements.
         If None, all statements without agents will be retrieved from the
@@ -235,25 +213,22 @@ def insert_agents(db, prefix, stmts_wo_agents=None, verbose=False, **kwargs):
         using the `yeild_per` feature of sqlalchemy queries.
     """
     agent_data = []
-    stmt_iter = _iterate_over_db_ref_stmts(db, prefix, 'agents', verbose,
+    stmt_iter = _iterate_over_db_ref_stmts(db, 'agents', verbose,
                                            stmts_wo_agents, **kwargs)
     for stmt_id, stmt in stmt_iter:
         agent_data.extend(_get_agent_tuples(stmt, stmt_id))
 
-    if prefix == 'pa':
-        cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
-    else:  # prefix == 'raw'
-        cols = ('stmt_id', 'db_name', 'db_id', 'role')
+    cols = ('stmt_id', 'db_name', 'db_id', 'role')
     for row in agent_data:
         if None in row:
             logger.warning("Found None in agent input:\n\t%s\n\t%s"
                            % (cols, row))
-    db.copy(prefix + '_agents', agent_data, cols, lazy=True)
+    db.copy('raw_agents', agent_data, cols, lazy=True)
     return
 
 
 @clockit
-def insert_pa_agents_directly(db, stmts, verbose=False):
+def insert_pa_agents(db, stmts, verbose=False):
     """Insert agents for preasembled statements.
 
     Unlike raw statements, preassembled statements are indexed by a hash,
@@ -394,14 +369,14 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
         print(" Done loading %d statements." % len(stmts))
     db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
     stmts_to_add_agents, num_stmts = \
-        get_statements_without_refs(db, 'raw', 'agents',
+        get_statements_without_refs(db, 'agents',
                                     db.RawStatements.db_info_id == db_ref_id)
-    insert_agents(db, 'raw', stmts_to_add_agents)
+    insert_raw_agents(db, stmts_to_add_agents)
     return
 
 
 def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
-                    direct_agent_load=True, ignore_agents=False):
+                    ignore_agents=False):
     """Insert pre-assembled statements, and any affiliated agents.
 
     Parameters
@@ -416,10 +391,6 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         statements for insert. Default False.
     do_copy : bool
         If True (default), use pgcopy to quickly insert the agents.
-    direct_agent_load : bool
-        If True (default), use the Statement get_hash method to get the id's of
-        the Statements for insert, instead of looking up the ids of Statements
-        from the database.
     """
     logger.info("Beginning to insert pre-assembled statements.")
     stmt_data = []
@@ -446,10 +417,7 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
     if not ignore_agents:
-        if direct_agent_load:
-            insert_pa_agents_directly(db, stmts, verbose=verbose)
-        else:
-            insert_agents(db, 'pa', verbose=verbose)
+        insert_pa_agents(db, stmts, verbose=verbose)
     return
 
 

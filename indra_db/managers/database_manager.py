@@ -274,6 +274,7 @@ class DatabaseManager(object):
             text_content_id = Column(Integer,
                                      ForeignKey('text_content.id'),
                                      nullable=False)
+            batch_id = Column(BigInteger, nullable=False)
             text_content = relationship(TextContent)
             reader = Column(String(20), nullable=False)
             reader_version = Column(String(20), nullable=False)

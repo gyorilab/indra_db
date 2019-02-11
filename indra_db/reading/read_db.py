@@ -50,29 +50,6 @@ def _convert_id_entry(id_entry, allowed_types=None):
     return ret
 
 
-def _enrich_reading_data(reading_data_iter, db=None):
-    """Get db ids for all ReadingData objects that correspond to a db ref.
-
-    Note that the objects are modified IN PLACE, so nothing is returned, and if
-    a copy of the objects is passed as an argument, this function will have no
-    effect. This does nothing if the readings are not in the database.
-    """
-    logger.debug("Enriching the reading data with database refs.")
-    if db is None:
-        db = get_primary_db()
-    possible_matches = db.select_all(
-        'reading',
-        db.Reading.text_content_id.in_([rd.tcid for rd in reading_data_iter
-                                        if rd.reading_id is None])
-        )
-    for rdata in reading_data_iter:
-        for reading in possible_matches:
-            if rdata.matches(reading):
-                rdata.reading_id = reading.id
-                break
-    return
-
-
 # =============================================================================
 # Content Retrieval
 # =============================================================================
@@ -523,25 +500,40 @@ def upload_readings(output_list, db=None):
         db.Reading,
         db.Reading.text_content_id.in_([rd.tcid for rd in output_list])
         )
-    exisiting_tcid_set = set([r.text_content_id for r in r_list])
+    exisiting_tcid_set = {r.text_content_id for r in r_list}
+
+    # Get the id for this batch of uploads.
+    batch_id = hash(uuid4())
+
+    # Make a list of data to copy, ensuring there are no conflicts.
     upload_list = []
-    for reading_data in output_list:
+    rd_dict = {}
+    for rd in output_list:
         # First check if this tcid is even in the set of existing tcids in the
         # readings table.
-        if reading_data.tcid in exisiting_tcid_set:
-            r_tcid_list = [r for r in r_list
-                           if r.text_content_id == reading_data.tcid]
+        if rd.tcid in exisiting_tcid_set:
+            r_tcid_list = (r for r in r_list
+                           if r.text_content_id == rd.tcid)
             # Now check for any exact matches:
-            if any([reading_data.matches(r) for r in r_tcid_list]):
+            if any([rd.matches(r) for r in r_tcid_list]):
                 continue
 
         # If there were no conflicts, we can add this to the copy list.
-        upload_list.append(reading_data.make_tuple())
+        upload_list.append(rd.make_tuple(batch_id))
+        rd_dict[(rd.tcid, rd.reader, rd.reader_version)] = rd
 
     # Copy into the database.
     logger.info("Adding %d/%d reading entries to the database." %
                 (len(upload_list), len(output_list)))
     db.copy('reading', upload_list, ReadingData.get_cols())
+
+    # Update the reading_data objects with their reading_ids.
+    rdata = db.select_all([db.Reading.id, db.Reading.text_content_id,
+                           db.Reading.reader, db.Reading.reader_version],
+                          db.Reading.batch_id == batch_id)
+    for tpl in rdata:
+        rd_dict[tuple(tpl[1:])] = tpl[0]
+
     return
 
 
@@ -651,7 +643,7 @@ def produce_readings(id_dict, reader_list, verbose=False, read_mode='unread',
 
     if pickle_file is not None:
         with open(pickle_file, 'wb') as f:
-            pickle.dump([output.make_tuple() for output in outputs], f)
+            pickle.dump([output.make_tuple(None) for output in outputs], f)
         print("Reading outputs stored in %s." % pickle_file)
 
     return outputs
@@ -686,9 +678,6 @@ def produce_statements(output_list, no_upload=False, pickle_file=None,
     """Convert the reader output into a list of StatementData instances."""
     if db is None:
         db = get_primary_db()
-
-    if enrich:
-        _enrich_reading_data(output_list, db=db)
 
     stmt_data_list = make_statements(output_list, n_proc)
 

@@ -130,42 +130,83 @@ def get_db(db_label):
 
 
 @clockit
-def get_statements_without_agents(db, prefix, *other_stmt_clauses, **kwargs):
+def get_statements_without_refs(db, prefix, ref, *other_stmt_clauses, **kwargs):
     """Get a generator for orm statement objects which do not have agents."""
     num_per_yield = kwargs.pop('num_per_yield', 100)
     verbose = kwargs.pop('verbose', False)
 
     # Get the objects for either raw or pa statements.
     stmt_tbl_obj = db.tables[prefix + '_statements']
-    agent_tbl_obj = db.tables[prefix + '_agents']
+    ref_tbl_obj = db.tables[prefix + '_' + ref]
 
     # Build a dict mapping stmt UUIDs to statement IDs
     logger.info("Getting %s that lack %s in the database."
-                % (stmt_tbl_obj.__tablename__, agent_tbl_obj.__tablename__))
+                % (stmt_tbl_obj.__tablename__, ref_tbl_obj.__tablename__))
     if prefix == 'pa':
-        agents_link = (stmt_tbl_obj.mk_hash == agent_tbl_obj.stmt_mk_hash)
+        refs_link = (stmt_tbl_obj.mk_hash == ref_tbl_obj.stmt_mk_hash)
     elif prefix == 'raw':
-        agents_link = (stmt_tbl_obj.id == agent_tbl_obj.stmt_id)
+        refs_link = (stmt_tbl_obj.id == ref_tbl_obj.stmt_id)
     else:
         raise IndraDbException("Unrecognized prefix: %s." % prefix)
-    stmts_wo_agents_q = (db.session
-                           .query(stmt_tbl_obj)
-                           .filter(*other_stmt_clauses)
-                           .filter(~exists().where(agents_link)))
+    stmts_wo_refs_q = (db.session
+                       .query(stmt_tbl_obj)
+                       .filter(*other_stmt_clauses)
+                       .filter(~exists().where(refs_link)))
 
     # Start printing some data
     if verbose:
-        num_stmts = stmts_wo_agents_q.count()
-        print("Adding agents for %d statements." % num_stmts)
+        num_stmts = stmts_wo_refs_q.count()
+        print("Adding refs for %d statements." % num_stmts)
     else:
         num_stmts = None
 
     # Get the iterator
-    return stmts_wo_agents_q.yield_per(num_per_yield), num_stmts
+    return stmts_wo_refs_q.yield_per(num_per_yield), num_stmts
+
+
+def _iterate_over_db_ref_stmts(db, prefix, ref, verbose, stmts_wo_refs,
+                               **kwargs):
+    if stmts_wo_refs is None:
+        stmts_wo_refs, num_stmts = \
+            get_statements_without_refs(db, prefix, ref, **kwargs)
+    else:
+        num_stmts = None
+
+    if verbose:
+        if num_stmts is None:
+            try:
+                num_stmts = len(stmts_wo_refs)
+            except TypeError:
+                logger.info("Could not get length from type: %s. Turning off "
+                            "verbose messaging." % type(stmts_wo_refs))
+                verbose = False
+
+    # Construct the agent records
+    logger.info("Building %s data for insert..." % ref[:-1])
+    if verbose:
+        print("Loading:", end='', flush=True)
+    for i, db_stmt in enumerate(stmts_wo_refs):
+        # Convert the database statement entry object into an indra statement.
+        stmt = _get_statement_object(db_stmt)
+
+        if prefix == 'pa':
+            stmt_id = db_stmt.mk_hash
+        else:  # prefix == 'raw'
+            stmt_id = db_stmt.id
+
+        yield stmt_id, stmt
+
+        # Optionally print another tick on the progress bar.
+        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
+            print('|', end='', flush=True)
+
+    if verbose and num_stmts > 25:
+        print()
+    return
 
 
 @clockit
-def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
+def insert_agents(db, prefix, stmts_wo_agents=None, verbose=False, **kwargs):
     """Insert agents for statements that don't have any agents.
 
     Note: This method currently works for both Statements and PAStatements and
@@ -182,6 +223,10 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         Select which stage of statements for which you wish to insert agents.
         The choices are 'pa' for preassembled statements or 'raw' for raw
         statements.
+    stmts_wo_agents : list[<database statement entries>]
+        A list of sql alchemy database entry objects for Raw or PA statements.
+        If None, all statements without agents will be retrieved from the
+        database.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -189,47 +234,11 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         To conserve memory, statements are loaded in batches of `num_per_yeild`
         using the `yeild_per` feature of sqlalchemy queries.
     """
-    verbose = kwargs.get('verbose', False)
-
-    agent_tbl_obj = db.tables[prefix + '_agents']
-
-    if stmts_wo_agents is None:
-        stmts_wo_agents, num_stmts = \
-            get_statements_without_agents(db, prefix, **kwargs)
-    else:
-        num_stmts = None
-
-    if verbose:
-        if num_stmts is None:
-            try:
-                num_stmts = len(stmts_wo_agents)
-            except TypeError:
-                logger.info("Could not get length from type: %s. Turning off "
-                            "verbose messaging." % type(stmts_wo_agents))
-                verbose = False
-
-    # Construct the agent records
-    logger.info("Building agent data for insert...")
-    if verbose:
-        print("Loading:", end='', flush=True)
     agent_data = []
-    for i, db_stmt in enumerate(stmts_wo_agents):
-        # Convert the database statement entry object into an indra statement.
-        stmt = _get_statement_object(db_stmt)
-
-        if prefix == 'pa':
-            stmt_id = db_stmt.mk_hash
-        else:  # prefix == 'raw'
-            stmt_id = db_stmt.id
-
+    stmt_iter = _iterate_over_db_ref_stmts(db, prefix, 'agents', verbose,
+                                           stmts_wo_agents, **kwargs)
+    for stmt_id, stmt in stmt_iter:
         agent_data.extend(_get_agent_tuples(stmt, stmt_id))
-
-        # Optionally print another tick on the progress bar.
-        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
-            print('|', end='', flush=True)
-
-    if verbose and num_stmts > 25:
-        print()
 
     if prefix == 'pa':
         cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
@@ -239,7 +248,7 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         if None in row:
             logger.warning("Found None in agent input:\n\t%s\n\t%s"
                            % (cols, row))
-    db.copy(agent_tbl_obj.__tablename__, agent_data, cols, lazy=True)
+    db.copy(prefix + '_agents', agent_data, cols, lazy=True)
     return
 
 
@@ -385,8 +394,8 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
         print(" Done loading %d statements." % len(stmts))
     db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
     stmts_to_add_agents, num_stmts = \
-        get_statements_without_agents(db, 'raw',
-                                      db.RawStatements.db_info_id == db_ref_id)
+        get_statements_without_refs(db, 'raw', 'agents',
+                                    db.RawStatements.db_info_id == db_ref_id)
     insert_agents(db, 'raw', stmts_to_add_agents)
     return
 

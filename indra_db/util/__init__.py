@@ -262,6 +262,29 @@ def insert_raw_muts(db, stmts_wo_muts=None, verbose=False, **kwargs):
     return
 
 
+def _insert_pa_agent_info(db, stmts, tbl_name, cols, get_data_func, verbose):
+    if verbose:
+        num_stmts = len(stmts)
+
+    # Construct the agent records
+    logger.info("Building data for insert into %s..." % tbl_name)
+    if verbose:
+        print("Loading:", end='', flush=True)
+    data = []
+    for i, stmt in enumerate(stmts):
+        data.extend(get_data_func(stmt, stmt.get_hash(shallow=True)))
+
+        # Optionally print another tick on the progress bar.
+        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
+            print('|', end='', flush=True)
+
+    if verbose and num_stmts > 25:
+        print()
+
+    db.copy(tbl_name, data, cols, lazy=True)
+    return
+
+
 @clockit
 def insert_pa_agents(db, stmts, verbose=False):
     """Insert agents for preasembled statements.
@@ -280,26 +303,42 @@ def insert_pa_agents(db, stmts, verbose=False):
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
     """
-    if verbose:
-        num_stmts = len(stmts)
-
-    # Construct the agent records
-    logger.info("Building agent data for insert...")
-    if verbose:
-        print("Loading:", end='', flush=True)
-    agent_data = []
-    for i, stmt in enumerate(stmts):
-        agent_data.extend(_get_agent_tuples(stmt, stmt.get_hash(shallow=True)))
-
-        # Optionally print another tick on the progress bar.
-        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
-            print('|', end='', flush=True)
-
-    if verbose and num_stmts > 25:
-        print()
-
     cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
-    db.copy('pa_agents', agent_data, cols, lazy=True)
+    _insert_pa_agent_info(db, stmts, 'pa_agents', cols, _get_agent_tuples,
+                          verbose)
+    return
+
+
+@clockit
+def insert_pa_mods(db, stmts, verbose=False):
+    """Insert modifications for preassembled statements."""
+    cols = ('stmt_mk_hash', 'type', 'site', 'residue', 'modified')
+
+    def get_mod_tuples(stmt, stmt_id):
+        mods = []
+        for ag in stmt.agent_list():
+            for mod in ag.mods:
+                mods.append((stmt_id, mod.mod_type, mod.site, mod.residue,
+                             mod.is_modified))
+        return mods
+
+    _insert_pa_agent_info(db, stmts, 'pa_mods', cols, get_mod_tuples, verbose)
+    return
+
+
+@clockit
+def insert_pa_muts(db, stmts, verbose=False):
+    cols = ('stmt_mk_hash', 'site', 'residue_from', 'residue_to')
+
+    def get_muts_tuples(stmt, stmt_id):
+        muts = []
+        for ag in stmt.agent_list():
+            for mut in ag.mutations:
+                muts.append((stmt_id, mut.site, mut.residue_from,
+                             mut.residue_to))
+        return muts
+
+    _insert_pa_agent_info(db, stmts, 'pa_muts', cols, get_muts_tuples, verbose)
     return
 
 
@@ -453,6 +492,8 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         db.insert_many('pa_statements', stmt_data, cols=cols)
     if not ignore_agents:
         insert_pa_agents(db, stmts, verbose=verbose)
+        insert_pa_mods(db, stmts, verbose=verbose)
+        insert_pa_muts(db, stmts, verbose=verbose)
     return
 
 

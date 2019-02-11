@@ -223,7 +223,42 @@ def insert_raw_agents(db, stmts_wo_agents=None, verbose=False, **kwargs):
         if None in row:
             logger.warning("Found None in agent input:\n\t%s\n\t%s"
                            % (cols, row))
-    db.copy('raw_agents', agent_data, cols, lazy=True)
+
+    db.copy('raw_agents', agent_data, cols)
+    return
+
+
+@clockit
+def insert_raw_mods(db, stmts_wo_mods=None, verbose=False, **kwargs):
+    """Insert modifications for raw statements."""
+    mod_data = []
+    stmt_iter = _iterate_over_db_ref_stmts(db, 'mods', verbose,
+                                           stmts_wo_mods, **kwargs)
+    for stmt_id, stmt in stmt_iter:
+        for ag in stmt.agent_list():
+            for mod in ag.mods:
+                mod_data.append((stmt_id, mod.mod_type, mod.site, mod.residue,
+                                 mod.is_modified))
+
+    cols = ('stmt_id', 'type', 'site', 'residue', 'modified')
+    db.copy('raw_mods', mod_data, cols)
+    return
+
+
+@clockit
+def insert_raw_muts(db, stmts_wo_muts=None, verbose=False, **kwargs):
+    """Insert modifications for raw statements."""
+    mut_data = []
+    stmt_iter = _iterate_over_db_ref_stmts(db, 'muts', verbose, stmts_wo_muts,
+                                           **kwargs)
+    for stmt_id, stmt in stmt_iter:
+        for ag in stmt.agent_list():
+            for mut in ag.mutations:
+                mut_data.append((stmt_id, mut.site, mut.residue_from,
+                                 mut.residue_to))
+
+    cols = ('stmt_id', 'site', 'residue_from', 'residue_to')
+    db.copy('raw_muts', mut_data, cols)
     return
 
 

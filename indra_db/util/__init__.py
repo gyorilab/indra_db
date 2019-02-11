@@ -181,17 +181,25 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     return
 
 
-def _insert_pa_agent_info(db, stmts, tbl_name, cols, get_data_func, verbose):
+def insert_pa_agents(db, stmts, verbose=False):
     if verbose:
         num_stmts = len(stmts)
 
     # Construct the agent records
-    logger.info("Building data for insert into %s..." % tbl_name)
+    logger.info("Building data from agents for insert into pa_agents, "
+                "pa_mods, and pa_muts...")
+
     if verbose:
         print("Loading:", end='', flush=True)
-    data = []
+
+    ref_data = []
+    mod_data = []
+    mut_data = []
     for i, stmt in enumerate(stmts):
-        data.extend(get_data_func(stmt, stmt.get_hash(shallow=True)))
+        refs, mods, muts = _extract_agent_data(stmt, stmt.get_hash())
+        ref_data.extend(refs)
+        mod_data.extend(mods)
+        mut_data.extend(muts)
 
         # Optionally print another tick on the progress bar.
         if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
@@ -200,65 +208,12 @@ def _insert_pa_agent_info(db, stmts, tbl_name, cols, get_data_func, verbose):
     if verbose and num_stmts > 25:
         print()
 
-    db.copy(tbl_name, data, cols, lazy=True)
-    return
-
-
-@clockit
-def insert_pa_agents(db, stmts, verbose=False):
-    """Insert agents for preasembled statements.
-
-    Unlike raw statements, preassembled statements are indexed by a hash,
-    allowing for bulk import without a lookup beforehand, and allowing for a
-    much simpler API.
-
-    Parameters
-    ----------
-    db : :py:class:`DatabaseManager`
-        The manager for the database into which you are adding agents.
-    stmts : list[:py:class:`Statement`]
-        A list of statements for which statements should be inserted.
-    verbose : bool
-        If True, print extra information and a status bar while compiling
-        agents for insert from statements. Default False.
-    """
-    cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
-    _insert_pa_agent_info(db, stmts, 'pa_agents', cols, _extract_agent_data,
-                          verbose)
-    return
-
-
-@clockit
-def insert_pa_mods(db, stmts, verbose=False):
-    """Insert modifications for preassembled statements."""
-    cols = ('stmt_mk_hash', 'type', 'site', 'residue', 'modified')
-
-    def get_mod_tuples(stmt, stmt_id):
-        mods = []
-        for ag in stmt.agent_list():
-            for mod in ag.mods:
-                mods.append((stmt_id, mod.mod_type, mod.site, mod.residue,
-                             mod.is_modified))
-        return mods
-
-    _insert_pa_agent_info(db, stmts, 'pa_mods', cols, get_mod_tuples, verbose)
-    return
-
-
-@clockit
-def insert_pa_muts(db, stmts, verbose=False):
-    """Insert mutations for preassembled statements."""
-    cols = ('stmt_mk_hash', 'site', 'residue_from', 'residue_to')
-
-    def get_muts_tuples(stmt, stmt_id):
-        muts = []
-        for ag in stmt.agent_list():
-            for mut in ag.mutations:
-                muts.append((stmt_id, mut.site, mut.residue_from,
-                             mut.residue_to))
-        return muts
-
-    _insert_pa_agent_info(db, stmts, 'pa_muts', cols, get_muts_tuples, verbose)
+    db.copy('pa_agents', ref_data,
+            ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+    db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'site', 'residue',
+                                  'modified'))
+    db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'site', 'residue_from',
+                                  'residue_to'))
     return
 
 

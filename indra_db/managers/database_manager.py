@@ -350,12 +350,38 @@ class DatabaseManager(object):
         self.RawAgents = RawAgents
         self.tables[RawAgents.__tablename__] = RawAgents
 
+        class RawMods(self.Base, Displayable):
+            __tablename__ = 'raw_mods'
+            id = Column(Integer, primary_key=True)
+            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
+                             nullable=False)
+            statements = relationship(RawStatements)
+            type = Column(String, nullable=False)
+            site = Column(Integer)
+            residue = Column(String(5))
+            modified = Column(Boolean)
+        self.RawMods = RawMods
+        self.tables[RawMods.__tablename__] = RawMods
+
+        class RawMuts(self.Base, Displayable):
+            __tablename__ = 'raw_muts'
+            id = Column(Integer, primary_key=True)
+            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
+                             nullable=False)
+            statements = relationship(RawStatements)
+            site = Column(Integer)
+            residue_from = Column(String(5))
+            residue_to = Column(String(5))
+        self.RawMuts = RawMuts
+        self.tables[RawMuts.__tablename__] = RawMuts
+
         class RawUniqueLinks(self.Base, Displayable):
             __tablename__ = 'raw_unique_links'
             id = Column(Integer, primary_key=True)
             raw_stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
                                  nullable=False)
-            pa_stmt_mk_hash = Column(BigInteger, ForeignKey('pa_statements.mk_hash'),
+            pa_stmt_mk_hash = Column(BigInteger,
+                                     ForeignKey('pa_statements.mk_hash'),
                                      nullable=False)
             __table_args = (
                 UniqueConstraint('raw_stmt_id', 'pa_stmt_mk_hash',
@@ -401,6 +427,31 @@ class DatabaseManager(object):
                 )
         self.PAAgents = PAAgents
         self.tables[PAAgents.__tablename__] = PAAgents
+
+        class PAMods(self.Base, Displayable):
+            __tablename__ = 'pa_mods'
+            id = Column(Integer, primary_key=True)
+            stmt_id = Column(Integer, ForeignKey('pa_statements.id'),
+                             nullable=False)
+            statements = relationship(PAStatements)
+            type = Column(String, nullable=False)
+            site = Column(Integer)
+            residue = Column(String(5))
+            modified = Column(Boolean)
+        self.PAMods = PAMods
+        self.tables[PAMods.__tablename__] = PAMods
+
+        class PAMuts(self.Base, Displayable):
+            __tablename__ = 'pa_muts'
+            id = Column(Integer, primary_key=True)
+            stmt_id = Column(Integer, ForeignKey('pa_statements.id'),
+                             nullable=False)
+            statements = relationship(PAStatements)
+            site = Column(Integer)
+            residue_from = Column(String(5))
+            residue_to = Column(String(5))
+        self.PAMuts = PAMuts
+        self.tables[PAMuts.__tablename__] = PAMuts
 
         class Curation(self.Base, Displayable):
             __tablename__ = 'curation'
@@ -643,8 +694,9 @@ class DatabaseManager(object):
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."
         ordered_tables = ['text_ref', 'text_content', 'reading', 'db_info',
-                          'raw_statements', 'raw_agents', 'pa_statements',
-                          'pa_agents', 'raw_unique_links', 'support_links']
+                          'raw_statements', 'raw_agents', 'raw_mods',
+                          'raw_muts', 'pa_statements', 'pa_agents', 'pa_mods',
+                          'pa_muts', 'raw_unique_links', 'support_links']
         if tbl_list is None:
             tbl_list = list(self.tables.keys())
 

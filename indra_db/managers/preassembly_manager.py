@@ -234,7 +234,7 @@ class PreassemblyManager(object):
             self._log("Insert new raw_unique links into the database...")
             db.copy('raw_unique_links', flatten_evidence_dict(evidence_links),
                     ('pa_stmt_mk_hash', 'raw_stmt_id'))
-            db.copy('raw_agents', agent_tuples,
+            db.copy('pa_agents', agent_tuples,
                     ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
 
         self._log("Added %d new pa statements into the database."

@@ -19,7 +19,7 @@ from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
 
 from indra_db import get_primary_db, formats, texttypes
 from indra_db import sql_expressions as sql
-from indra_db.util import insert_agents
+from indra_db.util import insert_raw_agents
 
 logger = logging.getLogger('make_db_readings')
 
@@ -679,7 +679,7 @@ def upload_statements(stmt_data_list, db=None):
                           db.RawStatements.uuid.like(s.statement.uuid))
             for s in stmt_data_list
             )
-        insert_agents(db, 'raw', db_stmts, verbose=True)
+        insert_raw_agents(db, db_stmts, verbose=True)
     return
 
 

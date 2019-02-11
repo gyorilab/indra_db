@@ -117,7 +117,7 @@ class _PrePaDatabaseTestSetup(object):
                           lazy=True, push_conflict=True,
                           constraint='reading_raw_statement_uniqueness')
         print("Inserting agents...")
-        dbu.insert_agents(self.test_db, 'raw')
+        dbu.insert_raw_agents(self.test_db)
         return
 
     def add_statements(self):

@@ -433,8 +433,9 @@ class DatabaseManager(object):
         class PAMods(self.Base, Displayable):
             __tablename__ = 'pa_mods'
             id = Column(Integer, primary_key=True)
-            stmt_id = Column(Integer, ForeignKey('pa_statements.id'),
-                             nullable=False)
+            stmt_mk_hash = Column(BigInteger,
+                                  ForeignKey('pa_statements.mk_hash'),
+                                  nullable=False)
             statements = relationship(PAStatements)
             type = Column(String, nullable=False)
             site = Column(Integer)
@@ -446,8 +447,9 @@ class DatabaseManager(object):
         class PAMuts(self.Base, Displayable):
             __tablename__ = 'pa_muts'
             id = Column(Integer, primary_key=True)
-            stmt_id = Column(Integer, ForeignKey('pa_statements.id'),
-                             nullable=False)
+            stmt_mk_hash = Column(BigInteger,
+                                  ForeignKey('pa_statements.mk_hash'),
+                                  nullable=False)
             statements = relationship(PAStatements)
             site = Column(Integer)
             residue_from = Column(String(5))

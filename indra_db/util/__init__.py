@@ -381,8 +381,6 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         db.insert_many('pa_statements', stmt_data, cols=cols)
     if not ignore_agents:
         insert_pa_agents(db, stmts, verbose=verbose)
-        insert_pa_mods(db, stmts, verbose=verbose)
-        insert_pa_muts(db, stmts, verbose=verbose)
     return
 
 

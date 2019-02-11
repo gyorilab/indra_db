@@ -159,12 +159,12 @@ def get_statements_without_refs(db, ref, *other_stmt_clauses, **kwargs):
     return stmts_wo_refs_q.yield_per(num_per_yield), num_stmts
 
 
-def _iterate_over_db_ref_stmts(db, ref, verbose, stmts_wo_refs, **kwargs):
-    if stmts_wo_refs is None:
-        stmts_wo_refs, num_stmts = \
-            get_statements_without_refs(db, ref, **kwargs)
-    else:
-        num_stmts = None
+def _iterate_over_db_ref_stmts(db, ref, verbose, conditions, **kwargs):
+    if conditions is None:
+        conditions = []
+
+    stmts_wo_refs, num_stmts = \
+        get_statements_without_refs(db, ref, *conditions, **kwargs)
 
     if verbose:
         if num_stmts is None:
@@ -175,7 +175,7 @@ def _iterate_over_db_ref_stmts(db, ref, verbose, stmts_wo_refs, **kwargs):
                             "verbose messaging." % type(stmts_wo_refs))
                 verbose = False
 
-    # Construct the agent records
+    # Construct the records
     logger.info("Building %s data for insert..." % ref[:-1])
     if verbose:
         print("Loading:", end='', flush=True)
@@ -194,17 +194,16 @@ def _iterate_over_db_ref_stmts(db, ref, verbose, stmts_wo_refs, **kwargs):
 
 
 @clockit
-def insert_raw_agents(db, stmts_wo_agents=None, verbose=False, **kwargs):
+def insert_raw_agents(db, conditions=None, verbose=False, **kwargs):
     """Insert agents for statements that don't have any agents.
 
     Parameters
     ----------
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are adding agents.
-    stmts_wo_agents : list[<database statement entries>]
-        A list of sql alchemy database entry objects for Raw or PA statements.
-        If None, all statements without agents will be retrieved from the
-        database.
+    conditions : list or None
+        A list of sqlalchemy conditions, or else None. If no contions given,
+        all statements that lack agents will be found and processed.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -214,7 +213,7 @@ def insert_raw_agents(db, stmts_wo_agents=None, verbose=False, **kwargs):
     """
     agent_data = []
     stmt_iter = _iterate_over_db_ref_stmts(db, 'agents', verbose,
-                                           stmts_wo_agents, **kwargs)
+                                           conditions, **kwargs)
     for stmt_id, stmt in stmt_iter:
         agent_data.extend(_get_agent_tuples(stmt, stmt_id))
 
@@ -229,11 +228,11 @@ def insert_raw_agents(db, stmts_wo_agents=None, verbose=False, **kwargs):
 
 
 @clockit
-def insert_raw_mods(db, stmts_wo_mods=None, verbose=False, **kwargs):
+def insert_raw_mods(db, conditions=None, verbose=False, **kwargs):
     """Insert modifications for raw statements."""
     mod_data = []
     stmt_iter = _iterate_over_db_ref_stmts(db, 'mods', verbose,
-                                           stmts_wo_mods, **kwargs)
+                                           conditions, **kwargs)
     for stmt_id, stmt in stmt_iter:
         for ag in stmt.agent_list():
             for mod in ag.mods:
@@ -246,10 +245,10 @@ def insert_raw_mods(db, stmts_wo_mods=None, verbose=False, **kwargs):
 
 
 @clockit
-def insert_raw_muts(db, stmts_wo_muts=None, verbose=False, **kwargs):
+def insert_raw_muts(db, conditions=None, verbose=False, **kwargs):
     """Insert modifications for raw statements."""
     mut_data = []
-    stmt_iter = _iterate_over_db_ref_stmts(db, 'muts', verbose, stmts_wo_muts,
+    stmt_iter = _iterate_over_db_ref_stmts(db, 'muts', verbose, conditions,
                                            **kwargs)
     for stmt_id, stmt in stmt_iter:
         for ag in stmt.agent_list():
@@ -328,6 +327,7 @@ def insert_pa_mods(db, stmts, verbose=False):
 
 @clockit
 def insert_pa_muts(db, stmts, verbose=False):
+    """Insert mutations for preassembled statements."""
     cols = ('stmt_mk_hash', 'site', 'residue_from', 'residue_to')
 
     def get_muts_tuples(stmt, stmt_id):
@@ -442,10 +442,9 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     if verbose:
         print(" Done loading %d statements." % len(stmts))
     db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
-    stmts_to_add_agents, num_stmts = \
-        get_statements_without_refs(db, 'agents',
-                                    db.RawStatements.db_info_id == db_ref_id)
-    insert_raw_agents(db, stmts_to_add_agents)
+    insert_raw_agents(db, [db.RawStatements.db_info_id == db_ref_id])
+    insert_raw_mods(db, [db.RawStatements.db_info_id == db_ref_id])
+    insert_raw_muts(db, [db.RawStatements.db_info_id == db_ref_id])
     return
 
 
@@ -710,6 +709,7 @@ def _detect_exact_duplicates(stmt_set_itr, linked_sids):
             # There isn't really a choice here.
             stmt_tpls |= stmt_tpl_set
         else:
+            logger.warning("FOUND DUPLICATES!!!!")
             prefed_tpls = {tpl for tpl in stmt_tpl_set
                            if tpl[0] in linked_sids}
             if not prefed_tpls:

@@ -5,6 +5,7 @@ Some key functions' capabilities include:
 - inserting statements, which are stored in multiple tables, into the database.
 - distilling and deleting statements
 """
+from uuid import uuid4
 
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_raw_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
@@ -130,80 +131,16 @@ def get_db(db_label):
 
 
 @clockit
-def get_statements_without_refs(db, ref, *other_stmt_clauses, **kwargs):
-    """Get a generator for orm statement objects which do not have agents."""
-    num_per_yield = kwargs.pop('num_per_yield', 100)
-    verbose = kwargs.pop('verbose', False)
-
-    # Get the objects for either raw or pa statements.
-    stmt_tbl_obj = db.tables['raw_statements']
-    ref_tbl_obj = db.tables['raw_' + ref]
-
-    # Build a dict mapping stmt UUIDs to statement IDs
-    logger.info("Getting %s that lack %s in the database."
-                % (stmt_tbl_obj.__tablename__, ref_tbl_obj.__tablename__))
-    refs_link = (stmt_tbl_obj.id == ref_tbl_obj.stmt_id)
-    stmts_wo_refs_q = (db.session
-                       .query(stmt_tbl_obj)
-                       .filter(*other_stmt_clauses)
-                       .filter(~exists().where(refs_link)))
-
-    # Start printing some data
-    if verbose:
-        num_stmts = stmts_wo_refs_q.count()
-        print("Adding refs for %d statements." % num_stmts)
-    else:
-        num_stmts = None
-
-    # Get the iterator
-    return stmts_wo_refs_q.yield_per(num_per_yield), num_stmts
-
-
-def _iterate_over_db_ref_stmts(db, ref, verbose, conditions, **kwargs):
-    if conditions is None:
-        conditions = []
-
-    stmts_wo_refs, num_stmts = \
-        get_statements_without_refs(db, ref, *conditions, **kwargs)
-
-    if verbose:
-        if num_stmts is None:
-            try:
-                num_stmts = len(stmts_wo_refs)
-            except TypeError:
-                logger.info("Could not get length from type: %s. Turning off "
-                            "verbose messaging." % type(stmts_wo_refs))
-                verbose = False
-
-    # Construct the records
-    logger.info("Building %s data for insert..." % ref[:-1])
-    if verbose:
-        print("Loading:", end='', flush=True)
-    for i, db_stmt in enumerate(stmts_wo_refs):
-        # Convert the database statement entry object into an indra statement.
-        stmt = _get_statement_object(db_stmt)
-        yield db_stmt.id, stmt
-
-        # Optionally print another tick on the progress bar.
-        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
-            print('|', end='', flush=True)
-
-    if verbose and num_stmts > 25:
-        print()
-    return
-
-
-@clockit
-def insert_raw_agents(db, conditions=None, verbose=False, **kwargs):
+def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     """Insert agents for statements that don't have any agents.
 
     Parameters
     ----------
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are adding agents.
-    conditions : list or None
-        A list of sqlalchemy conditions, or else None. If no contions given,
-        all statements that lack agents will be found and processed.
+    batch_id : list or None
+        Every set of new raw statements must be given an id unique to that copy
+        That id is used to get the set of statements that need agents added.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -211,53 +148,35 @@ def insert_raw_agents(db, conditions=None, verbose=False, **kwargs):
         To conserve memory, statements are loaded in batches of `num_per_yeild`
         using the `yeild_per` feature of sqlalchemy queries.
     """
-    agent_data = []
-    stmt_iter = _iterate_over_db_ref_stmts(db, 'agents', verbose,
-                                           conditions, **kwargs)
-    for stmt_id, stmt in stmt_iter:
-        agent_data.extend(_get_agent_tuples(stmt, stmt_id))
+    ref_tuples = []
+    mod_tuples = []
+    mut_tuples = []
+    q = db.filter_query([db.RawStatements.id, db.RawStatements],
+                         db.RawStatements.batch_id == batch_id)
+    if verbose:
+        num_stmts = q.count()
 
-    cols = ('stmt_id', 'db_name', 'db_id', 'role')
-    for row in agent_data:
-        if None in row:
-            logger.warning("Found None in agent input:\n\t%s\n\t%s"
-                           % (cols, row))
+    db_stmts = q.yield_per(num_per_yield)
 
-    db.copy('raw_agents', agent_data, cols)
-    return
+    for i, (stmt_id, db_stmt) in enumerate(db_stmts):
+        stmt = _get_statement_object(db_stmt)
+        ref_data, mod_data, mut_data = _extract_agent_data(stmt, stmt_id)
+        ref_tuples.extend(ref_data)
+        mod_tuples.extend(mod_data)
+        mut_tuples.extend(mut_data)
 
+        # Optionally print another tick on the progress bar.
+        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
+            print('|', end='', flush=True)
 
-@clockit
-def insert_raw_mods(db, conditions=None, verbose=False, **kwargs):
-    """Insert modifications for raw statements."""
-    mod_data = []
-    stmt_iter = _iterate_over_db_ref_stmts(db, 'mods', verbose,
-                                           conditions, **kwargs)
-    for stmt_id, stmt in stmt_iter:
-        for ag in stmt.agent_list():
-            for mod in ag.mods:
-                mod_data.append((stmt_id, mod.mod_type, mod.site, mod.residue,
-                                 mod.is_modified))
+    if verbose and num_stmts > 25:
+        print()
 
-    cols = ('stmt_id', 'type', 'site', 'residue', 'modified')
-    db.copy('raw_mods', mod_data, cols)
-    return
-
-
-@clockit
-def insert_raw_muts(db, conditions=None, verbose=False, **kwargs):
-    """Insert modifications for raw statements."""
-    mut_data = []
-    stmt_iter = _iterate_over_db_ref_stmts(db, 'muts', verbose, conditions,
-                                           **kwargs)
-    for stmt_id, stmt in stmt_iter:
-        for ag in stmt.agent_list():
-            for mut in ag.mutations:
-                mut_data.append((stmt_id, mut.site, mut.residue_from,
-                                 mut.residue_to))
-
-    cols = ('stmt_id', 'site', 'residue_from', 'residue_to')
-    db.copy('raw_muts', mut_data, cols)
+    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'))
+    db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'site', 'residue',
+                                     'modified'))
+    db.copy('raw_muts', mut_tuples, ('stmt_id', 'site', 'residue_from',
+                                     'residue_to'))
     return
 
 
@@ -303,7 +222,7 @@ def insert_pa_agents(db, stmts, verbose=False):
         agents for insert from statements. Default False.
     """
     cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
-    _insert_pa_agent_info(db, stmts, 'pa_agents', cols, _get_agent_tuples,
+    _insert_pa_agent_info(db, stmts, 'pa_agents', cols, _extract_agent_data,
                           verbose)
     return
 
@@ -357,7 +276,7 @@ def regularize_agent_id(id_val, id_ns):
     return new_id_val
 
 
-def _get_agent_tuples(stmt, stmt_id):
+def _extract_agent_data(stmt, stmt_id):
     """Create the tuples for copying agents into the database."""
     # Figure out how the agents are structured and assign roles.
     ag_list = stmt.agent_list()
@@ -372,30 +291,45 @@ def _get_agent_tuples(stmt, stmt_id):
                                "with agents: %s."
                                % (str(stmt), str(stmt.agent_list())))
 
-    def all_agent_refs(agents):
+    def all_agent_refs(ag):
         """Smooth out the iteration over agents and their refs."""
-        for role, ag in agents:
-            # If no agent, or no db_refs for the agent, skip the insert
-            # that follows.
-            if ag is None or ag.db_refs is None:
-                continue
-            for ns, ag_id in ag.db_refs.items():
-                if isinstance(ag_id, list):
-                    for sub_id in ag_id:
-                        yield ns, sub_id, role
-                else:
-                    yield ns, ag_id, role
-            yield 'NAME', ag.name, role
+        for ns, ag_id in ag.db_refs.items():
+            if isinstance(ag_id, list):
+                for sub_id in ag_id:
+                    yield ns, sub_id
+            else:
+                yield ns, ag_id
+        yield 'NAME', ag.name
 
     # Prep the agents for copy into the database.
-    agent_data = []
-    for ns, ag_id, role in all_agent_refs(agents):
-        if ag_id is not None:
-            agent_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
-                               role))
-        else:
-            logger.warning("Found agent for %s with None value." % ns)
-    return agent_data
+    ref_data = []
+    mod_data = []
+    mut_data = []
+    for role, ag in agents:
+        # If no agent, or no db_refs for the agent, skip the insert
+        # that follows.
+        if ag is None or ag.db_refs is None:
+            continue
+
+        # Get the db refs data.
+        for ns, ag_id in all_agent_refs(ag):
+            if ag_id is not None:
+                ref_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
+                                   role))
+            else:
+                logger.warning("Found agent for %s with None value." % ns)
+
+        # Get the modification data
+        for mod in ag.mods:
+            mod_data.append((stmt_id, mod.mod_type, mod.site, mod.residue,
+                             mod.is_modified))
+
+        # Get the mutation data
+        for mut in ag.mutations:
+            mut_data.append((stmt_id, mut.site, mut.residue_from,
+                             mut.residue_to))
+
+    return ref_data, mod_data, mut_data
 
 
 def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
@@ -418,8 +352,9 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     """
     # Preparing the statements for copying
     stmt_data = []
+    batch_id = hash(uuid4())
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
-            'indra_version')
+            'indra_version', 'batch_id')
     if verbose:
         print("Loading:", end='', flush=True)
     for i, stmt in enumerate(stmts):
@@ -434,7 +369,8 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
                 db_ref_id,
                 new_stmt.__class__.__name__,
                 json.dumps(new_stmt.to_json()).encode('utf8'),
-                get_version()
+                get_version(),
+                batch_id
             )
             stmt_data.append(stmt_rec)
         if verbose and i % (len(stmts)//25) == 0:
@@ -442,9 +378,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     if verbose:
         print(" Done loading %d statements." % len(stmts))
     db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
-    insert_raw_agents(db, [db.RawStatements.db_info_id == db_ref_id])
-    insert_raw_mods(db, [db.RawStatements.db_info_id == db_ref_id])
-    insert_raw_muts(db, [db.RawStatements.db_info_id == db_ref_id])
+    insert_raw_agents(db, batch_id)
     return
 
 

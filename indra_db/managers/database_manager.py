@@ -314,6 +314,7 @@ class DatabaseManager(object):
             _skip_disp = ['json']
             id = Column(Integer, primary_key=True)
             uuid = Column(String(40), unique=True, nullable=False)
+            batch_id = Column(BigInteger, nullable=False)
             mk_hash = Column(BigInteger, nullable=False)
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))

@@ -10,6 +10,7 @@ import random
 import logging
 from datetime import datetime
 from math import log10, floor, ceil
+from uuid import uuid4
 
 from indra.tools.reading.util.script_tools import get_parser, make_statements,\
                                              StatementData
@@ -668,23 +669,20 @@ def upload_statements(stmt_data_list, db=None):
 
     logger.info("Uploading %d statements to the database." %
                 len(stmt_data_list))
-    db.copy('raw_statements', [s.make_tuple() for s in stmt_data_list],
+    batch_id = hash(uuid4())
+    db.copy('raw_statements', [s.make_tuple(batch_id) for s in stmt_data_list],
             StatementData.get_cols(), lazy=True, push_conflict=True)
 
     logger.info("Uploading agents to the database.")
     reading_id_set = set([sd.reading_id for sd in stmt_data_list])
     if len(reading_id_set):
-        db_stmts = (
-            db.select_one(db.RawStatements,
-                          db.RawStatements.uuid.like(s.statement.uuid))
-            for s in stmt_data_list
-            )
-        insert_raw_agents(db, db_stmts, verbose=True)
+        insert_raw_agents(db, [db.RawStatements.batch_id == batch_id],
+                          verbose=True)
     return
 
 
-def produce_statements(output_list, enrich=True, no_upload=False,
-                       pickle_file=None, n_proc=1, db=None):
+def produce_statements(output_list, no_upload=False, pickle_file=None,
+                       n_proc=1, db=None):
     """Convert the reader output into a list of StatementData instances."""
     if db is None:
         db = get_primary_db()

@@ -138,6 +138,11 @@ nav {
 </head>
 
    <body data-spy="scroll" data-target="#toc">
+    <!-- Here put scripts that need to be executed before page load -->
+    <script type="text/javascript">
+      setEnv('indra');
+      checkSignIn(true);
+    </script>
 
     <!-- Page Header -->
     <div class="container">

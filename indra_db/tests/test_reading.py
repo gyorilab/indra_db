@@ -138,13 +138,6 @@ def test_reading_content_insert():
     assert is_complete_match(r_list, reading_output), \
         "Uniqueness constraints failed."
 
-    print("Test enrichement")
-    assert all([rd.reading_id is None for rd in reading_output]), \
-        "No readings should have reading_ids already."
-    rdb._enrich_reading_data(reading_output, db=db)
-    assert all([rd.reading_id is not None for rd in reading_output]),\
-        "Some reading data objects didn't have reading_ids after enrichment."
-
     print("Test making statements")
     stmts = rdb.produce_statements(reading_output, db=db)
     assert len(stmts), 'No statements created.'

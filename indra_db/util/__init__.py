@@ -174,9 +174,9 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
         print()
 
     db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'))
-    db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'site', 'residue',
+    db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'position', 'residue',
                                      'modified'))
-    db.copy('raw_muts', mut_tuples, ('stmt_id', 'site', 'residue_from',
+    db.copy('raw_muts', mut_tuples, ('stmt_id', 'position', 'residue_from',
                                      'residue_to'))
     return
 
@@ -210,9 +210,9 @@ def insert_pa_agents(db, stmts, verbose=False):
 
     db.copy('pa_agents', ref_data,
             ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
-    db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'site', 'residue',
-                                  'modified'))
-    db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'site', 'residue_from',
+    db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
+                                  'residue', 'modified'))
+    db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position', 'residue_from',
                                   'residue_to'))
     return
 
@@ -277,12 +277,12 @@ def _extract_agent_data(stmt, stmt_id):
 
         # Get the modification data
         for mod in ag.mods:
-            mod_data.append((stmt_id, mod.mod_type, mod.site, mod.residue,
+            mod_data.append((stmt_id, mod.mod_type, mod.position, mod.residue,
                              mod.is_modified))
 
         # Get the mutation data
         for mut in ag.mutations:
-            mut_data.append((stmt_id, mut.site, mut.residue_from,
+            mut_data.append((stmt_id, mut.position, mut.residue_from,
                              mut.residue_to))
 
     return ref_data, mod_data, mut_data

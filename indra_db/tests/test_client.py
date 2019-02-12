@@ -106,7 +106,7 @@ class _PrePaDatabaseTestSetup(object):
             + ('source_hash', 'batch_id')
         new_input_tuples = {}
 
-        batch_id = hash(uuid4())
+        batch_id = self.test_db.make_copy_batch_id()
 
         for t in input_tuples:
             # Add the source hash.

@@ -359,7 +359,7 @@ class DatabaseManager(object):
                              nullable=False)
             statements = relationship(RawStatements)
             type = Column(String, nullable=False)
-            site = Column(Integer)
+            position = Column(String(10))
             residue = Column(String(5))
             modified = Column(Boolean)
         self.RawMods = RawMods
@@ -371,7 +371,7 @@ class DatabaseManager(object):
             stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
                              nullable=False)
             statements = relationship(RawStatements)
-            site = Column(Integer)
+            position = Column(String(10))
             residue_from = Column(String(5))
             residue_to = Column(String(5))
         self.RawMuts = RawMuts
@@ -438,7 +438,7 @@ class DatabaseManager(object):
                                   nullable=False)
             statements = relationship(PAStatements)
             type = Column(String, nullable=False)
-            site = Column(Integer)
+            position = Column(String(10))
             residue = Column(String(5))
             modified = Column(Boolean)
         self.PAMods = PAMods
@@ -451,7 +451,7 @@ class DatabaseManager(object):
                                   ForeignKey('pa_statements.mk_hash'),
                                   nullable=False)
             statements = relationship(PAStatements)
-            site = Column(Integer)
+            position = Column(String(10))
             residue_from = Column(String(5))
             residue_to = Column(String(5))
         self.PAMuts = PAMuts
@@ -956,7 +956,7 @@ class DatabaseManager(object):
         copying in. At this time, only Reading and RawStatements use the
         feature.
         """
-        return random.randint(-2**31, 2**31)
+        return random.randint(-2**30, 2**30)
 
     def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False,
              constraint=None):

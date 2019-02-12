@@ -569,9 +569,6 @@ def produce_readings(id_dict, reader_list, verbose=False, read_mode='unread',
     batch_size : int
         Optional, default 1000 - The number of text content entries to be
         yielded by the database at a given time.
-    no_read : bool
-        Optional, default False - If True, do not perform any new readings, and
-        only retrieve existing readings from the database.
     no_upload : bool
         Optional, default False - If True, do not upload content to the
         database.
@@ -581,7 +578,7 @@ def produce_readings(id_dict, reader_list, verbose=False, read_mode='unread',
     db : indra_db.DatabaseManager instance
         Optional, default is None, in which case the primary database provided
         by `get_primary_db` function is used. Used to interface with a
-        different databse.
+        different database.
     log_readers : bool
         Default True. If True, stash the logs of the readers in a file.
     prioritize : bool

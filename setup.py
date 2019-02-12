@@ -8,12 +8,11 @@ def main():
           long_description='INDRA Database',
           url='https://github.com/indralab/indra_db',
           packages=find_packages(),
-          install_requires=['boto3', 'sqlalchemy', 'psycopg2-binary',
+          install_requires=['indra', 'boto3', 'sqlalchemy', 'psycopg2-binary',
                             'pgcopy', 'matplotlib', 'flask', 'nltk',
                             'reportlab'],
           extras_require={'test': ['nose', 'coverage', 'python-coveralls',
                                    'nose-timer']},
-          dependency_links=['git+https://github.com/sorgerlab/indra.git']
           )
 
 

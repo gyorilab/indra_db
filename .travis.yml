@@ -8,8 +8,9 @@ python:
 before_install:
   - sudo apt-get update
 install:
+  - pip install git+https://github.com/sorgerlab/indra.git
   # INDRA-DB dependencies
-  - pip install .[test] --process-dependency-links --allow-all-external
+  - pip install .[test]
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
   - wget http://sorger.med.harvard.edu/data/bgyori/test_text_ref_tuples.pkl -nv

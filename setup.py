@@ -7,7 +7,7 @@ def main():
           description='INDRA Database',
           long_description='INDRA Database',
           url='https://github.com/indralab/indra_db',
-          packages=find_packages()
+          packages=find_packages(),
           install_requires=['boto3', 'sqlalchemy', 'psycopg2-binary',
                             'pgcopy', 'matplotlib', 'flask', 'nltk',
                             'reportlab']

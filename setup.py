@@ -12,3 +12,7 @@ def main():
                             'pgcopy', 'matplotlib', 'flask', 'nltk',
                             'reportlab']
           )
+
+
+if __name__ == '__main__':
+    main()

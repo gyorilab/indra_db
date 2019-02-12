@@ -7,13 +7,12 @@ python:
   - "3.6"
 before_install:
   - sudo apt-get update
-  - pip install numpy scipy sympy cython nose lxml matplotlib==1.5.0 pandas
-  - sudo pip2 install numpy
 install:
+  # Packages needed for testing
+  - pip install nose coverage python-coveralls nose-timer
+  # INDRA-DB dependencies
+  - pip install boto3 sqlalchemy psycopg2-binary pgcopy flask nltk reportlab
   # INDRA dependencies
-  - pip install coverage python-coveralls boto3 sqlalchemy psycopg2-binary pgcopy nose-timer flask nltk reportlab
-  - pip install git+https://github.com/bgyori/paths_graph.git@networkx2
-  - pip install doctest-ignore-unicode
   - pip install git+https://github.com/sorgerlab/indra.git
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
@@ -22,7 +21,6 @@ install:
   - wget http://sorger.med.harvard.edu/data/bgyori/test_reading_tuples.pkl -nv
   - wget http://sorger.med.harvard.edu/data/bgyori/test_db_info_tuples.pkl -nv
   - wget http://sorger.med.harvard.edu/data/bgyori/test_stmts_tuples.pkl -nv
-  - pip install -U networkx>=2
   - pip list
 before_script:
   # Enable plotting on fake display

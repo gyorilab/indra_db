@@ -274,7 +274,7 @@ class DatabaseManager(object):
             text_content_id = Column(Integer,
                                      ForeignKey('text_content.id'),
                                      nullable=False)
-            batch_id = Column(BigInteger, nullable=False)
+            batch_id = Column(Integer, nullable=False)
             text_content = relationship(TextContent)
             reader = Column(String(20), nullable=False)
             reader_version = Column(String(20), nullable=False)
@@ -315,7 +315,7 @@ class DatabaseManager(object):
             _skip_disp = ['json']
             id = Column(Integer, primary_key=True)
             uuid = Column(String(40), unique=True, nullable=False)
-            batch_id = Column(BigInteger, nullable=False)
+            batch_id = Column(Integer, nullable=False)
             mk_hash = Column(BigInteger, nullable=False)
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
@@ -948,6 +948,15 @@ class DatabaseManager(object):
         self.commit("Could not remove %d records from the database." %
                     len(entry_list))
         return
+
+    def make_copy_batch_id(self):
+        """Generate a random batch id for copying into the database.
+
+        This allows for easy retrieval of the assigned ids immediately after
+        copying in. At this time, only Reading and RawStatements use the
+        feature.
+        """
+        return random.randint(-2**31, 2**31)
 
     def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False,
              constraint=None):

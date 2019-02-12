@@ -308,7 +308,8 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     """
     # Preparing the statements for copying
     stmt_data = []
-    batch_id = hash(uuid4())
+    batch_id = db.make_copy_batch_id()
+
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
             'indra_version', 'batch_id')
     if verbose:

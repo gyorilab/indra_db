@@ -503,7 +503,7 @@ def upload_readings(output_list, db=None):
     exisiting_tcid_set = {r.text_content_id for r in r_list}
 
     # Get the id for this batch of uploads.
-    batch_id = hash(uuid4())
+    batch_id = db.make_copy_batch_id()
 
     # Make a list of data to copy, ensuring there are no conflicts.
     upload_list = []
@@ -661,7 +661,7 @@ def upload_statements(stmt_data_list, db=None):
 
     logger.info("Uploading %d statements to the database." %
                 len(stmt_data_list))
-    batch_id = hash(uuid4())
+    batch_id = db.make_copy_batch_id()
     db.copy('raw_statements', [s.make_tuple(batch_id) for s in stmt_data_list],
             StatementData.get_cols(), lazy=True, push_conflict=True)
 

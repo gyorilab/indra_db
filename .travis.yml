@@ -8,12 +8,8 @@ python:
 before_install:
   - sudo apt-get update
 install:
-  # Packages needed for testing
-  - pip install nose coverage python-coveralls nose-timer
-  # INDRA dependencies
-  - pip install git+https://github.com/sorgerlab/indra.git
   # INDRA-DB dependencies
-  - pip install .
+  - pip install .[test] --process-dependency-links --allow-all-external
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
   - wget http://sorger.med.harvard.edu/data/bgyori/test_text_ref_tuples.pkl -nv

@@ -10,7 +10,10 @@ def main():
           packages=find_packages(),
           install_requires=['boto3', 'sqlalchemy', 'psycopg2-binary',
                             'pgcopy', 'matplotlib', 'flask', 'nltk',
-                            'reportlab']
+                            'reportlab'],
+          extras_require={'test': ['nose', 'coverage', 'python-coveralls',
+                                   'nose-timer']},
+          dependency_links=['git+https://github.com/sorgerlab/indra.git']
           )
 
 

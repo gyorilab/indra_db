@@ -102,33 +102,19 @@ class _PrePaDatabaseTestSetup(object):
 
     def insert_the_statements(self, input_tuples):
         print("Loading %d statements..." % len(input_tuples))
-        cols = self.test_data['raw_statements']['cols'] \
-            + ('source_hash', 'batch_id')
-        new_input_tuples = {}
+        cols = self.test_data['raw_statements']['cols'] + ('batch_id',)
+        new_input_dict = {}
 
         batch_id = self.test_db.make_copy_batch_id()
 
         for t in input_tuples:
-            # Add the source hash.
-            s = Statement._from_json(json.loads(t[-1].decode('utf-8')))
-            t += (s.evidence[0].get_source_hash(),)
-
-            # Replace the matches-key hash.
-            h = s.get_hash(shallow=False, refresh=True)
-            h_idx = cols.index('mk_hash')
-            if t[h_idx] != h:
-                if s.__class__.__name__ != 'Conversion':
-                    print(s, t[h_idx], h)
-                t_list = list(t)
-                t_list[cols.index('mk_hash')] = h
-                t = tuple(t_list)
             t += (batch_id,)
 
-            new_input_tuples[(t[cols.index('mk_hash')],
-                              t[cols.index('reading_id')],
-                              t[cols.index('db_info_id')])] = t
+            new_input_dict[(t[cols.index('mk_hash')],
+                            t[cols.index('reading_id')],
+                            t[cols.index('db_info_id')])] = t
 
-        self.test_db.copy('raw_statements', new_input_tuples.values(), cols,
+        self.test_db.copy('raw_statements', new_input_dict.values(), cols,
                           lazy=True, push_conflict=True,
                           constraint='reading_raw_statement_uniqueness')
         print("Inserting agents...")

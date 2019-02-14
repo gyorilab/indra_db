@@ -560,9 +560,11 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
                     some_stmt_tpls = {stmt_tpl for stmt_set in stmt_set_itr
                                       for stmt_tpl in stmt_set}
                 else:
-                    logger.warning("FOUND DUPLICATES!!!!")
                     some_stmt_tpls, some_duplicate_tpls = \
                         _detect_exact_duplicates(stmt_set_itr, linked_sids)
+
+                    if some_duplicate_tpls:
+                        logger.warning("FOUND DUPLICATES!!!!")
 
                     # Get the sids for the statements.
                     duplicate_sids |= {sid for sid, _ in some_duplicate_tpls}

@@ -79,7 +79,7 @@ class DatabaseReader(object):
             self._db = db
         self._tc_rd_link = \
             self._db.TextContent.id == self._db.Reading.text_content_id
-        pass
+        return
 
     def run(self):
         if self.read_mode != 'none':
@@ -130,7 +130,7 @@ class DatabaseReader(object):
     def dump_statements(self):
         raise NotImplementedError()
 
-    def make_db_readings(self, skip_dict=None, db=None, **kwargs):
+    def make_new_readings(self, skip_dict=None, db=None, **kwargs):
         """Read contents retrieved from the database.
 
         The content will be retrieved in batchs, given by the `batch` argument.
@@ -200,7 +200,7 @@ class DatabaseReader(object):
 
         return new_outputs
 
-    def get_db_readings(self):
+    def get_prior_readings(self):
         """Get readings from the database."""
         # Get any previous readings. Note that we do this BEFORE posting the new
         # readings. Otherwise we would have duplicates.
@@ -253,7 +253,7 @@ class DatabaseReader(object):
         prev_readings = []
         skip_reader_tcid_dict = None
         if self.read_mode != 'all' and self.stmt_mode == 'all':
-            prev_readings = self.get_db_readings()
+            prev_readings = self.get_prior_readings()
             skip_reader_tcid_dict = {r.name: [] for r in self.readers}
             logger.info("Found %d pre-existing readings." % len(prev_readings))
             if self.read_mode != 'none':
@@ -263,7 +263,7 @@ class DatabaseReader(object):
         # Now produce any new readings that need to be produced.
         outputs = []
         if self.read_mode != 'none':
-            outputs = self.make_db_readings(skip_dict=skip_reader_tcid_dict)
+            outputs = self.make_new_readings(skip_dict=skip_reader_tcid_dict)
             logger.info("Made %d new readings." % len(outputs))
 
         if not self.no_upload:
@@ -291,7 +291,7 @@ class DatabaseReader(object):
             # Check if at least one of the readers has read the content
             sql.or_(*[_get_matches_clause(db, reader)
                       for reader in self.readers])
-        ]
+            ]
 
         if self.tcids:
             readings_query = db.filter_query(
@@ -315,20 +315,6 @@ class DatabaseReader(object):
             return None
 
         return readings_query.distinct()
-
-    def get_db_readings(self):
-        """Get readings from the database."""
-        # Get any previous readings. Note that we do this BEFORE posting the
-        # new readings. Otherwise we would have duplicates.
-        previous_readings_query = self.get_readings_query()
-        if previous_readings_query is not None:
-            prev_readings = [
-                ReadingData.from_db_reading(r)
-                for r in previous_readings_query.yield_per(self.batch_size)
-            ]
-        else:
-            prev_readings = []
-        return prev_readings
 
     def upload_statements(self, stmt_data_list, db=None):
         """Upload the statements to the database."""

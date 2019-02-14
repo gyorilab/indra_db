@@ -202,16 +202,18 @@ class DatabaseReader(object):
 
     def get_prior_readings(self):
         """Get readings from the database."""
-        # Get any previous readings. Note that we do this BEFORE posting the new
-        # readings. Otherwise we would have duplicates.
-        previous_readings_query = self.get_readings_query()
-        if previous_readings_query is not None:
-            prev_readings = [
-                ReadingData.from_db_reading(r)
-                for r in previous_readings_query.yield_per(batch_size)
-            ]
-        else:
-            prev_readings = []
+        db = self._db
+        prev_readings = []
+        if self.tcids:
+            for reader in self.readers:
+                readings_query = db.filter_query(
+                    db.Reading,
+                    db.Reading.reader == reader.name,
+                    db.Reading.reader_version == reader.version[:20],
+                    db.Reading.text_content_id.in_(self.tcids)
+                )
+                for r in readings_query.yield_per(self.batch_size):
+                    prev_readings.append(ReadingData.from_db_reading(r))
         return prev_readings
 
     def upload_readings(self, output_list):
@@ -276,46 +278,6 @@ class DatabaseReader(object):
 
         return outputs
 
-    def get_readings_query(self):
-        """Create a query to access all the relevant existing readings.
-        """
-        db = self._db
-
-        clauses = [
-            # Bind conditions on readings to conditions on content.
-            db.Reading.text_content_id == db.TextContent.id,
-
-            # Bind text content to text refs
-            db.TextContent.text_ref_id == db.TextRef.id,
-
-            # Check if at least one of the readers has read the content
-            sql.or_(*[_get_matches_clause(db, reader)
-                      for reader in self.readers])
-            ]
-
-        if self.tcids:
-            readings_query = db.filter_query(
-                db.Reading,
-
-                # Bind conditions on readings to conditions on content.
-                db.Reading.text_content_id == db.TextContent.id,
-
-                # Bind text content to text refs
-                db.TextContent.text_ref_id == db.TextRef.id,
-
-                # Check if at least one of the readers has read the content
-                sql.or_(*[_get_matches_clause(db, reader)
-                          for reader in self.readers]),
-
-                # Conditions generated from the list of ids. These include a
-                # text-ref text-content binding to connect with id data.
-                *clauses
-                )
-        else:
-            return None
-
-        return readings_query.distinct()
-
     def upload_statements(self, stmt_data_list, db=None):
         """Upload the statements to the database."""
         if db is None:
@@ -357,15 +319,6 @@ class DatabaseReader(object):
             print("Statements pickled in %s." % pickle_file)
 
         return stmt_data_list
-
-
-# =============================================================================
-# Useful functions
-# =============================================================================
-def _get_matches_clause(db, reader):
-    "Make the clauses to get content that match Reader version and name."
-    return sql.and_(db.Reading.reader == reader.name,
-                    db.Reading.reader_version == reader.version[:20])
 
 
 # =============================================================================

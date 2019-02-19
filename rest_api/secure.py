@@ -67,8 +67,9 @@ class SecurityManager(object):
         # Update the lambda.
         lamb = boto3.client('lambda')
         with open(join(HERE, 'lambda.zip'), 'rb') as zf:
+            fname = self.function_name + '-auth'
             ret = lamb.update_function_code(ZipFile=zf.read(),
-                                            FunctionName=self.function_name)
+                                            FunctionName=fname)
             print(ret)
 
 

@@ -65,6 +65,7 @@ class SecurityManager(object):
 
     def package_lambdas(self):
         """Create a zip file for the lambdas."""
+        print("Packaging the environment...")
         # Package up the env
         zip_path = shutil.make_archive(join(HERE, 'lambda'), 'zip', sys.prefix)
         self._zip_files.append(zip_path)
@@ -97,6 +98,7 @@ class SecurityManager(object):
             # Package the environment and code.
             zip_path = self.package_lambdas()
 
+            print("Creating the lambda function...")
             self._sudoify()
             lamb = boto3.client('lambda', **self._creds)
             with open(zip_path, 'rb') as zf:
@@ -124,6 +126,7 @@ class SecurityManager(object):
             zip_path = self.package_lambdas()
 
             # Update the lambda.
+            print("Updating the lambda function...")
             lamb = boto3.client('lambda')
             with open(zip_path, 'rb') as zf:
                 fname = self.function_name + '-auth'

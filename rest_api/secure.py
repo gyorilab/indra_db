@@ -31,6 +31,8 @@ def get_gateway_client(role='SUDO'):
 
 
 class SecurityManager(object):
+    """Object to manage the security of the REST API."""
+
     def __init__(self, stage):
         with open(join(HERE, pardir, 'zappa_settings.json'), 'r') as f:
             info = json.load(f)

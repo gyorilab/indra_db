@@ -13,24 +13,6 @@ from zipfile import ZipFile
 HERE = dirname(abspath(__file__))
 
 
-def get_gateway_client(role='SUDO'):
-    """Get a boto3 client to the gateway with SUDO role permissions.
-
-    It is assumed the base user is able to access this role. If not, some boto
-    error will be raised.
-    """
-    sts = boto3.client('sts')
-    resp = sts.get_caller_identity()
-    acct_id = resp['Account']
-    aro = sts.assume_role(RoleArn='arn:aws:iam::%s:role/%s' % (acct_id, role),
-                          RoleSessionName='Assuming%s' % role)
-    creds = aro['Credentials']
-    agc = boto3.client('apigateway', aws_access_key_id=creds['AccessKeyId'],
-                       aws_secret_access_key=creds['SecretAccessKey'],
-                       aws_session_token=creds['SessionToken'])
-    return agc
-
-
 class SecurityManager(object):
     """Object to manage the security of the REST API."""
 
@@ -40,10 +22,46 @@ class SecurityManager(object):
         self.info = zappa_info[stage]
         self.function_name = self.info['project_name'] + '-' + stage
         self._zip_files = []
+        self._creds = None
         return
 
+    def _sudoify(self, role='SUDO'):
+        if self._creds is not None:
+            return
+
+        sts = boto3.client('sts')
+        resp = sts.get_caller_identity()
+        acct_id = resp['Account']
+        aro = sts.assume_role(RoleArn='arn:aws:iam::%s:role/%s'
+                                      % (acct_id, role),
+                              RoleSessionName='Assuming%s' % role)
+        self._creds = {}
+        for key in ['access_key_id', 'secret_access_key', 'session_token']:
+            cred_key = ''.join([s.upper() for s in key.split('_')])
+            self._creds['aws_' + key] = aro['Credentials'][cred_key]
+        return
+
+    def get_gateway_client(self):
+        """Get a boto3 client to the gateway with SUDO role permissions.
+
+        It is assumed the base user is able to access this role. If not, some boto
+        error will be raised.
+        """
+        self._sudoify()
+        agc = boto3.client('apigateway', **self._creds)
+        return agc
+
     def get_zappa_role(self):
-        return self.function_name + '-ZappaLambdaExecutionRole'
+        self._sudoify()
+        iam = boto3.client('iam', **self._creds)
+        resp = iam.list_roles()
+        expected_name = self.function_name + '-ZappaLambdaExecutionRole'
+        arn = None
+        for role_info in resp['Roles']:
+            if role_info['RoleName'] == expected_name:
+                arn = role_info['Arn']
+                break
+        return arn
 
     def package_lambdas(self):
         """Create a zip file for the lambdas."""

@@ -51,7 +51,7 @@
     <!-- Main -->
     <div class="content">
       <div class="container" id="sign-in">
-        Click the button to the right to sign in and get access to the DB search page <button style="margin: 10px" class="btn btn-outline-primary" id="status-notify" onClick="getTokenFromAuthEndpoint(window.location.href, window.location.href.replace('welcome', 'statements'))">Search the database</button>
+        Click the button to the right to sign in and get access to the DB search page <button style="margin: 10px" class="btn btn-outline-primary" id="status-notify" onClick="getTokenFromAuthEndpoint(window.location.href, window.location.href.replace('welcome', 'statements').split('#')[0])">Search the database</button>
       </div>
     </div>
 

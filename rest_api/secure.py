@@ -48,7 +48,7 @@ class SecurityManager(object):
         size limit.
         """
         # Package up the env
-        zip_path = shutil.make_archive(join(HERE, 'lambda'), sys.prefix)
+        zip_path = shutil.make_archive(join(HERE, 'lambda'), 'zip', sys.prefix)
 
         # Add the relevant files from indra_db.
         idbr_dir = join(HERE, pardir, 'indra_db')
@@ -59,6 +59,8 @@ class SecurityManager(object):
                      'indra_db/util/__init__.py')
             zf.write(join(idbr_dir, '__init__.py'),
                      'indra_db/__init__.py')
+            zf.write(join(idbr_dir, 'exceptions.py'),
+                     'indra_db/exceptions.py')
             zf.write(join(HERE, 'security_lambdas', 'verify_key_script.py'),
                      'verify_key_script.py')
 

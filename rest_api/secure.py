@@ -1,4 +1,13 @@
+import sys
+import json
 import boto3
+import shutil
+
+from os.path import dirname, abspath, join, pardir
+from zipfile import ZipFile
+
+
+HERE = dirname(abspath(__file__))
 
 
 def get_gateway_client(role='SUDO'):
@@ -19,6 +28,40 @@ def get_gateway_client(role='SUDO'):
     return agc
 
 
-def add_authorizers():
-    """Add authorizers to the api endpoint."""
-    agc = get_gateway_client()
+class SecurityManager(object):
+    def __init__(self, stage):
+        with open(join(HERE, pardir, 'zappa_settings.json'), 'r') as f:
+            info = json.load(f)
+        deployment_info = info[stage]
+        self.function_name = deployment_info['project_name'] + '-' + stage
+        return
+
+    def update_lambdas(self):
+        """Update the verification and api key creation lambdas.
+
+        It is assumed that the current virtual environment is the one to be
+        packaged. The env should be minimal because lambdas have a pretty strict
+        size limit.
+        """
+        # Package up the env
+        zip_path = shutil.make_archive(join(HERE, 'lambda'), sys.prefix)
+
+        # Add the relevant files from indra_db.
+        idbr_dir = join(HERE, pardir, 'indra_db')
+        with ZipFile(zip_path, 'a') as zf:
+            zf.write(join(idbr_dir, 'managers', 'database_manager.py'),
+                     'indra_db/database_manager.py')
+            zf.write(join(idbr_dir, 'util', '__init__.py'),
+                     'indra_db/util/__init__.py')
+            zf.write(join(idbr_dir, '__init__.py'),
+                     'indra_db/__init__.py')
+            zf.write(join(HERE, 'security_lambdas', 'verify_key_script.py'),
+                     'verify_key_script.py')
+
+        # Update the lambda.
+        lamb = boto3.client('lambda')
+        with open(join(HERE, 'lambda.zip'), 'rb') as zf:
+            ret = lamb.update_function_code(ZipFile=zf.read(),
+                                            FunctionName=self.function_name)
+            print(ret)
+

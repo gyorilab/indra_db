@@ -97,7 +97,8 @@ class SecurityManager(object):
             # Package the environment and code.
             zip_path = self.package_lambdas()
 
-            lamb = boto3.client('lambda')
+            self._sudoify()
+            lamb = boto3.client('lambda', **self._creds)
             with open(zip_path, 'rb') as zf:
                 fname = self.function_name + '-auth'
                 env = {'Variables': self.info['environment_variables']}

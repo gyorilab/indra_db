@@ -2,7 +2,11 @@ import boto3
 
 
 def get_gateway_client(role='SUDO'):
-    """Get a boto3 client to the gateway with SUDO role permissions."""
+    """Get a boto3 client to the gateway with SUDO role permissions.
+
+    It is assumed the base user is able to access this role. If not, some boto
+    error will be raised.
+    """
     sts = boto3.client('sts')
     resp = sts.get_caller_identity()
     acct_id = resp['Account']
@@ -17,3 +21,4 @@ def get_gateway_client(role='SUDO'):
 
 def add_authorizers():
     """Add authorizers to the api endpoint."""
+    agc = get_gateway_client()

@@ -1,4 +1,5 @@
 import re
+from indra_db import get_primary_db
 
 
 def lambda_handler(event, context):
@@ -38,6 +39,7 @@ def lambda_handler(event, context):
 
     The example policy below denies access to all resources in the RestApi.
     '''
+    db = get_primary_db()
     tmp = event['methodArn'].split(':')
     apiGatewayArnTmp = tmp[5].split('/')
     awsAccountId = tmp[4]
@@ -48,7 +50,8 @@ def lambda_handler(event, context):
     policy.region = tmp[3]
     policy.stage = apiGatewayArnTmp[1]
     policy.denyAllMethods()
-    if api_key == 'idonotlikegreeneggsandham':
+
+    if db._get_auth_info(api_key) is not None:
         policy.allowMethod(HttpVerb.GET, '/*')
         policy.allowMethod(HttpVerb.POST, '/*')
 

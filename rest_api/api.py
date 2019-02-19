@@ -207,7 +207,11 @@ def redirecet():
 @app.route('/browser/welcome', methods=['GET'])
 def welcome():
     logger.info("Browser welcome page.")
-    return Response('<body><h1>Welcome!</h1></body>')
+    page_path = path.join(path.dirname(path.abspath(__file__)),
+                          'welcome.html')
+    with open(page_path, 'r') as f:
+        page_html = f.read()
+    return Response(page_html)
 
 
 @app.route('/browser/statements', methods=['GET'])
@@ -215,7 +219,7 @@ def get_statements_query_format():
     # Create a template object from the template file, load once
     page_path = path.join(path.dirname(path.abspath(__file__)),
                           'search_statements.html')
-    with open(page_path, 'rt') as f:
+    with open(page_path, 'r') as f:
         page_html = f.read()
     return Response(page_html)
 

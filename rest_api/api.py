@@ -194,12 +194,23 @@ def _query_wrapper(f):
 
 
 @app.route('/', methods=['GET'])
-def welcome():
+def iamalive():
+    return Response("I am alive!")
+
+
+@app.route('/browser', methods=['GET'])
+def redirecet():
     logger.info("Got request for welcome info.")
-    return redirect('statements', code=302)
+    return redirect('browser/welcome', code=302)
 
 
-@app.route('/statements', methods=['GET'])
+@app.route('/browser/welcome', methods=['GET'])
+def welcome():
+    logger.info("Browser welcome page.")
+    return Response('<body><h1>Welcome!</h1></body>')
+
+
+@app.route('/browser/statements', methods=['GET'])
 def get_statements_query_format():
     # Create a template object from the template file, load once
     page_path = path.join(path.dirname(path.abspath(__file__)),
@@ -209,7 +220,8 @@ def get_statements_query_format():
     return Response(page_html)
 
 
-@app.route('/statements/from_agents', methods=['GET'])
+@app.route('/browser/statements/from_agents', methods=['GET'])
+@app.route('/api/statements/from_agents', methods=['GET'])
 @_query_wrapper
 def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get some statements constrained by query."""
@@ -269,7 +281,7 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/statements/from_hashes', methods=['POST'])
+@app.route('/api/statements/from_hashes', methods=['POST'])
 @_query_wrapper
 def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
     if ev_lim is None:
@@ -289,7 +301,8 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
     return result
 
 
-@app.route('/statements/from_hash/<hash_val>', methods=['GET'])
+@app.route('/api/statements/from_hash/<hash_val>', methods=['GET'])
+@app.route('/browser/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                           hash_val):
@@ -300,7 +313,7 @@ def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                                            best_first=best_first)
 
 
-@app.route('/statements/from_papers', methods=['POST'])
+@app.route('/api/statements/from_papers', methods=['POST'])
 @_query_wrapper
 def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get Statements from a papers with the given ids."""
@@ -332,12 +345,13 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/curation', methods=['GET'])
+@app.route('/api/curation', methods=['GET'])
 def describe_curation():
     return redirect('/statements', code=302)
 
 
-@app.route('/curation/submit/<hash_val>', methods=['POST'])
+@app.route('/api/curation/submit/<hash_val>', methods=['POST'])
+@app.route('/browser/curation/submit/<hash_val>', methods=['POST'])
 def submit_curation_endpoint(hash_val):
     logger.info("Adding curation for statement %s." % (hash_val))
     ev_hash = request.json.get('ev_hash')

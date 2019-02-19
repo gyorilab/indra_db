@@ -1,5 +1,7 @@
 import sys
 import json
+from argparse import ArgumentParser
+
 import boto3
 import shutil
 
@@ -65,3 +67,26 @@ class SecurityManager(object):
                                             FunctionName=self.function_name)
             print(ret)
 
+
+def get_parser():
+    parser = ArgumentParser(description='Apply and update the security to '
+                                        'the database REST API.')
+    parser.add_argument('action',
+                        choices=['update-lambdas'],
+                        help='Select which action to perform.')
+    parser.add_argument('stage', help='Select which stage to operate on.')
+    return parser
+
+
+def main():
+    parser = get_parser()
+    args = parser.parse_args()
+    sec_man = SecurityManager(args.stage)
+
+    if args.action == 'update-lambdas':
+        sec_man.update_lambdas()
+    return
+
+
+if __name__ == '__main__':
+    main()

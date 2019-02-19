@@ -37,7 +37,7 @@ class SecurityManager(object):
                               RoleSessionName='Assuming%s' % role)
         self._creds = {}
         for key in ['access_key_id', 'secret_access_key', 'session_token']:
-            cred_key = ''.join([s.upper() for s in key.split('_')])
+            cred_key = ''.join([s.capitalize() for s in key.split('_')])
             self._creds['aws_' + key] = aro['Credentials'][cred_key]
         return
 

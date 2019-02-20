@@ -71,6 +71,21 @@
             container.removeChild(button);
         }
 
+        function appendToFormSubmit(form) {
+          let accToken = _readCookie(ACCESSTOKEN_COOKIE_NAME);
+          let idToken = _readCookie(IDTOKEN_COOKIE_NAME);
+
+          let accField = document.createElement('input')
+          accField.attr('name', 'access_token').attr('type', 'hidden')
+          accField.val(accToken)
+          form.appendChild(accField)
+
+          let idField = document.createElement('input')
+          idField.attr('name', 'id_token').attr('type', 'hidden')
+          idField.val(idToken)
+          form.appendChild(idField)
+        }
+
       var ENV = 'indra';
     </script>
   <style>
@@ -155,7 +170,7 @@ nav {
 
     <!-- The main content -->
     <div class="content">
-      <form action="/browser/statements/from_agents">
+      <form action="/browser/statements/from_agents" onsubmit="appendToFormSubmit(this)">
         <table>
             <tr>
                 <td id="type" class="field" onclick="addField('type', 1)">Select a type</td>

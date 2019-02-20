@@ -74,7 +74,7 @@ class SecurityManager(object):
         idbr_dir = join(HERE, pardir, 'indra_db')
         with ZipFile(zip_path, 'a') as zf:
             zf.write(join(idbr_dir, 'managers', 'database_manager.py'),
-                     'indra_db/database_manager.py')
+                     'indra_db/managers/database_manager.py')
             zf.write(join(idbr_dir, 'util', '__init__.py'),
                      'indra_db/util/__init__.py')
             zf.write(join(idbr_dir, '__init__.py'),

@@ -52,6 +52,7 @@ def lambda_handler(event, context):
     policy.denyAllMethods()
 
     info = db._get_auth_info(api_key)
+    print(api_key, 'got info', info)
     if info is not None:
         user_id, name = info
         policy.principalId = user_id

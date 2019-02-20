@@ -79,6 +79,8 @@ class SecurityManager(object):
                      'indra_db/util/__init__.py')
             zf.write(join(idbr_dir, '__init__.py'),
                      'indra_db/__init__.py')
+            zf.write(join(idbr_dir, 'config.py'),
+                     'indra_db/config.py')
             zf.write(join(idbr_dir, 'exceptions.py'),
                      'indra_db/exceptions.py')
             zf.write(join(HERE, 'security_lambdas', 'verify_key_script.py'),

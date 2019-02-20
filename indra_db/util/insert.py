@@ -1,5 +1,5 @@
 __all__ = ['insert_agents', 'insert_pa_agents_directly', 'insert_pa_stmts',
-           'insert_db_stmts']
+           'insert_db_stmts', 'regularize_agent_id']
 
 import json
 import logging

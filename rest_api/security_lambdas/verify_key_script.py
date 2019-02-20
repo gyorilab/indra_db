@@ -1,5 +1,5 @@
 import re
-from indra_db import get_primary_db
+from indra_db.util.constructors import get_primary_db
 
 
 def lambda_handler(event, context):

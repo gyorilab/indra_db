@@ -104,3 +104,44 @@ def get_text_content_from_stmt_ids(stmt_ids):
         else:
             result[stmt_id] = None
     return result
+
+
+def get_text_content_from_text_refs(text_refs):
+    """Get text_content from an evidence object's text_refs attribute
+
+
+    Parameters
+    ----------
+    text_refs : dict of str: str
+        text_refs dictionary as contained in an evidence object
+        The dictionary should be keyed on id_types. The valid keys
+        are 'PMID', 'PMCID', 'DOI', 'PII', 'URL', 'MANUSCRIPT_ID'.
+
+    Returns
+    -------
+    text : str
+        fulltext corresponding to the text_refs if it exists in the
+        database, otherwise the abstract. Returns None if no content
+        exists for the text_refs in the database
+    """
+    db = dbu.get_primary_db()
+    for id_type in ['pmid', 'pmcid', 'doi',
+                    'pii', 'url', 'manuscript_id']:
+        try:
+            id_val = text_refs[id_type.upper()]
+            text_ref_id = dbu._get_trids(db, id_val, id_type)[0]
+            break
+        except KeyError:
+            pass
+    texts = db.select_all([db.TextContent.content,
+                           db.TextContent.text_type],
+                          db.TextContent.text_ref_id == text_ref_id)
+    fulltext = [dbu.unpack(content) for content, text_type in texts
+                if text_type == 'fulltext']
+    if fulltext:
+        return fulltext[0]
+    abstract = [dbu.unpack(content) for content, text_type in texts
+                if text_type == 'abstract']
+    if abstract:
+        return abstract[0]
+    return None

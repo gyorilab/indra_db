@@ -79,12 +79,14 @@ class DatabaseReader(object):
             self._db = db
         self._tc_rd_link = \
             self._db.TextContent.id == self._db.Reading.text_content_id
+
+        # To be filled.
+        self.reading_outputs = []
+        self._read_content = {r.name: [] for r in self.readers}
+        self.statement_outputs = []
         return
 
     def run(self):
-        if self.read_mode != 'none':
-            self.get_content()
-
         self.get_readings()
 
         if not self.no_upload:
@@ -97,26 +99,43 @@ class DatabaseReader(object):
                 self.dump_statements()
         pass
 
-    def get_content(self):
+    def iter_over_content(self, reader):
         # Get the text content query object
         tc_query = self._db.filter_query(
             self._db.TextContent,
-            self._tb.TextContent.id.in_(self.tcids)
+            self._db.TextContent.id.in_(self.tcids)
             ).distinct()
 
         if self.read_mode != 'all':
             logger.debug("Getting content to be read.")
             # Each sub query is a set of content that has been read by one of
             # the readers.
-            tc_q_subs = [tc_query.filter(self._tc_rd_link,
-                                         _get_matches_clause(self._db, r))
-                         for r in self.readers]
+                tc_query.filter(
+                    self._tc_rd_link,
+                    self._db.Reading.reader == r.name,
+                    self._db.Reading.reader_version == r.version[:20]
+                    )
+                for r in self.readers
+                ]
+
+            # Now let's exclude all of those.
             tc_tbr_query = tc_query.except_(sql.intersect(*tc_q_subs))
         else:
             logger.debug('All content will be read (force_read).')
             tc_tbr_query = tc_query
 
-        return tc_tbr_query.yield_per(self.batch_size)
+        for tc in tc_tbr_query.yield_per(self.batch_size):
+            for r in self.readers:
+                # Check to see if we are skipping this one.
+                if self.read_mode != 'all' \
+                   and tc.id in self._read_content[r.name]:
+                    continue
+
+                # Otherwise add it to the list
+                processed_content = process_content(tc)
+                if processed_content is not None:
+                    yield processed_content
+        return
 
     def get_readings(self):
         pass
@@ -130,59 +149,33 @@ class DatabaseReader(object):
     def dump_statements(self):
         raise NotImplementedError()
 
-    def make_new_readings(self, skip_dict=None, db=None, **kwargs):
+    def make_new_readings(self, **kwargs):
         """Read contents retrieved from the database.
 
         The content will be retrieved in batchs, given by the `batch` argument.
         This prevents the system RAM from being overloaded.
 
-        Parameters
-        ----------
-        skip_dict : dict {<reader> : list [int]}
-            A dict containing text content id's to be skipped.
-        db : indra_db.DatabaseManager instance
-            A handle to a database. Default None; if None, a handle to the primary
-            database (see indra_db) is retrieved.
-
-        Other keyword arguments are passed to the `read` methods of the readers.
+        Keyword arguments are passed to the `read` methods of the readers.
 
         Returns
         -------
         outputs : list of ReadingData instances
             The results of the readings with relevant metadata.
         """
-        if db is None:
-            db = get_primary_db()
-
         # Iterate
         logger.debug("Begginning to iterate.")
         batch_list_dict = {r.name: [] for r in self.readers}
         new_outputs = []
-        for text_content in self.get_content():
+        for content in self.iter_over_content():
             # The get_content function returns an iterator which yields
             # results in batches, so as not to overwhelm RAM. We need to read
             # in batches for much the same reason.
             for r in self.readers:
-                if not self.read_mode == 'all':
-                    if skip_dict is not None:
-                        if text_content.id in skip_dict[r.name]:
-                            continue
-                    else:
-                        # Try to get a previous reading from this reader.
-                        reading = db.select_one(
-                            db.Reading,
-                            db.Reading.text_content_id == text_content.id,
-                            _get_matches_clause(db, r)
-                        )
-                        if reading is not None:
-                            continue
-                processed_content = process_content(text_content)
-                if processed_content is not None:
-                    batch_list_dict[r.name].append(processed_content)
+                    batch_list_dict[r.name].append(content)
 
-                if (len(batch_list_dict[r.name])+1) % self.batch_size is 0:
+                # Periodically read a bunch of stuff.
+                if (len(batch_list_dict[r.name])+1) % self.batch_size == 0:
                     # TODO: this is a bit cludgy...maybe do this better?
-                    # Perhaps refactor read_content.
                     logger.debug("Reading batch of files for %s." % r.name)
                     results = r.read(batch_list_dict[r.name], **kwargs)
                     if results is not None:
@@ -203,7 +196,6 @@ class DatabaseReader(object):
     def get_prior_readings(self):
         """Get readings from the database."""
         db = self._db
-        prev_readings = []
         if self.tcids:
             for reader in self.readers:
                 readings_query = db.filter_query(
@@ -213,8 +205,11 @@ class DatabaseReader(object):
                     db.Reading.text_content_id.in_(self.tcids)
                 )
                 for r in readings_query.yield_per(self.batch_size):
-                    prev_readings.append(ReadingData.from_db_reading(r))
-        return prev_readings
+                    self.reading_outputs.append(ReadingData.from_db_reading(r))
+                    self._read_content[reader.name].append(r.text_content_id)
+        logger.info("Found %d pre-existing readings."
+                    % len(self.reading_outputs))
+        return
 
     def upload_readings(self, output_list):
         """Put the reading output on the database."""
@@ -252,20 +247,14 @@ class DatabaseReader(object):
         logger.debug("Producing readings in %s mode." % self.read_mode)
 
         # Handle the cases where I need to retrieve old readings.
-        prev_readings = []
-        skip_reader_tcid_dict = None
+        skip_reader_tcid_dict = {}
         if self.read_mode != 'all' and self.stmt_mode == 'all':
-            prev_readings = self.get_prior_readings()
-            skip_reader_tcid_dict = {r.name: [] for r in self.readers}
-            logger.info("Found %d pre-existing readings." % len(prev_readings))
-            if self.read_mode != 'none':
-                for rd in prev_readings:
-                    skip_reader_tcid_dict[rd.reader].append(rd.tcid)
+            self.get_prior_readings()
 
         # Now produce any new readings that need to be produced.
         outputs = []
         if self.read_mode != 'none':
-            outputs = self.make_new_readings(skip_dict=skip_reader_tcid_dict)
+            outputs = self.make_new_readings(skip_reader_tcid_dict)
             logger.info("Made %d new readings." % len(outputs))
 
         if not self.no_upload:

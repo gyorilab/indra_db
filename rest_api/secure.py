@@ -66,8 +66,16 @@ class SecurityManager(object):
     def package_lambdas(self):
         """Create a zip file for the lambdas."""
         print("Packaging the environment...", end='')
+        # Find the site packages
+        sp = None
+        for sp in sys.path:
+            if sp.startswith(sys.prefix) and sp.endswith('site-packages'):
+                break
+        else:
+            raise EnvironmentError("Cannot find site packages.")
+
         # Package up the env
-        zip_path = shutil.make_archive(join(HERE, 'lambda'), 'zip', sys.prefix)
+        zip_path = shutil.make_archive(join(HERE, 'lambda'), 'zip', sp)
         self._zip_files.append(zip_path)
 
         # Add the relevant files from indra_db.

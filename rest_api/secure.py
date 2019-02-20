@@ -65,7 +65,7 @@ class SecurityManager(object):
 
     def package_lambdas(self):
         """Create a zip file for the lambdas."""
-        print("Packaging the environment...")
+        print("Packaging the environment...", end='')
         # Package up the env
         zip_path = shutil.make_archive(join(HERE, 'lambda'), 'zip', sys.prefix)
         self._zip_files.append(zip_path)
@@ -85,6 +85,8 @@ class SecurityManager(object):
                      'indra_db/exceptions.py')
             zf.write(join(HERE, 'security_lambdas', 'verify_key_script.py'),
                      'verify_key_script.py')
+            size = sum([f.file_size for f in zf.filelist])/1e6  # MB
+        print(size, 'MB')
         return zip_path
 
     def _clear_packages(self):

@@ -83,10 +83,8 @@ class SecurityManager(object):
         with ZipFile(zip_path, 'a') as zf:
             zf.write(join(idbr_dir, 'managers', 'database_manager.py'),
                      'indra_db/managers/database_manager.py')
-            zf.write(join(idbr_dir, 'util', '__init__.py'),
+            zf.write(join(idbr_dir, 'util', 'constructors.py'),
                      'indra_db/util/constructors.py')
-            zf.write(join(idbr_dir, '__init__.py'),
-                     'indra_db/__init__.py')
             zf.write(join(idbr_dir, 'config.py'),
                      'indra_db/config.py')
             zf.write(join(idbr_dir, 'exceptions.py'),

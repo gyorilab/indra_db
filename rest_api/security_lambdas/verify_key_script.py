@@ -51,7 +51,11 @@ def lambda_handler(event, context):
     policy.stage = apiGatewayArnTmp[1]
     policy.denyAllMethods()
 
-    if db._get_auth_info(api_key) is not None:
+    info = db._get_auth_info(api_key)
+    if info is not None:
+        user_id, name = info
+        policy.principalId = user_id
+        print("Matched user:", user_id, name)
         policy.allowMethod(HttpVerb.GET, '/*')
         policy.allowMethod(HttpVerb.POST, '/*')
 

@@ -3,6 +3,7 @@ __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 from collections import defaultdict
 
 from .constructors import get_primary_db
+from .helpers import unpack
 
 
 def get_stmts_with_agent_text_like(pattern, filter_genes=False):
@@ -78,10 +79,10 @@ def get_text_content_from_stmt_ids(stmt_ids):
                            db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id.in_(text_refs.values()))
-    fulltexts = {text_id: dbu.unpack(text)
+    fulltexts = {text_id: unpack(text)
                  for text_id, text, text_type in texts
                  if text_type == 'fulltext'}
-    abstracts = {text_id: dbu.unpack(text)
+    abstracts = {text_id: unpack(text)
                  for text_id, text, text_type in texts
                  if text_type == 'abstract'}
     result = {}

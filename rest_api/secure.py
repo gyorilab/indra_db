@@ -141,7 +141,8 @@ def get_parser():
     parser = ArgumentParser(description='Apply and update the security to '
                                         'the database REST API.')
     parser.add_argument('action',
-                        choices=['update-lambdas', 'create-lambdas'],
+                        choices=['update-lambdas', 'create-lambdas',
+                                 'package-lambdas'],
                         help='Select which action to perform.')
     parser.add_argument('stage', help='Select which stage to operate on.')
     return parser
@@ -156,6 +157,8 @@ def main():
         sec_man.update_lambdas()
     elif args.action == 'create-lambdas':
         sec_man.create_lambdas()
+    elif args.action == 'package-lambdas':
+        sec_man.package_lambdas()
 
     return
 

@@ -1,5 +1,6 @@
 __all__ = ['unpack', '_get_trids', '_fix_evidence_refs',
-           'get_raw_stmts_frm_db_list', '_set_evidence_text_ref']
+           'get_raw_stmts_frm_db_list', '_set_evidence_text_ref',
+           'get_statement_object']
 
 import json
 import zlib
@@ -11,7 +12,7 @@ from indra.statements import Statement
 logger = logging.getLogger('util-helpers')
 
 
-def _get_statement_object(db_stmt):
+def get_statement_object(db_stmt):
     """Get an INDRA Statement object from a db_stmt."""
     return Statement._from_json(json.loads(db_stmt.json.decode('utf-8')))
 
@@ -54,7 +55,7 @@ def _fix_evidence_refs(db, rid_stmt_trios):
 def get_raw_stmts_frm_db_list(db, db_stmt_objs, fix_refs=True, with_sids=True):
     """Convert table objects of raw statements into INDRA Statement objects."""
     rid_stmt_sid_trios = [(db_stmt.reading_id, db_stmt.id,
-                           _get_statement_object(db_stmt))
+                           get_statement_object(db_stmt))
                           for db_stmt in db_stmt_objs]
     if fix_refs:
         _fix_evidence_refs(db, rid_stmt_sid_trios)

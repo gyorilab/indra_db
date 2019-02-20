@@ -12,7 +12,7 @@ from indra.statements import Complex, SelfModification, ActiveForm,\
 
 from indra_db.exceptions import IndraDbException
 
-from .helpers import _get_statement_object
+from .helpers import get_statement_object
 
 
 logger = logging.getLogger('util-insert')
@@ -104,7 +104,7 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
     agent_data = []
     for i, db_stmt in enumerate(stmts_wo_agents):
         # Convert the database statement entry object into an indra statement.
-        stmt = _get_statement_object(db_stmt)
+        stmt = get_statement_object(db_stmt)
 
         if prefix == 'pa':
             stmt_id = db_stmt.mk_hash

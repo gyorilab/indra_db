@@ -37,8 +37,8 @@ class DatabaseReader(object):
     tcids : iterable of ints
         An iterable (set, list, tuple, generator, etc) of integers referring to
         the primary keys of text content in the database.
-    readers : list[Reader]
-        A list of INDRA Reader objects.
+    reader : Reader
+        An INDRA Reader object.
     verbose : bool
         Optional, default False - If True, log and print the output of the
         commandline reader utilities, if False, don't.
@@ -64,10 +64,10 @@ class DatabaseReader(object):
         by `get_primary_db` function is used. Used to interface with a
         different database.
     """
-    def __init__(self, tcids, readers, verbose=True, read_mode='unread',
+    def __init__(self, tcids, reader, verbose=True, read_mode='unread',
                  stmt_mode='all', batch_size=1000, no_upload=False, db=None):
         self.tcids = tcids
-        self.readers = readers
+        self.reader = reader
         self.verbose = verbose
         self.read_mode = read_mode
         self.stmt_mode = stmt_mode
@@ -81,8 +81,8 @@ class DatabaseReader(object):
             self._db.TextContent.id == self._db.Reading.text_content_id
 
         # To be filled.
-        self.reading_outputs = []
-        self._read_content = {r.name: [] for r in self.readers}
+        self.extant_readings = []
+        self.new_readings = []
         self.statement_outputs = []
         return
 
@@ -99,7 +99,7 @@ class DatabaseReader(object):
                 self.dump_statements()
         pass
 
-    def iter_over_content(self, reader):
+    def iter_over_content(self):
         # Get the text content query object
         tc_query = self._db.filter_query(
             self._db.TextContent,
@@ -110,38 +110,23 @@ class DatabaseReader(object):
             logger.debug("Getting content to be read.")
             # Each sub query is a set of content that has been read by one of
             # the readers.
-                tc_query.filter(
-                    self._tc_rd_link,
-                    self._db.Reading.reader == r.name,
-                    self._db.Reading.reader_version == r.version[:20]
-                    )
-                for r in self.readers
-                ]
+            tc_sub_q = tc_query.filter(
+                self._tc_rd_link,
+                self._db.Reading.reader == self.reader.name,
+                self._db.Reading.reader_version == self.reader.version[:20]
+                )
 
             # Now let's exclude all of those.
-            tc_tbr_query = tc_query.except_(sql.intersect(*tc_q_subs))
+            tc_tbr_query = tc_query.except_(tc_sub_q)
         else:
             logger.debug('All content will be read (force_read).')
             tc_tbr_query = tc_query
 
         for tc in tc_tbr_query.yield_per(self.batch_size):
-            for r in self.readers:
-                # Check to see if we are skipping this one.
-                if self.read_mode != 'all' \
-                   and tc.id in self._read_content[r.name]:
-                    continue
-
-                # Otherwise add it to the list
-                processed_content = process_content(tc)
-                if processed_content is not None:
-                    yield processed_content
+            processed_content = process_content(tc)
+            if processed_content is not None:
+                yield processed_content
         return
-
-    def get_readings(self):
-        pass
-
-    def dump_readings(self):
-        raise NotImplementedError()
 
     def make_statements(self):
         pass
@@ -152,7 +137,7 @@ class DatabaseReader(object):
     def make_new_readings(self, **kwargs):
         """Read contents retrieved from the database.
 
-        The content will be retrieved in batchs, given by the `batch` argument.
+        The content will be retrieved in batches, given by the `batch` argument.
         This prevents the system RAM from being overloaded.
 
         Keyword arguments are passed to the `read` methods of the readers.
@@ -163,55 +148,51 @@ class DatabaseReader(object):
             The results of the readings with relevant metadata.
         """
         # Iterate
-        logger.debug("Begginning to iterate.")
-        batch_list_dict = {r.name: [] for r in self.readers}
-        new_outputs = []
+        logger.debug("Beginning to iterate.")
+        batch_list = []
         for content in self.iter_over_content():
             # The get_content function returns an iterator which yields
             # results in batches, so as not to overwhelm RAM. We need to read
             # in batches for much the same reason.
-            for r in self.readers:
-                    batch_list_dict[r.name].append(content)
+            batch_list.append(content)
 
-                # Periodically read a bunch of stuff.
-                if (len(batch_list_dict[r.name])+1) % self.batch_size == 0:
-                    # TODO: this is a bit cludgy...maybe do this better?
-                    logger.debug("Reading batch of files for %s." % r.name)
-                    results = r.read(batch_list_dict[r.name], **kwargs)
-                    if results is not None:
-                        new_outputs += results
-                    batch_list_dict[r.name] = []
+            # Periodically read a bunch of stuff.
+            if (len(batch_list)+1) % self.batch_size == 0:
+                # TODO: this is a bit cludgy...maybe do this better?
+                logger.debug("Reading batch of files for %s."
+                             % self.reader.name)
+                results = self.reader.read(batch_list, **kwargs)
+                if results is not None:
+                    self.new_readings.extend(results)
+                batch_list = []
         logger.debug("Finished iteration.")
 
         # Pick up any stragglers.
-        for r in self.readers:
-            if len(batch_list_dict[r.name]) > 0:
-                logger.debug("Reading remaining files for %s." % r.name)
-                results = r.read(batch_list_dict[r.name], **kwargs)
-                if results is not None:
-                    new_outputs += results
+        if len(batch_list) > 0:
+            logger.debug("Reading remaining files for %s." % self.reader.name)
+            results = self.reader.read(batch_list, **kwargs)
+            if results is not None:
+                self.new_readings.extend(results)
 
-        return new_outputs
+        return
 
     def get_prior_readings(self):
         """Get readings from the database."""
         db = self._db
         if self.tcids:
-            for reader in self.readers:
-                readings_query = db.filter_query(
-                    db.Reading,
-                    db.Reading.reader == reader.name,
-                    db.Reading.reader_version == reader.version[:20],
-                    db.Reading.text_content_id.in_(self.tcids)
-                )
-                for r in readings_query.yield_per(self.batch_size):
-                    self.reading_outputs.append(ReadingData.from_db_reading(r))
-                    self._read_content[reader.name].append(r.text_content_id)
+            readings_query = db.filter_query(
+                db.Reading,
+                db.Reading.reader == self.reader.name,
+                db.Reading.reader_version == self.reader.version[:20],
+                db.Reading.text_content_id.in_(self.tcids)
+            )
+            for r in readings_query.yield_per(self.batch_size):
+                self.extant_readings.append(ReadingData.from_db_reading(r))
         logger.info("Found %d pre-existing readings."
-                    % len(self.reading_outputs))
+                    % len(self.extant_readings))
         return
 
-    def upload_readings(self, output_list):
+    def dump_readings(self):
         """Put the reading output on the database."""
         db = self._db
 
@@ -221,14 +202,14 @@ class DatabaseReader(object):
         # Make a list of data to copy, ensuring there are no conflicts.
         upload_list = []
         rd_dict = {}
-        for rd in output_list:
+        for rd in self.new_readings:
             # If there were no conflicts, we can add this to the copy list.
             upload_list.append(rd.make_tuple(batch_id))
             rd_dict[(rd.tcid, rd.reader, rd.reader_version)] = rd
 
         # Copy into the database.
         logger.info("Adding %d/%d reading entries to the database." %
-                    (len(upload_list), len(output_list)))
+                    (len(upload_list), len(self.new_readings)))
         db.copy('reading', upload_list, ReadingData.get_cols())
 
         # Update the reading_data objects with their reading_ids.
@@ -236,36 +217,26 @@ class DatabaseReader(object):
                                db.Reading.reader, db.Reading.reader_version],
                               db.Reading.batch_id == batch_id)
         for tpl in rdata:
-            rd_dict[tuple(tpl[1:])] = tpl[0]
+            rd_dict[tuple(tpl[1:])].reading_id = tpl[0]
 
         return
 
-    def produce_readings(self):
+    def get_readings(self):
         """Produce the reading output for the given ids, and upload them to db.
         """
         # Get a database instance.
         logger.debug("Producing readings in %s mode." % self.read_mode)
 
         # Handle the cases where I need to retrieve old readings.
-        skip_reader_tcid_dict = {}
         if self.read_mode != 'all' and self.stmt_mode == 'all':
             self.get_prior_readings()
 
         # Now produce any new readings that need to be produced.
-        outputs = []
         if self.read_mode != 'none':
-            outputs = self.make_new_readings(skip_reader_tcid_dict)
-            logger.info("Made %d new readings." % len(outputs))
+            self.make_new_readings()
+            logger.info("Made %d new readings." % len(self.new_readings))
 
-        if not self.no_upload:
-            try:
-                self.upload_readings(outputs)
-            except Exception as e:
-                logger.exception(e)
-
-        outputs += prev_readings
-
-        return outputs
+        return
 
     def upload_statements(self, stmt_data_list, db=None):
         """Upload the statements to the database."""
@@ -294,7 +265,7 @@ class DatabaseReader(object):
 
         if not no_upload:
             try:
-                upload_statements(stmt_data_list, db=db)
+                self.upload_statements(stmt_data_list, db=db)
             except Exception as e:
                 logger.exception(e)
                 if pickle_file is None:
@@ -505,11 +476,7 @@ def main():
         # Read everything ====================================================
         db_reader = DatabaseReader(tcids, readers, verbose, args.reading_mode,
                                    args.stmt_mode, args.batch_size)
-
-        # Convert the outputs to statements ==================================
-        if args.stmt_mode != 'none':
-            produce_statements(outputs, no_upload=args.no_statement_upload,
-                               pickle_file=stmts_pickle, n_proc=args.n_proc)
+        db_reader.run()
 
 
 if __name__ == "__main__":

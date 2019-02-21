@@ -58,7 +58,7 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def __time_get_query(self, end_point, query_str):
-        return self.__time_query('get', end_point, query_str)
+        return self.__time_query('get', 'api/' + end_point, query_str)
 
     def __time_query(self, method, end_point, query_str=None, url_fmt='/%s?%s',
                      **data):

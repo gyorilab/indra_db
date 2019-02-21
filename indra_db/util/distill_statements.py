@@ -1,3 +1,6 @@
+__all__ = ['distill_stmts', 'get_filtered_rdg_stmts', 'get_filtered_db_stmts',
+           'delete_raw_statements_by_id', 'get_reading_stmt_dict']
+
 import json
 import pickle
 import logging
@@ -16,7 +19,7 @@ from .helpers import _set_evidence_text_ref
 logger = logging.getLogger('util-distill')
 
 
-def _get_reading_statement_dict(db, clauses=None, get_full_stmts=True):
+def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
     """Get a nested dict of statements, keyed by ref, content, and reading."""
     # Construct the query for metadata from the database.
     q = (db.session.query(db.TextRef, db.TextContent.id,
@@ -85,8 +88,8 @@ reader_versions = {
 text_content_sources = ['pubmed', 'elsevier', 'manuscripts', 'pmc_oa']
 
 
-def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
-                                 ignore_duplicates=False):
+def get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids=None,
+                           ignore_duplicates=False):
     """Get the set of statements/ids from readings minus exact duplicates."""
     logger.info("Filtering the statements from reading.")
     if linked_sids is None:
@@ -220,8 +223,8 @@ def _choose_unique(not_duplicates, get_full_stmts, stmt_tpl_grp):
     return ret_stmt, duplicate_ids
 
 
-def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None,
-                                not_duplicates=None, num_procs=1):
+def get_filtered_db_stmts(db, get_full_stmts=False, clauses=None,
+                          not_duplicates=None, num_procs=1):
     """Get the set of statements/ids from databases minus exact duplicates."""
     if not_duplicates is None:
         not_duplicates = set()
@@ -315,10 +318,10 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
     # Get de-duplicated Statements, and duplicate uuids, as well as uuid of
     # Statements that have been improved upon...
     logger.info("Sorting reading statements...")
-    stmt_nd = _get_reading_statement_dict(db, clauses, get_full_stmts)
+    stmt_nd = get_reading_stmt_dict(db, clauses, get_full_stmts)
 
     stmts, duplicate_sids, bettered_duplicate_sids = \
-        _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids)
+        get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids)
     logger.info("After filtering reading: %d unique statements, %d exact "
                 "duplicates, %d with results from better resources available."
                 % (len(stmts), len(duplicate_sids),
@@ -327,8 +330,8 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
     del stmt_nd  # This takes up a lot of memory, and is done being used.
 
     db_stmts, db_duplicates = \
-        _get_filtered_db_statements(db, get_full_stmts, clauses, linked_sids,
-                                    num_procs)
+        get_filtered_db_stmts(db, get_full_stmts, clauses, linked_sids,
+                              num_procs)
     stmts |= db_stmts
     duplicate_sids |= db_duplicates
     logger.info("After filtering database statements: %d unique, %d duplicates"

@@ -432,7 +432,7 @@ def test_bad_hash_curation():
 def test_source_hash():
     db, _ = _get_prepped_db(100)
     res = db.select_all(db.RawStatements)
-    pairs = [(dbu._get_statement_object(db_raw), db_raw.source_hash)
+    pairs = [(dbu.get_statement_object(db_raw), db_raw.source_hash)
              for db_raw in res]
     for stmt, sh in pairs:
         sh_rec = stmt.evidence[0].get_source_hash()

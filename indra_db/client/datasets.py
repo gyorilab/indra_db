@@ -5,7 +5,7 @@ from sqlalchemy import or_
 logger = logging.getLogger('db_dataset_client')
 
 from indra.databases import hgnc_client
-from indra_db.util import get_primary_db, _get_statement_object
+from indra_db.util import get_primary_db, get_statement_object
 
 
 def get_statement_essentials(clauses, count=1000, db=None, preassembled=True):
@@ -47,7 +47,7 @@ def get_statement_essentials(clauses, count=1000, db=None, preassembled=True):
     stmt_data = []
     db_stmts = db.select_all(stmts_tblname, *clauses, yield_per=count)
     for db_stmt in db_stmts:
-        stmt = _get_statement_object(db_stmt)
+        stmt = get_statement_object(db_stmt)
         sid = db_stmt.id if hasattr(db_stmt, 'id') else None
         stmt_data.append((db_stmt.uuid, sid, stmt.get_hash(shallow=True),
                           db_stmt.type, stmt.agent_list()))

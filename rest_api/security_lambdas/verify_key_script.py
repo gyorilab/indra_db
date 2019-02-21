@@ -49,7 +49,6 @@ def lambda_handler(event, context):
     policy.restApiId = apiGatewayArnTmp[0]
     policy.region = tmp[3]
     policy.stage = apiGatewayArnTmp[1]
-    policy.denyAllMethods()
 
     info = db._get_auth_info(api_key)
     print(api_key, 'got info', info)
@@ -57,8 +56,10 @@ def lambda_handler(event, context):
         user_id, name = info
         policy.principalId = user_id
         print("Matched user:", user_id, name)
-        policy.allowMethod(HttpVerb.GET, '/*')
-        policy.allowMethod(HttpVerb.POST, '/*')
+        policy.allowAllMethods()
+    else:
+        print("User not matched.")
+        policy.denyAllMethods()
 
     # Finally, build the policy
     authResponse = policy.build()

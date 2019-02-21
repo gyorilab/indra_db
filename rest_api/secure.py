@@ -44,12 +44,15 @@ class SecurityManager(object):
     def get_gateway_client(self):
         """Get a boto3 client to the gateway with SUDO role permissions.
 
-        It is assumed the base user is able to access this role. If not, some boto
-        error will be raised.
+        It is assumed the base user is able to access this role. If not, some
+        boto error will be raised.
         """
         self._sudoify()
         agc = boto3.client('apigateway', **self._creds)
         return agc
+
+    def connect_lambdas(self):
+        """Connect the lambdas to the API Gateway."""
 
     def get_zappa_role(self):
         self._sudoify()
@@ -67,7 +70,6 @@ class SecurityManager(object):
         """Create a zip file for the lambdas."""
         print("Packaging the environment...", end='')
         # Find the site packages
-        sp = None
         for sp in sys.path:
             if sp.startswith(sys.prefix) and sp.endswith('site-packages'):
                 break

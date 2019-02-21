@@ -71,7 +71,7 @@
             container.removeChild(button);
         }
 
-        function appendToFormSubmit(form) {
+        function appendToFormSubmit() {
           let accToken = _readCookie(ACCESSTOKEN_COOKIE_NAME);
           let idToken = _readCookie(IDTOKEN_COOKIE_NAME);
 
@@ -165,7 +165,7 @@ nav {
 
     <!-- The main content -->
     <div class="content">
-      <form name="submitForm" action="/browser/statements/from_agents" onsubmit="appendToFormSubmit(this)">
+      <form name="submitForm" action="/browser/statements/from_agents" onsubmit="appendToFormSubmit()">
         <table>
             <tr>
                 <td id="type" class="field" onclick="addField('type', 1)">Select a type</td>

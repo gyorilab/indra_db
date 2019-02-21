@@ -21,7 +21,7 @@ SIZELIMIT = 4e7
 
 
 def _check_stmt_agents(resp, agents):
-    json_stmts = json.loads(resp.data.decode('utf-8'))['statements']
+    json_stmts = json.loads(resp.data)['statements']
     stmts = stmts_from_json(json_stmts)
     for stmt in stmts:
         for ag_ix, db_ns, db_id in agents:
@@ -93,7 +93,7 @@ class DbApiTestCase(unittest.TestCase):
         assert resp.status_code == 200, \
             ('Got error code %d: \"%s\".'
              % (resp.status_code, resp.data.decode()))
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         assert size <= SIZELIMIT, \
             ("Query took up %f MB. Must be less than %f MB."
              % (size/1e6, SIZELIMIT/1e6))
@@ -261,7 +261,7 @@ class DbApiTestCase(unittest.TestCase):
                                                ('object=PPP1C@FPLX'
                                                 '&subject=CHEBI:44658@CHEBI'
                                                 '&type=Inhibition'))
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         stmts = stmts_from_json(resp_dict['statements'].values())
         assert len(stmts)
         _check_stmt_agents(resp, agents=[
@@ -276,7 +276,7 @@ class DbApiTestCase(unittest.TestCase):
                                                  type='Complex')
         _check_stmt_agents(resp, agents=[(None, 'FPLX', 'MEK'),
                                          (None, 'FPLX', 'ERK')])
-        resp_dict = json.loads(resp.data.decode())
+        resp_dict = json.loads(resp.data)
         print(len(resp_dict['statements']))
         for h, sj in resp_dict['statements'].items():
             fplx_set = {mem['db_refs'].get('FPLX') for mem in sj['members']}
@@ -291,7 +291,7 @@ class DbApiTestCase(unittest.TestCase):
                                                  agent1='ERK@FPLX',
                                                  type='Phosphorylation',
                                                  max_stmts=2)
-        resp_dict = json.loads(resp.data.decode())
+        resp_dict = json.loads(resp.data)
         assert len(resp_dict['statements']) == 2, len(resp_dict['statements'])
 
     def test_statements_by_hashes_query(self):
@@ -299,7 +299,7 @@ class DbApiTestCase(unittest.TestCase):
                                            hashes=[-36028793042562873,
                                                    -12978096432588272,
                                                    -12724735151233845])
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         self.__check_stmts(resp_dict['statements'].values())
         self.__check_time(dt)
         return
@@ -314,7 +314,7 @@ class DbApiTestCase(unittest.TestCase):
         # Run the test.
         resp, dt, size = self.__time_query('post', 'statements/from_hashes',
                                            hashes=list(hash_cnt_dict.keys()))
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         self.__check_stmts(resp_dict['statements'].values())
         self.__check_time(dt, time_goal=20)
         return
@@ -322,7 +322,7 @@ class DbApiTestCase(unittest.TestCase):
     def test_get_statement_by_single_hash_query(self):
         resp, dt, size = self.__time_query('get',
             'statements/from_hash/-36028793042562873')
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         self.__check_stmts(resp_dict['statements'].values())
         assert len(resp_dict['statements']) == 1, len(resp_dict['statements'])
         self.__check_time(dt, time_goal=1)
@@ -331,7 +331,7 @@ class DbApiTestCase(unittest.TestCase):
     def test_get_big_statement_by_single_hash_query(self):
         resp, dt, size = self.__time_query('get',
             'statements/from_hash/15317156147479913')
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         self.__check_stmts(resp_dict['statements'].values())
         assert len(resp_dict['statements']) == 1, len(resp_dict['statements'])
         self.__check_time(dt, time_goal=1)
@@ -339,13 +339,13 @@ class DbApiTestCase(unittest.TestCase):
 
     def __test_basic_paper_query(self, id_val, id_type, min_num_results=1):
         id_list = [{'id': id_val, 'type': id_type}]
-        resp, dt, size = self.__time_query('post', 'statements/from_papers',
+        resp, dt, size = self.__time_query('post',
+                                           'api/statements/from_papers',
                                            ids=id_list)
         self.__check_time(dt)
         assert size <= SIZELIMIT, size
         assert resp.status_code == 200, str(resp)
-        json_str = resp.data.decode('utf-8')
-        json_dict = json.loads(json_str)['statements']
+        json_dict = json.loads(resp.data)['statements']
         assert len(json_dict) >= min_num_results, (min_num_results,
                                                    len(json_dict))
         return json_dict
@@ -364,7 +364,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def __test_redaction(self, method, endpoint, base_qstr, **data):
         resp, dt, size = self.__time_query(method, endpoint, base_qstr, **data)
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         stmt_dict_redact = resp_dict['statements']
         elsevier_found = 0
         elsevier_long_found = 0
@@ -397,7 +397,7 @@ class DbApiTestCase(unittest.TestCase):
         else:
             new_qstr = key_param
         resp, dt, size = self.__time_query(method, endpoint, new_qstr, **data)
-        resp_dict = json.loads(resp.data.decode('utf-8'))
+        resp_dict = json.loads(resp.data)
         stmt_dict_intact = resp_dict['statements']
         assert stmt_dict_intact.keys() == stmt_dict_redact.keys(), \
             "Response content changed: different statements without redaction."

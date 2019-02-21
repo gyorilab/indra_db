@@ -654,20 +654,15 @@ def _choose_unique(not_duplicates, get_full_stmts, stmt_tpl_grp):
     return ret_stmt, duplicate_ids
 
 
-def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None,
-                                not_duplicates=None, num_procs=1):
+def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None):
     """Get the set of statements/ids from databases minus exact duplicates."""
-    if not_duplicates is None:
-        not_duplicates = set()
-
     # Only get the json if it's going to be used. Note that if the use of the
     # get_full_stmts parameter is inconsistent in _choose_unique, this will
     # cause some problems.
     if get_full_stmts:
-        tbl_list = [db.RawStatements.mk_hash, db.RawStatements.id,
-                    db.RawStatements.json]
+        tbl_list = [db.RawStatements.json]
     else:
-        tbl_list = [db.RawStatements.mk_hash, db.RawStatements.id]
+        tbl_list = [db.RawStatements.id]
 
     db_s_q = db.filter_query(tbl_list, db.RawStatements.db_info_id.isnot(None))
 
@@ -676,30 +671,12 @@ def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None,
         db_s_q = db_s_q.filter(*clauses)
 
     # Produce a generator of statement groups.
-    db_stmt_data = db_s_q.order_by(db.RawStatements.mk_hash).yield_per(10000)
-    choose_unique_stmt = partial(_choose_unique, not_duplicates, get_full_stmts)
-    stmt_groups = (list(grp) for _, grp
-                   in groupby(db_stmt_data, key=lambda x: x[0]))
-
-    # Actually do the comparison.
-    if num_procs is 1:
-        stmts = set()
-        duplicate_ids = set()
-        for stmt_list in stmt_groups:
-            stmt, some_duplicates = choose_unique_stmt(stmt_list)
-            stmts.add(stmt)
-            duplicate_ids |= some_duplicates
+    db_stmt_data = db_s_q.yield_per(10000)
+    if get_full_stmts:
+        return {Statement._from_json(json.loads(s_json.decode('utf-8')))
+                for s_json in db_stmt_data}
     else:
-        pool = Pool(num_procs)
-        print("Filtering db statements in %d processess." % num_procs)
-        res = pool.map(choose_unique_stmt, stmt_groups)
-        pool.close()
-        pool.join()
-        stmt_list, duplicate_sets = zip(*res)
-        stmts = set(stmt_list)
-        duplicate_ids = {uuid for dup_set in duplicate_sets for uuid in dup_set}
-
-    return stmts, duplicate_ids
+        return {sid for sid in db_stmt_data}
 
 
 @clockit
@@ -760,11 +737,9 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
     assert not linked_sids & duplicate_sids, linked_sids & duplicate_sids
     del stmt_nd  # This takes up a lot of memory, and is done being used.
 
-    db_stmts, db_duplicates = \
-        _get_filtered_db_statements(db, get_full_stmts, clauses, linked_sids,
-                                    num_procs)
+    db_stmts = _get_filtered_db_statements(db, get_full_stmts, clauses)
     stmts |= db_stmts
-    duplicate_sids |= db_duplicates
+
     logger.info("After filtering database statements: %d unique, %d duplicates"
                 % (len(stmts), len(duplicate_sids)))
     assert not linked_sids & duplicate_sids, linked_sids & duplicate_sids

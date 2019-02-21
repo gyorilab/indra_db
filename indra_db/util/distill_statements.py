@@ -1,5 +1,6 @@
 __all__ = ['distill_stmts', 'get_filtered_rdg_stmts', 'get_filtered_db_stmts',
-           'delete_raw_statements_by_id', 'get_reading_stmt_dict']
+           'delete_raw_statements_by_id', 'get_reading_stmt_dict',
+           'reader_versions', 'text_content_sources']
 
 import json
 import pickle

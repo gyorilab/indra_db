@@ -41,6 +41,7 @@
         function addField(name, max) {
             var container = document.getElementById(name + "-choices");
             var input = document.createElement("input");
+            input.className = "input-form";
             var suffix = '';
             if (document.getElementById(name + '-input')) {
                 var n = 0;
@@ -72,13 +73,37 @@
         }
 
         function appendToFormSubmit() {
+          // Loop form fields
+          let queryString = '';
+          for (el of document.getElementsByClassName('input-form')) {
+            queryString += el.name + '=' + el.value + '&';
+          }
+          queryString += 'format=' + document.getElementById('format-select').value;
+
+          // Get tokens
           let accToken = _readCookie(ACCESSTOKEN_COOKIE_NAME);
           let idToken = _readCookie(IDTOKEN_COOKIE_NAME);
+          // document.submitForm.access_token.value = accToken;
+          // document.submitForm.id_token.value = idToken;
 
-          document.submitForm.access_token.value = accToken;
-          document.submitForm.id_token.value = idToken;
-          
-          return true;
+          // Build URL
+          let baseUrl = window.location.href.split('?')[0].split('#')[0] + '/browser/statements/from_agents?';
+          var getUrl = baseUrl + queryString;
+
+          // Submit by sync ajax
+          console.log('getUrl: ' + getUrl)
+
+
+          // The browser complains that async ajax requests are deprecated. Look into this instead:
+          // https://xhr.spec.whatwg.org/
+          $.ajax({
+            url: getUrl,
+            type: 'GET',
+            headers: {
+              'Authorization': 'Bearer ' + accToken
+            },
+            async: false
+          })
         }
 
       var ENV = 'indra';
@@ -165,33 +190,31 @@ nav {
 
     <!-- The main content -->
     <div class="content">
-      <form name="submitForm" action="/browser/statements/from_agents" onsubmit="appendToFormSubmit()">
+      <!-- <form name="submitForm" action="/browser/statements/from_agents" onsubmit="appendToFormSubmit()"> -->
         <table>
-            <tr>
+<!--             <tr>
                 <td id="type" class="field" onclick="addField('type', 1)">Select a type</td>
                 <td id="type-choices" value=""></td>
+            </tr> -->
+            <tr>
+                <td id="subject" class="field">Choose the subject</td>
+                <td id="subject-choices"><input class="input-form" type="text" name="subject"></td>
             </tr>
             <tr>
-                <td id="subject" class="field" onclick="addField('subject', 1)">Choose the subject</td>
-                <td id="subject-choices"></td>
+                <td id="object" class="field">Choose the object</td>
+                <td id="object-choices"><input class="input-form" type="text" name="object"></td>
             </tr>
-            <tr>
-                <td id="object" class="field" onclick="addField('object', 1)">Choose the object</td>
-                <td id="object-choices"></td>
-            </tr>
-            <tr>
+<!--             <tr>
                 <td id="agent" class="field" onclick="addField('agent', 50)">Choose an agent</td>
                 <td id="agent-choices"></td>
-            </tr>
+            </tr> -->
         </table>
-        <select name="format">
+        <select name="format" id="format-select">
           <option value="html">HTML</option>
           <option value="json">JSON</option>
         </select>
-        <input type="hidden" name="id_token" value="">
-        <input type="hidden" name="access_token" value="">
-        <input type="submit" value="Submit">
-      </form>
+        <input id="submitButton" type="button" value="Submit" onClick="appendToFormSubmit()">
+      <!-- </form> -->
     </div>
     </div>
 

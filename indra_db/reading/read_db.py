@@ -65,15 +65,13 @@ class DatabaseReader(object):
         different database.
     """
     def __init__(self, tcids, reader, verbose=True, read_mode='unread',
-                 stmt_mode='all', batch_size=1000, no_upload=False, db=None,
-                 n_proc=1):
+                 stmt_mode='all', batch_size=1000, db=None, n_proc=1):
         self.tcids = tcids
         self.reader = reader
         self.verbose = verbose
         self.read_mode = read_mode
         self.stmt_mode = stmt_mode
         self.batch_size = batch_size
-        self.no_upload = no_upload
         self.n_proc = n_proc
         if db is None:
             self._db = get_primary_db()
@@ -86,20 +84,6 @@ class DatabaseReader(object):
         self.extant_readings = []
         self.new_readings = []
         self.statement_outputs = []
-        return
-
-    def run(self):
-        """Run the readings and produce the statements."""
-        self.get_readings()
-
-        if not self.no_upload:
-            self.dump_readings()
-
-        if self.stmt_mode != 'none':
-            self.get_statements()
-
-            if not self.no_upload:
-                self.dump_statements()
         return
 
     def iter_over_content(self):
@@ -131,7 +115,7 @@ class DatabaseReader(object):
                 yield processed_content
         return
 
-    def make_new_readings(self, **kwargs):
+    def _make_new_readings(self, **kwargs):
         """Read contents retrieved from the database.
 
         The content will be retrieved in batches, given by the `batch` argument.
@@ -173,7 +157,7 @@ class DatabaseReader(object):
 
         return
 
-    def get_prior_readings(self):
+    def _get_prior_readings(self):
         """Get readings from the database."""
         db = self._db
         if self.tcids:
@@ -189,7 +173,7 @@ class DatabaseReader(object):
                     % len(self.extant_readings))
         return
 
-    def dump_readings(self):
+    def dump_readings_to_db(self):
         """Put the reading output on the database."""
         db = self._db
 
@@ -218,24 +202,32 @@ class DatabaseReader(object):
 
         return
 
+    def dump_readings_to_pickle(self, pickle_file):
+        """Dump the reading results into a pickle file."""
+        with open(pickle_file, 'wb') as f:
+            rdata = [output.make_tuple()
+                     for output in self.new_readings + self.extant_readings]
+            pickle.dump(rdata, f)
+            print("Reading outputs pickled in: %s" % pickle_file)
+        return
+
     def get_readings(self):
-        """Produce the reading output for the given ids, and upload them to db.
-        """
+        """Get the reading output for the given ids."""
         # Get a database instance.
         logger.debug("Producing readings in %s mode." % self.read_mode)
 
         # Handle the cases where I need to retrieve old readings.
         if self.read_mode != 'all' and self.stmt_mode == 'all':
-            self.get_prior_readings()
+            self._get_prior_readings()
 
         # Now produce any new readings that need to be produced.
         if self.read_mode != 'none':
-            self.make_new_readings()
+            self._make_new_readings()
             logger.info("Made %d new readings." % len(self.new_readings))
 
         return
 
-    def dump_statements(self):
+    def dump_statements_to_db(self):
         """Upload the statements to the database."""
         logger.info("Uploading %d statements to the database." %
                     len(self.statement_outputs))
@@ -249,6 +241,12 @@ class DatabaseReader(object):
         if len(reading_id_set):
             insert_raw_agents(self._db, batch_id, verbose=True)
         return
+
+    def dump_statements_to_pickle(self, pickle_file):
+        """Dump the statements into a pickle file."""
+        with open(pickle_file, 'wb') as f:
+            pickle.dump([sd.statement for sd in self.statement_outputs], f)
+        print("Statements pickled in %s." % pickle_file)
 
     def get_statements(self):
         """Convert the reader output into a list of StatementData instances."""
@@ -354,7 +352,7 @@ def make_parser():
     )
     parser.add_argument(
         '--no_statement_upload',
-        help='Choose not to upload the statements to the databse.',
+        help='Choose not to upload the statements to the database.',
         action='store_true'
     )
     parser.add_argument(
@@ -454,7 +452,18 @@ def main():
             db_reader = DatabaseReader(tcids, reader, verbose,
                                        args.reading_mode, args.stmt_mode,
                                        args.batch_size)
-            db_reader.run()
+            db_reader.get_readings()
+            if not args.no_reading_upload:
+                db_reader.dump_readings_to_db()
+            if reading_pickle:
+                db_reader.dump_readings_to_pickle(reading_pickle)
+
+            if args.stmt_mode != 'none':
+                db_reader.get_statements()
+                if not args.no_statement_upload:
+                    db_reader.dump_statements_to_db()
+                if stmts_pickle:
+                    db_reader.dump_statements_to_pickle(stmts_pickle)
 
 
 if __name__ == "__main__":

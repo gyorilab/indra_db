@@ -450,9 +450,11 @@ def main():
         tcids = {int(tcid_str) for tcid_str in input_lines[B*n:B*(n+1)]}
 
         # Read everything ====================================================
-        db_reader = DatabaseReader(tcids, readers, verbose, args.reading_mode,
-                                   args.stmt_mode, args.batch_size)
-        db_reader.run()
+        for reader in readers:
+            db_reader = DatabaseReader(tcids, reader, verbose,
+                                       args.reading_mode, args.stmt_mode,
+                                       args.batch_size)
+            db_reader.run()
 
 
 if __name__ == "__main__":

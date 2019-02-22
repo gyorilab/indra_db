@@ -541,6 +541,10 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
                         some_bettered_duplicate_tpls |= r_dict.get_leaves()
                     else:
                         for h, stmt_set in list(r_dict.values())[0].items():
+                            # Sort the statements by their source, and whether
+                            # they are new or old, defined as whether they
+                            # have yet been included in preassembly. There
+                            # should be no overlap in hashes here.
                             sid_set = {sid for sid, _ in stmt_set}
                             if sid_set < linked_sids:
                                 simple_src_dict[src][h] = ('old', stmt_set)
@@ -665,21 +669,15 @@ def distill_stmts(db, get_full_stmts=False, clauses=None,
     logger.info("Sorting reading statements...")
     stmt_nd = _get_reading_statement_dict(db, clauses, get_full_stmts)
 
-    stmts, duplicate_sids, bettered_duplicate_sids = \
+    stmts, bettered_duplicate_sids = \
         _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids)
-    logger.info("After filtering reading: %d unique statements, %d exact "
-                "duplicates, %d with results from better resources available."
-                % (len(stmts), len(duplicate_sids),
-                   len(bettered_duplicate_sids)))
-    assert not linked_sids & duplicate_sids, linked_sids & duplicate_sids
+    logger.info("After filtering reading: %d unique statements, and %d with "
+                "results from better resources available."
+                % (len(stmts), len(bettered_duplicate_sids)))
     del stmt_nd  # This takes up a lot of memory, and is done being used.
 
     db_stmts = _get_filtered_db_statements(db, get_full_stmts, clauses)
     stmts |= db_stmts
-
-    logger.info("After filtering database statements: %d unique, %d duplicates"
-                % (len(stmts), len(duplicate_sids)))
-    assert not linked_sids & duplicate_sids, linked_sids & duplicate_sids
 
     # Remove support links for statements that have better versions available.
     bad_link_sids = bettered_duplicate_sids & linked_sids
@@ -690,18 +688,6 @@ def distill_stmts(db, get_full_stmts=False, clauses=None,
             db.RawUniqueLinks.raw_stmt_id.in_(bad_link_sids)
             )
         db.delete_all(rm_links)
-
-    # Delete exact duplicates
-    if len(duplicate_sids):
-        if handle_duplicates == 'delete':
-            logger.info("Deleting duplicates...")
-            for dup_id_batch in batch_iter(duplicate_sids, batch_size, set):
-                logger.info("Deleting %d duplicated raw statements."
-                            % len(dup_id_batch))
-                delete_raw_statements_by_id(db, dup_id_batch)
-        elif handle_duplicates != 'ignore':
-            with open('duplicate_ids_%s.pkl' % datetime.now(), 'wb') as f:
-                pickle.dump(duplicate_sids, f)
 
     return stmts
 

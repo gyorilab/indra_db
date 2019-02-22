@@ -551,6 +551,14 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
                             elif sid_set.isdisjoint(linked_sids):
                                 simple_src_dict[src][h] = ('new', stmt_set)
                             else:
+                                # If you ever see this pop up, something very
+                                # strange has happened. It means that some
+                                # statements from a given reading were already
+                                # included in preassembly, but others were not.
+                                # There is no mechanism that should accept only
+                                # some statements from within a reading, so
+                                # that should never happen, but Murphy will
+                                # always win the day.
                                 assert False, \
                                     "Found reading partially included."
 
@@ -558,8 +566,13 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
             new_stmt_dict = {}
             for src in reversed(text_content_sources):
                 for h, (status, s_set) in simple_src_dict[src].items():
+                    # If this error ever comes up, it means that the uniqueness
+                    # constraint on raw statements per reading is not
+                    # functioning correctly.
                     assert len(s_set) == 1, \
                         "Found exact duplicates from the same reading."
+
+                    # Choose whether to keep the statement or not.
                     s_tpl = s_set.pop()
                     if h not in new_stmt_dict:
                         # No conflict, no problem

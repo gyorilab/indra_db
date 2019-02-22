@@ -595,44 +595,6 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
     return stmts, bettered_duplicate_sids
 
 
-def _detect_exact_duplicates(stmt_set_itr, linked_sids):
-    # Pick one among any exact duplicates. Unlike with bettered
-    # duplicates, these choices are arbitrary, and such duplicates
-    # can be deleted.
-    stmt_tpls = set()
-    some_duplicate_tpls = set()
-    for stmt_tpl_set in stmt_set_itr:
-        if not stmt_tpl_set:
-            continue
-        elif len(stmt_tpl_set) == 1:
-            # There isn't really a choice here.
-            stmt_tpls |= stmt_tpl_set
-        else:
-            logger.warning("FOUND DUPLICATES!!!!")
-            prefed_tpls = {tpl for tpl in stmt_tpl_set
-                           if tpl[0] in linked_sids}
-            if not prefed_tpls:
-                # Pick the first one to pop, record the rest as
-                # duplicates.
-                stmt_tpls.add(stmt_tpl_set.pop())
-                some_duplicate_tpls |= stmt_tpl_set
-            elif len(prefed_tpls) == 1:
-                # There is now no choice: just take the preferred
-                # statement.
-                stmt_tpls |= prefed_tpls
-                some_duplicate_tpls |= (stmt_tpl_set - prefed_tpls)
-            else:
-                # This shouldn't happen, so an early run of this
-                # function must have failed somehow, or else there
-                # was some kind of misuse. Flag it, pick just one of
-                # the preferred statements, and delete any deletable
-                # statements.
-                assert False, \
-                    ("Duplicate deduplicated statements found: %s"
-                     % str(prefed_tpls))
-    return stmt_tpls, some_duplicate_tpls
-
-
 def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None):
     """Get the set of statements/ids from databases minus exact duplicates."""
     # Only get the json if it's going to be used.

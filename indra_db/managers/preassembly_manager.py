@@ -289,8 +289,7 @@ class PreassemblyManager(object):
                 stmt_ids = pickle.load(f)
         else:
             # Get the statement ids.
-            stmt_ids = distill_stmts(db, num_procs=self.n_proc,
-                                     handle_duplicates=dup_handling)
+            stmt_ids = distill_stmts(db, handle_duplicates=dup_handling)
             with open(sid_cache_fname, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
@@ -433,8 +432,7 @@ class PreassemblyManager(object):
             with open(dist_stash, 'rb') as f:
                 stmt_ids = pickle.load(f)
         else:
-            stmt_ids = distill_stmts(db, num_procs=self.n_proc,
-                                     get_full_stmts=False,
+            stmt_ids = distill_stmts(db, get_full_stmts=False,
                                      handle_duplicates=dup_handling)
             with open(dist_stash, 'wb') as f:
                 pickle.dump(stmt_ids, f)

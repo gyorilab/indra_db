@@ -434,9 +434,9 @@ def _check_statement_distillation(num_stmts):
     assert len(stmts) == len(stmt_ids), \
         "stmts: %d, stmt_ids: %d" % (len(stmts), len(stmt_ids))
     assert isinstance(list(stmt_ids)[0], int), type(list(stmt_ids)[0])
-    stmts_p = db_util.distill_stmts(db, num_procs=2)
+    stmts_p = db_util.distill_stmts(db)
     assert len(stmts_p) == len(stmt_ids)
-    stmt_ids_p = db_util.distill_stmts(db, num_procs=2)
+    stmt_ids_p = db_util.distill_stmts(db)
     assert stmt_ids_p == stmt_ids
 
 
@@ -721,9 +721,9 @@ def test_db_incremental_preassembly_small():
 #     _check_db_pa_supplement(11721, 2017)
 
 
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_very_large():
-#     _check_db_pa_supplement(100000, 20000, n_proc=2)
+@attr('nonpublic', 'slow')
+def test_db_incremental_preassembly_very_large():
+    _check_db_pa_supplement(100000, 20000, n_proc=2)
 
 
 # @attr('nonpublic', 'slow')

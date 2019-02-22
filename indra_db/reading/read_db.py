@@ -356,16 +356,6 @@ def make_parser():
         action='store_true'
     )
     parser.add_argument(
-        '--force_fulltext',
-        help='Make the reader only read full text from the database.',
-        action='store_true'
-    )
-    parser.add_argument(
-        '--use_best_fulltext',
-        help='Use only the best full text available.',
-        action='store_true'
-    )
-    parser.add_argument(
         '--max_reach_space_ratio',
         type=float,
         help='Set the maximum ratio of spaces to non-spaces for REACH input.',
@@ -428,7 +418,8 @@ def main():
     verbose = args.verbose and not args.quiet
 
     # Some combinations of options don't make sense:
-    forbidden_combos = [('all', 'unread'), ('none', 'unread'), ('none', 'none')]
+    forbidden_combos = [('all', 'unread'), ('none', 'unread'),
+                        ('none', 'none')]
     assert (args.reading_mode, args.stmt_mode) not in forbidden_combos, \
         ("The combination of reading mode %s and statement mode %s is not "
          "allowed." % (args.reading_mode, args.stmt_mode))
@@ -451,7 +442,7 @@ def main():
         for reader in readers:
             db_reader = DatabaseReader(tcids, reader, verbose,
                                        args.reading_mode, args.stmt_mode,
-                                       args.batch_size)
+                                       args.b_in)
             db_reader.get_readings()
             if not args.no_reading_upload:
                 db_reader.dump_readings_to_db()

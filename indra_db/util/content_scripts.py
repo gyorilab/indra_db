@@ -128,14 +128,19 @@ def get_text_content_from_text_refs(text_refs):
         exists for the text_refs in the database
     """
     db = get_primary_db()
+    text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:
         try:
             id_val = text_refs[id_type.upper()]
-            text_ref_id = _get_trids(db, id_val, id_type)[0]
-            break
+            trids = _get_trids(db, id_val, id_type)
+            if trids:
+                text_ref_id = trids[0]
+                break
         except KeyError:
             pass
+    if text_ref_id is None:
+        return None
     texts = db.select_all([db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id == text_ref_id)

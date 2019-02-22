@@ -65,7 +65,8 @@ class DatabaseReader(object):
         different database.
     """
     def __init__(self, tcids, reader, verbose=True, read_mode='unread',
-                 stmt_mode='all', batch_size=1000, no_upload=False, db=None):
+                 stmt_mode='all', batch_size=1000, no_upload=False, db=None,
+                 n_proc=1):
         self.tcids = tcids
         self.reader = reader
         self.verbose = verbose
@@ -73,6 +74,7 @@ class DatabaseReader(object):
         self.stmt_mode = stmt_mode
         self.batch_size = batch_size
         self.no_upload = no_upload
+        self.n_proc = n_proc
         if db is None:
             self._db = get_primary_db()
         else:
@@ -87,17 +89,18 @@ class DatabaseReader(object):
         return
 
     def run(self):
+        """Run the readings and produce the statements."""
         self.get_readings()
 
         if not self.no_upload:
             self.dump_readings()
 
-        if not self.stmt_mode == 'none':
-            self.make_statements()
+        if self.stmt_mode != 'none':
+            self.get_statements()
 
             if not self.no_upload:
                 self.dump_statements()
-        pass
+        return
 
     def iter_over_content(self):
         # Get the text content query object
@@ -127,12 +130,6 @@ class DatabaseReader(object):
             if processed_content is not None:
                 yield processed_content
         return
-
-    def make_statements(self):
-        pass
-
-    def dump_statements(self):
-        raise NotImplementedError()
 
     def make_new_readings(self, **kwargs):
         """Read contents retrieved from the database.
@@ -238,47 +235,26 @@ class DatabaseReader(object):
 
         return
 
-    def upload_statements(self, stmt_data_list, db=None):
+    def dump_statements(self):
         """Upload the statements to the database."""
-        if db is None:
-            db = get_primary_db()
-
         logger.info("Uploading %d statements to the database." %
-                    len(stmt_data_list))
-        batch_id = db.make_copy_batch_id()
-        db.copy('raw_statements', [s.make_tuple(batch_id) for s in stmt_data_list],
-                StatementData.get_cols(), lazy=True, push_conflict=True)
+                    len(self.statement_outputs))
+        batch_id = self._db.make_copy_batch_id()
+        stmt_tuples = [s.make_tuple(batch_id) for s in self.statement_outputs]
+        self._db.copy('raw_statements', stmt_tuples, StatementData.get_cols(),
+                      lazy=True, push_conflict=True)
 
         logger.info("Uploading agents to the database.")
-        reading_id_set = set([sd.reading_id for sd in stmt_data_list])
+        reading_id_set = {sd.reading_id for sd in self.statement_outputs}
         if len(reading_id_set):
-            insert_raw_agents(db, batch_id, verbose=True)
+            insert_raw_agents(self._db, batch_id, verbose=True)
         return
 
-    def produce_statements(self, output_list, no_upload=False, pickle_file=None,
-                           n_proc=1, db=None):
+    def get_statements(self):
         """Convert the reader output into a list of StatementData instances."""
-        if db is None:
-            db = get_primary_db()
-
-        stmt_data_list = make_statements(output_list, n_proc)
-
-        if not no_upload:
-            try:
-                self.upload_statements(stmt_data_list, db=db)
-            except Exception as e:
-                logger.exception(e)
-                if pickle_file is None:
-                    pickle_file = ("failure_stmt_dump_%s.pkl"
-                                   % datetime.now().strftime('%Y%m%d_%H%M%S'))
-                logger.error("Could not upload statements. Results pickled in: %s."
-                             % pickle_file)
-        if pickle_file is not None:
-            with open(pickle_file, 'wb') as f:
-                pickle.dump([sd.statement for sd in stmt_data_list], f)
-            print("Statements pickled in %s." % pickle_file)
-
-        return stmt_data_list
+        all_outputs = self.new_readings + self.extant_readings
+        self.statement_outputs = make_statements(all_outputs, self.n_proc)
+        return
 
 
 # =============================================================================

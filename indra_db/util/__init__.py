@@ -5,6 +5,8 @@ Some key functions' capabilities include:
 - inserting statements, which are stored in multiple tables, into the database.
 - distilling and deleting statements
 """
+from collections import defaultdict
+
 from uuid import uuid4
 
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_raw_agents',
@@ -520,6 +522,7 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
     logger.info("Filtering the statements from reading.")
     if linked_sids is None:
         linked_sids = set()
+
     def better_func(element):
         return text_content_sources.index(element)
 
@@ -529,47 +532,43 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
     bettered_duplicate_sids = set()  # Statements with "better" alternatives
     for trid, src_dict in stmt_nd.items():
         some_bettered_duplicate_tpls = set()
-        # Filter out unneeded fulltext.
-        while len(src_dict) > 1:
-            try:
-                worst_src = min(src_dict, key=better_func)
-                some_bettered_duplicate_tpls |= src_dict[worst_src].get_leaves()
-                del src_dict[worst_src]
-            except:
-                print(src_dict)
-                raise
 
         # Filter out the older reader versions
         for reader, rv_list in reader_versions.items():
-            for rv_dict in src_dict.gets(reader):
+            simple_src_dict = defaultdict(dict)
+            for (src, _, _), rv_dict in src_dict.get_paths(reader):
                 best_rv = max(rv_dict, key=lambda x: rv_list.index(x))
 
-                # Record the rest of the statement uuids.
+                # Record the rest of the statement ids.
                 for rv, r_dict in rv_dict.items():
                     if rv != best_rv:
                         some_bettered_duplicate_tpls |= r_dict.get_leaves()
+                    else:
+                        for h, stmt_set in list(r_dict.values())[0].items():
+                            sid_set = {sid for sid, _ in stmt_set}
+                            if sid_set < linked_sids:
+                                simple_src_dict[src][h] = ('old', stmt_set)
+                            elif sid_set.isdisjoint(linked_sids):
+                                simple_src_dict[src][h] = ('new', stmt_set)
+                            else:
+                                assert False, \
+                                    "Found reading partially included."
 
-                # Take any one of the duplicates. Statements/Statement ids are
-                # already grouped into sets of duplicates keyed by the
-                # Statement and Evidence matches key hashes. We only want one
-                # of each.
-                # TODO: This will soon, hopefully, be unnecessary.
-                stmt_set_itr = (stmt_set for r_dict in rv_dict[best_rv].values()
-                                for stmt_set in r_dict.values())
-                if ignore_duplicates:
-                    some_stmt_tpls = {stmt_tpl for stmt_set in stmt_set_itr
-                                      for stmt_tpl in stmt_set}
-                else:
-                    some_stmt_tpls, some_duplicate_tpls = \
-                        _detect_exact_duplicates(stmt_set_itr, linked_sids)
-
-                    if some_duplicate_tpls:
-                        logger.warning("FOUND DUPLICATES!!!!")
-
-                    # Get the sids for the statements.
-                    duplicate_sids |= {sid for sid, _ in some_duplicate_tpls}
-
-                stmt_tpls |= some_stmt_tpls
+            # Choose the statements to propagate
+            new_stmt_dict = {}
+            for src in reversed(text_content_sources):
+                for h, (status, s_set) in simple_src_dict[src].items():
+                    assert len(s_set) == 1, \
+                        "Found exact duplicates from the same reading."
+                    s_tpl = s_set.pop()
+                    if h not in new_stmt_dict:
+                        # No conflict, no problem
+                        new_stmt_dict[h] = s_tpl
+                    elif status == 'old':
+                        # The same statement was newly found by a better
+                        # version.
+                        some_bettered_duplicate_tpls.add(s_tpl)
+            stmt_tpls |= set(new_stmt_dict.values())
 
         # Add the bettered duplicates found in this round.
         bettered_duplicate_sids |= \
@@ -625,40 +624,9 @@ def _detect_exact_duplicates(stmt_set_itr, linked_sids):
     return stmt_tpls, some_duplicate_tpls
 
 
-def _choose_unique(not_duplicates, get_full_stmts, stmt_tpl_grp):
-    """Choose one of the statements from a redundant set."""
-    assert stmt_tpl_grp, "This cannot be empty."
-    if len(stmt_tpl_grp) == 1:
-        s_tpl = stmt_tpl_grp[0]
-        duplicate_ids = set()
-    else:
-        stmt_tpl_set = set(stmt_tpl_grp)
-        preferred_tpls = {tpl for tpl in stmt_tpl_set
-                          if tpl[1] in not_duplicates}
-        if not preferred_tpls:
-            s_tpl = stmt_tpl_set.pop()
-        elif len(preferred_tpls) == 1:
-            s_tpl = preferred_tpls.pop()
-        else:  # len(preferred_stmts) > 1
-            assert False, \
-                ("Duplicate deduplicated statements found: %s"
-                 % str(preferred_tpls))
-        duplicate_ids = {tpl[1] for tpl in stmt_tpl_set
-                         if tpl[1] not in not_duplicates}
-
-    if get_full_stmts:
-        stmt_json = json.loads(s_tpl[2].decode('utf-8'))
-        ret_stmt = Statement._from_json(stmt_json)
-    else:
-        ret_stmt = s_tpl[1]
-    return ret_stmt, duplicate_ids
-
-
 def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None):
     """Get the set of statements/ids from databases minus exact duplicates."""
-    # Only get the json if it's going to be used. Note that if the use of the
-    # get_full_stmts parameter is inconsistent in _choose_unique, this will
-    # cause some problems.
+    # Only get the json if it's going to be used.
     if get_full_stmts:
         tbl_list = [db.RawStatements.json]
     else:
@@ -674,13 +642,13 @@ def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None):
     db_stmt_data = db_s_q.yield_per(10000)
     if get_full_stmts:
         return {Statement._from_json(json.loads(s_json.decode('utf-8')))
-                for s_json in db_stmt_data}
+                for s_json, in db_stmt_data}
     else:
-        return {sid for sid in db_stmt_data}
+        return {sid for sid, in db_stmt_data}
 
 
 @clockit
-def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
+def distill_stmts(db, get_full_stmts=False, clauses=None,
                   handle_duplicates='ignore', weed_evidence=True,
                   batch_size=1000):
     """Get a corpus of statements from clauses and filters duplicate evidence.
@@ -698,8 +666,6 @@ def distill_stmts(db, get_full_stmts=False, clauses=None, num_procs=1,
         By default None. Specify sqlalchemy clauses to reduce the scope of
         statements, e.g. `clauses=[db.Statements.type == 'Phosphorylation']` or
         `clauses=[db.Statements.uuid.in_([<uuids>])]`.
-    num_procs : int
-        Select the number of process that can be used.
     handle_duplicates : 'ignore', 'delete', or a string file path
         Choose whether you want to delete the statements that are found to be
         duplicates ('delete'), or write a pickle file with their ids (at the

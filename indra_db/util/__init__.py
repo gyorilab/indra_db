@@ -523,12 +523,8 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
     if linked_sids is None:
         linked_sids = set()
 
-    def better_func(element):
-        return text_content_sources.index(element)
-
     # Now we filter and get the set of statements/statement ids.
     stmt_tpls = set()
-    duplicate_sids = set()  # Statements that are exact duplicates.
     bettered_duplicate_sids = set()  # Statements with "better" alternatives
     for trid, src_dict in stmt_nd.items():
         some_bettered_duplicate_tpls = set()
@@ -596,7 +592,7 @@ def _get_filtered_rdg_statements(stmt_nd, get_full_stmts, linked_sids=None,
     else:
         stmts = {sid for sid, _ in stmt_tpls}
 
-    return stmts, duplicate_sids, bettered_duplicate_sids
+    return stmts, bettered_duplicate_sids
 
 
 def _detect_exact_duplicates(stmt_set_itr, linked_sids):

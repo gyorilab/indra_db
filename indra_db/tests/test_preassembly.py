@@ -259,9 +259,8 @@ def _do_old_fashioned_preassembly(stmts):
 
 def _get_opa_input_stmts(db):
     stmt_nd = db_util._get_reading_statement_dict(db, get_full_stmts=True)
-    reading_stmts, _, _ =\
-        db_util._get_filtered_rdg_statements(stmt_nd, get_full_stmts=True,
-                                             ignore_duplicates=True)
+    reading_stmts, _ =\
+        db_util._get_filtered_rdg_statements(stmt_nd, get_full_stmts=True)
     db_stmts = db_client.get_statements([db.RawStatements.reading_id.is_(None)],
                                         preassembled=False, db=db)
     stmts = reading_stmts | set(db_stmts)
@@ -526,7 +525,7 @@ def _check_db_pa_supplement(num_stmts, batch_size, split=0.8, n_proc=1):
 def test_distillation_on_curated_set():
     stmt_dict, stmt_list, target_sets, target_bettered_ids = \
         make_raw_statement_set_for_distillation()
-    filtered_set, duplicate_ids, bettered_ids = \
+    filtered_set, bettered_ids = \
         db_util._get_filtered_rdg_statements(stmt_dict, get_full_stmts=True)
     for stmt_set, dup_set in target_sets:
         if stmt_set == filtered_set:
@@ -534,11 +533,11 @@ def test_distillation_on_curated_set():
     else:
         assert False, "Filtered set does not match any valid possibilities."
     assert bettered_ids == target_bettered_ids
-    assert dup_set == duplicate_ids, (dup_set - duplicate_ids,
-                                      duplicate_ids - dup_set)
+    # assert dup_set == duplicate_ids, (dup_set - duplicate_ids,
+    #                                   duplicate_ids - dup_set)
     stmt_dict, stmt_list, target_sets, target_bettered_ids = \
         make_raw_statement_set_for_distillation()
-    filtered_id_set, duplicate_ids, bettered_ids = \
+    filtered_id_set, bettered_ids = \
         db_util._get_filtered_rdg_statements(stmt_dict, get_full_stmts=False)
     assert len(filtered_id_set) == len(filtered_set), \
         (len(filtered_set), len(filtered_id_set))

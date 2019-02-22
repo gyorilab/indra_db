@@ -3,7 +3,7 @@ __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 from collections import defaultdict
 
 from .constructors import get_primary_db
-from .helpers import unpack
+from .helpers import unpack, _get_trids
 
 
 def get_stmts_with_agent_text_like(pattern, filter_genes=False):
@@ -127,23 +127,28 @@ def get_text_content_from_text_refs(text_refs):
         database, otherwise the abstract. Returns None if no content
         exists for the text_refs in the database
     """
-    db = dbu.get_primary_db()
+    db = get_primary_db()
+    text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:
         try:
             id_val = text_refs[id_type.upper()]
-            text_ref_id = dbu._get_trids(db, id_val, id_type)[0]
-            break
+            trids = _get_trids(db, id_val, id_type)
+            if trids:
+                text_ref_id = trids[0]
+                break
         except KeyError:
             pass
+    if text_ref_id is None:
+        return None
     texts = db.select_all([db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id == text_ref_id)
-    fulltext = [dbu.unpack(content) for content, text_type in texts
+    fulltext = [unpack(content) for content, text_type in texts
                 if text_type == 'fulltext']
     if fulltext:
         return fulltext[0]
-    abstract = [dbu.unpack(content) for content, text_type in texts
+    abstract = [unpack(content) for content, text_type in texts
                 if text_type == 'abstract']
     if abstract:
         return abstract[0]

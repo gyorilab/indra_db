@@ -95,23 +95,6 @@ class ReadingUpdateError(Exception):
     pass
 
 
-def get_empty_reader_class(reader_name):
-
-    class EmptyReader(object):
-        """A placeholder for readers that aren't currently active."""
-        name = reader_name
-
-        def __init__(self, *args, **kwargs):
-            self.version = self.get_version()
-            return
-
-        @staticmethod
-        def get_version():
-            return 'STATIC'
-
-    return EmptyReader
-
-
 class ReadingManager(object):
     """Abstract class for managing the readings of the database.
 
@@ -127,7 +110,7 @@ class ReadingManager(object):
     def __init__(self, reader_name, buffer_days=1):
         self.reader = get_reader_class(reader_name)
         if self.reader is None:
-            self.reader = get_empty_reader_class(reader_name)
+            self.reader = rdb.get_empty_reader_class(reader_name)
 
         self.buffer = timedelta(days=buffer_days)
         self.reader_version = self.reader.get_version()
@@ -287,9 +270,8 @@ class BulkLocalReadingManager(BulkReadingManager):
         base_dir = path.join(THIS_DIR, 'read_all_%s' % self.reader.name)
         reader = self.reader(base_dir=base_dir, n_proc=self.n_proc)
 
-        reading_mode = 'unread' if issubclass(self.reader, Reader) else 'none'
         rdb.run_reading([reader], tcids, db=db, batch_size=ids_per_job,
-                        verbose=self.verbose, reading_mode=reading_mode)
+                        verbose=self.verbose)
         return
 
 

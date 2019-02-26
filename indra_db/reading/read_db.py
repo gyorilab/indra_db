@@ -14,7 +14,7 @@ from indra.tools.reading.util.script_tools import get_parser
 from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
-    Content
+    Content, Reader
 from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
@@ -219,7 +219,10 @@ class DatabaseReader(object):
         self.tcids = tcids
         self.reader = reader
         self.verbose = verbose
-        self.reading_mode = reading_mode
+        if isinstance(reader, Reader):
+            self.reading_mode = reading_mode
+        else:
+            self.reading_mode = 'none'
         self.stmt_mode = stmt_mode
         self.batch_size = batch_size
         self.n_proc = n_proc
@@ -441,13 +444,35 @@ def process_content(text_content):
 # =============================================================================
 # High level functions
 # =============================================================================
+def get_empty_reader_class(reader_name):
+
+    class EmptyReader(object):
+        """A placeholder for readers that aren't currently active."""
+        name = reader_name
+
+        def __init__(self, *args, **kwargs):
+            self.version = self.get_version()
+            return
+
+        @staticmethod
+        def get_version():
+            return 'STATIC'
+
+    return EmptyReader
+
+
 def construct_readers(reader_names, **kwargs):
     """Construct the Reader objects from the names of the readers."""
     readers = []
     for reader_name in reader_names:
         if 'ResultClass' not in kwargs.keys():
             kwargs['ResultClass'] = DatabaseReadingData
-        readers.append(get_reader(reader_name, **kwargs))
+        reader = get_reader(reader_name, **kwargs)
+        if reader is None:
+            reader_class = get_empty_reader_class(reader_name)
+            reader = reader_class()
+
+        readers.append(reader)
     return readers
 
 

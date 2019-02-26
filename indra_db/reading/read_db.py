@@ -242,9 +242,11 @@ class DatabaseReader(object):
                 db.Reading.reader == self.reader.name,
                 db.Reading.reader_version == self.reader.version[:20],
                 db.Reading.text_content_id.in_(self.tcids)
-            )
+                )
             for r in readings_query.yield_per(self.batch_size):
-                self.extant_readings.append(ReadingData.from_db_reading(r))
+                self.extant_readings.append(
+                    DatabaseReadingData.from_db_reading(r)
+                    )
         logger.info("Found %d pre-existing readings."
                     % len(self.extant_readings))
         return
@@ -267,7 +269,7 @@ class DatabaseReader(object):
         # Copy into the database.
         logger.info("Adding %d/%d reading entries to the database." %
                     (len(upload_list), len(self.new_readings)))
-        db.copy('reading', upload_list, ReadingData.get_cols())
+        db.copy('reading', upload_list, DatabaseReadingData.get_cols())
 
         # Update the reading_data objects with their reading_ids.
         rdata = db.select_all([db.Reading.id, db.Reading.text_content_id,

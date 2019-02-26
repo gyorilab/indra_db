@@ -2,15 +2,11 @@
 database. This may also be run as a script; for details run:
 `python read_pmids_db --help`
 """
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
 
 import pickle
 import random
 import logging
-from datetime import datetime
-from math import log10, floor, ceil
-from uuid import uuid4
+from math import ceil
 
 from indra.tools.reading.util.script_tools import get_parser, make_statements,\
                                              StatementData
@@ -18,8 +14,7 @@ from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
     Content
 
-from indra_db import get_primary_db, formats, texttypes
-from indra_db import sql_expressions as sql
+from indra_db import get_primary_db, formats
 from indra_db.util import insert_raw_agents
 
 logger = logging.getLogger('make_db_readings')

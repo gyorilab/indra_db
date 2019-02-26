@@ -435,6 +435,45 @@ def process_content(text_content):
 
 
 # =============================================================================
+# High level functions
+# =============================================================================
+def construct_readers(reader_names, **kwargs):
+    """Construct the Reader objects from the names of the readers."""
+    readers = []
+    for reader_name in reader_names:
+        if 'ResultClass' not in kwargs.keys():
+            kwargs['ResultClass'] = DatabaseReadingData
+        readers.append(get_reader(reader_name, **kwargs))
+    return readers
+
+
+def run_reading(readers, tcids, verbose=True, reading_mode='unread',
+                stmt_mode='all', batch_size=1000, reading_pickle=None,
+                stmts_pickle=None, upload_readings=True, upload_stmts=True,
+                db=None):
+    """Run the reading with the given readers on the given text content ids."""
+    workers = []
+    for reader in readers:
+        db_reader = DatabaseReader(tcids, reader, verbose, stmt_mode=stmt_mode,
+                                   reading_mode=reading_mode, db=db,
+                                   batch_size=batch_size)
+        workers.append(db_reader)
+        db_reader.get_readings()
+        if upload_readings:
+            db_reader.dump_readings_to_db()
+        if reading_pickle:
+            db_reader.dump_readings_to_pickle(reading_pickle)
+
+        if stmt_mode != 'none':
+            db_reader.get_statements()
+            if upload_stmts:
+                db_reader.dump_statements_to_db()
+            if stmts_pickle:
+                db_reader.dump_statements_to_pickle(stmts_pickle)
+    return workers
+
+
+# =============================================================================
 # Main for script use
 # =============================================================================
 def make_parser():
@@ -554,19 +593,10 @@ def main():
     base_dir = _get_dir(args.temp, 'run_%s' % ('_and_'.join(args.readers)))
 
     # Get the readers objects.
-    special_reach_args_dict = {
-        'input_character_limit': args.max_reach_space_ratio,
-        'max_space_ratio': args.max_reach_input_len
-    }
-    readers = []
-    for reader_name in args.readers:
-        kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc,
-                  'ResultClass': DatabaseReadingData}
-        if reader_name == 'REACH':
-            for key_name, reach_arg in special_reach_args_dict.items():
-                if reach_arg is not None:
-                    kwargs[key_name] = reach_arg
-        readers.append(get_reader(reader_name, **kwargs))
+    kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc,
+              'input_character_limit': args.max_reach_space_ratio,
+              'max_space_ratio': args.max_reach_input_len}
+    readers = construct_readers(args.readers, **kwargs)
 
     # Set the verbosity. The quiet argument overrides the verbose argument.
     verbose = args.verbose and not args.quiet
@@ -590,25 +620,13 @@ def main():
             stmts_pickle = None
 
         # Get the dict of ids.
-        tcids = {int(tcid_str) for tcid_str in input_lines[B*n:B*(n+1)]}
+        tcids = [int(tcid_str.strip())
+                 for tcid_str in input_lines[B*n:B*(n+1)]]
 
         # Read everything ====================================================
-        for reader in readers:
-            db_reader = DatabaseReader(tcids, reader, verbose,
-                                       args.reading_mode, args.stmt_mode,
-                                       args.b_in)
-            db_reader.get_readings()
-            if not args.no_reading_upload:
-                db_reader.dump_readings_to_db()
-            if reading_pickle:
-                db_reader.dump_readings_to_pickle(reading_pickle)
-
-            if args.stmt_mode != 'none':
-                db_reader.get_statements()
-                if not args.no_statement_upload:
-                    db_reader.dump_statements_to_db()
-                if stmts_pickle:
-                    db_reader.dump_statements_to_pickle(stmts_pickle)
+        run_reading(readers, tcids, verbose, args.reading_mode, args.stmt_mode,
+                    args.b_in, reading_pickle, stmts_pickle,
+                    not args.no_reading_upload, not args.no_statement_upload)
 
 
 if __name__ == "__main__":

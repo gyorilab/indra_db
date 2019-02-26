@@ -195,12 +195,12 @@ class DatabaseReader(object):
     verbose : bool
         Optional, default False - If True, log and print the output of the
         commandline reader utilities, if False, don't.
-    read_mode : str : 'all', 'unread', or 'none'
+    reading_mode : str : 'all', 'unread', or 'none'
         Optional, default 'undread' - If 'all', read everything (generally
         slow); if 'unread', only read things that were unread, (the cache of old
         readings may still be used if `stmt_mode='all'` to get everything); if
         'none', don't read, and only retrieve existing readings.
-    stmt_mode : bool
+    stmt_mode : str : 'all', 'unread', or 'none'
         Optional, default 'all' - If 'all', produce statements for all content
         for all readers. If the readings were already produced, they will be
         retrieved from the database if `read_mode` is 'none' or 'unread'. If
@@ -214,12 +214,12 @@ class DatabaseReader(object):
         by `get_primary_db` function is used. Used to interface with a
         different database.
     """
-    def __init__(self, tcids, reader, verbose=True, read_mode='unread',
+    def __init__(self, tcids, reader, verbose=True, reading_mode='unread',
                  stmt_mode='all', batch_size=1000, db=None, n_proc=1):
         self.tcids = tcids
         self.reader = reader
         self.verbose = verbose
-        self.read_mode = read_mode
+        self.reading_mode = reading_mode
         self.stmt_mode = stmt_mode
         self.batch_size = batch_size
         self.n_proc = n_proc
@@ -243,7 +243,7 @@ class DatabaseReader(object):
             self._db.TextContent.id.in_(self.tcids)
             ).distinct()
 
-        if self.read_mode != 'all':
+        if self.reading_mode != 'all':
             logger.debug("Getting content to be read.")
             # Each sub query is a set of content that has been read by one of
             # the readers.
@@ -366,14 +366,14 @@ class DatabaseReader(object):
     def get_readings(self):
         """Get the reading output for the given ids."""
         # Get a database instance.
-        logger.debug("Producing readings in %s mode." % self.read_mode)
+        logger.debug("Producing readings in %s mode." % self.reading_mode)
 
         # Handle the cases where I need to retrieve old readings.
-        if self.read_mode != 'all' and self.stmt_mode == 'all':
+        if self.reading_mode != 'all' and self.stmt_mode == 'all':
             self._get_prior_readings()
 
         # Now produce any new readings that need to be produced.
-        if self.read_mode != 'none':
+        if self.reading_mode != 'none':
             self._make_new_readings()
             logger.info("Made %d new readings." % len(self.new_readings))
 

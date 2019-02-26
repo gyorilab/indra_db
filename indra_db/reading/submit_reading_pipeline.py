@@ -69,8 +69,8 @@ class DbReadingSubmitter(Submitter):
         return
 
     def _get_base(self, job_name, start_ix, end_ix):
-        read_mode = 'all' if self.options.get('force_read', False) else 'unread'
-        stmt_mode = 'none' if self.options.get('no_stmts', False) else 'all'
+        read_mode = self.options.get('reading_mode')
+        stmt_mode = self.options.get('stmt_mode')
 
         job_name = '%s_%d_%d' % (self.basename, start_ix, end_ix)
         base = ['python', '-m', 'indra_db.reading.read_db_aws',
@@ -81,37 +81,29 @@ class DbReadingSubmitter(Submitter):
 
     def _get_extensions(self):
         extensions = []
-        if self.options.get('force_fulltext', False):
-            extensions.append('--force_fulltext')
-        if self.options.get('prioritize', False):
-            extensions.append('--read_best_fulltext')
-        max_reach_input_len = self.options.get('max_reach_input_len')
-        max_reach_space_ratio = self.options.get('max_reach_space_ratio')
-        if max_reach_input_len is not None:
-            extensions += ['--max_reach_input_len', max_reach_input_len]
-        if max_reach_space_ratio is not None:
-            extensions += ['--max_reach_space_ratio', max_reach_space_ratio]
+        for key, val in self.options.items():
+            extensions.append(['--' + key, val])
         return extensions
 
-    def set_options(self, force_read=False, no_stmts=False,
-                    force_fulltext=False, prioritize=False,
+    def set_options(self, stmt_mode='all', reading_mode='unread',
                     max_reach_input_len=None, max_reach_space_ratio=None):
         """Set the options for this reading job.
 
         Parameters
         ----------
-        force_read : bool
-            Choose whether to force the readers to read all content, even if it
-            has already been read by the same version of the reader.
-        no_stmts : bool
-            Set to True if you do not want any statements produced. The reading
-            results will be stored but not processed.
-        force_fulltext : bool
-            Only read fulltext versions of content, and do not read content if
-            only abstracts are available.
-        prioritize : bool
-            Read the best content available, and only the best content
-            available. If there is a fulltext version, ignore the abstract.
+        stmt_mode : bool
+            Optional, default 'all' - If 'all', produce statements for all
+            content for all readers. If the readings were already produced,
+            they will be retrieved from the database if `read_mode` is 'none'
+            or 'unread'. If this option is 'unread', only the newly produced
+            readings will be processed. If 'none', no statements will be
+            produced.
+        reading_mode : str : 'all', 'unread', or 'none'
+            Optional, default 'undread' - If 'all', read everything (generally
+            slow); if 'unread', only read things that were unread, (the cache
+            of old readings may still be used if `stmt_mode='all'` to get
+            everything); if 'none', don't read, and only retrieve existing
+            readings.
         max_reach_input_len : int
             The maximum number of characters to all for inputs to REACH. The
             reader tends to hang up on larger papers, and beyond a certain
@@ -122,8 +114,8 @@ class DbReadingSubmitter(Submitter):
             fraction of characters that are spaces is a fast and simple way to
             catch and avoid such problems. Recommend a value of 0.5.
         """
-        self.options['force_fulltext'] = force_fulltext
-        self.options['prioritize'] = prioritize
+        self.options['stmt_mode'] = stmt_mode
+        self.options['reading_mode'] = reading_mode
         self.options['max_reach_input_len'] = max_reach_input_len
         self.options['max_reach_space_ratio'] = max_reach_space_ratio
         return
@@ -504,25 +496,6 @@ class DbReadingSubmitter(Submitter):
         return file_tree, stat_aggs
 
 
-def submit_db_reading(basename, id_list_filename, readers, start_ix=None,
-                      end_ix=None, pmids_per_job=3000, num_tries=2,
-                      force_read=False, force_fulltext=False,
-                      read_all_fulltext=False, project_name=None,
-                      max_reach_input_len=None, max_reach_space_ratio=None,
-                      no_stmts=False):
-    """Submit batch reading jobs that uses the database for content and results.
-
-    This function is provided for backwards compatibility, use DbReadingSubmitter
-    and its submit_reading method instead.
-    """
-    sub = DbReadingSubmitter(basename, readers, project_name)
-    sub.set_options(force_read, no_stmts, force_fulltext, read_all_fulltext,
-                    max_reach_input_len, max_reach_space_ratio)
-    sub.submit_reading(id_list_filename, start_ix, end_ix, pmids_per_job,
-                       num_tries)
-    return sub
-
-
 if __name__ == '__main__':
     import argparse
 
@@ -534,29 +507,20 @@ if __name__ == '__main__':
         parents=[parent_submit_parser, parent_read_parser],
         description=('Run reading with content on the db and submit results. '
                      'In this option, ids in \'input_file\' are given in the '
-                     'format \'<id type>:<id>\'. Unlike no-db, there is no '
-                     'need to combine pickles, and therefore no need to '
-                     'specify your task further.'),
-        epilog=('Note that `python wait_for_complete.py ...` should be run as '
-                'soon as this command completes successfully. For more '
-                'details use `python wait_for_complete.py -h`.')
+                     'as one text content id per line.'),
         )
-    '''Not currently supported
-    parent_db_parser.add_argument(
-        '--no_upload',
-        action='store_true',
-        help='Don\'t upload results to the database.'
-        )
-    '''
     parser.add_argument(
-        '--read_best_fulltext',
-        action='store_true',
-        help='Read only the best fulltext for input ids.'
+        '-S', '--stmt_mode',
+        choices=['all', 'unread', 'none'],
+        default='all',
+        help='Choose the subset of statements on which to run reading.'
     )
     parser.add_argument(
-        '--no_statements',
-        action='store_true',
-        help='Choose to not produce any Statements; only readings will be done.'
+        '-R', '--reading_mode',
+        choices=['all', 'unread', 'none'],
+        default='unread',
+        help=('Choose whether you want to read everything, nothing, or only '
+              'the content that hasn\'t been read.')
     )
     parser.add_argument(
         '--max_reach_space_ratio',
@@ -593,8 +557,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     sub = DbReadingSubmitter(args.basename, args.readers, args.project)
-    sub.set_options(args.force_read, args.no_statements,
-                    args.force_fulltext, args.prioritize,
+    sub.set_options(args.stmt_mode, args.reading_mode,
                     args.max_reach_input_len, args.max_reach_space_ratio)
     sub.submit_reading(args.input_file, args.start_ix, args.end_ix,
                        args.ids_per_job)

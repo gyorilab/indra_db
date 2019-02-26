@@ -7,28 +7,20 @@ Some key functions' capabilities include:
 """
 from collections import defaultdict
 
-from uuid import uuid4
-
 __all__ = ['get_defaults', 'get_primary_db', 'get_db', 'insert_raw_agents',
            'insert_pa_stmts', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
-           'distill_stmts', 'regularize_agent_id']
+           'distill_stmts', 'regularize_agent_id', 'unpack']
 
 import re
 import json
 import zlib
-import pickle
 import logging
-from datetime import datetime
-from itertools import groupby
-from functools import partial
-from multiprocessing.pool import Pool
-from sqlalchemy import exists
 
 from indra.util.nested_dict import NestedDict
 from indra.util.get_version import get_version
-from indra.util import batch_iter, clockit
+from indra.util import clockit
 from indra.statements import Complex, SelfModification, ActiveForm,\
-    stmts_from_json, Conversion, Translocation, Statement
+    Conversion, Translocation, Statement
 
 from indra_db.managers.database_manager import DatabaseManager
 from indra_db.exceptions import IndraDbException

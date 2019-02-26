@@ -240,7 +240,6 @@ def test_produce_readings():
     assert all([rd.reading_id is None for rd in outputs_4])
 
 
-
 @attr('nonpublic')
 def test_sparser_parallel():
     "Test running sparser in parallel."

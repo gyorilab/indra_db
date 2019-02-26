@@ -268,7 +268,7 @@ class DatabaseReader(object):
     def _make_new_readings(self, **kwargs):
         """Read contents retrieved from the database.
 
-        The content will be retrieved in batches, given by the `batch` argument.
+        The content will be retrieved in batches, given by the `batch` arg.
         This prevents the system RAM from being overloaded.
 
         Keyword arguments are passed to the `read` methods of the readers.
@@ -385,8 +385,9 @@ class DatabaseReader(object):
                     len(self.statement_outputs))
         batch_id = self._db.make_copy_batch_id()
         stmt_tuples = [s.make_tuple(batch_id) for s in self.statement_outputs]
-        self._db.copy('raw_statements', stmt_tuples, DatabaseStatementData.get_cols(),
-                      lazy=True, push_conflict=True)
+        self._db.copy('raw_statements', stmt_tuples,
+                      DatabaseStatementData.get_cols(), lazy=True,
+                      push_conflict=True)
 
         logger.info("Uploading agents to the database.")
         reading_id_set = {sd.reading_id for sd in self.statement_outputs}
@@ -426,8 +427,8 @@ def process_content(text_content):
         raw_xml_text = content.get_text()
         elsevier_text = process_elsevier(raw_xml_text)
         if elsevier_text is None:
-            logger.warning("Could not extract text from Elsevier xml for tcid: "
-                           "%d" % text_content.id)
+            logger.warning("Could not extract text from Elsevier xml for "
+                           "tcid: %d" % text_content.id)
             return None
         content = Content.from_string(content.get_id(), 'text', elsevier_text)
     return content
@@ -459,7 +460,7 @@ def make_parser():
         choices=['all', 'unread', 'none'],
         default='all',
         help=("Choose which readings should produce statements. If 'all', all "
-              "readings that are produced or retrieved will be used to produce "
+              "readings that are produced or retrieved will be used to make "
               "statements. If 'unread', only produce statements from "
               "previously unread content. If 'none', do not produce any "
               "statements (only readings will be produced).")

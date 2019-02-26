@@ -109,9 +109,6 @@ class ReadingManager(object):
     """
     def __init__(self, reader_name, buffer_days=1):
         self.reader = get_reader_class(reader_name)
-        if self.reader is None:
-            self.reader = rdb.get_empty_reader_class(reader_name)
-
         self.buffer = timedelta(days=buffer_days)
         self.reader_version = self.reader.get_version()
         self.run_datetime = None
@@ -290,12 +287,12 @@ if __name__ == '__main__':
         bulk_managers = [BulkLocalReadingManager(reader_name,
                                                  buffer_days=args.buffer,
                                                  n_proc=args.num_procs)
-                         for reader_name in ['SPARSER', 'REACH', 'DRUM']]
+                         for reader_name in ['SPARSER', 'REACH', 'TRIPS']]
     elif args.method == 'aws':
         bulk_managers = [BulkAwsReadingManager(reader_name,
                                                buffer_days=args.buffer,
                                                project_name=args.project_name)
-                         for reader_name in ['SPARSER', 'REACH', 'DRUM']]
+                         for reader_name in ['SPARSER', 'REACH', 'TRIPS']]
 
     for bulk_manager in bulk_managers:
         if args.task == 'read_all':

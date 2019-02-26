@@ -725,6 +725,6 @@ def test_db_incremental_preassembly_very_large():
     _check_db_pa_supplement(100000, 20000, n_proc=2)
 
 
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_1M():
-#     _check_db_pa_supplement(1000000, 200000, n_proc=6)
+@attr('nonpublic', 'slow')
+def test_db_incremental_preassembly_1M():
+    _check_db_pa_supplement(1000000, 200000, n_proc=6)

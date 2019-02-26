@@ -235,6 +235,31 @@ def test_produce_readings():
 
 
 @attr('nonpublic')
+def test_stmt_mode_unread():
+    "Test whether we can only create statements from unread content."
+    # Prep the inputs.
+    db = get_db_with_pubmed_content()
+    tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+
+    # Test with just sparser for tolerable speeds.
+    readers = get_readers('SPARSER')
+
+    # First create some readings.
+    some_tcids = random.sample(tcids, len(tcids)//2)
+    workers0 = rdb.run_reading(readers, some_tcids, db=db, verbose=True)
+    pre_stmt_hash_set = {sd.statement.get_hash(shallow=False)
+                         for sd in workers0[0].statement_outputs}
+
+    # Now only make statements for the content that was not read.
+    workers = rdb.run_reading(readers, tcids, db=db, verbose=True,
+                              stmt_mode='unread')
+    stmt_hash_set = {sd.statement.get_hash(shallow=False)
+                     for sd in workers[0].statement_outputs}
+    assert stmt_hash_set.isdisjoint(pre_stmt_hash_set), \
+        "There were overlapping statements."
+
+
+@attr('nonpublic')
 def test_sparser_parallel():
     "Test running sparser in parallel."
     db = get_db_with_pubmed_content()

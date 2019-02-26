@@ -403,8 +403,12 @@ class DatabaseReader(object):
 
     def get_statements(self):
         """Convert the reader output into a list of StatementData instances."""
-        all_outputs = self.new_readings + self.extant_readings
-        self.statement_outputs = make_statements(all_outputs, self.n_proc)
+        if self.stmt_mode == 'all':
+            all_outputs = self.new_readings + self.extant_readings
+            self.statement_outputs = make_statements(all_outputs, self.n_proc)
+        elif self.stmt_mode == 'unread':
+            self.statement_outputs = make_statements(self.new_readings,
+                                                     self.n_proc)
         return
 
 

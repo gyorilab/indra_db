@@ -3,6 +3,8 @@ database. This may also be run as a script; for details run:
 `python read_pmids_db --help`
 """
 
+import json
+import zlib
 import pickle
 import random
 import logging
@@ -13,6 +15,7 @@ from indra.tools.reading.util.script_tools import get_parser, make_statements,\
 from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
     Content
+from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
 from indra_db.util import insert_raw_agents
@@ -22,6 +25,84 @@ logger = logging.getLogger('make_db_readings')
 
 class ReadDBError(Exception):
     pass
+
+
+class DatabaseReadingData(ReadingData):
+    """This version of ReadingData adds valuable methods for database ops.
+
+    In particular, this adds methods that help in the packaging of the content
+    for copy into the database.
+
+    Parameters
+    ----------
+    tcid : int
+        The unique text content id provided by the database.
+    reader_name : str
+        The name of the reader, consistent with it's `name` attribute, for
+        example: 'REACH'
+    reader_version : str
+        A string identifying the version of the underlying nlp reader.
+    content_format : str
+        The format of the content. Options are in indra.db.formats.
+    content : str or dict
+        The content of the reading result. A string in the format given by
+        `content_format`.
+    reading_id : int
+        (optional) The unique integer id given to each reading result. In
+        practice, this is often assigned
+    """
+    def __init__(self, tcid, reader_name, reader_version, content_format,
+                 content, reading_id=None):
+        super(ReadingData, self).__init__(tcid, reader_name, reader_version,
+                                          content_format, content)
+        self.reading_id = reading_id
+        return
+
+    @classmethod
+    def from_db_reading(cls, db_reading):
+        """Construct a DatabaseReadingData object from an entry in the database
+
+        As returned by SQL Alchemy.
+        """
+        return cls(db_reading.text_content_id, db_reading.reader,
+                   db_reading.reader_version, db_reading.format,
+                   json.loads(zlib.decompress(db_reading.bytes,
+                                              16+zlib.MAX_WBITS)
+                              .decode('utf8')),
+                   db_reading.id)
+
+    @staticmethod
+    def get_cols():
+        """Get the columns for the tuple returned by `make_tuple`."""
+        return ('text_content_id', 'reader', 'reader_version', 'format',
+                'bytes', 'batch_id')
+
+    def zip_content(self):
+        """Compress the content, returning bytes."""
+        if self.format == formats.JSON:
+            ret = zip_string(json.dumps(self.content))
+        elif self.format == formats.TEXT:
+            ret = zip_string(self.content)
+        else:
+            raise Exception('Do not know how to zip format %s.' % self.format)
+        return ret
+
+    def make_tuple(self, batch_id):
+        """Make the tuple expected by the database."""
+        return (self.content_id, self.reader, self.reader_version, self.format,
+                self.zip_content(), batch_id)
+
+    def matches(self, r_entry):
+        """Determine if reading data matches the a reading entry from the db.
+
+        Returns True if tcid, reader, reader_version match the corresponding
+        elements of a db.Reading instance, else False.
+        """
+        # Note the temporary fix in clipping the reader version length. This is
+        # because the version is for some reason clipped in the database.
+        return (r_entry.text_content_id == self.content_id
+                and r_entry.reader == self.reader
+                and r_entry.reader_version == self.reader_version[:20])
 
 
 class DatabaseReader(object):
@@ -402,7 +483,8 @@ def main():
     }
     readers = []
     for reader_name in args.readers:
-        kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc}
+        kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc,
+                  'ResultClass': DatabaseReadingData}
         if reader_name == 'REACH':
             for key_name, reach_arg in special_reach_args_dict.items():
                 if reach_arg is not None:

@@ -82,10 +82,10 @@ if __name__ == '__main__':
         )
     args = parser.parse_args()
 
-from indra.tools.reading.readers import get_reader_class
+from indra.tools.reading.readers import get_reader_class, Reader
 from indra_db.reading import read_db as rdb
 from indra_db.util import get_primary_db, get_test_db, get_db
-from indra_db.reading.submit_reading_pipeline import submit_db_reading
+from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
 
 logger = logging.getLogger('reading_manager')
 THIS_DIR = path.dirname(path.abspath(__file__))
@@ -93,6 +93,23 @@ THIS_DIR = path.dirname(path.abspath(__file__))
 
 class ReadingUpdateError(Exception):
     pass
+
+
+def get_empty_reader_class(reader_name):
+
+    class EmptyReader(object):
+        """A placeholder for readers that aren't currently active."""
+        name = reader_name
+
+        def __init__(self, *args, **kwargs):
+            self.version = self.get_version()
+            return
+
+        @staticmethod
+        def get_version():
+            return 'STATIC'
+
+    return EmptyReader
 
 
 class ReadingManager(object):
@@ -110,8 +127,8 @@ class ReadingManager(object):
     def __init__(self, reader_name, buffer_days=1):
         self.reader = get_reader_class(reader_name)
         if self.reader is None:
-            raise ReadingUpdateError('Name of reader was not matched to an '
-                                     'available reader.')
+            self.reader = get_empty_reader_class(reader_name)
+
         self.buffer = timedelta(days=buffer_days)
         self.reader_version = self.reader.get_version()
         self.run_datetime = None
@@ -169,15 +186,15 @@ class BulkReadingManager(ReadingManager):
 
     This takes exactly the parameters used by :py:class:`ReadingManager`.
     """
-    def _run_reading(self, db, trids, max_refs=5000):
+    def _run_reading(self, db, tcids, ids_per_job=5000):
         raise NotImplementedError("_run_reading must be defined in child.")
 
     @ReadingManager._handle_update_table
     def read_all(self, db):
         """Read everything available on the database."""
         self.end_datetime = self.run_datetime
-        trids = {trid for trid, in db.select_all(db.TextContent.text_ref_id)}
-        self._run_reading(db, trids)
+        tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+        self._run_reading(db, tcids)
         return True
 
     @ReadingManager._handle_update_table
@@ -190,12 +207,12 @@ class BulkReadingManager(ReadingManager):
         else:
             raise ReadingUpdateError("There are no previous updates. "
                                      "Please run_all.")
-        trid_q = db.filter_query(
-            db.TextContent.text_ref_id,
+        tcid_q = db.filter_query(
+            db.TextContent.id,
             db.TextContent.insert_date > self.begin_datetime
             )
-        trids = {trid for trid, in trid_q.all()}
-        self._run_reading(db, trids)
+        tcids = {tcid for tcid, in tcid_q.all()}
+        self._run_reading(db, tcids)
         return True
 
 
@@ -218,26 +235,23 @@ class BulkAwsReadingManager(BulkReadingManager):
         super(BulkAwsReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, trids, max_refs=5000):
-        if len(trids)/max_refs >= 1000:
+    def _run_reading(self, db, tcids, ids_per_job=5000):
+        if len(tcids)/ids_per_job >= 1000:
             raise ReadingUpdateError("Too many id's for one submission. "
                                      "Break it up and do it manually.")
 
         logger.info("Producing readings on aws for %d text refs with new "
-                    "content not read by %s." % (len(trids), self.reader.name))
+                    "content not read by %s." % (len(tcids), self.reader.name))
         job_prefix = ('%s_reading_%s'
                       % (self.reader.name.lower(),
                          self.run_datetime.strftime('%Y%m%d_%H%M%S')))
         with open(job_prefix + '.txt', 'w') as f:
-            f.write('\n'.join(['trid:%s' % trid for trid in trids]))
+            f.write('\n'.join(['%s' % tcid for tcid in tcids]))
         logger.info("Submitting jobs...")
-        sub = submit_db_reading(job_prefix, job_prefix + '.txt',
-                                readers=[self.reader.name.lower()],
-                                start_ix=0, end_ix=None,
-                                pmids_per_job=max_refs, num_tries=2,
-                                force_read=False, force_fulltext=False,
-                                read_all_fulltext=False,
-                                project_name=self.project_name)
+        sub = DbReadingSubmitter(job_prefix, [self.reader.name.lower()],
+                                 self.project_name)
+        sub.submit_reading(job_prefix + '.txt', 0, None, ids_per_job)
+
         logger.info("Waiting for complete...")
         sub.watch_and_wait(idle_log_timeout=1200, kill_on_timeout=True,
                            stash_log_method='s3')
@@ -264,22 +278,18 @@ class BulkLocalReadingManager(BulkReadingManager):
         super(BulkLocalReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, trids, max_refs=5000):
-        if len(trids) > max_refs:
+    def _run_reading(self, db, tcids, ids_per_job=5000):
+        if len(tcids) > ids_per_job:
             raise ReadingUpdateError("Too many id's to run locally. Try "
                                      "running on batch (use_batch).")
         logger.info("Producing readings locally for %d new text refs."
-                    % len(trids))
+                    % len(tcids))
         base_dir = path.join(THIS_DIR, 'read_all_%s' % self.reader.name)
-        reader_inst = self.reader(base_dir=base_dir, n_proc=self.n_proc)
+        reader = self.reader(base_dir=base_dir, n_proc=self.n_proc)
 
-        logger.info("Making readings...")
-        outputs = rdb.produce_readings({'trid': trids}, [reader_inst],
-                                       read_mode='unread_unread', db=db,
-                                       prioritize=True, verbose=self.verbose)
-        logger.info("Made %d readings." % len(outputs))
-        logger.info("Making statements...")
-        rdb.produce_statements(outputs, n_proc=self.n_proc, db=db)
+        reading_mode = 'unread' if issubclass(self.reader, Reader) else 'none'
+        rdb.run_reading([reader], tcids, db=db, batch_size=ids_per_job,
+                        verbose=self.verbose, reading_mode=reading_mode)
         return
 
 
@@ -298,12 +308,12 @@ if __name__ == '__main__':
         bulk_managers = [BulkLocalReadingManager(reader_name,
                                                  buffer_days=args.buffer,
                                                  n_proc=args.num_procs)
-                         for reader_name in ['SPARSER', 'REACH']]
+                         for reader_name in ['SPARSER', 'REACH', 'DRUM']]
     elif args.method == 'aws':
         bulk_managers = [BulkAwsReadingManager(reader_name,
                                                buffer_days=args.buffer,
                                                project_name=args.project_name)
-                         for reader_name in ['SPARSER', 'REACH']]
+                         for reader_name in ['SPARSER', 'REACH', 'DRUM']]
 
     for bulk_manager in bulk_managers:
         if args.task == 'read_all':

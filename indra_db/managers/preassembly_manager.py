@@ -238,7 +238,7 @@ class PreassemblyManager(object):
                     ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
 
         self._log("Added %d new pa statements into the database."
-                    % len(new_mk_set))
+                   % len(new_mk_set))
         return new_mk_set
 
     @clockit

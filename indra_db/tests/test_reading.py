@@ -10,13 +10,11 @@ import boto3
 from nose.plugins.attrib import attr
 
 from indra.util import zip_string
-from indra.tools.reading.util.script_tools import make_statements
 from indra.tools.reading.readers import SparserReader
 from indra.tools.reading.readers import get_readers as get_all_readers
 
 from indra_db import util as dbu
 from indra_db.reading import read_db as rdb
-from indra_db.tests.test_content_manager import get_db as get_test_db
 from indra_db.tests.test_content_manager import get_db_with_pubmed_content
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
 
@@ -41,60 +39,29 @@ def get_id_dict(tr_list):
 
 
 def get_readers(*names, **kwargs):
+    kwargs['ResultClass'] = rdb.DatabaseReadingData
     return [reader_class(**kwargs) for reader_class in get_all_readers()
             if (not names or reader_class.name in names)]
 
 
-def test_convert_id_entry():
-    "Test that we correctly conver the id's given us."
-    id_entry = 'pmid\t: 12345\n'
-    res = rdb._convert_id_entry(id_entry)
-    assert len(res) == 2 and res[0] == 'pmid' and res[1] == '12345'
-
-
-def test_get_clauses():
-    "Test that the clauses are correctly created."
-    db = get_test_db()
-    id_dict = {'pmid': '17399955', 'pmcid': 'PMC3199586'}
-    clauses = rdb.get_clauses(id_dict, db)
-    assert len(clauses) == 2
-    clause = clauses[0]
-    assert 'IN' in str(clause),\
-        "Unexpected form for clause: %s" % str(clause)
-
-
 @attr('nonpublic')
 def test_get_content():
-    "Test that content querries are correctly formed."
+    "Test that content queries are correctly formed."
     db = get_db_with_pubmed_content()
-    tr_list = db.select_all(db.TextRef)
-    id_dict = get_id_dict(tr_list)
+    tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
     readers = get_readers()
-    tc_query_1 = rdb.get_content_query(id_dict, readers, db=db,
-                                       force_read=False)
-    N_exp = db.filter_query(db.TextContent).count()
-    N_1 = tc_query_1.count()
-    assert N_1 == N_exp,\
-        "Expected %d results in our query, got %d." % (N_exp, N_1)
+    for reader in readers:
+        worker = rdb.DatabaseReader(tcids, reader, db=db)
 
-    # This tests both that tcid and trid are recognized, and that we really
-    # are getting just a subset of the content.
-    test_tcs_2 = tc_query_1.limit(2).all()
-    small_id_dict = {'tcid': [test_tcs_2[0].id],
-                     'trid': [test_tcs_2[1].text_ref_id]}
-    tc_query_2 = rdb.get_content_query(small_id_dict, readers, db=db)
-    N_2 = tc_query_2.count()
-    assert N_2 == 2, "Expected 2 items in query, but got %d." % N_2
+        N_exp = db.filter_query(db.TextContent).count()
+        N_1 = sum([1 for _ in worker.iter_over_content()])
+        assert N_1 == N_exp,\
+            "Expected %d results in our query, got %d." % (N_exp, N_1)
 
-    # Now test the 'all' feature.
-    tc_query_3 = rdb.get_content_query('all', readers, db=db)
-    N_3 = tc_query_3.count()
-    assert N_3 == N_1, \
-        "Expected to get %d items in query, but got %d." % (N_1, N_3)
-
-    # Test response to empyt dict.
-    assert rdb.get_content_query({}, readers, db=db) is None, \
-        "Expected None when passing no ids."
+        # Test response to empyt dict.
+        worker = rdb.DatabaseReader([], reader, db=db)
+        assert not any([c for c in worker.iter_over_content()]), \
+            "Expected no results when passing no ids."
 
 
 @attr('nonpublic')
@@ -111,39 +78,45 @@ def test_reading_content_insert():
     db = get_db_with_pubmed_content()
 
     print("Test reading")
-    tc_list = db.select_all(db.TextContent)
+    tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
     readers = get_readers()
+    workers = [rdb.DatabaseReader(tcids, reader, verbose=True, db=db)
+               for reader in readers]
     reading_output = []
-    for reader in readers:
-        reading_output += reader.read([rdb.process_content(tc) for tc in tc_list],
-                                      verbose=True)
-    expected_output_len = len(tc_list)*len(readers)
-    assert len(reading_output) == expected_output_len, \
-        ("Not all text content successfully read."
-         "Expected %d outputs, but got %d.") % (expected_output_len,
-                                                len(reading_output))
+    for worker in workers:
+        worker.get_readings()
+        reading_output.extend(worker.new_readings)
+
+        expected_output_len = len(tcids)
+        assert len(reading_output) == expected_output_len, \
+            ("Not all text content successfully read by %s."
+             "Expected %d outputs, but got %d."
+             % (worker.reader.name, expected_output_len, len(reading_output)))
 
     print("Test reading insert")
-    rdb.upload_readings(reading_output, db=db)
-    r_list = db.select_all(db.Reading)
+    for worker in workers:
+        worker.dump_readings_to_db()
+        r_list = db.select_all(db.Reading)
 
-    def is_complete_match(r_list, reading_output):
-        return all([any([rd.matches(r) for r in r_list])
-                    for rd in reading_output])
+        def is_complete_match(r_list, reading_output):
+            return all([any([rd.matches(r) for r in r_list])
+                        for rd in reading_output])
 
-    assert is_complete_match(r_list, reading_output), \
-        "Not all reading output posted."
-    rdb.upload_readings(reading_output, db=db)
-    assert is_complete_match(r_list, reading_output), \
-        "Uniqueness constraints failed."
+        assert is_complete_match(r_list, reading_output), \
+            "Not all reading output posted for reading by %s."\
+            % worker.reader.name
 
     print("Test making statements")
-    stmts = rdb.produce_statements(reading_output, db=db)
-    assert len(stmts), 'No statements created.'
-    db_stmts = db.select_all(db.RawStatements)
-    assert len(db_stmts) == len(stmts), \
-        "Only %d/%d statements added." % (len(db_stmts), len(stmts))
-    assert len(db.select_all(db.RawAgents)), "No agents added."
+    for worker in workers:
+        worker.get_statements()
+        assert worker.statement_outputs, "Did not get any statement outputs."
+        num_stmts = len(worker.statement_outputs)
+
+        worker.dump_statements_to_db()
+        num_db_sids = db.count(db.RawStatements.id)
+        assert num_db_sids == num_stmts, \
+            "Only %d/%d statements added." % (num_db_sids, num_stmts)
+        assert len(db.select_all(db.RawAgents)), "No agents added."
 
 
 @attr('nonpublic')
@@ -151,36 +124,45 @@ def test_read_db():
     "Test the low level make_db_readings functionality with various settings."
     # Prep the inputs.
     db = get_db_with_pubmed_content()
-    complete_tr_list = db.select_all(db.TextRef)
-    id_dict = get_id_dict(complete_tr_list)
-    readers = get_readers('SPARSER')
+    tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+    reader = get_readers('SPARSER')[0]
 
-    # Run the reading with default batch size, no force_fulltext, and
-    # no force_read
-    reading_output_1 = rdb.make_db_readings(id_dict, readers, db=db)
-    N1 = len(reading_output_1)
-    N1_exp = len(readers)*db.filter_query(db.TextContent).count()
+    # Run the reading with default batch size and reading_mode set to 'unread'
+    worker1 = rdb.DatabaseReader(tcids, reader, db=db, reading_mode='unread')
+    worker1.get_readings()
+    N1 = len(worker1.new_readings)
+    N1_exp = len(tcids)
     assert N1 == N1_exp, \
         'Expected %d readings, but got %d.' % (N1_exp, N1)
-    rdb.upload_readings(reading_output_1, db=db)  # setup for later test.
+    worker1.dump_readings_to_db()
     N1_db = len(db.select_all(db.Reading))
     assert N1_db == N1, \
         'Expected %d readings to be copied to db, only %d found.' % (N1, N1_db)
 
-    # Run the reading with default batch size, no force_fulltext, but with
-    # force_read = True (this hould produce new readings.)
-    reading_output_2 = rdb.make_db_readings(id_dict, readers, db=db,
-                                            force_read=True)
-    N2 = len(reading_output_2)
-    assert N1 == N2, "Got %d readings from run 1 but %d from run 2." % (N1, N2)
+    # Run the reading with default batch size, reading_mode set to 'all'. (this
+    # should produce new readings.)
+    worker2 = rdb.DatabaseReader(tcids, reader, db=db, reading_mode='all')
+    worker2.get_readings()
 
-    # Run the reading with default batch size, no force_fulltext, but without
-    # force_read = True (this should NOT produce new readings.)
-    old_readings = rdb.get_db_readings(id_dict, readers, db=db)
-    reading_output = rdb.make_db_readings(id_dict, readers, db=db)
-    assert len(reading_output) == 0, "Got new readings when force_read=False."
-    assert len(old_readings) == N1, \
-        "Did not get old readings when force_read=False."
+    N2_old = len(worker2.extant_readings)
+    N2_new = len(worker2.new_readings)
+    assert N1 == N2_new, \
+        "Got %d readings from run 1 but %d from run 2." % (N1, N2_new)
+    assert N2_old == 0, "Got old readings despite reading_mode set to 'all'."
+
+    # Run the reading with default batch size, with reading_mode set to
+    # 'unread', again. (this should NOT produce new readings.)
+    worker3 = rdb.DatabaseReader(tcids, reader, db=db, reading_mode='unread')
+    worker3.get_readings()
+
+    N_new = len(worker3.new_readings)
+    N_old = len(worker3.extant_readings)
+
+    assert N_new == 0,\
+        "Got new readings when reading_mode was 'unread' and readings existed."
+    assert N_old == N1, \
+        ("Missed old readings when reading_mode was 'unread' and readings "
+         "existed: expected %d, but got %d." % (N1, N_old))
 
 
 @attr('slow', 'nonpublic')
@@ -188,56 +170,68 @@ def test_produce_readings():
     "Comprehensive test of the high level production of readings."
     # Prep the inputs.
     db = get_db_with_pubmed_content()
-    complete_tr_list = db.select_all(db.TextRef)
-    id_dict = get_id_dict(complete_tr_list)
+    tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
 
     # Test with just sparser for tollerable speeds.
-    reader_list = get_readers('SPARSER')
+    readers = get_readers('SPARSER')
 
-    # Test the read_mode='none' option (should yield nothing, because there
+    # Test the reading_mode='none' option (should yield nothing, because there
     # aren't any readings yet.)
-    outputs_0 = rdb.produce_readings(id_dict, reader_list, verbose=True, db=db,
-                                     read_mode='none')
-    assert len(outputs_0) == 0
+    workers = rdb.run_reading(readers, tcids, verbose=True, db=db,
+                              reading_mode='none', stmt_mode='none')
+    assert all(len(worker.new_readings) == 0 for worker in workers)
+    assert all(len(worker.extant_readings) == 0 for worker in workers)
 
     # Test just getting a pickle file (Nothing should be posted to the db.).
     pkl_file = 'test_db_res.pkl'
-    outputs_1 = rdb.produce_readings(id_dict, reader_list, verbose=True, db=db,
-                                     no_upload=True, pickle_file=pkl_file)
-    N_out = len(outputs_1)
-    N_exp = len(reader_list)*db.filter_query(db.TextContent).count()
-    assert N_out == N_exp, "Expected %d readings, got %d." % (N_exp, N_out)
+    workers = rdb.run_reading(readers, tcids, verbose=True, db=db,
+                              upload_readings=False, reading_pickle=pkl_file)
+    N_new = len(workers[0].new_readings)
+    N_old = len(workers[0].extant_readings)
+    N_exp = len(readers)*len(tcids)
+    assert N_new == N_exp, "Expected %d readings, got %d." % (N_exp, N_new)
+    assert N_old == 0, "Found old readings, when there should be none."
     assert path.exists(pkl_file), "Pickle file not created."
     with open(pkl_file, 'rb') as f:
         N_pkl = len(pickle.load(f))
     assert N_pkl == N_exp, \
-        "Expected %d readings in pickle, got %d." % (N_exp, N_out)
+        "Expected %d readings in pickle, got %d." % (N_exp, N_pkl)
     N_readings = db.filter_query(db.Reading).count()
     assert N_readings == 0, \
         "There shouldn't be any readings yet, but found %d." % N_readings
 
     # Test reading and insert to the database.
-    rdb.produce_readings(id_dict, reader_list, verbose=True, db=db)
+    rdb.run_reading(readers, tcids, verbose=True, db=db)
     N_db = db.filter_query(db.Reading).count()
-    assert N_db == N_exp, "Excpected %d readings, got %d." % (N_exp, N_db)
+    assert N_db == N_exp, "Expected %d readings, got %d." % (N_exp, N_db)
 
-    # Test reading again, without read_mode='all'
-    outputs_2 = rdb.produce_readings(id_dict, reader_list, verbose=True, db=db)
-    assert len(outputs_2) == N_exp, \
-        "Got %d readings, expected %d." % (len(outputs_2), N_exp)
-    assert all([rd.reading_id is not None for rd in outputs_2])
+    # Test reading again, without read_mode='all', ('unread' by default)
+    workers = rdb.run_reading(readers, tcids, verbose=True, db=db)
+    N_old = len(workers[0].extant_readings)
+    N_new = len(workers[0].new_readings)
+    assert N_old == N_exp, \
+        "Got %d old readings, expected %d." % (N_old, N_exp)
+    assert N_new == 0, \
+        "Got %d new readings, when none should have been read." % N_new
+    assert all([rd.reading_id is not None
+                for rd in workers[0].extant_readings])
 
     # Test with read_mode='none' again.
-    outputs_3 = rdb.produce_readings(id_dict, reader_list, verbose=True, db=db,
-                                     read_mode='none')
-    assert len(outputs_3) == N_exp
-    assert all([rd.reading_id is not None for rd in outputs_3])
+    workers = rdb.run_reading(readers, tcids, verbose=True, db=db,
+                              reading_mode='none')
+    N_old = len(workers[0].extant_readings)
+    assert N_old == N_exp
+    assert all([rd.reading_id is not None
+                for rd in workers[0].extant_readings])
 
     # Test the read_mode='all'.
-    outputs_4 = rdb.produce_readings(id_dict, reader_list, verbose=True, db=db,
-                                     read_mode='all')
-    assert len(outputs_4) == N_exp
-    assert all([rd.reading_id is None for rd in outputs_4])
+    workers = rdb.run_reading(readers, tcids, verbose=True, db=db,
+                              reading_mode='all')
+    old = workers[0].extant_readings
+    new = workers[0].new_readings
+    assert len(new) == N_exp
+    assert len(old) == 0
+    assert all([rd.reading_id is not None for rd in new])
 
 
 @attr('nonpublic')
@@ -273,15 +267,15 @@ def test_multi_batch_run():
     "Test that reading works properly with multiple batches run."
     db = get_db_with_pubmed_content()
     readers = get_readers()
-    tc_list = db.select_all(db.TextContent)
-    id_dict = {'tcid': [tc.id for tc in tc_list]}
-    outputs = rdb.make_db_readings(id_dict, readers,
-                                   batch_size=len(tc_list)//2, db=db)
+    tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+    rdb.run_reading(readers, tcids, batch_size=len(tcids)//2, db=db,
+                    stmt_mode='none')
+
     # This should catch any repeated readings.
-    rdb.upload_readings(outputs, db=db)
     num_readings = db.filter_query(db.Reading).count()
-    assert num_readings == 2*len(tc_list), \
-        "Expected %d readings, only found %d." % (2*len(tc_list), num_readings)
+    num_expected = len(readers)*len(tcids)
+    assert num_readings == num_expected, \
+        "Expected %d readings, only found %d." % (num_expected, num_readings)
 
 
 @attr('slow', 'nonpublic')
@@ -289,10 +283,11 @@ def test_multiproc_statements():
     "Test the multiprocessing creation of statements."
     db = get_db_with_pubmed_content()
     readers = get_readers()
-    tc_list = db.select_all(db.TextContent)
-    id_dict = {'tcid': [tc.id for tc in tc_list]}
-    outputs = rdb.make_db_readings(id_dict, readers, db=db)
-    stmts = make_statements(outputs, 2)
+    tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+    workers = rdb.run_reading(readers, tcids, db=db)
+    assert not any(worker.extant_readings for worker in workers)
+    outputs = [rd for worker in workers for rd in worker.new_readings]
+    stmts = rdb.make_statements(outputs, 2)
     assert len(stmts)
 
 
@@ -330,8 +325,7 @@ def test_normal_db_reading_call():
     basename = 'local_db_test_run'
     s3_prefix = 'reading_results/%s/' % basename
     s3.put_object(Bucket='bigmech', Key=s3_prefix + 'id_list',
-                  Body='\n'.join(['tcid: %d' % i
-                                  for i in range(len(text_content))]))
+                  Body='\n'.join(['%d' % i for i in range(len(text_content))]))
 
     # Call the reading tool
     sub = DbReadingSubmitter(basename, ['sparser'])

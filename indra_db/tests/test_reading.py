@@ -10,7 +10,7 @@ import boto3
 from nose.plugins.attrib import attr
 
 from indra.util import zip_string
-from indra.tools.reading.readers import SparserReader
+from indra.tools.reading.readers import SparserReader, EmptyReader
 from indra.tools.reading.readers import get_reader_classes
 
 from indra_db import util as dbu
@@ -82,40 +82,47 @@ def test_reading_content_insert():
     readers = get_readers()
     workers = [rdb.DatabaseReader(tcids, reader, verbose=True, db=db)
                for reader in readers]
+    reading_output = []
     for worker in workers:
         worker.get_readings()
 
         expected_output_len = len(tcids)
         N_new = len(worker.new_readings)
-        assert N_new == expected_output_len, \
-            ("Not all text content successfully read by %s."
-             "Expected %d outputs, but got %d."
-             % (worker.reader.name, expected_output_len, N_new))
+        reading_output.extend(worker.new_readings)
+        if isinstance(worker.reader, EmptyReader):
+            assert N_new == 0, "An empty reader read something..."
+        else:
+            assert N_new == expected_output_len, \
+                ("Not all text content successfully read by %s."
+                 "Expected %d outputs, but got %d."
+                 % (worker.reader.name, expected_output_len, N_new))
 
     print("Test reading insert")
     for worker in workers:
         worker.dump_readings_to_db()
-        r_list = db.select_all(db.Reading)
+    r_list = db.select_all(db.Reading)
 
-        def is_complete_match(r_list, reading_output):
-            return all([any([rd.matches(r) for r in r_list])
-                        for rd in reading_output])
+    def is_complete_match(r_list, reading_output):
+        return all([any([rd.matches(r) for r in r_list])
+                    for rd in reading_output])
 
-        assert is_complete_match(r_list, reading_output), \
-            "Not all reading output posted for reading by %s."\
-            % worker.reader.name
+    assert is_complete_match(r_list, reading_output), \
+        "Not all reading output posted."
 
     print("Test making statements")
+    num_stmts = 0
     for worker in workers:
         worker.get_statements()
-        assert worker.statement_outputs, "Did not get any statement outputs."
-        num_stmts = len(worker.statement_outputs)
+        if not isinstance(worker.reader, EmptyReader):
+            assert worker.statement_outputs, "Did not get statement outputs."
+        num_stmts += len(worker.statement_outputs)
 
         worker.dump_statements_to_db()
-        num_db_sids = db.count(db.RawStatements.id)
-        assert num_db_sids == num_stmts, \
-            "Only %d/%d statements added." % (num_db_sids, num_stmts)
-        assert len(db.select_all(db.RawAgents)), "No agents added."
+
+    num_db_sids = db.count(db.RawStatements.id)
+    assert num_db_sids == num_stmts, \
+        "Only %d/%d statements added." % (num_db_sids, num_stmts)
+    assert len(db.select_all(db.RawAgents)), "No agents added."
 
 
 @attr('nonpublic')
@@ -140,17 +147,21 @@ def test_read_db():
 
     # Run the reading with default batch size, reading_mode set to 'all'. (this
     # should produce new readings.)
+    reader.reset()
     worker2 = rdb.DatabaseReader(tcids, reader, db=db, reading_mode='all')
     worker2.get_readings()
 
     N2_old = len(worker2.extant_readings)
     N2_new = len(worker2.new_readings)
+    print(N2_old, N2_new, N1, N1_db)
+    assert N2_old == 0,\
+        "Got %d old readings despite reading_mode set to 'all'." % N2_old
     assert N1 == N2_new, \
         "Got %d readings from run 1 but %d from run 2." % (N1, N2_new)
-    assert N2_old == 0, "Got old readings despite reading_mode set to 'all'."
 
     # Run the reading with default batch size, with reading_mode set to
     # 'unread', again. (this should NOT produce new readings.)
+    reader.reset()
     worker3 = rdb.DatabaseReader(tcids, reader, db=db, reading_mode='unread')
     worker3.get_readings()
 

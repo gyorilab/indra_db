@@ -69,8 +69,8 @@ class DbReadingSubmitter(Submitter):
         return
 
     def _get_base(self, job_name, start_ix, end_ix):
-        read_mode = self.options.get('reading_mode')
-        stmt_mode = self.options.get('stmt_mode')
+        read_mode = self.options.get('reading_mode', 'unread')
+        stmt_mode = self.options.get('stmt_mode', 'all')
 
         job_name = '%s_%d_%d' % (self.basename, start_ix, end_ix)
         base = ['python', '-m', 'indra_db.reading.read_db_aws',
@@ -239,7 +239,9 @@ class DbReadingSubmitter(Submitter):
         idx_patt = re.compile('%s_(\d+)_(\d+)' % self.basename)
         job_segs = NestedDict()
         plot_set = set()
+        stages = []
         for stage, stage_d in timing_info.items():
+            stages.append((list(stage_d['start'].values())[0], stage))
             # e.g. reading, statement production...
             for metric, metric_d in stage_d.items():
                 # e.g. start, end, ...
@@ -255,6 +257,7 @@ class DbReadingSubmitter(Submitter):
                     plot_set.add(key)
         plot_list = list(plot_set)
         plot_list.sort()
+        stages = [stg for _, stg in sorted(stages)]
 
         # Use this for getting the minimum and maximum.
         all_times = [dt for job in job_segs.values() for stage in job.values()
@@ -273,7 +276,6 @@ class DbReadingSubmitter(Submitter):
         gs = plt.GridSpec(2, 1, height_ratios=[10, 1])
         ax0 = plt.subplot(gs[0])
         ytick_pairs = []
-        stages = ['reading', 'statement production', 'stats']
         t = arange((all_end - all_start).total_seconds())
         counts = dict.fromkeys(['jobs'] + stages)
         for k in counts.keys():
@@ -281,7 +283,7 @@ class DbReadingSubmitter(Submitter):
         for i, job_tpl in enumerate(plot_list):
             s_ix, e_ix, job_name = job_tpl
             job_d = job_segs[job_name]
-            xs = [get_time_tuple(job_d[stg]) for stg in stages]
+            xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
             ys = (s_ix, (e_ix - s_ix)*0.9)
             ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix)))
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
@@ -297,7 +299,7 @@ class DbReadingSubmitter(Submitter):
 
         # Format the plot
         ax0.tick_params(top='off', left='off', right='off', bottom='off',
-                       labelleft='on', labelbottom='off')
+                        labelleft='on', labelbottom='off')
         for spine in ax0.spines.values():
             spine.set_visible(False)
         total_time = (all_end - all_start).total_seconds()
@@ -330,12 +332,20 @@ class DbReadingSubmitter(Submitter):
 
         # Plot the lower axis.
         legend_list = []
-        color_map = {'jobs': 'k', 'reading': 'r', 'statement production': 'g',
-                     'stats': 'b'}
         ax1 = plt.subplot(gs[1], sharex=ax0)
         for k, cs in counts.items():
             legend_list.append(k)
-            ax1.plot(t, cs, color=color_map[k])
+            if 'old_readings' in k:
+                c = '#EE7D64'
+            elif 'new_readings' in k:
+                c = '#A43E27'
+            elif 'make_statements' in k:
+                c = '#33BB26'
+            elif k == 'stats':
+                c = 'b'
+            elif k == 'jobs':
+                c = 'k'
+            ax1.plot(t, cs, color=c)
         for lbl, spine in ax1.spines.items():
             spine.set_visible(False)
         max_n = max(counts['jobs'])

@@ -153,4 +153,4 @@ if __name__ == '__main__':
     reading_outputs = [rd for worker in workers
                        for rd in worker.extant_readings + worker.new_readings]
     stmt_outputs = [s for worker in workers for s in worker.statement_outputs]
-    rep.report_statistics(reading_outputs, stmt_outputs, starts, ends)
+    rep.report_statistics(workers)

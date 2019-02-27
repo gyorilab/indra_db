@@ -105,11 +105,14 @@ class DbAwsStatReporter(Reporter):
     def _make_timing_report(self, starts, ends):
         """Stash a text file with the timings: start, end, and duration."""
         # Report on the timing
-        timing_str = ''
-        for step in ['reading', 'statement production', 'stats']:
+        timing_strs = []
+        for step in starts.keys():
             time_taken = ends[step] - starts[step]
-            timing_str += ('%22s: start: %s, end: %s, duration: %s\n'
-                           % (step, starts[step], ends[step], time_taken))
+            line = '%22s: start: %s, end: %s, duration: %s' \
+                   % (step, starts[step], ends[step], time_taken)
+            timing_strs.append((starts[step], line))
+
+        timing_str = '\n'.join(l for _, l in sorted(timing_strs))
 
         self.s3.put_object(Key=self.s3_prefix + 'timing.txt', Body=timing_str,
                            Bucket=self.bucket_name)
@@ -242,7 +245,7 @@ class DbAwsStatReporter(Reporter):
         self.add_text(key, section='Job Info', space=(1, 6))
         self.add_text(value, section='Job Info', style='Code')
 
-    def report_statistics(self, reading_outputs, stmt_outputs, starts, ends):
+    def report_statistics(self, workers):
         """Grab low-hanging-statistics and produce a pdf report.
 
         All the data generated is also stashed for future use in text and pickle
@@ -250,21 +253,26 @@ class DbAwsStatReporter(Reporter):
 
         Parameters
         ----------
-        reading_outputs : list [ReadingData]
-            A list of the ReadingData results output by `produce_readings`.
-        stmt_outputs : list [StatementData]
-            A list of the StatementData results output by `produce_statements`.
-        starts : dict {<stage> : <datetime.datetime instance>}
-            A dict of the start times of different parts of the job
-            (e.g. statement production).
-        ends : dict {<stage> : <datetime.datetime instance>}
-            A dict of the end times of different parts of the job (like starts).
+        workers : list(DatabaseReader)
+            A list of the workers used to produce the readings.
         """
+        starts = {}
+        ends = {}
+        for worker in workers:
+            for key, val in worker.starts.items():
+                starts[worker.reader.name + '_' + key] = val
+            for key, val in worker.stops.items():
+                ends[worker.reader.name + '_' + key] = val
+
         starts['stats'] = datetime.now()
         for k, end in ends.items():
             self._make_job_line(k + ' start', str(starts[k]))
             self._make_job_line(k + ' end', str(end))
             self._make_job_line(k + ' duration', str(end-starts[k]))
+
+        reading_outputs = [rd for w in workers
+                           for rd in w.new_readings + w.extant_readings]
+        stmt_outputs = [s for w in workers for s in w.statement_outputs]
 
         self.summary_dict['Total readings'] = len(reading_outputs)
         reading_stmts = [(rd.reading_id, rd.tcid, rd.reader, rd.get_statements())

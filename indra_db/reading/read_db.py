@@ -7,6 +7,7 @@ import json
 import pickle
 import random
 import logging
+from datetime import datetime
 from math import ceil
 from multiprocessing.pool import Pool
 
@@ -238,6 +239,8 @@ class DatabaseReader(object):
         self.extant_readings = []
         self.new_readings = []
         self.statement_outputs = []
+        self.starts = {}
+        self.stops = {}
         return
 
     def iter_over_content(self):
@@ -263,7 +266,7 @@ class DatabaseReader(object):
             logger.debug('All content will be read (force_read).')
             tc_tbr_query = tc_query
 
-        for tc in tc_tbr_query.yield_per(self.batch_size):
+        for tc in tc_tbr_query.distinct().yield_per(self.batch_size):
             processed_content = process_content(tc)
             if processed_content is not None:
                 yield processed_content
@@ -282,6 +285,7 @@ class DatabaseReader(object):
         outputs : list of ReadingData instances
             The results of the readings with relevant metadata.
         """
+        self.starts['new_readings'] = datetime.now()
         # Iterate
         logger.debug("Beginning to iterate.")
         batch_list = []
@@ -293,7 +297,6 @@ class DatabaseReader(object):
 
             # Periodically read a bunch of stuff.
             if (len(batch_list)+1) % self.batch_size == 0:
-                # TODO: this is a bit cludgy...maybe do this better?
                 logger.debug("Reading batch of files for %s."
                              % self.reader.name)
                 results = self.reader.read(batch_list, **kwargs)
@@ -308,11 +311,12 @@ class DatabaseReader(object):
             results = self.reader.read(batch_list, **kwargs)
             if results is not None:
                 self.new_readings.extend(results)
-
+        self.stops['new_readings'] = datetime.now()
         return
 
     def _get_prior_readings(self):
         """Get readings from the database."""
+        self.starts['old_readings'] = datetime.now()
         db = self._db
         if self.tcids:
             readings_query = db.filter_query(
@@ -327,10 +331,12 @@ class DatabaseReader(object):
                     )
         logger.info("Found %d pre-existing readings."
                     % len(self.extant_readings))
+        self.stops['old_readings'] = datetime.now()
         return
 
     def dump_readings_to_db(self):
         """Put the reading output on the database."""
+        self.starts['dump_readings_db'] = datetime.now()
         db = self._db
 
         # Get the id for this batch of uploads.
@@ -355,16 +361,19 @@ class DatabaseReader(object):
                               db.Reading.batch_id == batch_id)
         for tpl in rdata:
             rd_dict[tuple(tpl[1:])].reading_id = tpl[0]
-
+        self.stops['dump_readings_db'] = datetime.now()
         return
 
     def dump_readings_to_pickle(self, pickle_file):
         """Dump the reading results into a pickle file."""
+        self.starts['dump_readings_pkl'] = datetime.now()
         with open(pickle_file, 'wb') as f:
             rdata = [output.make_tuple(None)
                      for output in self.new_readings + self.extant_readings]
             pickle.dump(rdata, f)
             print("Reading outputs pickled in: %s" % pickle_file)
+
+        self.stops['dump_readings_pkl'] = datetime.now()
         return
 
     def get_readings(self):
@@ -385,34 +394,42 @@ class DatabaseReader(object):
 
     def dump_statements_to_db(self):
         """Upload the statements to the database."""
+        self.starts['dump_statements_db'] = datetime.now()
         logger.info("Uploading %d statements to the database." %
                     len(self.statement_outputs))
         batch_id = self._db.make_copy_batch_id()
         stmt_tuples = [s.make_tuple(batch_id) for s in self.statement_outputs]
         self._db.copy('raw_statements', stmt_tuples,
                       DatabaseStatementData.get_cols(), lazy=True,
-                      push_conflict=True)
+                      push_conflict=True,
+                      constraint='reading_raw_statement_uniqueness')
 
         logger.info("Uploading agents to the database.")
         reading_id_set = {sd.reading_id for sd in self.statement_outputs}
         if len(reading_id_set):
             insert_raw_agents(self._db, batch_id, verbose=True)
+        self.stops['dump_statements_db'] = datetime.now()
         return
 
     def dump_statements_to_pickle(self, pickle_file):
         """Dump the statements into a pickle file."""
+        self.starts['dump_statements_pkl'] = datetime.now()
         with open(pickle_file, 'wb') as f:
             pickle.dump([sd.statement for sd in self.statement_outputs], f)
         print("Statements pickled in %s." % pickle_file)
+        self.stops['dump_readings_pkl'] = datetime.now()
+        return
 
     def get_statements(self):
         """Convert the reader output into a list of StatementData instances."""
+        self.starts['make_statements'] = datetime.now()
         if self.stmt_mode == 'all':
             all_outputs = self.new_readings + self.extant_readings
             self.statement_outputs = make_statements(all_outputs, self.n_proc)
         elif self.stmt_mode == 'unread':
             self.statement_outputs = make_statements(self.new_readings,
                                                      self.n_proc)
+        self.stops['make_statements'] = datetime.now()
         return
 
 

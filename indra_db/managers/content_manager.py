@@ -771,42 +771,51 @@ class Pubmed(_NihManager):
             logger.info("All files have been loaded. Nothing to do.")
             return False
 
-        # Download the XML files in parallel
-        q = mp.Queue()
-        proc_list = []
-        for xml_file in xml_files:
-            if continuing and xml_file in existing_files:
-                logger.info("Skipping %s. Already uploaded." % xml_file)
-                continue
-            p = mp.Process(
-                target=self.get_article_info,
-                args=(xml_file, q, ),
-                daemon=True
-                )
-            proc_list.append(p)
-        n_tot = len(proc_list)
+        if n_procs > 1:
+            # Download the XML files in parallel
+            q = mp.Queue()
+            proc_list = []
+            for xml_file in xml_files:
+                if continuing and xml_file in existing_files:
+                    logger.info("Skipping %s. Already uploaded." % xml_file)
+                    continue
+                p = mp.Process(
+                    target=self.get_article_info,
+                    args=(xml_file, q)
+                    )
+                proc_list.append(p)
+            n_tot = len(proc_list)
 
-        for _ in range(n_procs):
-            if len(proc_list):
-                proc_list.pop(0).start()
+            for _ in range(n_procs):
+                if len(proc_list):
+                    p = proc_list.pop(0)
+                    p.start()
 
-        def upload_and_record_next(start_new):
-            xml_file, article_info = q.get()  # Block until at least 1 is done.
-            if start_new:
-                proc_list.pop(0).start()
-            logger.info("Beginning to upload %s." % xml_file)
-            self.upload_article(db, article_info, carefully)
-            logger.info("Completed %s." % xml_file)
-            if xml_file not in existing_files:
-                db.insert('source_file', source=self.my_source, name=xml_file)
+            def upload_and_record_next(start_new):
+                xml_file, article_info = q.get()  # Block until at least 1 is done.
+                if start_new:
+                    proc_list.pop(0).start()
+                logger.info("Beginning to upload %s." % xml_file)
+                self.upload_article(db, article_info, carefully)
+                logger.info("Completed %s." % xml_file)
+                if xml_file not in existing_files:
+                    db.insert('source_file', source=self.my_source, name=xml_file)
 
-        while len(proc_list):
-            upload_and_record_next(True)
-            n_tot -= 1
+            while len(proc_list):
+                upload_and_record_next(True)
+                n_tot -= 1
 
-        while n_tot is not 0:
-            upload_and_record_next(False)
-            n_tot -= 1
+            while n_tot is not 0:
+                upload_and_record_next(False)
+                n_tot -= 1
+        else:
+            for xml_file in xml_files:
+                article_info = self.get_article_info(xml_file)
+                logger.info("Beginning to upload %s." % xml_file)
+                self.upload_article(db, article_info, carefully)
+                logger.info("Completed %s." % xml_file)
+                if xml_file not in existing_files:
+                    db.insert('source_file', source=self.my_source, name=xml_file)
 
         return True
 

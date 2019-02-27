@@ -53,8 +53,10 @@ class DatabaseReadingData(ReadingData):
     """
     def __init__(self, tcid, reader_name, reader_version, content_format,
                  content, reading_id=None):
-        super(ReadingData, self).__init__(tcid, reader_name, reader_version,
-                                          content_format, content)
+        super(DatabaseReadingData, self).__init__(tcid, reader_name,
+                                                  reader_version,
+                                                  content_format, content)
+        self.tcid = tcid
         self.reading_id = reading_id
         return
 
@@ -359,7 +361,7 @@ class DatabaseReader(object):
     def dump_readings_to_pickle(self, pickle_file):
         """Dump the reading results into a pickle file."""
         with open(pickle_file, 'wb') as f:
-            rdata = [output.make_tuple()
+            rdata = [output.make_tuple(None)
                      for output in self.new_readings + self.extant_readings]
             pickle.dump(rdata, f)
             print("Reading outputs pickled in: %s" % pickle_file)

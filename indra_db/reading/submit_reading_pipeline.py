@@ -82,7 +82,8 @@ class DbReadingSubmitter(Submitter):
     def _get_extensions(self):
         extensions = []
         for key, val in self.options.items():
-            extensions.append(['--' + key, val])
+            if val is not None:
+                extensions.append(['--' + key, val])
         return extensions
 
     def set_options(self, stmt_mode='all', reading_mode='unread',

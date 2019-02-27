@@ -68,8 +68,8 @@ def test_get_content():
 def test_get_reader_children():
     "Test method for getting reader objects."
     readers = get_readers()
-    assert len(readers) == 2, \
-        "Expected only 2 readers, but got %s." % str(readers)
+    assert len(readers) == 3, \
+        "Expected only 3 readers, but got %s." % str(readers)
 
 
 @attr('slow', 'nonpublic')
@@ -82,16 +82,15 @@ def test_reading_content_insert():
     readers = get_readers()
     workers = [rdb.DatabaseReader(tcids, reader, verbose=True, db=db)
                for reader in readers]
-    reading_output = []
     for worker in workers:
         worker.get_readings()
-        reading_output.extend(worker.new_readings)
 
         expected_output_len = len(tcids)
-        assert len(reading_output) == expected_output_len, \
+        N_new = len(worker.new_readings)
+        assert N_new == expected_output_len, \
             ("Not all text content successfully read by %s."
              "Expected %d outputs, but got %d."
-             % (worker.reader.name, expected_output_len, len(reading_output)))
+             % (worker.reader.name, expected_output_len, N_new))
 
     print("Test reading insert")
     for worker in workers:

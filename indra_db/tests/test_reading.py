@@ -11,7 +11,7 @@ from nose.plugins.attrib import attr
 
 from indra.util import zip_string
 from indra.tools.reading.readers import SparserReader
-from indra.tools.reading.readers import get_readers as get_all_readers
+from indra.tools.reading.readers import get_reader_classes
 
 from indra_db import util as dbu
 from indra_db.reading import read_db as rdb
@@ -40,7 +40,7 @@ def get_id_dict(tr_list):
 
 def get_readers(*names, **kwargs):
     kwargs['ResultClass'] = rdb.DatabaseReadingData
-    return [reader_class(**kwargs) for reader_class in get_all_readers()
+    return [reader_class(**kwargs) for reader_class in get_reader_classes()
             if (not names or reader_class.name in names)]
 
 

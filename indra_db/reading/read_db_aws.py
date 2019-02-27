@@ -2,9 +2,6 @@
 for the job either needs to be provided in environment variables (e.g., the
 REACH version and path) or loaded from S3 (e.g., the list of PMIDs).
 """
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 import os
 import sys
 import boto3
@@ -12,10 +9,8 @@ import botocore
 import logging
 import random
 from datetime import datetime
-from indra.tools.reading.readers import get_readers
 
-from indra_db.reading.read_db import produce_readings, \
-    produce_statements, get_id_dict, run_reading, construct_readers
+from indra_db.reading.read_db import run_reading, construct_readers
 from indra_db.reading.report_db_aws import DbAwsStatReporter
 
 

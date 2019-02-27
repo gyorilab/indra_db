@@ -16,7 +16,7 @@ from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
     Content, Reader, EmptyReader
-from indra.util import zip_string
+from indra.util import zip_string, batch_iter
 
 from indra_db import get_primary_db, formats
 from indra_db.util import insert_raw_agents, unpack
@@ -248,7 +248,7 @@ class DatabaseReader(object):
         tc_query = self._db.filter_query(
             self._db.TextContent,
             self._db.TextContent.id.in_(self.tcids)
-            ).distinct()
+            )
 
         if self.reading_mode != 'all':
             logger.debug("Getting content to be read.")
@@ -288,29 +288,16 @@ class DatabaseReader(object):
         self.starts['new_readings'] = datetime.now()
         # Iterate
         logger.debug("Beginning to iterate.")
-        batch_list = []
-        for content in self.iter_over_content():
-            # The get_content function returns an iterator which yields
-            # results in batches, so as not to overwhelm RAM. We need to read
-            # in batches for much the same reason.
-            batch_list.append(content)
-
-            # Periodically read a bunch of stuff.
-            if (len(batch_list)+1) % self.batch_size == 0:
-                logger.debug("Reading batch of files for %s."
-                             % self.reader.name)
-                results = self.reader.read(batch_list, **kwargs)
-                if results is not None:
-                    self.new_readings.extend(results)
-                batch_list = []
-        logger.debug("Finished iteration.")
-
-        # Pick up any stragglers.
-        if len(batch_list) > 0:
-            logger.debug("Reading remaining files for %s." % self.reader.name)
-            results = self.reader.read(batch_list, **kwargs)
+        iterator = enumerate(batch_iter(self.iter_over_content(),
+                                        self.batch_size))
+        for i, batch in iterator:
+            logger.debug("Reading batch %d of files for %s."
+                         % (i, self.reader.name))
+            results = self.reader.read(batch, **kwargs)
             if results is not None:
                 self.new_readings.extend(results)
+        logger.debug("Finished iteration.")
+
         self.stops['new_readings'] = datetime.now()
         return
 

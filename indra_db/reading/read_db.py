@@ -221,6 +221,7 @@ class DatabaseReader(object):
                  stmt_mode='all', batch_size=1000, db=None, n_proc=1):
         self.tcids = tcids
         self.reader = reader
+        self.reader.reset()
         self.verbose = verbose
         self.reading_mode = reading_mode
         if isinstance(reader, EmptyReader):
@@ -289,13 +290,13 @@ class DatabaseReader(object):
         # Iterate
         logger.debug("Beginning to iterate.")
         iterator = enumerate(batch_iter(self.iter_over_content(),
-                                        self.batch_size))
+                                        self.batch_size, return_func=list))
         for i, batch in iterator:
             logger.debug("Reading batch %d of files for %s."
                          % (i, self.reader.name))
-            results = self.reader.read(batch, **kwargs)
-            if results is not None:
-                self.new_readings.extend(results)
+            self.reader.read(batch, **kwargs)
+        if self.reader.results:
+            self.new_readings.extend(self.reader.results)
         logger.debug("Finished iteration.")
 
         self.stops['new_readings'] = datetime.now()
@@ -340,7 +341,10 @@ class DatabaseReader(object):
         # Copy into the database.
         logger.info("Adding %d/%d reading entries to the database." %
                     (len(upload_list), len(self.new_readings)))
-        db.copy('reading', upload_list, DatabaseReadingData.get_cols())
+        if upload_list:
+            is_all = self.reading_mode == 'all'
+            db.copy('reading', upload_list, DatabaseReadingData.get_cols(),
+                    lazy=is_all, push_conflict=is_all)
 
         # Update the reading_data objects with their reading_ids.
         rdata = db.select_all([db.Reading.id, db.Reading.text_content_id,

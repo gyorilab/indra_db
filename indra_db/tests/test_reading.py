@@ -308,7 +308,7 @@ def test_multi_batch_run():
 
     # This should catch any repeated readings.
     num_readings = db.filter_query(db.Reading).count()
-    num_expected = len(readers)*len(tcids)
+    num_expected = len([r for r in readers if not isinstance(r, EmptyReader)])*len(tcids)
     assert num_readings == num_expected, \
         "Expected %d readings, only found %d." % (num_expected, num_readings)
 

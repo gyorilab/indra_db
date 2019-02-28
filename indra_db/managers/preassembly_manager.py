@@ -79,7 +79,7 @@ from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
 
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
-    _extract_agent_data
+    _extract_agent_data, insert_pa_agents
 
 HERE = path.dirname(path.abspath(__file__))
 ipa_logger.setLevel(logging.DEBUG)
@@ -236,6 +236,7 @@ class PreassemblyManager(object):
                     ('pa_stmt_mk_hash', 'raw_stmt_id'))
             db.copy('pa_agents', agent_tuples,
                     ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+            insert_pa_agents(db, stmts, verbose=True, skip=['agents'])
 
         self._log("Added %d new pa statements into the database."
                    % len(new_mk_set))

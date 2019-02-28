@@ -175,7 +175,10 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     return
 
 
-def insert_pa_agents(db, stmts, verbose=False):
+def insert_pa_agents(db, stmts, verbose=False, skip=None):
+    if skip is None:
+        skip = []
+
     if verbose:
         num_stmts = len(stmts)
 
@@ -202,12 +205,15 @@ def insert_pa_agents(db, stmts, verbose=False):
     if verbose and num_stmts > 25:
         print()
 
-    db.copy('pa_agents', ref_data,
-            ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
-    db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
-                                  'residue', 'modified'))
-    db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position', 'residue_from',
-                                  'residue_to'))
+    if 'agents' not in skip:
+        db.copy('pa_agents', ref_data,
+                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+    if 'mods' not in skip:
+        db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
+                                      'residue', 'modified'))
+    if 'muts' not in skip:
+        db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position',
+                                      'residue_from', 'residue_to'))
     return
 
 
@@ -265,7 +271,7 @@ def _extract_agent_data(stmt, stmt_id):
         for ns, ag_id in all_agent_refs(ag):
             if ag_id is not None:
                 ref_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
-                                   role))
+                                 role))
             else:
                 logger.warning("Found agent for %s with None value." % ns)
 
@@ -616,8 +622,7 @@ def _get_filtered_db_statements(db, get_full_stmts=False, clauses=None):
 
 @clockit
 def distill_stmts(db, get_full_stmts=False, clauses=None,
-                  handle_duplicates='ignore', weed_evidence=True,
-                  batch_size=1000):
+                  handle_duplicates='ignore', weed_evidence=True):
     """Get a corpus of statements from clauses and filters duplicate evidence.
 
     Parameters

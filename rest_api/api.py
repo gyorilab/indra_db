@@ -7,7 +7,7 @@ from jinja2 import Template
 from functools import wraps
 from datetime import datetime
 
-from flask import Flask, request, abort, Response, redirect
+from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
 from flask_cors import CORS
 
@@ -195,7 +195,7 @@ def _query_wrapper(f):
 
 @app.route('/', methods=['GET'])
 def iamalive():
-    return Response("I am alive!")
+    return redirect('browser/welcome', code=302)
 
 
 @app.route('/browser', methods=['GET'])
@@ -212,6 +212,53 @@ def welcome():
     with open(page_path, 'r') as f:
         page_html = f.read()
     return Response(page_html)
+
+
+COOKIE_TOKEN_KEY = 'indradb-authorization'
+
+
+@app.route('/browser/demon', methods=['GET', 'POST'])
+def demon():
+    logger.info("Got a demon request")
+    print("Args -----------")
+    print(request.args)
+    print("Cookies ------------")
+    print(request.cookies)
+    print("------------------")
+    endpoint = request.args.get('endpoint')
+    assert endpoint, "Got a request with no endpoint."
+
+    token = request.headers.get('Authorization')
+    if token:
+        resp = redirect(url_for('browser/' + endpoint, **request.args),
+                        code=302)
+        resp.headers = request.headers
+        return resp
+
+    token = request.args.pop('token-id', None)
+    _ = request.args.pop('token-auth', None)
+    if token:
+        resp = redirect(url_for('browser/' + endpoint, **request.args),
+                        code=302)
+        resp.headers = request.headers
+        resp.headers['Authorization'] = token
+        resp.set_cookie(COOKIE_TOKEN_KEY, token)
+        return resp
+
+    token = request.cookies.get('indradb-authorization')
+    if token:
+        resp = redirect(url_for('browser/' + endpoint, **request.args))
+        resp.headers = request.headers
+        resp.headers['Authorization'] = token
+        return resp
+
+    resp = redirect(url_for('auth.indra.bio/login', response_type='token',
+                            client_id='45rmn7pdon4q4g2o1nr7m33rpv',
+                            redirect_uri=url_for('/browser/demon',
+                                                 **request.args),
+                            state='spamandeggs'),
+                    code=302)
+    return resp
 
 
 @app.route('/browser/statements', methods=['GET'])

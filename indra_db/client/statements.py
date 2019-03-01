@@ -11,7 +11,7 @@ from indra.util import batch_iter, clockit
 from indra.databases import hgnc_client
 
 from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
-    _get_statement_object, regularize_agent_id, _get_trids
+    get_statement_object, regularize_agent_id, _get_trids
 from indra_db.client.datasets import get_statement_essentials
 
 
@@ -288,7 +288,7 @@ def _process_pa_statement_res_wev(db, stmt_iterable, count=1000,
         for pa_stmt_db_obj, raw_stmt_db_obj in stmt_pair_batch:
             k = pa_stmt_db_obj.mk_hash
             if k not in stmt_dict.keys():
-                stmt_dict[k] = _get_statement_object(pa_stmt_db_obj)
+                stmt_dict[k] = get_statement_object(pa_stmt_db_obj)
                 ev_dict[k] = [raw_stmt_db_obj.id,]
             else:
                 ev_dict[k].append(raw_stmt_db_obj.id)
@@ -323,7 +323,7 @@ def _process_pa_statement_res_nev(stmt_iterable, count=1000):
         for pa_stmt_db_obj in stmt_pair_batch:
             k = pa_stmt_db_obj.mk_hash
             if k not in stmt_dict.keys():
-                stmt_dict[k] = _get_statement_object(pa_stmt_db_obj)
+                stmt_dict[k] = get_statement_object(pa_stmt_db_obj)
 
         logger.info("Up to %d pa statements in all." % len(stmt_dict))
     return stmt_dict

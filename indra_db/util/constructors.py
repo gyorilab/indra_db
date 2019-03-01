@@ -104,5 +104,3 @@ def get_db(db_label):
         return
     sqltype = m.groups()[0]
     return DatabaseManager(db_name, sqltype=sqltype, label=db_label)
-
-

@@ -1,14 +1,13 @@
-from collections import defaultdict
-
 __all__ = ['distill_stmts', 'get_filtered_rdg_stmts', 'get_filtered_db_stmts',
            'delete_raw_statements_by_id', 'get_reading_stmt_dict',
            'reader_versions', 'text_content_sources']
 
 import json
 import logging
+from collections import defaultdict
 
-from indra.statements import Statement
 from indra.util import clockit
+from indra.statements import Statement
 from indra.util.nested_dict import NestedDict
 
 from .helpers import _set_evidence_text_ref

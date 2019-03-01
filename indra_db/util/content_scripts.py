@@ -1,6 +1,9 @@
+__all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
+
 from collections import defaultdict
 
-import indra_db.util as dbu
+from .constructors import get_primary_db
+from .helpers import unpack
 
 
 def get_stmts_with_agent_text_like(pattern, filter_genes=False):
@@ -24,7 +27,7 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
         ids for statements with at least one agent with raw text matching
         the pattern.
     """
-    db = dbu.get_primary_db()
+    db = get_primary_db()
 
     text_dict = db.select_all([db.RawAgents.stmt_id,
                                db.RawAgents.db_id],
@@ -67,7 +70,7 @@ def get_text_content_from_stmt_ids(stmt_ids):
         if one is available, falls back upon using the abstract.
         A statement id will map to None if no text content is available.
     """
-    db = dbu.get_primary_db()
+    db = get_primary_db()
     text_refs = db.select_all([db.RawStatements.id, db.TextRef.id],
                               db.RawStatements.id.in_(stmt_ids),
                               *db.link(db.RawStatements, db.TextRef))
@@ -76,10 +79,10 @@ def get_text_content_from_stmt_ids(stmt_ids):
                            db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id.in_(text_refs.values()))
-    fulltexts = {text_id: dbu.unpack(text)
+    fulltexts = {text_id: unpack(text)
                  for text_id, text, text_type in texts
                  if text_type == 'fulltext'}
-    abstracts = {text_id: dbu.unpack(text)
+    abstracts = {text_id: unpack(text)
                  for text_id, text, text_type in texts
                  if text_type == 'abstract'}
     result = {}

@@ -103,6 +103,17 @@
 
           console.log('getPromise')
           console.log(getPromise)
+
+          getPromise.then(function(data){
+            if (data) {
+              console.log('GET from db search')
+              console.log(data)
+              // document.open();
+              // document.write(newContent);
+              // document.close();
+              // document.createElement('HTML').innerHtml = data;
+            }
+          })
         }
 
       var ENV = 'indra';

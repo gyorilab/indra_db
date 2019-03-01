@@ -1,5 +1,5 @@
 __all__ = ['insert_raw_agents', 'insert_pa_agents', 'insert_pa_stmts',
-           'insert_db_stmts', 'regularize_agent_id']
+           'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data']
 
 import json
 import logging
@@ -48,7 +48,7 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
 
     for i, (stmt_id, db_stmt) in enumerate(db_stmts):
         stmt = get_statement_object(db_stmt)
-        ref_data, mod_data, mut_data = _extract_agent_data(stmt, stmt_id)
+        ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
         ref_tuples.extend(ref_data)
         mod_tuples.extend(mod_data)
         mut_tuples.extend(mut_data)
@@ -86,7 +86,7 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
     mod_data = []
     mut_data = []
     for i, stmt in enumerate(stmts):
-        refs, mods, muts = _extract_agent_data(stmt, stmt.get_hash())
+        refs, mods, muts = extract_agent_data(stmt, stmt.get_hash())
         ref_data.extend(refs)
         mod_data.extend(mods)
         mut_data.extend(muts)
@@ -125,7 +125,7 @@ def regularize_agent_id(id_val, id_ns):
     return new_id_val
 
 
-def _extract_agent_data(stmt, stmt_id):
+def extract_agent_data(stmt, stmt_id):
     """Create the tuples for copying agents into the database."""
     # Figure out how the agents are structured and assign roles.
     ag_list = stmt.agent_list()

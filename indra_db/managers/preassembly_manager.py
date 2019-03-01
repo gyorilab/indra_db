@@ -79,7 +79,7 @@ from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
 
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
-    _extract_agent_data, insert_pa_agents
+    extract_agent_data, insert_pa_agents
 
 HERE = path.dirname(path.abspath(__file__))
 ipa_logger.setLevel(logging.DEBUG)
@@ -262,7 +262,7 @@ class PreassemblyManager(object):
             evidence_links[h].add(uuid_sid_dict[s.uuid])
 
             # Add any db refs to the agents.
-            ref_data, _, _ = _extract_agent_data(s, h)
+            ref_data, _, _ = extract_agent_data(s, h)
             agent_tuples |= set(ref_data)
 
         return new_unique_stmts, evidence_links, agent_tuples

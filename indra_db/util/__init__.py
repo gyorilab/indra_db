@@ -8,7 +8,8 @@ Some key functions' capabilities include:
 
 __all__ = ['get_primary_db', 'get_db', 'insert_raw_agents', 'insert_pa_stmts',
            'insert_pa_agents', 'insert_db_stmts', 'get_raw_stmts_frm_db_list',
-           'distill_stmts', 'regularize_agent_id', 'get_statement_object']
+           'distill_stmts', 'regularize_agent_id', 'get_statement_object',
+           'extract_agent_data']
 
 from .insert import *
 from .helpers import *

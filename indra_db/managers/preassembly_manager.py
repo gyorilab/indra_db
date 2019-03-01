@@ -1,6 +1,3 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 import json
 import pickle
 import logging
@@ -17,7 +14,7 @@ if __name__ == '__main__':
     # here prevents a long wait just to fined out you entered a command wrong.
     from argparse import ArgumentParser
     parser = ArgumentParser(
-        description='Manage content on INDRA\'s database.'
+        description='Manage preassembly of raw statements into pa statements.'
         )
     parser.add_argument(
         choices=['create', 'update'],
@@ -58,8 +55,7 @@ if __name__ == '__main__':
         help=('Select a database from the names given in the config or '
               'environment, for example primary is INDRA_DB_PRIMAY in the '
               'config file and INDRADBPRIMARY in the environment. The default '
-              'is \'primary\'. Note that this is overwridden by use of the '
-              '--test flag if \'test\' is not a part of the name given.')
+              'is \'primary\'.')
         )
     parser.add_argument(
         '--store_duplicates',
@@ -79,12 +75,14 @@ from indra.util import batch_iter, clockit
 from indra.statements import Statement
 from indra.tools import assemble_corpus as ac
 from indra.preassembler import Preassembler
+from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
 
-from indra_db.util import insert_pa_stmts, distill_stmts, get_db
-
+from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
+    extract_agent_data, insert_pa_agents
 
 HERE = path.dirname(path.abspath(__file__))
+ipa_logger.setLevel(logging.DEBUG)
 
 
 def _handle_update_table(func):
@@ -200,7 +198,8 @@ class PreassemblyManager(object):
                 yield [(sid, _stmt_from_json(s_json)) for sid, s_json in subres]
 
     @clockit
-    def _get_unique_statements(self, db, raw_sids, num_stmts, mk_done=None):
+    def _extract_and_push_unique_statements(self, db, raw_sids, num_stmts,
+                                            mk_done=None):
         """Get the unique Statements from the raw statements."""
         self._log("There are %d distilled raw statement ids to preassemble."
                   % len(raw_sids))
@@ -212,8 +211,9 @@ class PreassemblyManager(object):
         num_batches = num_stmts/self.batch_size
         for i, stmt_tpl_batch in self._raw_sid_stmt_iter(db, raw_sids, True):
             self._log("Processing batch %d/%d of %d/%d statements."
-                       % (i, num_batches, len(stmt_tpl_batch), num_stmts))
-            # Get a list of statements, and generate a mapping from uuid to sid.
+                      % (i, num_batches, len(stmt_tpl_batch), num_stmts))
+
+            # Get a list of statements and generate a mapping from uuid to sid.
             stmts = []
             uuid_sid_dict = {}
             for sid, stmt in stmt_tpl_batch:
@@ -224,17 +224,23 @@ class PreassemblyManager(object):
             cleaned_stmts = self._clean_statements(stmts)
 
             # Use the shallow hash to condense unique statements.
-            new_unique_stmts, evidence_links = \
+            new_unique_stmts, evidence_links, agent_tuples = \
                 self._condense_statements(cleaned_stmts, mk_done, new_mk_set,
                                           uuid_sid_dict)
 
+            # Insert the statements and their links.
             self._log("Insert new statements into database...")
-            insert_pa_stmts(db, new_unique_stmts)
+            insert_pa_stmts(db, new_unique_stmts, ignore_agents=True)
             self._log("Insert new raw_unique links into the database...")
             db.copy('raw_unique_links', flatten_evidence_dict(evidence_links),
                     ('pa_stmt_mk_hash', 'raw_stmt_id'))
+            db.copy('pa_agents', agent_tuples,
+                    ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+            insert_pa_agents(db, new_unique_stmts, verbose=True,
+                             skip=['agents'])
+
         self._log("Added %d new pa statements into the database."
-                    % len(new_mk_set))
+                   % len(new_mk_set))
         return new_mk_set
 
     @clockit
@@ -243,6 +249,7 @@ class PreassemblyManager(object):
         self._log("Condense into unique statements...")
         new_unique_stmts = []
         evidence_links = defaultdict(lambda: set())
+        agent_tuples = set()
         for s in cleaned_stmts:
             h = shash(s)
 
@@ -253,7 +260,12 @@ class PreassemblyManager(object):
 
             # Add the evidence to the dict.
             evidence_links[h].add(uuid_sid_dict[s.uuid])
-        return new_unique_stmts, evidence_links
+
+            # Add any db refs to the agents.
+            ref_data, _, _ = extract_agent_data(s, h)
+            agent_tuples |= set(ref_data)
+
+        return new_unique_stmts, evidence_links, agent_tuples
 
     @_handle_update_table
     def create_corpus(self, db, continuing=False, dups_file=None):
@@ -279,8 +291,7 @@ class PreassemblyManager(object):
                 stmt_ids = pickle.load(f)
         else:
             # Get the statement ids.
-            stmt_ids = distill_stmts(db, num_procs=self.n_proc,
-                                     handle_duplicates=dup_handling)
+            stmt_ids = distill_stmts(db, handle_duplicates=dup_handling)
             with open(sid_cache_fname, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
@@ -300,7 +311,7 @@ class PreassemblyManager(object):
                           % len(done_pa_ids))
 
         # Get the set of unique statements
-        self._get_unique_statements(db, stmt_ids, len(stmt_ids), done_pa_ids)
+        self._extract_and_push_unique_statements(db, stmt_ids, len(stmt_ids), done_pa_ids)
 
         # If we are continuing, check for support links that were already found.
         if continuing:
@@ -316,23 +327,29 @@ class PreassemblyManager(object):
 
         # Now get the support links between all batches.
         support_links = set()
-        for i, outer_batch in enumerate(self._pa_batch_iter(db)):
+        outer_iter = db.select_all_batched(self.batch_size,
+                                           db.PAStatements.json,
+                                           order_by=db.PAStatements.mk_hash)
+        for outer_idx, outer_batch_jsons in outer_iter:
+            outer_batch = [_stmt_from_json(sj) for sj, in outer_batch_jsons]
             # Get internal support links
-            self._log('Getting internal support links outer batch %d.' % i)
-            some_support_links = self._get_support_links(outer_batch,
-                                                         poolsize=self.n_proc)
-            outer_mk_hashes = {shash(s) for s in outer_batch}
+            self._log('Getting internal support links outer batch %d.'
+                      % outer_idx)
+            some_support_links = self._get_support_links(outer_batch)
 
             # Get links with all other batches
-            ib_iter = self._pa_batch_iter(db, ex_mks=outer_mk_hashes)
-            for j, inner_batch in enumerate(ib_iter):
+            inner_iter = db.select_all_batched(self.batch_size,
+                                               db.PAStatements.json,
+                                               order_by=db.PAStatements.mk_hash,
+                                               skip_idx=outer_idx)
+            for inner_idx, inner_batch_jsons in inner_iter:
+                inner_batch = [_stmt_from_json(sj) for sj, in inner_batch_jsons]
                 split_idx = len(inner_batch)
                 full_list = inner_batch + outer_batch
-                self._log('Getting support compared to other batch %d of outer'
-                          'batch %d.' % (j, i))
+                self._log('Getting support between outer batch %d and inner'
+                          'batch %d.' % (outer_idx, inner_idx))
                 some_support_links |= \
-                    self._get_support_links(full_list, split_idx=split_idx,
-                                            poolsize=self.n_proc)
+                    self._get_support_links(full_list, split_idx=split_idx)
 
             # Add all the new support links
             support_links |= (some_support_links - existing_links)
@@ -417,8 +434,7 @@ class PreassemblyManager(object):
             with open(dist_stash, 'rb') as f:
                 stmt_ids = pickle.load(f)
         else:
-            stmt_ids = distill_stmts(db, num_procs=self.n_proc,
-                                     get_full_stmts=False,
+            stmt_ids = distill_stmts(db, get_full_stmts=False,
                                      handle_duplicates=dup_handling)
             with open(dist_stash, 'wb') as f:
                 pickle.dump(stmt_ids, f)
@@ -438,9 +454,9 @@ class PreassemblyManager(object):
             end_date = stash_dict['end']
             new_mk_set = stash_dict['mk_set']
         else:
-            new_mk_set = self._get_unique_statements(db, new_stmt_ids,
-                                                     len(new_stmt_ids),
-                                                     old_mk_set)
+            new_mk_set = self._extract_and_push_unique_statements(db, new_stmt_ids,
+                                                                  len(new_stmt_ids),
+                                                                  old_mk_set)
             end_date = datetime.utcnow()
             with open(new_mk_stash, 'wb') as f:
                 pickle.dump({'start': start_date, 'end': end_date,
@@ -458,48 +474,56 @@ class PreassemblyManager(object):
         if continuing and path.exists(support_link_stash):
             with open(support_link_stash, 'rb') as f:
                 status_dict = pickle.load(f)
-                existing_links = status_dict['existing links']
+                new_support_links = status_dict['existing links']
                 npa_done = status_dict['ids done']
-            self._log("Found %d existing links." % len(existing_links))
+            self._log("Found %d previously found new links."
+                      % len(new_support_links))
         else:
-            existing_links = set()
+            new_support_links = set()
             npa_done = set()
 
+        self._log("Downloading all pre-existing support links")
+        existing_links = {(a, b) for a, b in
+                          db.select_all([db.PASupportLinks.supported_mk_hash,
+                                         db.PASupportLinks.supporting_mk_hash])}
+        # Just in case...
+        new_support_links -= existing_links
+
         # Now find the new support links that need to be added.
-        new_support_links = set()
         batching_args = (self.batch_size,
                          db.PAStatements.json,
                          db.PAStatements.create_date >= start_date,
                          db.PAStatements.create_date <= end_date)
         npa_json_iter = db.select_all_batched(*batching_args,
-                                           order_by=db.PAStatements.create_date)
-        try:
-            for outer_offset, npa_json_batch in npa_json_iter:
-                npa_batch = [_stmt_from_json(s_json)
-                             for s_json, in npa_json_batch]
+                                              order_by=db.PAStatements.mk_hash)
+        for outer_idx, npa_json_batch in npa_json_iter:
+            # Create the statements from the jsons.
+            npa_batch = []
+            for s_json, in npa_json_batch:
+                s = _stmt_from_json(s_json)
+                if s.get_hash(shallow=True) not in npa_done:
+                    npa_batch.append(s)
 
-                # Compare internally
-                self._log("Getting support for new pa at offset %d."
-                          % outer_offset)
-                some_support_links = self._get_support_links(npa_batch)
+            # Compare internally
+            self._log("Getting support for new pa batch %d." % outer_idx)
+            some_support_links = self._get_support_links(npa_batch)
 
+            try:
                 # Compare against the other new batch statements.
-                diff_new_mks = new_mk_set - {shash(s) for s in npa_batch}
                 other_npa_json_iter = db.select_all_batched(
                     *batching_args,
-                    order_by=db.PAStatements.create_date,
-                    skip_offset=outer_offset
+                    order_by=db.PAStatements.mk_hash,
+                    skip_idx=outer_idx
                     )
-                for inner_offset, other_npa_json_batch in other_npa_json_iter:
+                for inner_idx, other_npa_json_batch in other_npa_json_iter:
                     other_npa_batch = [_stmt_from_json(s_json)
                                        for s_json, in other_npa_json_batch]
                     split_idx = len(npa_batch)
                     full_list = npa_batch + other_npa_batch
-                    self._log("Comparing offset %d to offset %d of other new "
-                              "statements." % (outer_offset, inner_offset))
+                    self._log("Comparing outer batch %d to inner batch %d of "
+                              "other new statements." % (outer_idx, inner_idx))
                     some_support_links |= \
-                        self._get_support_links(full_list, split_idx=split_idx,
-                                                poolsize=self.n_proc)
+                        self._get_support_links(full_list, split_idx=split_idx)
 
                 # Compare against the existing statements.
                 opa_json_iter = db.select_all_batched(
@@ -507,44 +531,29 @@ class PreassemblyManager(object):
                     db.PAStatements.json,
                     db.PAStatements.create_date < start_date
                     )
-                for old_offset, opa_json_batch in opa_json_iter:
+                for opa_idx, opa_json_batch in opa_json_iter:
                     opa_batch = [_stmt_from_json(s_json)
                                  for s_json, in opa_json_batch]
                     split_idx = len(npa_batch)
                     full_list = npa_batch + opa_batch
-                    self._log("Comparing new offset %d to offset %d of old "
-                              "statements." % (outer_offset, old_offset))
+                    self._log("Comparing new batch %d to batch %d of old "
+                              "statements." % (outer_idx, opa_idx))
                     some_support_links |= \
-                        self._get_support_links(full_list, split_idx=split_idx,
-                                                poolsize=self.n_proc)
-
-                # Although there are generally few support links, copying as we
-                # go allows work to not be wasted.
+                        self._get_support_links(full_list, split_idx=split_idx)
+            finally:
+                # Stash the new support links in case we crash.
                 new_support_links |= (some_support_links - existing_links)
-                self._log("Copying batch of %d support links into db."
-                          % len(new_support_links))
-                db.copy('pa_support_links', new_support_links,
-                        ('supported_mk_hash', 'supporting_mk_hash'))
-                existing_links |= new_support_links
-                npa_done |= {s.get_hash(shallow=True) for s in npa_batch}
-                new_support_links = set()
                 with open(support_link_stash, 'wb') as f:
-                    pickle.dump({'existing links': existing_links,
+                    pickle.dump({'existing links': new_support_links,
                                  'ids done': npa_done}, f)
+            npa_done |= {s.get_hash(shallow=True) for s in npa_batch}
 
-            # Insert any remaining support links.
-            if new_support_links:
-                self._log("Copying batch final of %d support links into db."
-                          % len(new_support_links))
-                db.copy('pa_support_links', new_support_links,
-                        ('supported_mk_hash', 'supporting_mk_hash'))
-                existing_links |= new_support_links
-        except Exception:
-            logger.info("Stashing support links found so far.")
-            if new_support_links:
-                with open(support_link_stash, 'wb') as f:
-                    pickle.dump(existing_links, f)
-            raise
+        # Insert any remaining support links.
+        if new_support_links:
+            self._log("Copying %d support links into db."
+                      % len(new_support_links))
+            db.copy('pa_support_links', new_support_links,
+                    ('supported_mk_hash', 'supporting_mk_hash'))
 
         # Remove all the caches so they can't be picked up accidentally later.
         for cache in pickle_stashes:
@@ -575,10 +584,10 @@ class PreassemblyManager(object):
         return stmts
 
     @clockit
-    def _get_support_links(self, unique_stmts, **generate_id_map_kwargs):
+    def _get_support_links(self, unique_stmts, split_idx=None):
         """Find the links of refinement/support between statements."""
-        id_maps = self.pa._generate_id_maps(unique_stmts,
-                                            **generate_id_map_kwargs)
+        id_maps = self.pa._generate_id_maps(unique_stmts, poolsize=self.n_proc,
+                                            split_idx=split_idx)
         ret = set()
         for ix_pair in id_maps:
             if ix_pair[0] == ix_pair[1]:

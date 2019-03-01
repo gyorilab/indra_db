@@ -4,6 +4,8 @@ import pickle
 import random
 
 from unittest import SkipTest
+from uuid import uuid4
+
 from nose.plugins.attrib import attr
 
 from indra.tests.util import IS_PY3
@@ -53,6 +55,10 @@ class _PrePaDatabaseTestSetup(object):
         td = self.test_data
         tables = ['text_ref', 'text_content', 'reading', 'db_info']
 
+        # Include the reading batch id.
+        reading_batch_id = self.test_db.make_copy_batch_id()
+        td['reading']['cols'] += ('batch_id',)
+
         # Handle the case where we aren't using all the statements.
         if len(self.stmt_tuples) < len(td['raw_statements']['tuples']):
             # Look up the indices for easy access.
@@ -73,7 +79,7 @@ class _PrePaDatabaseTestSetup(object):
                     continue
                 # Select the reading.
                 rdg_tpl = td['reading']['dict'][stmt_tpl[rdg_idx]]
-                inputs['reading'].add(rdg_tpl)
+                inputs['reading'].add(rdg_tpl + (reading_batch_id,))
 
                 # Select the text content.
                 tc_tpl = td['text_content']['dict'][rdg_tpl[tc_idx]]
@@ -84,24 +90,35 @@ class _PrePaDatabaseTestSetup(object):
         else:
             inputs = {tbl: set(td[tbl]['tuples']) for tbl in tables}
 
+            # Add the batch ids to the reading tuples.
+            inputs['reading'] = {t + (reading_batch_id,)
+                                 for t in inputs['reading']}
+
         # Insert the necessary content.
         for tbl in tables:
             print("Loading %s..." % tbl)
-            self.test_db.copy(tbl, inputs[tbl], self.test_data[tbl]['cols'])
+            self.test_db.copy(tbl, inputs[tbl], td[tbl]['cols'])
         return
 
     def insert_the_statements(self, input_tuples):
         print("Loading %d statements..." % len(input_tuples))
-        cols = self.test_data['raw_statements']['cols'] + ('source_hash',)
-        new_input_tuples = []
-        for t in input_tuples:
-            s = Statement._from_json(json.loads(t[-1].decode('utf-8')))
-            t += (s.evidence[0].get_source_hash(),)
-            new_input_tuples.append(t)
+        cols = self.test_data['raw_statements']['cols'] + ('batch_id',)
+        new_input_dict = {}
 
-        self.test_db.copy('raw_statements', new_input_tuples, cols)
+        batch_id = self.test_db.make_copy_batch_id()
+
+        for t in input_tuples:
+            t += (batch_id,)
+
+            new_input_dict[(t[cols.index('mk_hash')],
+                            t[cols.index('reading_id')],
+                            t[cols.index('db_info_id')])] = t
+
+        self.test_db.copy('raw_statements', new_input_dict.values(), cols,
+                          lazy=True, push_conflict=True,
+                          constraint='reading_raw_statement_uniqueness')
         print("Inserting agents...")
-        dbu.insert_agents(self.test_db, 'raw')
+        dbu.insert_raw_agents(self.test_db, batch_id)
         return
 
     def add_statements(self):

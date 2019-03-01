@@ -1,3 +1,6 @@
+from __future__ import absolute_import, print_function, unicode_literals
+from builtins import dict, str
+
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
            'IndraDbException', 'sql_expressions']
 
@@ -21,6 +24,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.dialects.postgresql import BYTEA, INET
 
 from indra_db.exceptions import IndraDbException
+from indra.util import batch_iter
 
 try:
     import networkx as nx
@@ -65,7 +69,12 @@ try:
     CAN_COPY = True
 except ImportError:
     print("WARNING: pgcopy unavailable. Bulk copies will be slow.")
-    CopyManager = None
+
+    class CopyManager(object):
+        def __init__(self, conn, table, cols):
+            raise NotImplementedError("CopyManager could not be imported from"
+                                      "pgcopy.")
+
     CAN_COPY = False
 
 
@@ -137,6 +146,10 @@ class Displayable(object):
         return self._make_str()
 
 
+class MaterializedView(Displayable):
+    __definition__ = NotImplemented
+
+
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -204,8 +217,8 @@ class DatabaseManager(object):
             create_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             __table_args__ = (
-                UniqueConstraint('pmid', 'doi'),
-                UniqueConstraint('pmcid', 'doi')
+                UniqueConstraint('pmid', 'doi', name='pmid-doi'),
+                UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
                 )
 
         self.TextRef = TextRef
@@ -218,7 +231,7 @@ class DatabaseManager(object):
             name = Column(String(250), nullable=False)
             load_date = Column(DateTime, default=func.now())
             __table_args__ = (
-                UniqueConstraint('source', 'name'),
+                UniqueConstraint('source', 'name', name='source-name'),
                 )
         self.SourceFile = SourceFile
         self.tables[SourceFile.__tablename__] = SourceFile
@@ -248,9 +261,8 @@ class DatabaseManager(object):
             insert_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             __table_args__ = (
-                UniqueConstraint(
-                    'text_ref_id', 'source', 'format', 'text_type'
-                    ),
+                UniqueConstraint('text_ref_id', 'source', 'format',
+                                 'text_type', name='content-uniqueness'),
                 )
         self.TextContent = TextContent
         self.tables[TextContent.__tablename__] = TextContent
@@ -262,6 +274,7 @@ class DatabaseManager(object):
             text_content_id = Column(Integer,
                                      ForeignKey('text_content.id'),
                                      nullable=False)
+            batch_id = Column(Integer, nullable=False)
             text_content = relationship(TextContent)
             reader = Column(String(20), nullable=False)
             reader_version = Column(String(20), nullable=False)
@@ -270,9 +283,8 @@ class DatabaseManager(object):
             create_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             __table_args__ = (
-                UniqueConstraint(
-                    'text_content_id', 'reader', 'reader_version'
-                    ),
+                UniqueConstraint('text_content_id', 'reader', 'reader_version',
+                                 name='reading-uniqueness'),
                 )
         self.Reading = Reading
         self.tables[Reading.__tablename__] = Reading
@@ -303,6 +315,7 @@ class DatabaseManager(object):
             _skip_disp = ['json']
             id = Column(Integer, primary_key=True)
             uuid = Column(String(40), unique=True, nullable=False)
+            batch_id = Column(Integer, nullable=False)
             mk_hash = Column(BigInteger, nullable=False)
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
@@ -313,6 +326,12 @@ class DatabaseManager(object):
             indra_version = Column(String(100), nullable=False)
             json = Column(Bytea, nullable=False)
             create_date = Column(DateTime, default=func.now())
+            __table_args__ = (
+                UniqueConstraint('mk_hash', 'reading_id',
+                                 name='reading_raw_statement_uniqueness'),
+                UniqueConstraint('mk_hash', 'db_info_id',
+                                 name='db_info_raw_statement_uniqueness'),
+                )
         self.RawStatements = RawStatements
         self.tables[RawStatements.__tablename__] = RawStatements
 
@@ -326,16 +345,50 @@ class DatabaseManager(object):
             db_name = Column(String(40), nullable=False)
             db_id = Column(String, nullable=False)
             role = Column(String(20), nullable=False)
+            __table_args = (
+                UniqueConstraint('stmt_id', 'db_name', 'db_id', 'role',
+                                 name='raw-agents-uniqueness'),
+                )
         self.RawAgents = RawAgents
         self.tables[RawAgents.__tablename__] = RawAgents
+
+        class RawMods(self.Base, Displayable):
+            __tablename__ = 'raw_mods'
+            id = Column(Integer, primary_key=True)
+            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
+                             nullable=False)
+            statements = relationship(RawStatements)
+            type = Column(String, nullable=False)
+            position = Column(String(10))
+            residue = Column(String(5))
+            modified = Column(Boolean)
+        self.RawMods = RawMods
+        self.tables[RawMods.__tablename__] = RawMods
+
+        class RawMuts(self.Base, Displayable):
+            __tablename__ = 'raw_muts'
+            id = Column(Integer, primary_key=True)
+            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
+                             nullable=False)
+            statements = relationship(RawStatements)
+            position = Column(String(10))
+            residue_from = Column(String(5))
+            residue_to = Column(String(5))
+        self.RawMuts = RawMuts
+        self.tables[RawMuts.__tablename__] = RawMuts
 
         class RawUniqueLinks(self.Base, Displayable):
             __tablename__ = 'raw_unique_links'
             id = Column(Integer, primary_key=True)
             raw_stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
                                  nullable=False)
-            pa_stmt_mk_hash = Column(BigInteger, ForeignKey('pa_statements.mk_hash'),
+            pa_stmt_mk_hash = Column(BigInteger,
+                                     ForeignKey('pa_statements.mk_hash'),
                                      nullable=False)
+            __table_args = (
+                UniqueConstraint('raw_stmt_id', 'pa_stmt_mk_hash',
+                                 name='stmt-link-uniqueness'),
+                )
         self.RawUniqueLinks = RawUniqueLinks
         self.tables[RawUniqueLinks.__tablename__] = RawUniqueLinks
 
@@ -370,8 +423,39 @@ class DatabaseManager(object):
             db_name = Column(String(40), nullable=False)
             db_id = Column(String, nullable=False)
             role = Column(String(20), nullable=False)
+            __table_args__ = (
+                UniqueConstraint('stmt_mk_hash', 'db_name', 'db_id', 'role',
+                                 name='pa-agent-uniqueness'),
+                )
         self.PAAgents = PAAgents
         self.tables[PAAgents.__tablename__] = PAAgents
+
+        class PAMods(self.Base, Displayable):
+            __tablename__ = 'pa_mods'
+            id = Column(Integer, primary_key=True)
+            stmt_mk_hash = Column(BigInteger,
+                                  ForeignKey('pa_statements.mk_hash'),
+                                  nullable=False)
+            statements = relationship(PAStatements)
+            type = Column(String, nullable=False)
+            position = Column(String(10))
+            residue = Column(String(5))
+            modified = Column(Boolean)
+        self.PAMods = PAMods
+        self.tables[PAMods.__tablename__] = PAMods
+
+        class PAMuts(self.Base, Displayable):
+            __tablename__ = 'pa_muts'
+            id = Column(Integer, primary_key=True)
+            stmt_mk_hash = Column(BigInteger,
+                                  ForeignKey('pa_statements.mk_hash'),
+                                  nullable=False)
+            statements = relationship(PAStatements)
+            position = Column(String(10))
+            residue_from = Column(String(5))
+            residue_to = Column(String(5))
+        self.PAMuts = PAMuts
+        self.tables[PAMuts.__tablename__] = PAMuts
 
         class Curation(self.Base, Displayable):
             __tablename__ = 'curation'
@@ -410,18 +494,20 @@ class DatabaseManager(object):
         self.__Auth = Auth
 
         # Materialized Views
-        # ----------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # We use materialized views to allow fast and efficient load of data,
-        # and to add a layer of separation between the processes of updating the
-        # content of the database and accessing the content of the database.
-        # However, it is not practical to have the views created through
-        # sqlalchemy: instead they are generated and updated manually (or by
-        # other non-sqlalchemy scripts).
+        # and to add a layer of separation between the processes of updating
+        # the content of the database and accessing the content of the
+        # database. However, it is not practical to have the views created
+        # through sqlalchemy: instead they are generated and updated manually
+        # (or by other non-sqlalchemy scripts).
         #
         # The following views must be built in this specific order:
         #   1. fast_raw_pa_link
         #   2. evidence_counts
         #   3. pa_meta
+        #   4. raw_stmt_src
+        #   5. pa_stmt_src
         # The following can be built at any time and in any order:
         #   - reading_ref_link
         # Note that the order of views below is determined not by the above
@@ -429,33 +515,24 @@ class DatabaseManager(object):
 
         self.m_views = {}
 
-        # evidence_counts
-        # ---------------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #  SELECT count(id) AS ev_count, mk_hash
-        #   FROM fast_raw_pa_link
-        #   GROUP BY mk_hash
-        # WITH DATA;
-        class EvidenceCounts(self.Base, Displayable):
+        class EvidenceCounts(self.Base, MaterializedView):
             __tablename__ = 'evidence_counts'
+            ___definition__ = ('SELECT count(id) AS ev_count, mk_hash '
+                               'FROM fast_raw_pa_link '
+                               'GROUP BY mk_hash')
             mk_hash = Column(BigInteger, primary_key=True)
             ev_count = Column(Integer)
         self.EvidenceCounts = EvidenceCounts
         self.m_views[EvidenceCounts.__tablename__] = EvidenceCounts
 
-        # reading_ref_link
-        # ----------------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #   SELECT text_ref.pmid, text_ref.pmcid, text_ref.id AS trid,
-        #     text_ref.doi, text_ref.pii, text_ref.url, text_ref.manuscript_id,
-        #     text_content.id AS tcid, text_content.source, reading.id AS rid,
-        #     reading.reader
-        #    FROM text_ref, reading, text_content
-        #    WHERE text_ref.id = text_content.text_ref_id
-        #     AND text_content.id = reading.text_content_id;
-        # WITH DATA;
-        class ReadingRefLink(self.Base, Displayable):
+        class ReadingRefLink(self.Base, MaterializedView):
             __tablename__ = 'reading_ref_link'
+            __definition__ = ('SELECT pmid, pmcid, tr.id AS trid, doi, '
+                              'pii, url, manuscript_id, tc.id AS tcid, '
+                              'source, r.id AS rid, reader '
+                              'FROM text_ref AS tr JOIN text_content AS tc '
+                              'ON tr.id = tc.text_ref_id JOIN reading AS r '
+                              'ON tc.id = r.text_content_id')
             trid = Column(Integer)
             pmid = Column(String(20))
             pmcid = Column(String(20))
@@ -470,22 +547,16 @@ class DatabaseManager(object):
         self.ReadingRefLink = ReadingRefLink
         self.m_views[ReadingRefLink.__tablename__] = ReadingRefLink
 
-        # fast_raw_pa_link
-        # ----------------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #  SELECT raw_statements.id,
-        #    raw_statements.json AS raw_json,
-        #    raw_statements.reading_id,
-        #    raw_statements.db_info_id,
-        #    pa_statements.mk_hash,
-        #    pa_statements.json AS pa_json,
-        #    pa_statements.type
-        #   FROM raw_statements, pa_statements, raw_unique_links
-        #   WHERE raw_unique_links.raw_stmt_id = raw_statements.id
-        #    AND raw_unique_links.pa_stmt_mk_hash = pa_statements.mk_hash
-        # WITH DATA;
-        class FastRawPaLink(self.Base, Displayable):
+        class FastRawPaLink(self.Base, MaterializedView):
             __tablename__ = 'fast_raw_pa_link'
+            __definition__ = ('SELECT id, raw.json AS raw_json, '
+                              'raw.reading_id, raw.db_info_id, '
+                              'pa.mk_hash, pa.json AS pa_json, pa.type '
+                              'FROM raw_statements AS raw, '
+                              'pa_statements AS pa, '
+                              'raw_unique_links AS link'
+                              'WHERE link.raw_stmt_id = raw.id '
+                              'AND link.pa_stmt_mk_hash = pa.mk_hash')
             _skip_disp = ['raw_json', 'pa_json']
             id = Column(Integer, primary_key=True)
             raw_json = Column(BYTEA)
@@ -499,18 +570,15 @@ class DatabaseManager(object):
         self.FastRawPaLink = FastRawPaLink
         self.m_views[FastRawPaLink.__tablename__] = FastRawPaLink
 
-        # pa_meta
-        # -------
-        # CREATE MATERIALIZED VIEW public.evidence_counts AS
-        #  SELECT pa_agents.db_name, pa_agents.db_id, pa_agents.id AS ag_id,
-        #    pa_agents.role, pa_statements.type, pa_statements.mk_hash,
-        #    evidence_counts.ev_count
-        #   FROM pa_agents,pa_statements,evidence_counts
-        #   WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash
-        #    AND pa_statements.mk_hash = evidence_counts.mk_hash
-        # WITH DATA;
-        class PaMeta(self.Base, Displayable):
+        class PaMeta(self.Base, MaterializedView):
             __tablename__ = 'pa_meta'
+            __definition__ = ('SELECT pa_agents.db_name, pa_agents.db_id, '
+                              'pa_agents.id AS ag_id, pa_agents.role, '
+                              'pa_statements.type, pa_statements.mk_hash, '
+                              'evidence_counts.ev_count '
+                              'FROM pa_agents, pa_statements,evidence_counts '
+                              'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
+                              'AND pa_statements.mk_hash = evidence_counts.mk_hash')
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)
             db_id = Column(String)
@@ -521,6 +589,44 @@ class DatabaseManager(object):
             ev_count = Column(Integer)
         self.PaMeta = PaMeta
         self.m_views[PaMeta.__tablename__] = PaMeta
+
+        class RawStmtSrc(self.Base, MaterializedView):
+            __tablename__ = 'raw_stmt_src'
+            __definition__ = ('SELECT raw_statements.id AS sid, '
+                              'reading.reader AS src '
+                              'FROM raw_statements, reading '
+                              'WHERE reading.id = raw_statements.reading_id '
+                              'UNION '
+                              'SELECT raw_statements.id AS sid, '
+                              'db_info.db_name AS src '
+                              'FROM raw_statements, db_info '
+                              'WHERE db_info.id = raw_statements.db_info_id')
+            sid = Column(Integer, primary_key=True)
+            src = Column(String)
+        self.RawStmtSrc = RawStmtSrc
+        self.m_views[RawStmtSrc.__tablename__] = RawStmtSrc
+
+        class PaStmtSrc(self.Base, MaterializedView):
+            __tablename__ = 'pa_stmt_src'
+            __definition__ = ("SELECT * FROM crosstab("
+                              "'SELECT mk_hash, src, count(sid) "
+                              "  FROM raw_stmt_src "
+                              "   JOIN fast_raw_pa_link ON sid = id"
+                              "  GROUP BY (mk_hash, src)' "
+                              " ) final_result(mk_hash bigint, "
+                              "    \"REACH\" bigint, \"SPARSER\" bigint, "
+                              "    biopax bigint, biogrid bigint, tas bigint, "
+                              "    signor bigint, bel bigint)")
+            mk_hash = Column(BigInteger, primary_key=True)
+            REACH = Column(BigInteger)
+            SPARSER = Column(BigInteger)
+            biopax = Column(BigInteger)
+            biogrid = Column(BigInteger)
+            tas = Column(BigInteger)
+            signor = Column(BigInteger)
+            bel = Column(BigInteger)
+        self.PaStmtSrc = PaStmtSrc
+        self.m_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
         self.engine = create_engine(host)
 
@@ -592,8 +698,9 @@ class DatabaseManager(object):
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."
         ordered_tables = ['text_ref', 'text_content', 'reading', 'db_info',
-                          'raw_statements', 'raw_agents', 'pa_statements',
-                          'pa_agents', 'raw_unique_links', 'support_links']
+                          'raw_statements', 'raw_agents', 'raw_mods',
+                          'raw_muts', 'pa_statements', 'pa_agents', 'pa_mods',
+                          'pa_muts', 'raw_unique_links', 'support_links']
         if tbl_list is None:
             tbl_list = list(self.tables.keys())
 
@@ -842,7 +949,17 @@ class DatabaseManager(object):
                     len(entry_list))
         return
 
-    def copy(self, tbl_name, data, cols=None):
+    def make_copy_batch_id(self):
+        """Generate a random batch id for copying into the database.
+
+        This allows for easy retrieval of the assigned ids immediately after
+        copying in. At this time, only Reading and RawStatements use the
+        feature.
+        """
+        return random.randint(-2**30, 2**30)
+
+    def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False,
+             constraint=None):
         "Use pg_copy to copy over a large amount of data."
         logger.info("Received request to copy %d entries into %s." %
                     (len(data), tbl_name))
@@ -873,9 +990,7 @@ class DatabaseManager(object):
                         cols += (col.name,)
                         data = [datum + (now,) for datum in data]
 
-            # Now actually do the copy
-            conn = self.engine.raw_connection()
-            mngr = CopyManager(conn, tbl_name, cols)
+            # Format the data for the copy.
             data_bts = []
             for entry in data:
                 new_entry = []
@@ -894,13 +1009,96 @@ class DatabaseManager(object):
                             "number." % type(element)
                             )
                 data_bts.append(tuple(new_entry))
-            mngr.copy(data_bts, BytesIO)
+
+            # Actually do the copy.
+            conn = self.engine.raw_connection()
+            if lazy:
+                # We need a constraint for if we are going to update on-
+                # conflict, so if we didn't get a constraint, we can try to
+                # guess it.
+                if push_conflict and constraint is None:
+                    tbl = self.tables[tbl_name]
+
+                    # Look for table arguments that are constraints, and
+                    # moreover that involve a subset of the columns being
+                    # copied. If the column isn't in the input data, it can't
+                    # possibly violate a constraint. It is also because of this
+                    # line of code that constraints MUST be named. This process
+                    # will not catch foreign key constraints, which may not
+                    # even apply.
+                    constraints = [c.name for c in tbl.__table_args__
+                                   if isinstance(c, UniqueConstraint)
+                                   and set(c.columns.keys()) < set(cols)]
+
+                    # Include the primary key in the list, if applicable.
+                    if inspect(tbl).primary_key[0].name in cols:
+                        constraints.append(tbl_name + '_pkey')
+
+                    # Hopefully at this point there is
+                    if len(constraints) > 1:
+                        raise ValueError("Cannot infer constraint. Only "
+                                         "one constraint is allowed, and "
+                                         "there are multiple "
+                                         "possibilities. Please specify a "
+                                         "single constraint.")
+                    elif len(constraints) == 1:
+                        constraint = constraints[0]
+                    else:
+                        raise ValueError("Could not infer a relevant "
+                                         "constraint. If no columns have "
+                                         "constraints on them, the lazy "
+                                         "option is unnecessary. Note that I "
+                                         "cannot guess a foreign key "
+                                         "constraint.")
+
+                mngr = LazyCopyManager(conn, tbl_name, cols,
+                                       push_conflict=push_conflict,
+                                       constraint=constraint)
+                mngr.copy(data_bts, BytesIO)
+            else:
+                mngr = CopyManager(conn, tbl_name, cols)
+                mngr.copy(data_bts, BytesIO)
             conn.commit()
         else:
             # TODO: use bulk insert mappings?
             logger.warning("You are not using postgresql or do not have "
                            "pgcopy, so this will likely be very slow.")
             self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
+
+    def create_materialized_view(self, table, with_data=True):
+        """Create a materialize view."""
+        if isinstance(table, str):
+            table = self.m_views[table]
+
+        if not isinstance(table, MaterializedView):
+            raise IndraDbException("Table used to create a materialized view "
+                                   "must be of type MaterializedView.")
+
+        sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
+              % (table.__tablename__, table.__definition__,
+                 '' if with_data else "NO")
+        conn = self.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+        return
+
+    def refresh_materialized_view(self, table, with_data=True):
+        """Refresh the given materialized view."""
+        if isinstance(table, str):
+            table = self.m_views[table]
+
+        if not isinstance(table, MaterializedView):
+            raise IndraDbException("Table used to refresh a materialized view "
+                                   "must be of type MaterializedView.")
+
+        sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
+              % (table.__tablename__, '' if with_data else 'NO')
+        conn = self.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+        return
 
     def filter_query(self, tbls, *args):
         "Query a table and filter results."
@@ -1007,7 +1205,7 @@ class DatabaseManager(object):
             return self.filter_query(tbls, *args).yield_per(yield_per)
         return self.filter_query(tbls, *args).all()
 
-    def select_all_batched(self, batch_size, tbls, *args, skip_offset=None,
+    def select_all_batched(self, batch_size, tbls, *args, skip_idx=None,
                            order_by=None):
         """Load the results of a query in batches of size batch_size.
 
@@ -1021,16 +1219,10 @@ class DatabaseManager(object):
         q = self.filter_query(tbls, *args)
         if order_by:
             q = q.order_by(order_by)
-        offset = 0
-        remainder = batch_size
-        while remainder == batch_size:
-            if skip_offset is not None and offset == skip_offset:
-                offset += batch_size
-                continue
-            some_res = q.limit(batch_size).offset(offset).all()
-            yield offset, some_res
-            offset += batch_size
-            remainder = len(some_res)
+        res_iter = q.yield_per(batch_size)
+        for i, batch in enumerate(batch_iter(res_iter, batch_size)):
+            if i != skip_idx:
+                yield i, batch
 
     def select_sample_from_table(self, number, table, *args, **kwargs):
         """Select a number of random samples from the given table.
@@ -1086,3 +1278,51 @@ class DatabaseManager(object):
         "Check whether an entry/entries matching given specs live in the db."
         q = self.filter_query(tbls, *args)
         return self.session.query(q.exists()).first()[0]
+
+
+class LazyCopyManager(CopyManager):
+    """A copy manager that ignores entries which violate constraints."""
+    def __init__(self, conn, table, cols, push_conflict=False,
+                 constraint=None):
+        super(LazyCopyManager, self).__init__(conn, table, cols)
+        if push_conflict and constraint is None:
+            raise ValueError("A constraint is required if you are updating "
+                             "on-conflict.")
+        self.push_conflict = push_conflict
+        self.constraint = constraint
+        return
+
+    def copystream(self, datastream):
+        cmd_fmt = ('CREATE TEMP TABLE "tmp_{table}" '
+                   'ON COMMIT DROP '
+                   'AS SELECT "{cols}" FROM "{schema}"."{table}" '
+                   'WITH NO DATA; '
+                   '\n'
+                   'COPY "tmp_{table}" ("{cols}") '
+                   'FROM STDIN WITH BINARY; '
+                   '\n'
+                   'INSERT INTO "{schema}"."{table}" ("{cols}") '
+                   'SELECT "{cols}" '
+                   'FROM "tmp_{table}" ')
+        cmd_fmt += 'ON CONFLICT '
+        if self.push_conflict:
+            update = ', '.join('{0} = EXCLUDED.{0}'.format(c)
+                               for c in self.cols)
+            cmd_fmt += 'ON CONSTRAINT "%s" DO UPDATE SET %s;' \
+                       % (self.constraint, update)
+        else:
+            if self.constraint:
+                cmd_fmt += 'ON CONSTRAINT "%s" ' % self.constraint
+            cmd_fmt += 'DO NOTHING;'
+        columns = '", "'.join(self.cols)
+        sql = cmd_fmt.format(schema=self.schema,
+                             table=self.table,
+                             cols=columns)
+        print(sql)
+        cursor = self.conn.cursor()
+        try:
+            cursor.copy_expert(sql, datastream)
+        except Exception as e:
+            templ = "error doing lazy binary copy into {0}.{1}:\n{2}"
+            e.message = templ.format(self.schema, self.table, e)
+            raise e

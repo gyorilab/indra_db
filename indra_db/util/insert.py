@@ -1,9 +1,8 @@
-__all__ = ['insert_agents', 'insert_pa_agents_directly', 'insert_pa_stmts',
-           'insert_db_stmts', 'regularize_agent_id']
+__all__ = ['insert_raw_agents', 'insert_pa_agents', 'insert_pa_stmts',
+           'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data']
 
 import json
 import logging
-from sqlalchemy import exists
 
 from indra.util import clockit
 from indra.util.get_version import get_version
@@ -19,58 +18,16 @@ logger = logging.getLogger('util-insert')
 
 
 @clockit
-def get_statements_without_agents(db, prefix, *other_stmt_clauses, **kwargs):
-    """Get a generator for orm statement objects which do not have agents."""
-    num_per_yield = kwargs.pop('num_per_yield', 100)
-    verbose = kwargs.pop('verbose', False)
-
-    # Get the objects for either raw or pa statements.
-    stmt_tbl_obj = db.tables[prefix + '_statements']
-    agent_tbl_obj = db.tables[prefix + '_agents']
-
-    # Build a dict mapping stmt UUIDs to statement IDs
-    logger.info("Getting %s that lack %s in the database."
-                % (stmt_tbl_obj.__tablename__, agent_tbl_obj.__tablename__))
-    if prefix == 'pa':
-        agents_link = (stmt_tbl_obj.mk_hash == agent_tbl_obj.stmt_mk_hash)
-    elif prefix == 'raw':
-        agents_link = (stmt_tbl_obj.id == agent_tbl_obj.stmt_id)
-    else:
-        raise IndraDbException("Unrecognized prefix: %s." % prefix)
-    stmts_wo_agents_q = (db.session
-                         .query(stmt_tbl_obj)
-                         .filter(*other_stmt_clauses)
-                         .filter(~exists().where(agents_link)))
-
-    # Start printing some data
-    if verbose:
-        num_stmts = stmts_wo_agents_q.count()
-        print("Adding agents for %d statements." % num_stmts)
-    else:
-        num_stmts = None
-
-    # Get the iterator
-    return stmts_wo_agents_q.yield_per(num_per_yield), num_stmts
-
-
-@clockit
-def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
+def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     """Insert agents for statements that don't have any agents.
-
-    Note: This method currently works for both Statements and PAStatements and
-    their corresponding agents (Agents and PAAgents). However, if you already
-    have preassembled INDRA Statement objects that you know don't have agents
-    in the database, you can use `insert_pa_agents_directly` to insert the
-    agents much faster.
 
     Parameters
     ----------
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are adding agents.
-    prefix : str
-        Select which stage of statements for which you wish to insert agents.
-        The choices are 'pa' for preassembled statements or 'raw' for raw
-        statements.
+    batch_id : int
+        Every set of new raw statements must be given an id unique to that copy
+        That id is used to get the set of statements that need agents added.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -78,40 +35,23 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
         To conserve memory, statements are loaded in batches of `num_per_yeild`
         using the `yeild_per` feature of sqlalchemy queries.
     """
-    verbose = kwargs.get('verbose', False)
-
-    agent_tbl_obj = db.tables[prefix + '_agents']
-
-    if stmts_wo_agents is None:
-        stmts_wo_agents, num_stmts = \
-            get_statements_without_agents(db, prefix, **kwargs)
-    else:
-        num_stmts = None
-
+    ref_tuples = []
+    mod_tuples = []
+    mut_tuples = []
+    q = db.filter_query([db.RawStatements.id, db.RawStatements],
+                        db.RawStatements.batch_id == batch_id)
     if verbose:
-        if num_stmts is None:
-            try:
-                num_stmts = len(stmts_wo_agents)
-            except TypeError:
-                logger.info("Could not get length from type: %s. Turning off "
-                            "verbose messaging." % type(stmts_wo_agents))
-                verbose = False
-
-    # Construct the agent records
-    logger.info("Building agent data for insert...")
-    if verbose:
+        num_stmts = q.count()
         print("Loading:", end='', flush=True)
-    agent_data = []
-    for i, db_stmt in enumerate(stmts_wo_agents):
-        # Convert the database statement entry object into an indra statement.
+
+    db_stmts = q.yield_per(num_per_yield)
+
+    for i, (stmt_id, db_stmt) in enumerate(db_stmts):
         stmt = get_statement_object(db_stmt)
-
-        if prefix == 'pa':
-            stmt_id = db_stmt.mk_hash
-        else:  # prefix == 'raw'
-            stmt_id = db_stmt.id
-
-        agent_data.extend(_get_agent_tuples(stmt, stmt_id))
+        ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
+        ref_tuples.extend(ref_data)
+        mod_tuples.extend(mod_data)
+        mut_tuples.extend(mut_data)
 
         # Optionally print another tick on the progress bar.
         if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
@@ -120,46 +60,36 @@ def insert_agents(db, prefix, stmts_wo_agents=None, **kwargs):
     if verbose and num_stmts > 25:
         print()
 
-    if prefix == 'pa':
-        cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
-    else:  # prefix == 'raw'
-        cols = ('stmt_id', 'db_name', 'db_id', 'role')
-    for row in agent_data:
-        if None in row:
-            logger.warning("Found None in agent input:\n\t%s\n\t%s"
-                           % (cols, row))
-    db.copy(agent_tbl_obj.__tablename__, agent_data, cols)
+    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'))
+    db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'position', 'residue',
+                                     'modified'))
+    db.copy('raw_muts', mut_tuples, ('stmt_id', 'position', 'residue_from',
+                                     'residue_to'))
     return
 
 
-@clockit
-def insert_pa_agents_directly(db, stmts, verbose=False):
-    """Insert agents for preasembled statements.
+def insert_pa_agents(db, stmts, verbose=False, skip=None):
+    if skip is None:
+        skip = []
 
-    Unlike raw statements, preassembled statements are indexed by a hash,
-    allowing for bulk import without a lookup beforehand, and allowing for a
-    much simpler API.
-
-    Parameters
-    ----------
-    db : :py:class:`DatabaseManager`
-        The manager for the database into which you are adding agents.
-    stmts : list[:py:class:`Statement`]
-        A list of statements for which statements should be inserted.
-    verbose : bool
-        If True, print extra information and a status bar while compiling
-        agents for insert from statements. Default False.
-    """
     if verbose:
         num_stmts = len(stmts)
 
     # Construct the agent records
-    logger.info("Building agent data for insert...")
+    logger.info("Building data from agents for insert into pa_agents, "
+                "pa_mods, and pa_muts...")
+
     if verbose:
         print("Loading:", end='', flush=True)
-    agent_data = []
+
+    ref_data = []
+    mod_data = []
+    mut_data = []
     for i, stmt in enumerate(stmts):
-        agent_data.extend(_get_agent_tuples(stmt, stmt.get_hash(shallow=True)))
+        refs, mods, muts = extract_agent_data(stmt, stmt.get_hash())
+        ref_data.extend(refs)
+        mod_data.extend(mods)
+        mut_data.extend(muts)
 
         # Optionally print another tick on the progress bar.
         if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
@@ -168,22 +98,34 @@ def insert_pa_agents_directly(db, stmts, verbose=False):
     if verbose and num_stmts > 25:
         print()
 
-    cols = ('stmt_mk_hash', 'db_name', 'db_id', 'role')
-    db.copy('pa_agents', agent_data, cols)
+    if 'agents' not in skip:
+        db.copy('pa_agents', ref_data,
+                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+    if 'mods' not in skip:
+        db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
+                                      'residue', 'modified'))
+    if 'muts' not in skip:
+        db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position',
+                                      'residue_from', 'residue_to'))
     return
 
 
 def regularize_agent_id(id_val, id_ns):
     """Change agent ids for better search-ability and index-ability."""
-    new_id_val = id_val
-    if id_ns.upper() == 'CHEBI':
-        if id_val.startswith('CHEBI'):
-            new_id_val = id_val[6:]
-            logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
+    ns_abbrevs = [('CHEBI', ':'), ('GO', ':'), ('HMDB', ''), ('PF', ''),
+                  ('IP', '')]
+    for ns, div in ns_abbrevs:
+        if id_ns.upper() == ns and id_val.startswith(ns):
+            new_id_val = id_val[len(ns) + len(div)]
+            break
+    else:
+        return id_val
+
+    # logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
     return new_id_val
 
 
-def _get_agent_tuples(stmt, stmt_id):
+def extract_agent_data(stmt, stmt_id):
     """Create the tuples for copying agents into the database."""
     # Figure out how the agents are structured and assign roles.
     ag_list = stmt.agent_list()
@@ -198,29 +140,45 @@ def _get_agent_tuples(stmt, stmt_id):
                                "with agents: %s."
                                % (str(stmt), str(stmt.agent_list())))
 
-    def all_agent_refs(agents):
+    def all_agent_refs(ag):
         """Smooth out the iteration over agents and their refs."""
-        for role, ag in agents:
-            # If no agent, or no db_refs for the agent, skip the insert
-            # that follows.
-            if ag is None or ag.db_refs is None:
-                continue
-            for ns, ag_id in ag.db_refs.items():
-                if isinstance(ag_id, list):
-                    for sub_id in ag_id:
-                        yield ns, sub_id, role
-                else:
-                    yield ns, ag_id, role
+        for ns, ag_id in ag.db_refs.items():
+            if isinstance(ag_id, list):
+                for sub_id in ag_id:
+                    yield ns, sub_id
+            else:
+                yield ns, ag_id
+        yield 'NAME', ag.name
 
     # Prep the agents for copy into the database.
-    agent_data = []
-    for ns, ag_id, role in all_agent_refs(agents):
-        if ag_id is not None:
-            agent_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
-                               role))
-        else:
-            logger.warning("Found agent for %s with None value." % ns)
-    return agent_data
+    ref_data = []
+    mod_data = []
+    mut_data = []
+    for role, ag in agents:
+        # If no agent, or no db_refs for the agent, skip the insert
+        # that follows.
+        if ag is None or ag.db_refs is None:
+            continue
+
+        # Get the db refs data.
+        for ns, ag_id in all_agent_refs(ag):
+            if ag_id is not None:
+                ref_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
+                                 role))
+            else:
+                logger.warning("Found agent for %s with None value." % ns)
+
+        # Get the modification data
+        for mod in ag.mods:
+            mod_data.append((stmt_id, mod.mod_type, mod.position, mod.residue,
+                             mod.is_modified))
+
+        # Get the mutation data
+        for mut in ag.mutations:
+            mut_data.append((stmt_id, mut.position, mut.residue_from,
+                             mut.residue_to))
+
+    return ref_data, mod_data, mut_data
 
 
 def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
@@ -243,8 +201,10 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     """
     # Preparing the statements for copying
     stmt_data = []
+    batch_id = db.make_copy_batch_id()
+
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
-            'indra_version')
+            'indra_version', 'batch_id')
     if verbose:
         print("Loading:", end='', flush=True)
     for i, stmt in enumerate(stmts):
@@ -259,23 +219,21 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
                 db_ref_id,
                 new_stmt.__class__.__name__,
                 json.dumps(new_stmt.to_json()).encode('utf8'),
-                get_version()
+                get_version(),
+                batch_id
             )
             stmt_data.append(stmt_rec)
         if verbose and i % (len(stmts)//25) == 0:
             print('|', end='', flush=True)
     if verbose:
         print(" Done loading %d statements." % len(stmts))
-    db.copy('raw_statements', stmt_data, cols)
-    stmts_to_add_agents, num_stmts = \
-        get_statements_without_agents(db, 'raw',
-                                      db.RawStatements.db_info_id == db_ref_id)
-    insert_agents(db, 'raw', stmts_to_add_agents)
+    db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
+    insert_raw_agents(db, batch_id)
     return
 
 
 def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
-                    direct_agent_load=True):
+                    ignore_agents=False):
     """Insert pre-assembled statements, and any affiliated agents.
 
     Parameters
@@ -290,10 +248,6 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         statements for insert. Default False.
     do_copy : bool
         If True (default), use pgcopy to quickly insert the agents.
-    direct_agent_load : bool
-        If True (default), use the Statement get_hash method to get the id's of
-        the Statements for insert, instead of looking up the ids of Statements
-        from the database.
     """
     logger.info("Beginning to insert pre-assembled statements.")
     stmt_data = []
@@ -319,8 +273,6 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         db.copy('pa_statements', stmt_data, cols)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
-    if direct_agent_load:
-        insert_pa_agents_directly(db, stmts, verbose=verbose)
-    else:
-        insert_agents(db, 'pa', verbose=verbose)
+    if not ignore_agents:
+        insert_pa_agents(db, stmts, verbose=verbose)
     return

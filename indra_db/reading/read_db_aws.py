@@ -2,9 +2,6 @@
 for the job either needs to be provided in environment variables (e.g., the
 REACH version and path) or loaded from S3 (e.g., the list of PMIDs).
 """
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 import os
 import sys
 import boto3
@@ -12,10 +9,8 @@ import botocore
 import logging
 import random
 from datetime import datetime
-from indra.tools.reading.readers import get_readers
 
-from indra_db.reading.read_db import produce_readings, \
-    produce_statements, get_id_dict
+from indra_db.reading.read_db import run_reading, construct_readers
 from indra_db.reading.report_db_aws import DbAwsStatReporter
 
 
@@ -76,16 +71,6 @@ if __name__ == '__main__':
         help='Choose which reader(s) to use.'
         )
     parser.add_argument(
-        '--force_fulltext',
-        action='store_true',
-        help='Require that content be fulltext, skip anything that isn\'t.'
-        )
-    parser.add_argument(
-        '--use_best_fulltext',
-        action='store_true',
-        help='Read only the "best" fulltext available for a given id.'
-        )
-    parser.add_argument(
         '--test',
         action='store_true',
         help="Use the test database."
@@ -98,10 +83,6 @@ if __name__ == '__main__':
     client = boto3.client('s3')
     bucket_name = 'bigmech'
     id_list_key = 'reading_results/%s/id_list' % args.basename
-    readers = [reader_class(args.basename, args.num_cores)
-               for reader_class in get_readers()
-               if reader_class.name.lower() in args.readers]
-
     try:
         id_list_obj = client.get_object(
             Bucket=bucket_name,
@@ -116,11 +97,16 @@ if __name__ == '__main__':
         # If there was some other kind of problem, re-raise the exception
         else:
             raise e
+
+    # Get the reader objects
+    kwargs = {'base_dir': args.basename, 'n_proc': args.num_cores}
+    readers = construct_readers(args.readers, **kwargs)
+
     # Get the content from the object
     id_list_str = id_list_obj['Body'].read().decode('utf8').strip()
     id_str_list = id_list_str.splitlines()[args.start_index:args.end_index]
     random.shuffle(id_str_list)
-    id_dict = get_id_dict([line.strip() for line in id_str_list])
+    tcids = [int(line.strip()) for line in id_str_list]
 
     # Some combinations of options don't make sense:
     forbidden_combos = [('all', 'unread'), ('none', 'unread'), ('none', 'none')]
@@ -144,11 +130,9 @@ if __name__ == '__main__':
 
     # Read everything ========================================
     starts['reading'] = datetime.now()
-    outputs = produce_readings(id_dict, readers, verbose=True,
-                               read_mode=args.read_mode,
-                               get_preexisting=(args.stmt_mode == 'all'),
-                               force_fulltext=args.force_fulltext,
-                               prioritize=args.use_best_fulltext, db=db)
+    workers = run_reading(readers, tcids, verbose=True, db=db,
+                          reading_mode=args.read_mode,
+                          stmt_mode=args.stmt_mode)
     ends['reading'] = datetime.now()
 
     # Preserve the sparser logs
@@ -164,13 +148,9 @@ if __name__ == '__main__':
             client.put_object(Key=s3_key, Body=f.read(),
                               Bucket=bucket_name)
 
-    # Convert the outputs to statements ==================================
-    if args.stmt_mode != 'none':
-        starts['statement production'] = datetime.now()
-        stmt_data = produce_statements(outputs, n_proc=args.num_cores, db=db)
-        ends['statement production'] = datetime.now()
-    else:
-        stmt_data = []
-
+    # Create a summary report.
     rep = DbAwsStatReporter(args.job_name, s3_log_prefix, client, bucket_name)
-    rep.report_statistics(outputs, stmt_data, starts, ends)
+    reading_outputs = [rd for worker in workers
+                       for rd in worker.extant_readings + worker.new_readings]
+    stmt_outputs = [s for worker in workers for s in worker.statement_outputs]
+    rep.report_statistics(workers)

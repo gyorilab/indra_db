@@ -236,7 +236,8 @@ class PreassemblyManager(object):
                     ('pa_stmt_mk_hash', 'raw_stmt_id'))
             db.copy('pa_agents', agent_tuples,
                     ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
-            insert_pa_agents(db, stmts, verbose=True, skip=['agents'])
+            insert_pa_agents(db, new_unique_stmts, verbose=True,
+                             skip=['agents'])
 
         self._log("Added %d new pa statements into the database."
                    % len(new_mk_set))

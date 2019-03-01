@@ -1,0 +1,278 @@
+__all__ = ['insert_raw_agents', 'insert_pa_agents', 'insert_pa_stmts',
+           'insert_db_stmts', 'regularize_agent_id']
+
+import json
+import logging
+
+from indra.util import clockit
+from indra.util.get_version import get_version
+from indra.statements import Complex, SelfModification, ActiveForm,\
+    Conversion, Translocation
+
+from indra_db.exceptions import IndraDbException
+
+from .helpers import get_statement_object
+
+
+logger = logging.getLogger('util-insert')
+
+
+@clockit
+def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
+    """Insert agents for statements that don't have any agents.
+
+    Parameters
+    ----------
+    db : :py:class:`DatabaseManager`
+        The manager for the database into which you are adding agents.
+    batch_id : int
+        Every set of new raw statements must be given an id unique to that copy
+        That id is used to get the set of statements that need agents added.
+    verbose : bool
+        If True, print extra information and a status bar while compiling
+        agents for insert from statements. Default False.
+    num_per_yield : int
+        To conserve memory, statements are loaded in batches of `num_per_yeild`
+        using the `yeild_per` feature of sqlalchemy queries.
+    """
+    ref_tuples = []
+    mod_tuples = []
+    mut_tuples = []
+    q = db.filter_query([db.RawStatements.id, db.RawStatements],
+                        db.RawStatements.batch_id == batch_id)
+    if verbose:
+        num_stmts = q.count()
+        print("Loading:", end='', flush=True)
+
+    db_stmts = q.yield_per(num_per_yield)
+
+    for i, (stmt_id, db_stmt) in enumerate(db_stmts):
+        stmt = get_statement_object(db_stmt)
+        ref_data, mod_data, mut_data = _extract_agent_data(stmt, stmt_id)
+        ref_tuples.extend(ref_data)
+        mod_tuples.extend(mod_data)
+        mut_tuples.extend(mut_data)
+
+        # Optionally print another tick on the progress bar.
+        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
+            print('|', end='', flush=True)
+
+    if verbose and num_stmts > 25:
+        print()
+
+    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'))
+    db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'position', 'residue',
+                                     'modified'))
+    db.copy('raw_muts', mut_tuples, ('stmt_id', 'position', 'residue_from',
+                                     'residue_to'))
+    return
+
+
+def insert_pa_agents(db, stmts, verbose=False, skip=None):
+    if skip is None:
+        skip = []
+
+    if verbose:
+        num_stmts = len(stmts)
+
+    # Construct the agent records
+    logger.info("Building data from agents for insert into pa_agents, "
+                "pa_mods, and pa_muts...")
+
+    if verbose:
+        print("Loading:", end='', flush=True)
+
+    ref_data = []
+    mod_data = []
+    mut_data = []
+    for i, stmt in enumerate(stmts):
+        refs, mods, muts = _extract_agent_data(stmt, stmt.get_hash())
+        ref_data.extend(refs)
+        mod_data.extend(mods)
+        mut_data.extend(muts)
+
+        # Optionally print another tick on the progress bar.
+        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
+            print('|', end='', flush=True)
+
+    if verbose and num_stmts > 25:
+        print()
+
+    if 'agents' not in skip:
+        db.copy('pa_agents', ref_data,
+                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+    if 'mods' not in skip:
+        db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
+                                      'residue', 'modified'))
+    if 'muts' not in skip:
+        db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position',
+                                      'residue_from', 'residue_to'))
+    return
+
+
+def regularize_agent_id(id_val, id_ns):
+    """Change agent ids for better search-ability and index-ability."""
+    ns_abbrevs = [('CHEBI', ':'), ('GO', ':'), ('HMDB', ''), ('PF', ''),
+                  ('IP', '')]
+    for ns, div in ns_abbrevs:
+        if id_ns.upper() == ns and id_val.startswith(ns):
+            new_id_val = id_val[len(ns) + len(div)]
+            break
+    else:
+        return id_val
+
+    # logger.info("Fixed agent id: %s -> %s" % (id_val, new_id_val))
+    return new_id_val
+
+
+def _extract_agent_data(stmt, stmt_id):
+    """Create the tuples for copying agents into the database."""
+    # Figure out how the agents are structured and assign roles.
+    ag_list = stmt.agent_list()
+    nary_stmt_types = [Complex, SelfModification, ActiveForm, Conversion,
+                       Translocation]
+    if any([isinstance(stmt, tp) for tp in nary_stmt_types]):
+        agents = {('OTHER', ag) for ag in ag_list}
+    elif len(ag_list) == 2:
+        agents = {('SUBJECT', ag_list[0]), ('OBJECT', ag_list[1])}
+    else:
+        raise IndraDbException("Unhandled agent structure for stmt %s "
+                               "with agents: %s."
+                               % (str(stmt), str(stmt.agent_list())))
+
+    def all_agent_refs(ag):
+        """Smooth out the iteration over agents and their refs."""
+        for ns, ag_id in ag.db_refs.items():
+            if isinstance(ag_id, list):
+                for sub_id in ag_id:
+                    yield ns, sub_id
+            else:
+                yield ns, ag_id
+        yield 'NAME', ag.name
+
+    # Prep the agents for copy into the database.
+    ref_data = []
+    mod_data = []
+    mut_data = []
+    for role, ag in agents:
+        # If no agent, or no db_refs for the agent, skip the insert
+        # that follows.
+        if ag is None or ag.db_refs is None:
+            continue
+
+        # Get the db refs data.
+        for ns, ag_id in all_agent_refs(ag):
+            if ag_id is not None:
+                ref_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
+                                 role))
+            else:
+                logger.warning("Found agent for %s with None value." % ns)
+
+        # Get the modification data
+        for mod in ag.mods:
+            mod_data.append((stmt_id, mod.mod_type, mod.position, mod.residue,
+                             mod.is_modified))
+
+        # Get the mutation data
+        for mut in ag.mutations:
+            mut_data.append((stmt_id, mut.position, mut.residue_from,
+                             mut.residue_to))
+
+    return ref_data, mod_data, mut_data
+
+
+def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
+    """Insert statement, their database, and any affiliated agents.
+
+    Note that this method is for uploading statements that came from a
+    database to our databse, not for inserting any statements to the database.
+
+    Parameters
+    ----------
+    db : :py:class:`DatabaseManager`
+        The manager for the database into which you are loading statements.
+    stmts : list [:py:class:`indra.statements.Statement`]
+        A list of un-assembled indra statements to be uploaded to the datbase.
+    db_ref_id : int
+        The id to the db_ref entry corresponding to these statements.
+    verbose : bool
+        If True, print extra information and a status bar while compiling
+        statements for insert. Default False.
+    """
+    # Preparing the statements for copying
+    stmt_data = []
+    batch_id = db.make_copy_batch_id()
+
+    cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
+            'indra_version', 'batch_id')
+    if verbose:
+        print("Loading:", end='', flush=True)
+    for i, stmt in enumerate(stmts):
+        # Only one evidence is allowed for each statement.
+        for ev in stmt.evidence:
+            new_stmt = stmt.make_generic_copy()
+            new_stmt.evidence.append(ev)
+            stmt_rec = (
+                new_stmt.uuid,
+                new_stmt.get_hash(shallow=False),
+                new_stmt.evidence[0].get_source_hash(),
+                db_ref_id,
+                new_stmt.__class__.__name__,
+                json.dumps(new_stmt.to_json()).encode('utf8'),
+                get_version(),
+                batch_id
+            )
+            stmt_data.append(stmt_rec)
+        if verbose and i % (len(stmts)//25) == 0:
+            print('|', end='', flush=True)
+    if verbose:
+        print(" Done loading %d statements." % len(stmts))
+    db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
+    insert_raw_agents(db, batch_id)
+    return
+
+
+def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
+                    ignore_agents=False):
+    """Insert pre-assembled statements, and any affiliated agents.
+
+    Parameters
+    ----------
+    db : :py:class:`DatabaseManager`
+        The manager for the database into which you are loading pre-assembled
+        statements.
+    stmts : iterable [:py:class:`indra.statements.Statement`]
+        A list of pre-assembled indra statements to be uploaded to the datbase.
+    verbose : bool
+        If True, print extra information and a status bar while compiling
+        statements for insert. Default False.
+    do_copy : bool
+        If True (default), use pgcopy to quickly insert the agents.
+    """
+    logger.info("Beginning to insert pre-assembled statements.")
+    stmt_data = []
+    indra_version = get_version()
+    cols = ('uuid', 'matches_key', 'mk_hash', 'type', 'json', 'indra_version')
+    if verbose:
+        print("Loading:", end='', flush=True)
+    for i, stmt in enumerate(stmts):
+        stmt_rec = (
+            stmt.uuid,
+            stmt.matches_key(),
+            stmt.get_hash(shallow=True),
+            stmt.__class__.__name__,
+            json.dumps(stmt.to_json()).encode('utf8'),
+            indra_version
+        )
+        stmt_data.append(stmt_rec)
+        if verbose and i % (len(stmts)//25) == 0:
+            print('|', end='', flush=True)
+    if verbose:
+        print(" Done loading %d statements." % len(stmts))
+    if do_copy:
+        db.copy('pa_statements', stmt_data, cols)
+    else:
+        db.insert_many('pa_statements', stmt_data, cols=cols)
+    if not ignore_agents:
+        insert_pa_agents(db, stmts, verbose=verbose)
+    return

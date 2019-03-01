@@ -1031,9 +1031,6 @@ class PmcManager(_NihManager):
         upload by another process. Otherwise, if `db` is provided, upload the
         batches of data on this process. One or the other MUST be provided.
         """
-        tr_data = []
-        tc_data = []
-
         with tarfile.open(archive_path, mode='r:gz') as tar:
             xml_files = [m for m in tar.getmembers() if m.isfile()
                          and m.name.endswith('xml')]

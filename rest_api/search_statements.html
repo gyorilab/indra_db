@@ -93,16 +93,16 @@
           // Submit by sync ajax
           console.log('getUrl: ' + getUrl)
 
-
-          // The browser complains that async ajax requests are deprecated. Look into this instead:
-          // https://xhr.spec.whatwg.org/
-          $.ajax({
+          let getPromise = $.ajax({
             url: getUrl,
             type: 'GET',
             headers: {
-              'Authorization': 'Bearer ' + accToken
+              'Authorization': 'Bearer ' + idToken
             }
           })
+
+          console.log('getPromise')
+          console.log(getPromise)
         }
 
       var ENV = 'indra';

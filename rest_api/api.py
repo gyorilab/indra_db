@@ -232,7 +232,7 @@ def demon():
     token = request.headers.get('Authorization')
     if token:
         logger.info('Authentication header already present; forwarding...')
-        resp = redirect(url_for('browser/' + endpoint, **args),
+        resp = redirect(url_for(endpoint, **args),
                         code=302)
         resp.headers = request.headers
         return resp
@@ -242,7 +242,7 @@ def demon():
     if token:
         logger.info('Authentication tokens present in query string. Baking '
                     'into cookies and forwarding...')
-        resp = redirect(url_for('browser/' + endpoint, **args),
+        resp = redirect(url_for(endpoint, **args),
                         code=302)
         resp.headers = request.headers
         resp.headers['Authorization'] = token
@@ -253,17 +253,18 @@ def demon():
     if token:
         logger.info("Found authentication tokens in the cookies. Adding to "
                     "the header and forwarding...")
-        resp = redirect(url_for('browser/' + endpoint, **args))
+        resp = redirect(url_for(endpoint, **args))
         resp.headers = request.headers
         resp.headers['Authorization'] = token
         return resp
 
     logger.info("No tokens found. Redirecting to cognito...")
-    resp = redirect(url_for('auth.indra.bio/login', response_type='token',
-                            client_id='45rmn7pdon4q4g2o1nr7m33rpv',
-                            redirect_uri=url_for('browser/demon',
-                                                 **args),
-                            state='spamandeggs'),
+    req_dict = {'response_type': 'token',
+                'client_id': '45rmn7pdon4q4g2o1nr7m33rpv',
+                'redirect_uri': url_for('demon', **args),
+                'state': 'spamandeggs'}
+    query_str = '&'.join('%s=%s' % (k, v) for k, v in req_dict.items())
+    resp = redirect('https://auth.indra.bio/login?%ss' % query_str,
                     code=302)
     return resp
 

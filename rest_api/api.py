@@ -258,14 +258,14 @@ def demon():
         resp.headers['Authorization'] = token
         return resp
 
-    logger.info("No tokens found. Redirecting to cognito...")
     req_dict = {'response_type': 'token',
                 'client_id': '45rmn7pdon4q4g2o1nr7m33rpv',
                 'redirect_uri': url_for('demon', **args),
                 'state': 'spamandeggs'}
     query_str = '&'.join('%s=%s' % (k, v) for k, v in req_dict.items())
-    resp = redirect('https://auth.indra.bio/login?%ss' % query_str,
-                    code=302)
+    url = 'https://auth.indra.bio/login?%s' % query_str
+    logger.info("No tokens found. Redirecting to cognito (%s)..." % url)
+    resp = redirect(url, code=302)
     return resp
 
 

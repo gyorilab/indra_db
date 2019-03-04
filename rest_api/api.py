@@ -226,11 +226,12 @@ def demon():
     print("Cookies ------------")
     print(request.cookies)
     print("------------------")
-    endpoint = args.get('endpoint')
+    endpoint = args.get('directto')
     assert endpoint, "Got a request with no endpoint."
 
     token = request.headers.get('Authorization')
     if token:
+        logger.info('Authentication header already present; forwarding...')
         resp = redirect(url_for('browser/' + endpoint, **args),
                         code=302)
         resp.headers = request.headers
@@ -239,6 +240,8 @@ def demon():
     token = args.pop('token-id', None)
     _ = args.pop('token-auth', None)
     if token:
+        logger.info('Authentication tokens present in query string. Baking '
+                    'into cookies and forwarding...')
         resp = redirect(url_for('browser/' + endpoint, **args),
                         code=302)
         resp.headers = request.headers
@@ -248,11 +251,14 @@ def demon():
 
     token = request.cookies.get('indradb-authorization')
     if token:
+        logger.info("Found authentication tokens in the cookies. Adding to "
+                    "the header and forwarding...")
         resp = redirect(url_for('browser/' + endpoint, **args))
         resp.headers = request.headers
         resp.headers['Authorization'] = token
         return resp
 
+    logger.info("No tokens found. Redirecting to cognito...")
     resp = redirect(url_for('auth.indra.bio/login', response_type='token',
                             client_id='45rmn7pdon4q4g2o1nr7m33rpv',
                             redirect_uri=url_for('/browser/demon',

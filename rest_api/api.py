@@ -220,25 +220,26 @@ COOKIE_TOKEN_KEY = 'indradb-authorization'
 @app.route('/browser/demon', methods=['GET', 'POST'])
 def demon():
     logger.info("Got a demon request")
+    args = request.args.copy()
     print("Args -----------")
-    print(request.args)
+    print(args)
     print("Cookies ------------")
     print(request.cookies)
     print("------------------")
-    endpoint = request.args.get('endpoint')
+    endpoint = args.get('endpoint')
     assert endpoint, "Got a request with no endpoint."
 
     token = request.headers.get('Authorization')
     if token:
-        resp = redirect(url_for('browser/' + endpoint, **request.args),
+        resp = redirect(url_for('browser/' + endpoint, **args),
                         code=302)
         resp.headers = request.headers
         return resp
 
-    token = request.args.pop('token-id', None)
-    _ = request.args.pop('token-auth', None)
+    token = args.pop('token-id', None)
+    _ = args.pop('token-auth', None)
     if token:
-        resp = redirect(url_for('browser/' + endpoint, **request.args),
+        resp = redirect(url_for('browser/' + endpoint, **args),
                         code=302)
         resp.headers = request.headers
         resp.headers['Authorization'] = token
@@ -247,7 +248,7 @@ def demon():
 
     token = request.cookies.get('indradb-authorization')
     if token:
-        resp = redirect(url_for('browser/' + endpoint, **request.args))
+        resp = redirect(url_for('browser/' + endpoint, **args))
         resp.headers = request.headers
         resp.headers['Authorization'] = token
         return resp
@@ -255,7 +256,7 @@ def demon():
     resp = redirect(url_for('auth.indra.bio/login', response_type='token',
                             client_id='45rmn7pdon4q4g2o1nr7m33rpv',
                             redirect_uri=url_for('/browser/demon',
-                                                 **request.args),
+                                                 **args),
                             state='spamandeggs'),
                     code=302)
     return resp

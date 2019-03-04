@@ -220,7 +220,7 @@ COOKIE_TOKEN_KEY = 'indradb-authorization'
 @app.route('/browser/demon', methods=['GET', 'POST'])
 def demon():
     logger.info("Got a demon request")
-    args = request.args.copy()
+    args = dict(request.args.copy())
     print("Args -----------")
     print(args)
     print("Cookies ------------")

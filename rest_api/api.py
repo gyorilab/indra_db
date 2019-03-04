@@ -261,7 +261,7 @@ def demon():
     logger.info("No tokens found. Redirecting to cognito...")
     resp = redirect(url_for('auth.indra.bio/login', response_type='token',
                             client_id='45rmn7pdon4q4g2o1nr7m33rpv',
-                            redirect_uri=url_for('/browser/demon',
+                            redirect_uri=url_for('browser/demon',
                                                  **args),
                             state='spamandeggs'),
                     code=302)

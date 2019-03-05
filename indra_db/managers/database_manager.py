@@ -111,6 +111,7 @@ class sqltypes(_map_class):
 class texttypes(_map_class):
     FULLTEXT = 'fulltext'
     ABSTRACT = 'abstract'
+    TITLE = 'title'
 
 
 class formats(_map_class):

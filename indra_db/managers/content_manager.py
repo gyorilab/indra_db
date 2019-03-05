@@ -729,12 +729,15 @@ class Pubmed(_NihManager):
                                "%s..." % pmid)
                 continue
             tr_id = pmid_tr_dict[pmid]
-            abstract = article_info[pmid].get('abstract')
-            if abstract and abstract.strip():
-                abstract_gz = zip_string(abstract)
-                text_content_records.append((tr_id, self.my_source,
-                                             formats.TEXT, texttypes.ABSTRACT,
-                                             abstract_gz))
+
+            # Get both the title and the abstract.
+            for cont_type in [texttypes.ABSTRACT, texttypes.TITLE]:
+                content = article_info[pmid].get(cont_type)
+                if content and content.strip():
+                    content_gz = zip_string(content)
+                    text_content_records.append((tr_id, self.my_source,
+                                                 formats.TEXT, cont_type,
+                                                 content_gz))
         logger.info("Found %d new text content entries."
                     % len(text_content_records))
 

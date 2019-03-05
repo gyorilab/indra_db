@@ -714,41 +714,43 @@ class Pubmed(_NihManager):
 
         # Build a dict mapping PMIDs to text_ref IDs
         tr_qry = db.filter_query(db.TextRef, db.TextRef.pmid.in_(valid_pmids))
+        tref_list = tr_qry.all()
         if not carefully:
             # This doesn't check if there are any existing refs.
-            tref_list = tr_qry.all()
             logger.info('There are %d content entries that will be uploaded.'
                         % len(tref_list))
         else:
-            # This does...
-            tr_to_avoid_qry = tr_qry.filter(
-                db.TextRef.id == db.TextContent.text_ref_id,
-                db.TextContent.source == self.my_source
-                )
-            valid_pmids -= {tr.pmid for tr in tr_to_avoid_qry.all()}
-            tref_list = tr_qry.except_(tr_to_avoid_qry).all()
-            logger.info("Only %d entries without pre-existing content."
-                        % len(tref_list))
+            cat_valid_pmids = {}
+            for cat in self.categories:
+                # This does...
+                tr_to_avoid_qry = tr_qry.filter(
+                    db.TextRef.id == db.TextContent.text_ref_id,
+                    db.TextContent.source == self.my_source,
+                    db.TextContent.text_type == cat
+                    )
+                cat_valid_pmids[cat] = \
+                    valid_pmids - {tr.pmid for tr in tr_to_avoid_qry.all()}
+                logger.info("Only %d entries without pre-existing content for "
+                            "%s." % (len(cat_valid_pmids[cat]), cat))
         pmid_tr_dict = {pmid: trid for (pmid, trid) in
                         db.get_values(tref_list, ['pmid', 'id'])}
 
         # Add the text_ref IDs to the content to be inserted
         text_content_records = []
-        for pmid in valid_pmids:
-            if pmid not in pmid_tr_dict.keys():
-                logger.warning("Found content marked to be uploaded which "
-                               "does not have a text ref. Skipping pmid "
-                               "%s..." % pmid)
-                continue
-            tr_id = pmid_tr_dict[pmid]
+        for cat in self.categories:
+            for pmid in cat_valid_pmids[cat]:
+                if pmid not in pmid_tr_dict.keys():
+                    logger.warning("Found content marked to be uploaded which "
+                                   "does not have a text ref. Skipping pmid "
+                                   "%s..." % pmid)
+                    continue
+                tr_id = pmid_tr_dict[pmid]
 
-            # Get both the title and the abstract.
-            for cont_type in self.categories:
-                content = article_info[pmid].get(cont_type)
+                content = article_info[pmid].get(cat)
                 if content and content.strip():
                     content_gz = zip_string(content)
                     text_content_records.append((tr_id, self.my_source,
-                                                 formats.TEXT, cont_type,
+                                                 formats.TEXT, cat,
                                                  content_gz))
         logger.info("Found %d new text content entries."
                     % len(text_content_records))

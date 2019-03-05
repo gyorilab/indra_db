@@ -598,9 +598,21 @@ class Pubmed(_NihManager):
     my_source = 'pubmed'
     tr_cols = ('pmid', 'pmcid', 'doi', 'pii',)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, categories=None, tables=None, **kwargs):
         super(Pubmed, self).__init__(*args, **kwargs)
         self.deleted_pmids = None
+        if categories is None:
+            self.categories = [texttypes.TITLE, texttypes.ABSTRACT]
+        else:
+            self.categories = categories[:]
+        assert all(cat in texttypes.values() for cat in self.categories)
+
+        if tables is None:
+            self.tables = ['text_ref', 'text_content']
+        else:
+            self.tables = tables[:]
+
+        self.db_pmids = None
         return
 
     def get_deleted_pmids(self):
@@ -731,7 +743,7 @@ class Pubmed(_NihManager):
             tr_id = pmid_tr_dict[pmid]
 
             # Get both the title and the abstract.
-            for cont_type in [texttypes.ABSTRACT, texttypes.TITLE]:
+            for cont_type in self.categories:
                 content = article_info[pmid].get(cont_type)
                 if content and content.strip():
                     content_gz = zip_string(content)
@@ -755,25 +767,36 @@ class Pubmed(_NihManager):
         logger.info("%d PMIDs in XML dataset" % len(article_info))
 
         # Process and load the text refs, updating where appropriate.
-        valid_pmids = self.load_text_refs(db, article_info, carefully)
+        if 'text_ref' in self.tables:
+            valid_pmids = self.load_text_refs(db, article_info, carefully)
+        else:
+            valid_pmids = set(article_info.keys()) & self.db_pmids
+            logger.info("%d pmids are valid." % len(valid_pmids))
 
-        self.load_text_content(db, article_info, valid_pmids, carefully)
+        if 'text_content' in self.tables:
+            self.load_text_content(db, article_info, valid_pmids, carefully)
         return True
 
     def load_files(self, db, dirname, n_procs=1, continuing=False,
-                   carefully=False):
+                   carefully=False, log_update=True):
         """Load the files in subdirectory indicated by `dirname`."""
+        if 'text_ref' not in self.tables:
+            logger.info("Loading pmids from the database...")
+            self.db_pmids = {pmid for pmid, in db.select_all(db.TextRef.pmid)}
+
         xml_files = set(self.get_file_list(dirname))
-        sf_list = db.select_all(
-            db.SourceFile,
-            db.SourceFile.source == self.my_source
-            )
-        existing_files = {sf.name for sf in sf_list if dirname in sf.name}
+        if continuing or log_update:
+            sf_list = db.select_all(
+                db.SourceFile,
+                db.SourceFile.source == self.my_source
+                )
+            existing_files = {sf.name for sf in sf_list if dirname in sf.name}
 
-        if continuing and xml_files == existing_files:
-            logger.info("All files have been loaded. Nothing to do.")
-            return False
+            if continuing and xml_files == existing_files:
+                logger.info("All files have been loaded. Nothing to do.")
+                return False
 
+        logger.info('Beginning upload with %d processes...' % n_procs)
         if n_procs > 1:
             # Download the XML files in parallel
             q = mp.Queue()
@@ -795,14 +818,16 @@ class Pubmed(_NihManager):
                     p.start()
 
             def upload_and_record_next(start_new):
-                xml_file, article_info = q.get()  # Block until at least 1 is done.
+                # Wait until at least one article is done.
+                xml_file, article_info = q.get()
                 if start_new:
                     proc_list.pop(0).start()
                 logger.info("Beginning to upload %s." % xml_file)
                 self.upload_article(db, article_info, carefully)
                 logger.info("Completed %s." % xml_file)
-                if xml_file not in existing_files:
-                    db.insert('source_file', source=self.my_source, name=xml_file)
+                if log_update and xml_file not in existing_files:
+                    db.insert('source_file', source=self.my_source,
+                              name=xml_file)
 
             while len(proc_list):
                 upload_and_record_next(True)
@@ -817,8 +842,9 @@ class Pubmed(_NihManager):
                 logger.info("Beginning to upload %s." % xml_file)
                 self.upload_article(db, article_info, carefully)
                 logger.info("Completed %s." % xml_file)
-                if xml_file not in existing_files:
-                    db.insert('source_file', source=self.my_source, name=xml_file)
+                if log_update and xml_file not in existing_files:
+                    db.insert('source_file', source=self.my_source,
+                              name=xml_file)
 
         return True
 

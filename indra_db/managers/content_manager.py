@@ -803,7 +803,7 @@ class Pubmed(_NihManager):
             # Download the XML files in parallel
             q = mp.Queue()
             proc_list = []
-            for xml_file in xml_files:
+            for xml_file in sorted(xml_files):
                 if continuing and xml_file in existing_files:
                     logger.info("Skipping %s. Already uploaded." % xml_file)
                     continue
@@ -839,7 +839,7 @@ class Pubmed(_NihManager):
                 upload_and_record_next(False)
                 n_tot -= 1
         else:
-            for xml_file in xml_files:
+            for xml_file in sorted(xml_files):
                 article_info = self.get_article_info(xml_file)
                 logger.info("Beginning to upload %s." % xml_file)
                 self.upload_article(db, article_info, carefully)

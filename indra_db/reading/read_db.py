@@ -155,6 +155,7 @@ def get_stmts_safely(reading_data):
         if not len(stmts):
             logger.info("Got no statements for %s." % reading_data.reading_id)
         for stmt in stmts:
+            stmt.evidence[0].pmid = None
             stmt_data = DatabaseStatementData(stmt, reading_data.reading_id)
             stmt_data_list.append(stmt_data)
     else:

@@ -18,10 +18,13 @@ logger = logging.getLogger('util-distill')
 def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
     """Get a nested dict of statements, keyed by ref, content, and reading."""
     # Construct the query for metadata from the database.
-    q = (db.session.query(db.TextRef, db.TextContent.id,
-                          db.TextContent.source, db.Reading.id,
-                          db.Reading.reader_version, db.RawStatements.id,
-                          db.RawStatements.json)
+    elements = [db.TextRef, db.TextContent.id, db.TextContent.source,
+                db.Reading.id, db.Reading.reader_version, db.RawStatements.id,
+                db.RawStatements.mk_hash, db.RawStatements.text_hash]
+    if get_full_stmts:
+        elements += [db.RawStatements.json]
+
+    q = (db.session.query(*elements)
          .filter(db.RawStatements.reading_id == db.Reading.id,
                  db.Reading.text_content_id == db.TextContent.id,
                  db.TextContent.text_ref_id == db.TextRef.id))
@@ -34,21 +37,23 @@ def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
 
     # Populate a dict with all the data.
     stmt_nd = NestedDict()
-    for tr, tcid, src, rid, rv, sid, sjson in q.yield_per(1000):
+    for data in q.yield_per(1000):
+        if get_full_stmts:
+            tr, tcid, src, rid, rv, sid, mk_hash, text_hash, sjson = data
+            stmt_json = json.loads(sjson.decode('utf8'))
+            stmt = Statement._from_json(stmt_json)
+            _set_evidence_text_ref(stmt, tr)
+        else:
+            tr, tcid, src, rid, rv, sid, mk_hash, text_hash = data
+
+        stmt_hash = (mk_hash, text_hash)
+
         # Back out the reader name.
         for reader, rv_list in reader_versions.items():
             if rv in rv_list:
                 break
         else:
             raise Exception("rv %s not recognized." % rv)
-
-        # Get the json for comparison and/or storage
-        stmt_json = json.loads(sjson.decode('utf8'))
-        stmt = Statement._from_json(stmt_json)
-        _set_evidence_text_ref(stmt, tr)
-
-        # Hash the compbined stmt and evidence matches key.
-        stmt_hash = stmt.get_hash(shallow=False)
 
         # For convenience get the endpoint statement dict
         s_dict = stmt_nd[tr.id][src][tcid][reader][rv][rid]

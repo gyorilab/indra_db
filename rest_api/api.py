@@ -1,11 +1,16 @@
 import sys
 import json
+import string
 import logging
+import secrets
 from os import path
 from io import StringIO
 from jinja2 import Template
 from functools import wraps
 from datetime import datetime
+from http.cookies import SimpleCookie
+from http.cookiejar import CookieJar
+from requests.utils import add_dict_to_cookiejar, dict_from_cookiejar
 
 from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
@@ -27,6 +32,8 @@ logger.setLevel(logging.INFO)
 app = Flask(__name__)
 Compress(app)
 CORS(app)
+SC = SimpleCookie()
+CJ = CookieJar()
 
 print("Loading file")
 logger.info("INFO working.")
@@ -36,10 +43,25 @@ logger.error("ERROR working.")
 
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
-
+STATE_COOKIE_NAME = 'indralabStateCookie'
+ACCESSTOKEN_COOKIE_NAME = 'indralabAccessCookie'
+IDTOKEN_COOKIE_NAME = 'indradb-authorization'
+STATE_SPLIT = '_redirect_'
 
 class DbAPIError(Exception):
     pass
+
+
+def _new_state_value():
+    alphabet = string.ascii_letters + string.digits
+    while True:
+
+        state = ''.join(secrets.choice(alphabet) for i in range(64))
+        if (any(c.islower() for c in state)
+                and any(c.isupper() for c in state)
+                and sum(c.isdigit() for c in state) >= 3):
+            break
+    return state
 
 
 def __process_agent(agent_param):
@@ -214,9 +236,6 @@ def welcome():
     return Response(page_html)
 
 
-COOKIE_TOKEN_KEY = 'indradb-authorization'
-
-
 @app.route('/browser/demon', methods=['GET', 'POST'])
 def demon():
     logger.info("Got a demon request")
@@ -226,8 +245,34 @@ def demon():
     print("Cookies ------------")
     print(request.cookies)
     print("------------------")
-    endpoint = args.get('directto')
-    assert endpoint, "Got a request with no endpoint."
+
+    # The state value is used to both secure traffic and to keep track of final
+    # endpoint.
+    # The traffic with cognito must always have a state value that matches
+    # the local state value stored in a cookie.
+    # Every new cognito request needs a new state value
+
+    # STATE VALUE HANDLING
+    # If there is a state value in the request, we assume its origin was cognito
+    # current_cookies = dict_from_cookiejar(cj=CJ)
+    # cookie_state = current_cookies[STATE_COOKIE_NAME]
+    cookie_state = request.cookies.get(STATE_COOKIE_NAME)
+    logger.info('Resolved state from cookie: %s' % cookie_state)
+    req_state = args.get('state')
+    logger.info('Resolved state from request: %s' % req_state)
+
+    # ENDPOINT HANDLING
+    # If there is a state value, then source is assumed to be cognito and
+    # (assuming the state values match) it will contain the endpoint.
+    # If there is no state value, then source is assumed to be client and the
+    # query parameters should contain a redirect=endpoint
+    # state parameter format: '<state value><STATE_SPLIT><redirect uri>'
+    if req_state:
+        state, endpoint = req_state.split(STATE_SPLIT)
+    else:
+        endpoint = args.get('redirect')
+    logger.info('Demon: final endpoint %s' % endpoint)
+    assert endpoint, 'Got a request with no endpoint.'
 
     token = request.headers.get('Authorization')
     if token:
@@ -237,19 +282,28 @@ def demon():
         resp.headers = request.headers
         return resp
 
+    # query string from cognito:
+    # api.address.com/search_statements.html#
+    # id_token=ID_TOKEN_STRING&
+    # access_token=ACCESS_TOKEN_STRING&
+    # expires_in=TIME_SECONDS&
+    # token_type=Bearer&
+    # state=STATE_STRING
     token = args.pop('token-id', None)
     _ = args.pop('token-auth', None)
-    if token:
+    # TODO check if request state matches cookie state
+    #  if token and cookie_state==full_state
+    if token:  # and cookie_state==full_state:
         logger.info('Authentication tokens present in query string. Baking '
                     'into cookies and forwarding...')
         resp = redirect(url_for(endpoint, **args),
                         code=302)
         resp.headers = request.headers
         resp.headers['Authorization'] = token
-        resp.set_cookie(COOKIE_TOKEN_KEY, token)
+        resp.set_cookie(IDTOKEN_COOKIE_NAME, token)
         return resp
 
-    token = request.cookies.get('indradb-authorization')
+    token = request.cookies.get(IDTOKEN_COOKIE_NAME)
     if token:
         logger.info("Found authentication tokens in the cookies. Adding to "
                     "the header and forwarding...")
@@ -258,10 +312,19 @@ def demon():
         resp.headers['Authorization'] = token
         return resp
 
+    # new_state = _new_state_value()
+    new_state = 'spamandeggs'
+
+    # save/overwrite state value to state cookie
+    new_full_state = new_state + STATE_SPLIT + endpoint
+    # add_dict_to_cookiejar(cj=CJ,
+    #                       cookie_dict={STATE_COOKIE_NAME: new_full_state})
+    request.cookies[STATE_COOKIE_NAME] = new_full_state
+
     req_dict = {'response_type': 'token',
                 'client_id': '45rmn7pdon4q4g2o1nr7m33rpv',
                 'redirect_uri': url_for('demon', **args),
-                'state': 'spamandeggs'}
+                'state': new_full_state}
     query_str = '&'.join('%s=%s' % (k, v) for k, v in req_dict.items())
     url = 'https://auth.indra.bio/login?%s' % query_str
     logger.info("No tokens found. Redirecting to cognito (%s)..." % url)

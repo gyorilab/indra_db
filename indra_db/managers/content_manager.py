@@ -1,8 +1,3 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str, int
-
-
-import sys
 import re
 import csv
 import time
@@ -719,6 +714,8 @@ class Pubmed(_NihManager):
             # This doesn't check if there are any existing refs.
             logger.info('There are %d content entries that will be uploaded.'
                         % len(tref_list))
+            cat_valid_pmids = {cat: valid_pmids.copy()
+                               for cat in self.categories}
         else:
             cat_valid_pmids = {}
             for cat in self.categories:

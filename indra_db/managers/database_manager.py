@@ -318,6 +318,7 @@ class DatabaseManager(object):
             uuid = Column(String(40), unique=True, nullable=False)
             batch_id = Column(Integer, nullable=False)
             mk_hash = Column(BigInteger, nullable=False)
+            text_hash = Column(BigInteger)
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
             db_info = relationship(DBInfo)

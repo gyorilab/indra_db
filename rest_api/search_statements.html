@@ -87,33 +87,37 @@
           // document.submitForm.id_token.value = idToken;
 
           // Build URL
-          let baseUrl = window.location.href.split('?')[0].split('#')[0] + '/browser/statements/from_agents?';
+          let baseUrl = window.location.href.split('?')[0].split('#')[0] + '/from_agents?';
+          // let baseUrl = 'https://153pf2mdal.execute-api.us-east-1.amazonaws.com/dev/browser/statements/from_agents?'
           var getUrl = baseUrl + queryString;
 
           // Submit by sync ajax
           console.log('getUrl: ' + getUrl)
 
-          let getPromise = $.ajax({
-            url: getUrl,
-            type: 'GET',
-            headers: {
-              'Authorization': 'Bearer ' + idToken
-            }
-          })
+          // Redirect
+          window.location.replace(getUrl)
 
-          console.log('getPromise')
-          console.log(getPromise)
+          // let getPromise = $.ajax({
+          //   url: getUrl,
+          //   type: 'GET',
+          //   headers: {
+          //     'Authorization': 'Bearer ' + idToken
+          //   }
+          // })
 
-          getPromise.then(function(data){
-            if (data) {
-              console.log('GET from db search')
-              console.log(data)
-              // document.open();
-              // document.write(newContent);
-              // document.close();
-              // document.createElement('HTML').innerHtml = data;
-            }
-          })
+          // console.log('getPromise')
+          // console.log(getPromise)
+
+          // getPromise.then(function(data){
+          //   if (data) {
+          //     console.log('GET from db search')
+          //     console.log(data)
+          //     document.open();
+          //     document.write(data);
+          //     document.close();
+          //     // document.createElement('HTML').innerHtml = data;
+          //   }
+          // })
         }
 
       var ENV = 'indra';
@@ -187,7 +191,7 @@ nav {
     <!-- Here put scripts that need to be executed before page load -->
     <script type="text/javascript">
       setEnv('indra');
-      checkSignIn(true);
+      checkSignIn();
     </script>
 
     <!-- Page Header -->

@@ -10,7 +10,7 @@ readings, and statements. This implementation is currently designed to work
 primarily with Amazon Web Services RDS running Postrgres 9+. Used as a backend
 to INDRA, the INDRA Database provides a systematic way of scaling the knowledge
 acquired from other databases, reading, and manual input, and puts that
-knowledge at your fingertips through a direct pyton client and a REST api.
+knowledge at your fingertips through a direct Python client and a REST api.
 
 ### Knowledge sources
 

@@ -14,14 +14,15 @@ knowledge at your fingertips through a direct pyton client and a REST api.
 
 ### Knowledge sources
 
-The INDRA Database currently integrates the following natural language
+The INDRA Database currently integrates the following biology-focused natural language
 processing systems at scale:
-- [REACH](https://github.com/clulab/reach) - for biology
-- [Sparser](https://github.com/ddmcdonald/sparser) - for biology
+- [REACH](https://github.com/clulab/reach)
+- [Sparser](https://github.com/ddmcdonald/sparser)
+- [TRIPS](http://trips.ihmc.us/trac/drum/wiki/TripsDrumSystemInstallation)
 
 with content drawn from:
-- [PubMed](https://www.ncbi.nlm.nih.gov/pubmed/) - ~28 million abstracts
-- [PubMed Central](/www.ncbi.nlm.nih.gov/pmc/) - ~5 million fulltext
+- [PubMed](https://www.ncbi.nlm.nih.gov/pubmed/) - ~19 million abstracts and ~29 million titles
+- [PubMed Central](/www.ncbi.nlm.nih.gov/pmc/) - ~2.7 million fulltext
 - [Elsevier](https://www.elsevier.com/) - ~0.7 million fulltext 
 (requires special access)
 
@@ -29,6 +30,8 @@ We also collect information from these databases:
 - [Pathway Commons database](http://pathwaycommons.org/)
 - [BEL Large Corpus](https://github.com/OpenBEL/)
 - [SIGNOR](https://signor.uniroma2.it/)
+- [BioGRID](https://thebiogrid.org/)
+- [TAS](https://www.biorxiv.org/content/10.1101/358978v1)
 
 These databases are retrieved using the tools in `indra.sources`. The statements
 extracted from all of these sources are stored and updated in the database.

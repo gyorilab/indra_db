@@ -118,6 +118,7 @@ class formats(_map_class):
     XML = 'xml'
     TEXT = 'text'
     JSON = 'json'
+    EKB = 'ekb'
 
 
 class IndraTableError(IndraDbException):

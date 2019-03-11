@@ -71,7 +71,8 @@ class CBNManager(object):
             logger.info('Processing jgif files')
             for jgif in zipf.namelist():
                 if jgif.endswith('.jgf') or jgif.endswith('.jgif'):
-                    pbp = process_jgif_file(tmp_archive + jgif)
+                    logger.info(f'Processing {jgif}')
+                    pbp = process_jgif_file(temp_extract + jgif)
                     stmts = stmts + pbp.statements
 
         # Cleanup

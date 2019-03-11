@@ -1,6 +1,8 @@
 from nose.plugins.attrib import attr
 
-from indra_db.managers.dataset_manager import TasManager
+from indra.statements.statements import Statement
+
+from indra_db.managers.dataset_manager import TasManager, CBNManager
 from indra_db.util import get_test_db
 
 
@@ -18,3 +20,16 @@ def test_tas():
     print(len(db_stmts))
     assert len(db_stmts)
     assert all(s.db_info_id == dbid for s in db_stmts)
+
+
+def test_cbn():
+    s3_url = 'https://s3.amazonaws.com/bigmech/travis/Hox-2.0-Hs.jgf.zip'
+    tmp_archive = './temp_Hox-2.0-Hs.jgf.zip'
+    temp_extract = './temp/'
+
+    cbn_mgr = CBNManager(tmp_archive=tmp_archive,
+                         temp_extract=temp_extract,
+                         archive_url=s3_url)
+
+    stmts = cbn_mgr._get_statements()
+    assert isinstance(stmts[0], Statement)

@@ -36,3 +36,12 @@ class TasManager(DatasetManager):
         from indra.sources.tas import process_csv
         proc = process_csv()
         return proc.statements
+
+
+class SignorManager(DatasetManager):
+    name = 'signor'
+
+    def _get_statements(self, db):
+        from indra.sources.signor import process_from_web
+        proc = process_from_web()
+        return proc.statements

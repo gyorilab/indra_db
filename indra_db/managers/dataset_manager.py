@@ -11,10 +11,17 @@ class DatasetManager(object):
 
     def upload(self, db):
         """Upload the content for this dataset into the database."""
-        dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == self.name)
+        dbid = self.check_reference(db)
         stmts = self._get_statements(db)
-        insert_db_stmts(db, stmts, dbid)
+        insert_db_stmts(db, set(stmts), dbid)
         return
+
+    def check_reference(self, db):
+        """Ensure that this database has an entry in the database."""
+        dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == self.name)
+        if dbid is None:
+            dbid = db.insert(db.DBInfo, db_name=self.name)
+        return dbid
 
     def _get_statements(self, db):
         raise NotImplementedError("Statement retrieval must be defined in "

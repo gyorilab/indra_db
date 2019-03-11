@@ -56,6 +56,7 @@ class SignorManager(DatasetManager):
 
 class CBNManager(object):
     """This manager handles retrieval and processing of CBN network files"""
+    name = 'cbn'
 
     @staticmethod
     def _get_statements():

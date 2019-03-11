@@ -23,6 +23,8 @@ class DatasetManager(object):
 
 class TasManager(DatasetManager):
     """This manager handles retrieval and processing of the TAS dataset."""
+    name = 'tas'
+
     def _get_statements(self, db):
         from indra.sources.tas import process_csv
         proc = process_csv()

@@ -7,8 +7,6 @@ from zipfile import ZipFile
 from indra.sources.bel.api import process_jgif_file
 from indra_db.util import insert_db_stmts
 
-CBN_DN = 'http://www.causalbionet.com/Content/jgf_bulk_files/Human-2.0.zip'
-
 logger = logging.getLogger(__name__)
 
 
@@ -58,25 +56,31 @@ class CBNManager(object):
     """This manager handles retrieval and processing of CBN network files"""
     name = 'cbn'
 
-    @staticmethod
-    def _get_statements():
-        tmp_archive = './temp_cbn_human.zip'
-        temp_extract = './temp/'
+    def __init__(self, tmp_archive=None, temp_extract=None, archive_url=None):
+        self.tmp_archive = './temp_cbn_human.zip' if not tmp_archive else \
+            tmp_archive
+        self.temp_extract = './temp/' if not temp_extract else temp_extract
+        self.archive_url = \
+            'http://www.causalbionet.com/Content/jgf_bulk_files/Human-2.0.zip' \
+            '' if not archive_url else archive_url
+
+    def _get_statements(self):
         logger.info('Retrieving CBN network zip archive')
-        response = urllib_request.urlretrieve(url=CBN_DN, filename=tmp_archive)
+        response = urllib_request.urlretrieve(url=self.archive_url,
+                                              filename=self.tmp_archive)
         stmts = []
-        with ZipFile(tmp_archive) as zipf:
-            logger.info(f'Extracting archive to {temp_extract}')
-            zipf.extractall(path=temp_extract)
+        with ZipFile(self.tmp_archive) as zipf:
+            logger.info(f'Extracting archive to {self.temp_extract}')
+            zipf.extractall(path=self.temp_extract)
             logger.info('Processing jgif files')
             for jgif in zipf.namelist():
                 if jgif.endswith('.jgf') or jgif.endswith('.jgif'):
                     logger.info(f'Processing {jgif}')
-                    pbp = process_jgif_file(temp_extract + jgif)
+                    pbp = process_jgif_file(self.temp_extract + jgif)
                     stmts = stmts + pbp.statements
 
         # Cleanup
-        shutil.rmtree(temp_extract)
-        os.remove(tmp_archive)
+        shutil.rmtree(self.temp_extract)
+        os.remove(self.tmp_archive)
 
         return stmts

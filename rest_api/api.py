@@ -1,5 +1,6 @@
 import sys
 import json
+import boto3
 import string
 import logging
 import secrets
@@ -34,6 +35,7 @@ Compress(app)
 CORS(app)
 SC = SimpleCookie()
 CJ = CookieJar()
+cognito_idp_client = boto3.client('cognito-idp')
 
 print("Loading file")
 logger.info("INFO working.")
@@ -43,6 +45,8 @@ logger.error("ERROR working.")
 
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
+
+# COGNITO PARAMETERS
 STATE_COOKIE_NAME = 'indralabStateCookie'
 ACCESSTOKEN_COOKIE_NAME = 'indralabAccessCookie'
 IDTOKEN_COOKIE_NAME = 'indradb-authorization'
@@ -62,6 +66,36 @@ def _new_state_value():
                 and sum(c.isdigit() for c in state) >= 3):
             break
     return state
+
+
+def _verify_user(access_token):
+    """Verifies a user given an Access Token"""
+    try:
+        resp = cognito_idp_client.get_user(AccessToken=access_token)
+    except cognito_idp_client.exceptions.NotAuthorizedException:
+        resp = {}
+    return resp
+
+
+def _redirect_to_sign_in(args, endpoint, ):
+    # new_state = _new_state_value()
+    new_state = 'spamandeggs'
+
+    # save/overwrite state value to state cookie
+    new_full_state = new_state + STATE_SPLIT + endpoint
+    # add_dict_to_cookiejar(cj=CJ,
+    #                       cookie_dict={STATE_COOKIE_NAME: new_full_state})
+    request.cookies[STATE_COOKIE_NAME] = new_full_state
+
+    req_dict = {'response_type': 'token',
+                'client_id': '45rmn7pdon4q4g2o1nr7m33rpv',
+                'redirect_uri': url_for('demon', **args),
+                'state': new_full_state}
+    query_str = '&'.join('%s=%s' % (k, v) for k, v in req_dict.items())
+    url = COGNITO_AUTH_URL + query_str
+    logger.info("No tokens found. Redirecting to cognito (%s)..." % url)
+    resp = redirect(url, code=302)
+    return resp
 
 
 def __process_agent(agent_param):

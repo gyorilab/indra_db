@@ -1,7 +1,10 @@
+from nose.plugins.attrib import attr
+
 from indra_db.managers.dataset_manager import TasManager
 from indra_db.util import get_test_db
 
 
+@attr("nonpublic")
 def test_tas():
     db = get_test_db()
     db._clear(force=True)

@@ -4,7 +4,7 @@ import logging
 import urllib.request as urllib_request
 
 from zipfile import ZipFile
-from indra.sources.bel.api import process_jgif_file
+from indra.sources.bel.api import process_cbn_jgif_file
 from indra_db.util import insert_db_stmts
 
 logger = logging.getLogger(__name__)
@@ -76,10 +76,11 @@ class CBNManager(object):
             for jgif in zipf.namelist():
                 if jgif.endswith('.jgf') or jgif.endswith('.jgif'):
                     logger.info(f'Processing {jgif}')
-                    pbp = process_jgif_file(self.temp_extract + jgif)
+                    pbp = process_cbn_jgif_file(self.temp_extract + jgif)
                     stmts = stmts + pbp.statements
 
         # Cleanup
+        logger.info('Cleaning up...')
         shutil.rmtree(self.temp_extract)
         os.remove(self.tmp_archive)
 

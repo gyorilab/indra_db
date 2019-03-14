@@ -330,9 +330,10 @@ class DatabaseManager(object):
             json = Column(Bytea, nullable=False)
             create_date = Column(DateTime, default=func.now())
             __table_args__ = (
-                UniqueConstraint('mk_hash', 'reading_id',
+                UniqueConstraint('mk_hash', 'text_hash', 'source_hash',
+                                 'reading_id',
                                  name='reading_raw_statement_uniqueness'),
-                UniqueConstraint('mk_hash', 'db_info_id',
+                UniqueConstraint('mk_hash', 'source_hash', 'db_info_id',
                                  name='db_info_raw_statement_uniqueness'),
                 )
         self.RawStatements = RawStatements

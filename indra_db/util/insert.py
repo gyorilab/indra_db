@@ -6,7 +6,7 @@ import logging
 
 from indra.util import clockit
 from indra.util.get_version import get_version
-from indra.statements import Complex, SelfModification, ActiveForm,\
+from indra.statements import Complex, SelfModification, ActiveForm, \
     Conversion, Translocation
 
 from indra_db.exceptions import IndraDbException
@@ -215,7 +215,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
             stmt_rec = (
                 new_stmt.uuid,
                 new_stmt.get_hash(),
-                new_stmt.evidence[0].get_source_hash(),
+                ev.get_source_hash(),
                 db_ref_id,
                 new_stmt.__class__.__name__,
                 json.dumps(new_stmt.to_json()).encode('utf8'),

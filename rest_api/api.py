@@ -11,7 +11,6 @@ from functools import wraps
 from datetime import datetime
 from http.cookies import SimpleCookie
 from http.cookiejar import CookieJar
-from requests.utils import add_dict_to_cookiejar, dict_from_cookiejar
 
 from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
@@ -50,22 +49,10 @@ TITLE = "The INDRA Database"
 STATE_COOKIE_NAME = 'indralabStateCookie'
 ACCESSTOKEN_COOKIE_NAME = 'indralabAccessCookie'
 IDTOKEN_COOKIE_NAME = 'indradb-authorization'
-STATE_SPLIT = '_redirect_'
+
 
 class DbAPIError(Exception):
     pass
-
-
-def _new_state_value():
-    alphabet = string.ascii_letters + string.digits
-    while True:
-
-        state = ''.join(secrets.choice(alphabet) for i in range(64))
-        if (any(c.islower() for c in state)
-                and any(c.isupper() for c in state)
-                and sum(c.isdigit() for c in state) >= 3):
-            break
-    return state
 
 
 def _verify_user(access_token):
@@ -74,27 +61,6 @@ def _verify_user(access_token):
         resp = cognito_idp_client.get_user(AccessToken=access_token)
     except cognito_idp_client.exceptions.NotAuthorizedException:
         resp = {}
-    return resp
-
-
-def _redirect_to_sign_in(args, endpoint, ):
-    # new_state = _new_state_value()
-    new_state = 'spamandeggs'
-
-    # save/overwrite state value to state cookie
-    new_full_state = new_state + STATE_SPLIT + endpoint
-    # add_dict_to_cookiejar(cj=CJ,
-    #                       cookie_dict={STATE_COOKIE_NAME: new_full_state})
-    request.cookies[STATE_COOKIE_NAME] = new_full_state
-
-    req_dict = {'response_type': 'token',
-                'client_id': '45rmn7pdon4q4g2o1nr7m33rpv',
-                'redirect_uri': url_for('demon', **args),
-                'state': new_full_state}
-    query_str = '&'.join('%s=%s' % (k, v) for k, v in req_dict.items())
-    url = COGNITO_AUTH_URL + query_str
-    logger.info("No tokens found. Redirecting to cognito (%s)..." % url)
-    resp = redirect(url, code=302)
     return resp
 
 

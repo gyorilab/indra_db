@@ -98,9 +98,13 @@ def _redirect_to_sign_in(args, endpoint, ):
     return resp
 
 
-def _redirect_to_welcome():
-    url = url_for('welcome')
-    return redirect(location=url, code=302)
+def _redirect_to_welcome(qp_object):
+    base_url = url_for('welcome')
+    if not qp_object.is_empty():
+        url = base_url + '?' + qp_object.to_url_str()
+    else:
+        url = base_url
+    return redirect(url, code=302)
 
 
 class QueryParam(object):

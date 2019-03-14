@@ -1,6 +1,3 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
            'IndraDbException', 'sql_expressions']
 
@@ -33,7 +30,7 @@ except ImportError:
     WITH_NX = False
 
 
-logger = logging.getLogger('db_manager')
+logger = logging.getLogger(__name__)
 
 
 # Solution to fix postgres drop tables
@@ -756,10 +753,7 @@ class DatabaseManager(object):
                 msg += ("Do you really want to clear these tables from %s? "
                         "[y/N]: " % self.label)
             # Check to make sure.
-            try:
-                resp = raw_input(msg)
-            except NameError:
-                resp = input(msg)
+            resp = input(msg)
             if resp != 'y' and resp != 'yes':
                 logger.info('Aborting clear.')
                 return False

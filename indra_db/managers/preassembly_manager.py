@@ -5,71 +5,7 @@ from os import path, remove
 from functools import wraps
 from datetime import datetime
 from collections import defaultdict
-
-logger = logging.getLogger('db_preassembly')
-
-
-if __name__ == '__main__':
-    # NOTE: PEP8 will complain about this, however having the args parsed up
-    # here prevents a long wait just to fined out you entered a command wrong.
-    from argparse import ArgumentParser
-    parser = ArgumentParser(
-        description='Manage preassembly of raw statements into pa statements.'
-        )
-    parser.add_argument(
-        choices=['create', 'update'],
-        dest='task',
-        help=('Choose whether you want to perform an initial upload or update '
-              'the existing content on the database.')
-        )
-    parser.add_argument(
-        '-c', '--continue',
-        dest='continuing',
-        action='store_true',
-        help='Continue uploading or updating, picking up where you left off.'
-        )
-    parser.add_argument(
-        '-n', '--num_procs',
-        dest='num_procs',
-        type=int,
-        default=1,
-        help=('Select the number of processors to use during this operation. '
-              'Default is 1.')
-        )
-    parser.add_argument(
-        '-b', '--batch',
-        type=int,
-        default=10000,
-        help=("Select the number of statements loaded at a time. More "
-              "statements at a time will run faster, but require more memory.")
-    )
-    parser.add_argument(
-        '-d', '--debug',
-        dest='debug',
-        action='store_true',
-        help='Run with debugging level output.'
-        )
-    parser.add_argument(
-        '-D', '--database',
-        default='primary',
-        help=('Select a database from the names given in the config or '
-              'environment, for example primary is INDRA_DB_PRIMAY in the '
-              'config file and INDRADBPRIMARY in the environment. The default '
-              'is \'primary\'.')
-        )
-    parser.add_argument(
-        '--store_duplicates',
-        help=('If you do not want duplicates deleted in this run, their ids '
-              'can instead be stored in a pickle file. The file given here '
-              'will be used. If this option is not used, they will simply be '
-              'deleted now.')
-        )
-    args = parser.parse_args()
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-        from indra.db.database_manager import logger as db_logger
-        db_logger.setLevel(logging.DEBUG)
-
+from argparse import ArgumentParser
 
 from indra.util import batch_iter, clockit
 from indra.statements import Statement
@@ -80,6 +16,8 @@ from indra.preassembler.hierarchy_manager import hierarchies
 
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
     extract_agent_data, insert_pa_agents
+
+logger = logging.getLogger(__name__)
 
 HERE = path.dirname(path.abspath(__file__))
 ipa_logger.setLevel(logging.DEBUG)
@@ -96,16 +34,6 @@ def _handle_update_table(func):
                       run_datetime=run_datetime)
         return completed
     return run_and_record_update
-
-
-def _stmt_from_json(stmt_json_bytes):
-    return Statement._from_json(json.loads(stmt_json_bytes.decode('utf-8')))
-
-
-# This is purely for reducing having to type this long thing so often.
-def shash(s):
-    """Get the shallow hash of a statement."""
-    return s.get_hash(shallow=True)
 
 
 class IndraDBPreassemblyError(Exception):
@@ -601,6 +529,16 @@ class PreassemblyManager(object):
         return ret
 
 
+def _stmt_from_json(stmt_json_bytes):
+    return Statement._from_json(json.loads(stmt_json_bytes.decode('utf-8')))
+
+
+# This is purely for reducing having to type this long thing so often.
+def shash(s):
+    """Get the shallow hash of a statement."""
+    return s.get_hash(shallow=True)
+
+
 def make_graph(unique_stmts, match_key_maps):
     """Create a networkx graph of the statement and their links."""
     import networkx as nx
@@ -624,7 +562,68 @@ def flatten_evidence_dict(ev_dict):
             for ev_stmt_uuid in ev_stmt_uuid_set}
 
 
-if __name__ == '__main__':
+def _make_parser():
+    parser = ArgumentParser(
+        description='Manage preassembly of raw statements into pa statements.'
+    )
+    parser.add_argument(
+        choices=['create', 'update'],
+        dest='task',
+        help=('Choose whether you want to perform an initial upload or update '
+              'the existing content on the database.')
+    )
+    parser.add_argument(
+        '-c', '--continue',
+        dest='continuing',
+        action='store_true',
+        help='Continue uploading or updating, picking up where you left off.'
+    )
+    parser.add_argument(
+        '-n', '--num_procs',
+        dest='num_procs',
+        type=int,
+        default=1,
+        help=('Select the number of processors to use during this operation. '
+              'Default is 1.')
+    )
+    parser.add_argument(
+        '-b', '--batch',
+        type=int,
+        default=10000,
+        help=("Select the number of statements loaded at a time. More "
+              "statements at a time will run faster, but require more memory.")
+    )
+    parser.add_argument(
+        '-d', '--debug',
+        dest='debug',
+        action='store_true',
+        help='Run with debugging level output.'
+    )
+    parser.add_argument(
+        '-D', '--database',
+        default='primary',
+        help=('Select a database from the names given in the config or '
+              'environment, for example primary is INDRA_DB_PRIMAY in the '
+              'config file and INDRADBPRIMARY in the environment. The default '
+              'is \'primary\'.')
+    )
+    parser.add_argument(
+        '--store_duplicates',
+        help=('If you do not want duplicates deleted in this run, their ids '
+              'can instead be stored in a pickle file. The file given here '
+              'will be used. If this option is not used, they will simply be '
+              'deleted now.')
+    )
+    return parser
+
+
+def _main():
+    parser = _make_parser()
+    args = parser.parse_args()
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+        from indra.db.database_manager import logger as db_logger
+        db_logger.setLevel(logging.DEBUG)
     print("Getting %s database." % args.database)
     db = get_db(args.database)
     assert db is not None
@@ -639,3 +638,7 @@ if __name__ == '__main__':
         pm.supplement_corpus(db, args.continuing, args.store_duplicates)
     else:
         raise IndraDBPreassemblyError('Unrecognized task: %s.' % args.task)
+
+
+if __name__ == '__main__':
+    _main()

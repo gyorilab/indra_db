@@ -21,7 +21,7 @@ from argparse import ArgumentParser
 
 from indra_db.util import get_db
 
-logger = logging.getLogger("materialized_views")
+logger = logging.getLogger(__name__)
 
 ORDERED_VIEWS = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
                  'raw_stmt_src', 'pa_stmt_src']

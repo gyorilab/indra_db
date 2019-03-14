@@ -1,6 +1,3 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str, int
-
 import logging
 from os import path
 from functools import wraps
@@ -12,7 +9,7 @@ from indra_db.reading import read_db as rdb
 from indra_db.util import get_primary_db, get_test_db, get_db
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
 
-logger = logging.getLogger('reading_manager')
+logger = logging.getLogger(__name__)
 THIS_DIR = path.dirname(path.abspath(__file__))
 
 

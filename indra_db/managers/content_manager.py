@@ -5,104 +5,23 @@ import tarfile
 import zlib
 import logging
 import pickle
-import xml.etree.ElementTree as ET
 import multiprocessing as mp
-from os import path, remove, rename, listdir
-from datetime import datetime, timedelta
-from functools import wraps
-from ftplib import FTP
+import xml.etree.ElementTree as ET
+
 from io import BytesIO
-from indra.util import _require_python3
-from indra.literature.elsevier_client import download_article_from_ids
+from ftplib import FTP
+from functools import wraps
+from argparse import ArgumentParser
+from datetime import datetime, timedelta
+from os import path, remove, rename, listdir
 from indra.literature.crossref_client import get_publisher
 from indra.literature.pubmed_client import get_metadata_for_ids
-
-
-logger = logging.getLogger('content_manager')
-
-
-if __name__ == '__main__':
-    # NOTE: PEP8 will complain about this, however having the args parsed up
-    # here prevents a long wait just to fined out you entered a command wrong.
-    from argparse import ArgumentParser
-    parser = ArgumentParser(
-        description='Manage content on INDRA\'s database.'
-        )
-    parser.add_argument(
-        choices=['upload', 'update'],
-        dest='task',
-        help=('Choose whether you want to perform an initial upload or update '
-              'the existing content on the database.')
-        )
-    parser.add_argument(
-        '-c', '--continue',
-        dest='continuing',
-        action='store_true',
-        help='Continue uploading or updating, picking up where you left off.'
-        )
-    parser.add_argument(
-        '-n', '--num_procs',
-        dest='num_procs',
-        type=int,
-        default=1,
-        help=('Select the number of processors to use during this operation. '
-              'Default is 1.')
-        )
-    parser.add_argument(
-        '-d', '--debug',
-        dest='debug',
-        action='store_true',
-        help='Run with debugging level output.'
-        )
-    parser.add_argument(
-        '-t', '--test',
-        action='store_true',
-        help='Run tests using one of the designated test databases.'
-        )
-    parser.add_argument(
-        '-s', '--sources',
-        nargs='+',
-        choices=['pubmed', 'pmc_oa', 'manuscripts', 'elsevier'],
-        default=['pubmed', 'pmc_oa', 'manuscripts'],
-        help=('Specify which sources are to be uploaded. Defaults are pubmed, '
-              'pmc_oa, and manuscripts.')
-        )
-    parser.add_argument(
-        '-D', '--database',
-        default='primary',
-        help=('Select a database from the names given in the config or '
-              'environment, for example primary is INDRA_DB_PRIMAY in the '
-              'config file and INDRADBPRIMARY in the environment. The default '
-              'is \'primary\'. Note that this is overwridden by use of the '
-              '--test flag if \'test\' is not a part of the name given.')
-        )
-    args = parser.parse_args()
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-        from indra.db.database_manager import logger as db_logger
-        db_logger.setLevel(logging.DEBUG)
-
-    if not args.continuing and args.task == 'upload':
-        print("#"*63)
-        print(
-            "# You are about to wipe the database completely clean and     #\n"
-            "# load it from scratch, which could take hours, and eliminate #\n"
-            "# any updates, and potentially interfere with other users.    #\n"
-            "#                                                             #\n"
-            "# If you wish to continue an earlier upload, add the -c       #\n"
-            "# option, and if you wish to update the database, specify     #\n"
-            "# `update` in your command. For mor details, use --help.      #"
-            )
-        print("#"*63)
-        resp = input("Are you sure you want to continue? [yes/no]: ")
-        if resp not in ('yes', 'y'):
-            print ("Aborting...")
-            sys.exit()
+from indra.literature.elsevier_client import download_article_from_ids
 
 from indra.util import zip_string
-from indra.util import UnicodeXMLTreeBuilder as UTB
-from indra.literature.pmc_client import id_lookup
 from indra.literature import pubmed_client
+from indra.literature.pmc_client import id_lookup
+from indra.util import UnicodeXMLTreeBuilder as UTB
 
 from indra_db.util import get_primary_db, get_db, get_test_db
 from indra_db.managers.database_manager import texttypes, formats
@@ -116,6 +35,7 @@ except ImportError:
         "Using this in a try-except will catch nothing. (That's the point.)"
         pass
 
+logger = logging.getLogger(__name__)
 
 ftp_blocksize = 33554432  # Chunk size recommended by NCBI
 THIS_DIR = path.dirname(path.abspath(__file__))
@@ -143,6 +63,7 @@ class _NihFtpClient(object):
         self.my_path = my_path
         self.is_local = local
         self.ftp_url = ftp_url
+        return
 
     def _path_join(self, *args):
         joined_str = path.join(*args)
@@ -238,7 +159,7 @@ class _NihFtpClient(object):
                 contents = [(k, meta['modify']) for k, meta in raw_contents
                             if not k.startswith('.')]
         else:
-            dir_path = self._path_join(self.fpt_url, ftp_path)
+            dir_path = self._path_join(self.ftp_url, ftp_path)
             raw_contents = listdir(dir_path)
             contents = [(fname, path.getmtime(path.join(dir_path, fname)))
                         for fname in raw_contents]
@@ -278,13 +199,13 @@ class ContentManager(object):
         vile_data = None
         try:
             db.copy(tbl_name, data, cols=cols)
-        except DatabaseError as e:
+        except DatabaseError as err:
             db.grab_session()
             db.session.rollback()
             logger.warning('Failed in a copy.')
 
             # Try to extract the failed record and try again.
-            m = self.err_patt.match(e.args[0])
+            m = self.err_patt.match(err.args[0])
             if m is not None and retry:
                 constraint, id_types, ids = m.groups()
                 logger.info('Constraint %s was violated by (%s)=(%s).'
@@ -324,7 +245,7 @@ class ContentManager(object):
 
                 if not len(vile_data):
                     logger.error("Failed to find erroneous data.")
-                    raise e
+                    raise err
 
                 logger.info('Resubmitting copy without the offending ids.')
                 more_vile_data = self.copy_into_db(db, tbl_name, new_data,
@@ -338,11 +259,11 @@ class ContentManager(object):
                 while path.exists(pkl_file_fmt % i):
                     i += 1
                 with open(pkl_file_fmt % i, 'wb') as f:
-                    pickle.dump((e, tbl_name, data, cols), f, protocol=3)
+                    pickle.dump((err, tbl_name, data, cols), f, protocol=3)
                 logger.error('Could not resubmit, not a handled error. '
                              'Pickling the data in %s.' % (pkl_file_fmt % i))
-                logger.exception(e)
-                raise e
+                logger.exception(err)
+                raise err
         logger.debug('Finished copying.')
         return vile_data
 
@@ -456,7 +377,7 @@ class ContentManager(object):
             if len(match_set) == 1:
                 tr_new = match_set.pop()
 
-                # Add this record to the match list, unless there are conflicts;
+                # Add this record to the match list, unless there are conflicts
                 # If there are conflicts (multiple matches in the DB) then
                 # we skip any updates.
                 if not add_to_found_record_list(tr_new):
@@ -1147,6 +1068,9 @@ class PmcManager(_NihManager):
         remove(archive_local_path)
         return
 
+    def is_archive(self, *args):
+        raise NotImplementedError("is_archive must be defined by the child.")
+
     def get_file_list(self):
         return [k for k in self.ftp.ftp_ls() if self.is_archive(k)]
 
@@ -1421,6 +1345,7 @@ class Elsevier(ContentManager):
             pmid_set = {tr.pmid for tr in tr_set}
             tr_dict = {tr.pmid: tr for tr in tr_set}
             num_retries = 0
+            meta_data_dict = None
             while num_retries < max_retries:
                 try:
                     meta_data_dict = get_metadata_for_ids(pmid_set)
@@ -1558,7 +1483,87 @@ class Elsevier(ContentManager):
         return self._get_elsevier_content(db, tr_query, False)
 
 
-if __name__ == '__main__':
+def _make_parser():
+    parser = ArgumentParser(
+        description='Manage content on INDRA\'s database.'
+    )
+    parser.add_argument(
+        choices=['upload', 'update'],
+        dest='task',
+        help=('Choose whether you want to perform an initial upload or update '
+              'the existing content on the database.')
+    )
+    parser.add_argument(
+        '-c', '--continue',
+        dest='continuing',
+        action='store_true',
+        help='Continue uploading or updating, picking up where you left off.'
+    )
+    parser.add_argument(
+        '-n', '--num_procs',
+        dest='num_procs',
+        type=int,
+        default=1,
+        help=('Select the number of processors to use during this operation. '
+              'Default is 1.')
+    )
+    parser.add_argument(
+        '-d', '--debug',
+        dest='debug',
+        action='store_true',
+        help='Run with debugging level output.'
+    )
+    parser.add_argument(
+        '-t', '--test',
+        action='store_true',
+        help='Run tests using one of the designated test databases.'
+    )
+    parser.add_argument(
+        '-s', '--sources',
+        nargs='+',
+        choices=['pubmed', 'pmc_oa', 'manuscripts', 'elsevier'],
+        default=['pubmed', 'pmc_oa', 'manuscripts'],
+        help=('Specify which sources are to be uploaded. Defaults are pubmed, '
+              'pmc_oa, and manuscripts.')
+    )
+    parser.add_argument(
+        '-D', '--database',
+        default='primary',
+        help=('Select a database from the names given in the config or '
+              'environment, for example primary is INDRA_DB_PRIMAY in the '
+              'config file and INDRADBPRIMARY in the environment. The default '
+              'is \'primary\'. Note that this is overwridden by use of the '
+              '--test flag if \'test\' is not a part of the name given.')
+    )
+    return parser
+
+
+def _main():
+    import sys
+    parser = _make_parser()
+    args = parser.parse_args()
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+        from indra.db.database_manager import logger as db_logger
+        db_logger.setLevel(logging.DEBUG)
+
+    if not args.continuing and args.task == 'upload':
+        print("#"*63)
+        print(
+            "# You are about to wipe the database completely clean and     #\n"
+            "# load it from scratch, which could take hours, and eliminate #\n"
+            "# any updates, and potentially interfere with other users.    #\n"
+            "#                                                             #\n"
+            "# If you wish to continue an earlier upload, add the -c       #\n"
+            "# option, and if you wish to update the database, specify     #\n"
+            "# `update` in your command. For mor details, use --help.      #"
+        )
+        print("#"*63)
+        resp = input("Are you sure you want to continue? [yes/no]: ")
+        if resp not in ('yes', 'y'):
+            print("Aborting...")
+            sys.exit()
+
     if args.test:
         if 'test' not in args.database:
             db = get_test_db()
@@ -1586,3 +1591,7 @@ if __name__ == '__main__':
             if Updater.my_source in args.sources:
                 logger.info("Updating %s." % Updater.my_source)
                 Updater().update(db, args.num_procs)
+
+
+if __name__ == '__main__':
+    _main()

@@ -210,6 +210,63 @@ class LogTracker(object):
         return ret
 
 
+def _security_wrapper(fs):
+    logger.info('security wrapper')
+
+    @wraps(fs)
+    def demon(*args, **kwargs):
+        logger.info("Got a demon request")
+        logger.info('Full url received: %s' % request.url)
+
+        # Order of things to check:
+        # If no endpoint:
+        #   redirect to welcome without queries
+        # If token:
+        #   if token valid:
+        #       load endpoint
+        # When above fails:
+        #   redirect to welcome with whatever query string it came with
+
+        # HANDLE ENDPOINT
+        url_in = request.url
+        if url_in.find('/browser/') < 0:
+            return _redirect_to_welcome(QueryParam({}))
+        endpoint = url_in[:url_in.find('?')] if url_in.find('?') > 0 else \
+            url_in
+
+        qp = QueryParam(query_dict=dict(request.args.copy()))
+
+        print("Args -----------")
+        print(qp.query_params)
+        print("Cookies ------------")
+        print(request.cookies)
+        print("------------------")
+
+        # TOKEN HANDLING
+        # Try to load tokens from cookie:
+        access_token = request.cookies.get(ACCESSTOKEN_COOKIE_NAME)
+
+        # No tokens, no access - redirect
+        if not access_token:
+            logger.info('No token found, redirecting to login')
+            if not qp.query_params.get('endpoint'):
+                qp.query_params['endpoint'] = endpoint
+            return _redirect_to_welcome(qp)
+
+        # VERIFY ACCESS TOKEN
+        logger.info('Token found in cookie...')
+        if _verify_user(access_token):
+            logger.info('User verified with access token')
+            logger.info('Loading requested endpoint: %s' % endpoint)
+            return fs(*args, **kwargs)
+        else:
+            # Final fallback
+            logger.info('Could not verify user, redirecting to welcome...')
+            return _redirect_to_welcome(QueryParam({}))
+
+    return demon
+
+
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
 
@@ -309,102 +366,6 @@ def welcome():
     return Response(page_html)
 
 
-@app.route('/browser/demon', methods=['GET', 'POST'])
-def demon():
-    logger.info("Got a demon request")
-    args = dict(request.args.copy())
-    print("Args -----------")
-    print(args)
-    print("Cookies ------------")
-    print(request.cookies)
-    print("------------------")
-
-    # The state value is used to both secure traffic and to keep track of final
-    # endpoint.
-    # The traffic with cognito must always have a state value that matches
-    # the local state value stored in a cookie.
-    # Every new cognito request needs a new state value
-
-    # STATE VALUE HANDLING
-    # If there is a state value in the request, we assume its origin was cognito
-    # current_cookies = dict_from_cookiejar(cj=CJ)
-    # cookie_state = current_cookies[STATE_COOKIE_NAME]
-    cookie_state = request.cookies.get(STATE_COOKIE_NAME)
-    logger.info('Resolved state from cookie: %s' % cookie_state)
-    req_state = args.get('state')
-    logger.info('Resolved state from request: %s' % req_state)
-
-    # ENDPOINT HANDLING
-    # If there is a state value, then source is assumed to be cognito and
-    # (assuming the state values match) it will contain the endpoint.
-    # If there is no state value, then source is assumed to be client and the
-    # query parameters should contain a redirect=endpoint
-    # state parameter format: '<state value><STATE_SPLIT><redirect uri>'
-    if req_state:
-        state, endpoint = req_state.split(STATE_SPLIT)
-    else:
-        endpoint = args.get('redirect')
-    logger.info('Demon: final endpoint %s' % endpoint)
-    assert endpoint, 'Got a request with no endpoint.'
-
-    token = request.headers.get('Authorization')
-    if token:
-        logger.info('Authentication header already present; forwarding...')
-        resp = redirect(url_for(endpoint, **args),
-                        code=302)
-        resp.headers = request.headers
-        return resp
-
-    # query string from cognito:
-    # api.address.com/search_statements.html#
-    # id_token=ID_TOKEN_STRING&
-    # access_token=ACCESS_TOKEN_STRING&
-    # expires_in=TIME_SECONDS&
-    # token_type=Bearer&
-    # state=STATE_STRING
-    token = args.pop('token-id', None)
-    _ = args.pop('token-auth', None)
-    # TODO check if request state matches cookie state
-    #  if token and cookie_state==full_state
-    if token:  # and cookie_state==full_state:
-        logger.info('Authentication tokens present in query string. Baking '
-                    'into cookies and forwarding...')
-        resp = redirect(url_for(endpoint, **args),
-                        code=302)
-        resp.headers = request.headers
-        resp.headers['Authorization'] = token
-        resp.set_cookie(IDTOKEN_COOKIE_NAME, token)
-        return resp
-
-    token = request.cookies.get(IDTOKEN_COOKIE_NAME)
-    if token:
-        logger.info("Found authentication tokens in the cookies. Adding to "
-                    "the header and forwarding...")
-        resp = redirect(url_for(endpoint, **args))
-        resp.headers = request.headers
-        resp.headers['Authorization'] = token
-        return resp
-
-    # new_state = _new_state_value()
-    new_state = 'spamandeggs'
-
-    # save/overwrite state value to state cookie
-    new_full_state = new_state + STATE_SPLIT + endpoint
-    # add_dict_to_cookiejar(cj=CJ,
-    #                       cookie_dict={STATE_COOKIE_NAME: new_full_state})
-    request.cookies[STATE_COOKIE_NAME] = new_full_state
-
-    req_dict = {'response_type': 'token',
-                'client_id': '45rmn7pdon4q4g2o1nr7m33rpv',
-                'redirect_uri': url_for('demon', **args),
-                'state': new_full_state}
-    query_str = '&'.join('%s=%s' % (k, v) for k, v in req_dict.items())
-    url = 'https://auth.indra.bio/login?%s' % query_str
-    logger.info("No tokens found. Redirecting to cognito (%s)..." % url)
-    resp = redirect(url, code=302)
-    return resp
-
-
 @app.route('/browser/statements', methods=['GET'])
 def get_statements_query_format():
     # Create a template object from the template file, load once
@@ -417,6 +378,7 @@ def get_statements_query_format():
 
 @app.route('/browser/statements/from_agents', methods=['GET'])
 @app.route('/api/statements/from_agents', methods=['GET'])
+@_security_wrapper
 @_query_wrapper
 def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get some statements constrained by query."""
@@ -498,6 +460,7 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
 
 @app.route('/api/statements/from_hash/<hash_val>', methods=['GET'])
 @app.route('/browser/statements/from_hash/<hash_val>', methods=['GET'])
+@_security_wrapper
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                           hash_val):

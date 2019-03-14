@@ -104,10 +104,13 @@ def _redirect_to_welcome():
 
 
 class QueryParam(object):
-    """class holding query parameters. Edit content via self.query_params"""
+    """class holding query parameters"""
     def __init__(self, query_dict):
+        # edit content via self.query_params
         self.query_params = query_dict
-        self.is_empty = not bool(self.query_params)
+
+    def is_empty(self):
+        return not bool(self.query_params)
 
     def to_dict(self):
         """Returns the query parameters as a dictionary"""

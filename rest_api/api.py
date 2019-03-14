@@ -214,7 +214,7 @@ def _security_wrapper(fs):
 
         # No tokens, no access - redirect
         if not access_token:
-            logger.info('No token found, redirecting to login')
+            logger.info('No token found, redirecting to welcome for login...')
             if not qp.query_params.get('endpoint'):
                 qp.query_params['endpoint'] = endpoint
             return _redirect_to_welcome(qp)

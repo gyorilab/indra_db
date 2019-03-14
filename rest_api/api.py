@@ -98,6 +98,38 @@ def _redirect_to_sign_in(args, endpoint, ):
     return resp
 
 
+def _redirect_to_welcome():
+    url = url_for('welcome')
+    return redirect(location=url, code=302)
+
+
+class QueryParam(object):
+    """class holding query parameters. Edit content via self.query_params"""
+    def __init__(self, query_dict):
+        self.query_params = query_dict
+        self.is_empty = not bool(self.query_params)
+
+    def to_dict(self):
+        """Returns the query parameters as a dictionary"""
+        return self.query_params
+
+    def to_url_str(self):
+        """Returns the query parameters formatted for a url string"""
+        if self.query_params:
+            return '&'.join(
+                '%s=%s' % (k, v) for k, v in self.query_params.items())
+        else:
+            return ''
+
+    def to_cookie_str(self):
+        """Returns the query parameters formatted for a cookie string"""
+        if self.query_params:
+            return '_and_'.join(
+                '%s_eq_%s' % (k, v) for k, v in self.query_params.items())
+        else:
+            return ''
+
+
 def __process_agent(agent_param):
     """Get the agent id and namespace from an input param."""
     if not agent_param.endswith('@TEXT'):

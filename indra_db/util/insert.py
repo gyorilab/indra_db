@@ -181,7 +181,7 @@ def extract_agent_data(stmt, stmt_id):
     return ref_data, mod_data, mut_data
 
 
-def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
+def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None):
     """Insert statement, their database, and any affiliated agents.
 
     Note that this method is for uploading statements that came from a
@@ -198,10 +198,14 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     verbose : bool
         If True, print extra information and a status bar while compiling
         statements for insert. Default False.
+    batch_id : int or None
+        Select a batch id to use for this upload. It can be used to trace what
+        content has been added.
     """
     # Preparing the statements for copying
     stmt_data = []
-    batch_id = db.make_copy_batch_id()
+    if batch_id is None:
+        batch_id = db.make_copy_batch_id()
 
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
             'indra_version', 'batch_id')

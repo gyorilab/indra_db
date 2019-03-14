@@ -111,12 +111,14 @@ class sqltypes(_map_class):
 class texttypes(_map_class):
     FULLTEXT = 'fulltext'
     ABSTRACT = 'abstract'
+    TITLE = 'title'
 
 
 class formats(_map_class):
     XML = 'xml'
     TEXT = 'text'
     JSON = 'json'
+    EKB = 'ekb'
 
 
 class IndraTableError(IndraDbException):
@@ -317,6 +319,7 @@ class DatabaseManager(object):
             uuid = Column(String(40), unique=True, nullable=False)
             batch_id = Column(Integer, nullable=False)
             mk_hash = Column(BigInteger, nullable=False)
+            text_hash = Column(BigInteger)
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
             db_info = relationship(DBInfo)

@@ -7,9 +7,12 @@ import json
 import pickle
 import random
 import logging
+import re
 from datetime import datetime
 from math import ceil
 from multiprocessing.pool import Pool
+
+from indra.statements import make_hash
 
 from indra.tools.reading.util.script_tools import get_parser
 from indra.util.get_version import get_version as get_indra_version
@@ -125,21 +128,28 @@ class DatabaseStatementData(object):
         self.db_info_id = db_info_id
         self.statement = statement
         self.indra_version = get_indra_version()
+        self.__text_patt = re.compile('[\W_]+')
         return
+
+    def _get_text_hash(self):
+        simple_text = self.__text_patt.sub('', self.statement.evidence[0].text)
+        return make_hash(simple_text.lower(), 16)
 
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
         return 'batch_id', 'reading_id', 'db_info_id', 'uuid', 'mk_hash', \
-               'source_hash', 'type', 'json', 'indra_version'
+               'source_hash', 'type', 'json', 'indra_version', 'shallow_hash',\
+               'text_hash'
 
     def make_tuple(self, batch_id):
         """Make a tuple for copying into the database."""
         return (batch_id, self.reading_id, self.db_info_id,
-                self.statement.uuid, self.statement.get_hash(shallow=False),
+                self.statement.uuid, self.statement.get_hash(),
                 self.statement.evidence[0].get_source_hash(),
                 self.statement.__class__.__name__,
-                json.dumps(self.statement.to_json()), self.indra_version)
+                json.dumps(self.statement.to_json()), self.indra_version,
+                self.statement.get_hash(), self._get_text_hash())
 
 
 def get_stmts_safely(reading_data):
@@ -155,6 +165,7 @@ def get_stmts_safely(reading_data):
         if not len(stmts):
             logger.info("Got no statements for %s." % reading_data.reading_id)
         for stmt in stmts:
+            stmt.evidence[0].pmid = None
             stmt_data = DatabaseStatementData(stmt, reading_data.reading_id)
             stmt_data_list.append(stmt_data)
     else:

@@ -214,7 +214,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
             new_stmt.evidence.append(ev)
             stmt_rec = (
                 new_stmt.uuid,
-                new_stmt.get_hash(shallow=False),
+                new_stmt.get_hash(),
                 new_stmt.evidence[0].get_source_hash(),
                 db_ref_id,
                 new_stmt.__class__.__name__,

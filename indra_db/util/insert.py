@@ -2,6 +2,7 @@ __all__ = ['insert_raw_agents', 'insert_pa_agents', 'insert_pa_stmts',
            'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data']
 
 import json
+import pickle
 import logging
 
 from indra.util import clockit
@@ -18,7 +19,8 @@ logger = logging.getLogger('util-insert')
 
 
 @clockit
-def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
+def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
+                      num_per_yield=100):
     """Insert agents for statements that don't have any agents.
 
     Parameters
@@ -28,6 +30,9 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     batch_id : int
         Every set of new raw statements must be given an id unique to that copy
         That id is used to get the set of statements that need agents added.
+    stmts : list[indra.statements.Statement]
+        The list of statements that include those whose agents are being
+        uploaded.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -38,8 +43,14 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     ref_tuples = []
     mod_tuples = []
     mut_tuples = []
-    q = db.filter_query([db.RawStatements.id, db.RawStatements],
-                        db.RawStatements.batch_id == batch_id)
+    if stmts is None:
+        tbls = [db.RawStatements.id, db.RawStatements]
+        stmt_dict = None
+    else:
+        tbls = [db.RawStatements.id, db.RawStatements.uuid]
+        stmt_dict = {s.uuid: s for s in stmts}
+
+    q = db.filter_query(tbls, db.RawStatements.batch_id == batch_id)
     if verbose:
         num_stmts = q.count()
         print("Loading:", end='', flush=True)
@@ -47,7 +58,11 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     db_stmts = q.yield_per(num_per_yield)
 
     for i, (stmt_id, db_stmt) in enumerate(db_stmts):
-        stmt = get_statement_object(db_stmt)
+        if stmts is None:
+            stmt = get_statement_object(db_stmt)
+        else:
+            stmt = stmt_dict[db_stmt]
+
         ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
         ref_tuples.extend(ref_data)
         mod_tuples.extend(mod_data)
@@ -181,7 +196,8 @@ def extract_agent_data(stmt, stmt_id):
     return ref_data, mod_data, mut_data
 
 
-def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None):
+def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
+                    lazy=False):
     """Insert statement, their database, and any affiliated agents.
 
     Note that this method is for uploading statements that came from a
@@ -211,6 +227,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None):
             'indra_version', 'batch_id')
     if verbose:
         print("Loading:", end='', flush=True)
+    insert_stmts = []
     for i, stmt in enumerate(stmts):
         # Only one evidence is allowed for each statement.
         for ev in stmt.evidence:
@@ -218,7 +235,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None):
             new_stmt.evidence.append(ev)
             stmt_rec = (
                 new_stmt.uuid,
-                new_stmt.get_hash(),
+                new_stmt.get_hash(refresh=True),
                 ev.get_source_hash(),
                 db_ref_id,
                 new_stmt.__class__.__name__,
@@ -226,13 +243,20 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None):
                 get_version(),
                 batch_id
             )
+            insert_stmts.append(new_stmt)
             stmt_data.append(stmt_rec)
         if verbose and i % (len(stmts)//25) == 0:
             print('|', end='', flush=True)
     if verbose:
         print(" Done loading %d statements." % len(stmts))
-    db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
-    insert_raw_agents(db, batch_id)
+    try:
+        db.copy('raw_statements', stmt_data, cols, lazy=lazy,
+                push_conflict=lazy)
+    except Exception:
+        with open('stmt_data_dump.pkl', 'wb') as f:
+            pickle.dump(stmt_data, f)
+        raise
+    insert_raw_agents(db, insert_stmts, batch_id)
     return
 
 

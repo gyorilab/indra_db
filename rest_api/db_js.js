@@ -24,16 +24,34 @@ function _cookieUrlToUrl(cookieUrl) {
   return cookieUrl.replace(/!/g, ':').replace(/\|/g, '/')
 }
 
-function _toCookieString(queryDict) {
-  console.log('function _toCookieString(queryDict)')
+function _dictToCookieString(queryDict) {
+  console.log('function _dictToCookieString(queryDict)')
   var cookieString = ''
   for (key in queryDict) {
-    if (cookieString.length == 0) cookieString = key + '_eq_' + queryDict[key];
-  else cookieString = cookieString + '_and_' + key + '_eq_' + queryDict[key];
+    if (cookieString.length == 0) cookieString = key + '_eq_' + _urlToCookieUrl(queryDict[key]);
+  else cookieString = cookieString + '_and_' + key + '_eq_' + _urlToCookieUrl(queryDict[key]);
   }
   return cookieString;
 }
 
-function _fromCookieStringToQuery(cookieString) {
-  return cookieString.replace(/_eq_/g, '=').replace(/_and_/g, '&');
+function _cookieStringToDict(cookieString) {
+  let dict = {}
+  for (par of _cookieUrlToUrl(cookieString).split('_and_')) {
+    k_v = par.split('_eq_')
+    dict[k_v[0]] = k_v[1]
+  }
+  return dict
+}
+
+function _cookieStringToQuery(cookieString, stripEndpoint) {
+  let cookieDict = _cookieStringToDict(cookieString)
+  let query = ''
+  for (key in cookieDict) {
+    if (stripEndpoint && key == 'endpoint') {
+      continue;
+    }
+    if (query.length == 0) query = '?' + key + '=' + cookieDict[key];
+    else query = query + '&' + key + '=' + cookieDict[key]; 
+  }
+  return query;
 }

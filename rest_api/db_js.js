@@ -6,11 +6,67 @@ The usage of this file assumes awsServices.js is loaded
 */
 
 // CONSTANTS
+SEARCH_STATE_COOKIE_NAME = 'indraDBsearchQuery'
+BUTTON_ID = NOTIFY_TAG_ID;
 
 // FUNCTIONS
-
 function checkState() {
+  // Get query dict
+  let dict_split = getDictFromUrl(window.location.href)
+  let dict = dict_split[0]
+
+  // Check if query string (?) or fragment (#)
+  if (dict_split[1] == '?') {
+    // Save query string in cookie
+    _writeCookie(SEARCH_STATE_COOKIE_NAME, _dictToCookieString(dict), 1)
+
+    // Set button to login redirect
+    let buttonTag = document.getElementById(BUTTON_ID)
+    console.log(buttonTag)
+    buttonTag.textContent = 'Login to continue search';
+    buttonTag.onclick = goToLogin;
+
+  } else if (dict_split[1] == '#') {
+    // Fragment handling - assume redirect from cognito
+
+    // Get tokens
+    let accTokenString = dict['access_token']
+    let idTokenString = dict['id_token']
+
+    // Verifies the user and saves cookies
+    verifyUser(accTokenString, idTokenString, false, null)
+
+    // Set button to continue search
+    let buttonTag = document.getElementById(BUTTON_ID)
+    buttonTag.textContent = 'Continue search';
+    buttonTag.onclick = continueSearch;
+  }
   return;
+}
+
+function goToLogin() {
+  getTokenFromAuthEndpoint(window.location.href)
+}
+
+function continueSearch() {
+  // Get query cookie
+  let cookieQueryString = _readCookie(SEARCH_STATE_COOKIE_NAME)
+  let queryDict = _cookieStringToDict(cookieQueryString);
+  let endpoint = queryDict['endpoint']
+  if (delete queryDict['endpoint']) {
+
+    // Create full URL of previous search
+    let full_url = endpoint + _cookieStringToQuery(cookieQueryString, true)
+    
+    // Delete query cookie
+    console.log('Deleting search state cookie')
+    // _deleteCookie(SEARCH_STATE_COOKIE_NAME)
+
+    // redirect to endpoint
+    console.log('redirecting to endpoint')
+    console.log(full_url)
+     window.location.replace(full_url) // Redirect
+  }
 }
 
 function _urlToCookieUrl(endpoint) {

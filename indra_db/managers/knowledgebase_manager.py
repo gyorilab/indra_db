@@ -23,6 +23,8 @@ class KnowledgebaseManager(object):
         dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == self.name)
         if dbid is None:
             dbid = db.insert(db.DBInfo, db_name=self.name)
+        else:
+            dbid = dbid[0]
         return dbid
 
     def _get_statements(self, db):

@@ -13,39 +13,42 @@ BUTTON_ID = NOTIFY_TAG_ID;
 function checkState() {
   // Get query dict
   let dict_split = getDictFromUrl(window.location.href)
-  let dict = dict_split[0]
+  if (dict_split) {
+    let dict = dict_split[0]
 
-  // Check if query string (?) or fragment (#)
-  if (dict_split[1] == '?') {
-    // Save query string in cookie
-    _writeCookie(SEARCH_STATE_COOKIE_NAME, _dictToCookieString(dict), 1)
+    // Check if query string (?) or fragment (#)
+    if (dict_split[1] == '?') {
+      // Save query string in cookie
+      _writeCookie(SEARCH_STATE_COOKIE_NAME, _dictToCookieString(dict), 1)
 
-    // Set button to login redirect
-    let buttonTag = document.getElementById(BUTTON_ID)
-    console.log(buttonTag)
-    buttonTag.textContent = 'Login to continue search';
-    buttonTag.onclick = goToLogin;
+      // Set button to login redirect
+      let buttonTag = document.getElementById(BUTTON_ID)
+      console.log(buttonTag)
+      buttonTag.textContent = 'Login to continue search';
+      buttonTag.onclick = goToLogin;
 
-  } else if (dict_split[1] == '#') {
-    // Fragment handling - assume redirect from cognito
+    } else if (dict_split[1] == '#') {
+      // Fragment handling - assume redirect from cognito
 
-    // Get tokens
-    let accTokenString = dict['access_token']
-    let idTokenString = dict['id_token']
+      // Get tokens
+      let accTokenString = dict['access_token']
+      let idTokenString = dict['id_token']
 
-    // Verifies the user and saves cookies
-    verifyUser(accTokenString, idTokenString, false, null)
+      // Verifies the user and saves cookies
+      verifyUser(accTokenString, idTokenString, false, null, 'Continue search')
 
-    // Set button to continue search
-    let buttonTag = document.getElementById(BUTTON_ID)
-    buttonTag.textContent = 'Continue search';
-    buttonTag.onclick = continueSearch;
+      // Set button to continue search
+      let buttonTag = document.getElementById(BUTTON_ID)
+      buttonTag.textContent = 'Continue search';
+      buttonTag.onclick = continueSearch;
+    }
   }
   return;
 }
 
 function goToLogin() {
-  getTokenFromAuthEndpoint(window.location.href)
+  // Split off the query string
+  getTokenFromAuthEndpoint(window.location.href.split('?')[0])
 }
 
 function continueSearch() {

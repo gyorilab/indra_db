@@ -1,10 +1,7 @@
 import os
 import shutil
 import logging
-import urllib.request as urllib_request
 
-from zipfile import ZipFile
-from indra.sources.bel.api import process_cbn_jgif_file
 from indra_db.util import insert_db_stmts
 
 logger = logging.getLogger(__name__)
@@ -71,6 +68,10 @@ class CBNManager(KnowledgebaseManager):
         return
 
     def _get_statements(self, db):
+        from zipfile import ZipFile
+        import urllib.request as urllib_request
+        from indra.sources.bel.api import process_cbn_jgif_file
+
         logger.info('Retrieving CBN network zip archive')
         response = urllib_request.urlretrieve(url=self.archive_url,
                                               filename=self.tmp_archive)
@@ -91,3 +92,12 @@ class CBNManager(KnowledgebaseManager):
         os.remove(self.tmp_archive)
 
         return stmts
+
+
+class BiogridManager(KnowledgebaseManager):
+    name = 'biogrid'
+
+    def _get_statements(self, db):
+        from indra.sources import biogrid
+        bp = biogrid.BiogridProcessor()
+        return bp.statements

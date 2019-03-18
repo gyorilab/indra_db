@@ -63,7 +63,7 @@ function continueSearch() {
     
     // Delete query cookie
     console.log('Deleting search state cookie')
-    // _deleteCookie(SEARCH_STATE_COOKIE_NAME)
+    _deleteCookie(SEARCH_STATE_COOKIE_NAME)
 
     // redirect to endpoint
     console.log('redirecting to endpoint')

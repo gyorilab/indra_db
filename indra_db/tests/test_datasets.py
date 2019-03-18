@@ -1,9 +1,10 @@
 from nose.plugins.attrib import attr
 
-from indra.statements.statements import Statement
+from indra.statements.statements import Statement, Agent, Phosphorylation, \
+    Complex, Evidence
 
 from indra_db.managers.dataset_manager import TasManager, CBNManager
-from indra_db.util import get_test_db
+from indra_db.util import get_test_db, insert_db_stmts
 
 
 @attr("nonpublic")
@@ -33,3 +34,19 @@ def test_cbn():
 
     stmts = cbn_mgr._get_statements()
     assert isinstance(stmts[0], Statement)
+
+
+def test_simple_db_insert():
+    db = get_test_db()
+    db._clear(force=True)
+    stmts = [Phosphorylation(Agent('MEK', db_refs={'FPLX': 'MEK'}),
+                             Agent('ERK', db_refs={'FPLX': 'ERK'}),
+                             evidence=Evidence(source_api='test')),
+             Complex([Agent(n, db_refs={'FPLX': n}) for n in ('MEK', 'ERK')],
+                     evidence=Evidence(source_api='test'))]
+    dbid = db.insert(db.DBInfo, db_name='test')
+    insert_db_stmts(db, stmts, dbid)
+    db_stmts = db.select_all(db.RawStatements)
+    db_agents = db.select_all(db.RawAgents)
+    assert len(db_stmts) == 2, len(db_stmts)
+    assert len(db_agents) == 8, len(db_agents)

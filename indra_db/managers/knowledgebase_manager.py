@@ -10,7 +10,7 @@ from indra_db.util import insert_db_stmts
 logger = logging.getLogger(__name__)
 
 
-class DatasetManager(object):
+class KnowledgebaseManager(object):
     """This is a class to lay out the methods for updating a dataset."""
     name = NotImplemented
 
@@ -33,7 +33,7 @@ class DatasetManager(object):
                                   "each child.")
 
 
-class TasManager(DatasetManager):
+class TasManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the TAS dataset."""
     name = 'tas'
 
@@ -43,7 +43,7 @@ class TasManager(DatasetManager):
         return proc.statements
 
 
-class SignorManager(DatasetManager):
+class SignorManager(KnowledgebaseManager):
     name = 'signor'
 
     def _get_statements(self, db):

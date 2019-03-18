@@ -3,7 +3,7 @@ from nose.plugins.attrib import attr
 from indra.statements.statements import Statement, Agent, Phosphorylation, \
     Complex, Evidence
 
-from indra_db.managers.dataset_manager import TasManager, CBNManager
+from indra_db.managers.knowledgebase_manager import TasManager, CBNManager
 from indra_db.util import get_test_db, insert_db_stmts
 
 

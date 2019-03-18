@@ -824,9 +824,6 @@ class DatabaseManager(object):
         try:
             logger.debug('Attempting to commit...')
             self.session.commit()
-            if self._conn is not None:
-                self._conn.commit()
-                self._conn = None
             logger.debug('Message committed.')
         except Exception as e:
             if self.session is not None:
@@ -836,6 +833,19 @@ class DatabaseManager(object):
             logger.exception(e)
             logger.error(err_msg)
             raise
+
+    def commit_copy(self, err_msg):
+        if self._conn is not None:
+            try:
+                logger.debug('Attempting to commit...')
+                self._conn.commit()
+                self._conn = None
+                logger.debug('Message committed.')
+            except Exception as e:
+                self._conn = None
+                logger.exception(e)
+                logger.error(err_msg)
+                raise
 
     def _get_foreign_key_constraint(self, table_name_1, table_name_2):
         cols = self.get_column_objects(self.tables[table_name_1])

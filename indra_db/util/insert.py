@@ -43,7 +43,7 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     ref_tuples = []
     mod_tuples = []
     mut_tuples = []
-    if stmts is None:
+    if not stmts:
         tbls = [db.RawStatements.id, db.RawStatements]
         stmt_dict = None
     else:
@@ -75,11 +75,13 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     if verbose and num_stmts > 25:
         print()
 
-    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'))
+    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'),
+            commit=False)
     db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'position', 'residue',
-                                     'modified'))
+                                     'modified'), commit=False)
     db.copy('raw_muts', mut_tuples, ('stmt_id', 'position', 'residue_from',
-                                     'residue_to'))
+                                     'residue_to'), commit=False)
+    db.commit_copy('Error copying raw agents, mods, and muts.')
     return
 
 
@@ -115,13 +117,17 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
 
     if 'agents' not in skip:
         db.copy('pa_agents', ref_data,
-                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True,
+                commit=False)
     if 'mods' not in skip:
         db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
-                                      'residue', 'modified'))
+                                      'residue', 'modified'), commit=False)
     if 'muts' not in skip:
         db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position',
-                                      'residue_from', 'residue_to'))
+                                      'residue_from', 'residue_to'),
+                commit=False)
+    db.session.commit_copy('Error copying pa agents, mods, and muts, '
+                           'excluding: %s.' % (', '.join(skip)))
     return
 
 
@@ -219,44 +225,54 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
         content has been added.
     """
     # Preparing the statements for copying
-    stmt_data = []
     if batch_id is None:
         batch_id = db.make_copy_batch_id()
+
+    stmt_data = []
+    insert_stmts = []
+
+    def add_stmt_tuple(stmt, src_hash=None):
+        stmt_rec = (
+            stmt.uuid,
+            stmt.get_hash(refresh=True),
+            src_hash,
+            db_ref_id,
+            stmt.__class__.__name__,
+            json.dumps(stmt.to_json()).encode('utf8'),
+            get_version(),
+            batch_id
+        )
+        insert_stmts.append(stmt)
+        stmt_data.append(stmt_rec)
 
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
             'indra_version', 'batch_id')
     if verbose:
         print("Loading:", end='', flush=True)
-    insert_stmts = []
     for i, stmt in enumerate(stmts):
         # Only one evidence is allowed for each statement.
-        for ev in stmt.evidence:
-            new_stmt = stmt.make_generic_copy()
-            new_stmt.evidence.append(ev)
-            stmt_rec = (
-                new_stmt.uuid,
-                new_stmt.get_hash(refresh=True),
-                ev.get_source_hash(),
-                db_ref_id,
-                new_stmt.__class__.__name__,
-                json.dumps(new_stmt.to_json()).encode('utf8'),
-                get_version(),
-                batch_id
-            )
-            insert_stmts.append(new_stmt)
-            stmt_data.append(stmt_rec)
+        if len(stmt.evidence) > 1:
+            for ev in stmt.evidence:
+                new_stmt = stmt.make_generic_copy()
+                new_stmt.evidence.append(ev)
+                add_stmt_tuple(new_stmt, ev.get_source_hash())
+        else:
+            add_stmt_tuple(stmt, stmt.evidence[0].get_source_hash())
         if verbose and i % (len(stmts)//25) == 0:
             print('|', end='', flush=True)
     if verbose:
         print(" Done loading %d statements." % len(stmts))
     try:
+        # TODO: Make it possible to not commit this immediately. That would
+        # require developing a more sophisticated copy procedure for raw
+        # statements and agents.
         db.copy('raw_statements', stmt_data, cols, lazy=lazy,
                 push_conflict=lazy)
-    except Exception:
+    except Exception as e:
         with open('stmt_data_dump.pkl', 'wb') as f:
             pickle.dump(stmt_data, f)
-        raise
-    insert_raw_agents(db, insert_stmts, batch_id)
+        raise e
+    insert_raw_agents(db, batch_id, insert_stmts)
     return
 
 

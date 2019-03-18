@@ -54,6 +54,7 @@ class CBNManager(KnowledgebaseManager):
     name = 'cbn'
 
     def __init__(self, tmp_archive=None, temp_extract=None, archive_url=None):
+        # Specifying arguments is intended for testing only.
         if not tmp_archive:
             self.tmp_archive = './temp_cbn_human.zip'
         else:
@@ -101,3 +102,18 @@ class BiogridManager(KnowledgebaseManager):
         from indra.sources import biogrid
         bp = biogrid.BiogridProcessor()
         return bp.statements
+
+
+class BelLcManager(KnowledgebaseManager):
+    name = 'bel_lc'
+
+    def _get_statements(self, db):
+        import boto3
+        import pybel
+        from indra.sources import bel
+
+        s3 = boto3.client('s3')
+        resp = s3.get_object(Bucket='bigmech', Key='indra-db/large_corpus.bel')
+        pbg = pybel.from_bytes(resp['Body'].read())
+        pbp = bel.process_pybel_graph(pbg)
+        return pbp.statements

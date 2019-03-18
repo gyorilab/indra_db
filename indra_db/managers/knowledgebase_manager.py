@@ -52,30 +52,36 @@ class SignorManager(KnowledgebaseManager):
         return proc.statements
 
 
-class CBNManager(object):
+class CBNManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of CBN network files"""
     name = 'cbn'
 
     def __init__(self, tmp_archive=None, temp_extract=None, archive_url=None):
-        self.tmp_archive = './temp_cbn_human.zip' if not tmp_archive else \
-            tmp_archive
+        if not tmp_archive:
+            self.tmp_archive = './temp_cbn_human.zip'
+        else:
+            self.tmp_archive = tmp_archive
         self.temp_extract = './temp/' if not temp_extract else temp_extract
-        self.archive_url = \
-            'http://www.causalbionet.com/Content/jgf_bulk_files/Human-2.0.zip' \
-            '' if not archive_url else archive_url
 
-    def _get_statements(self):
+        if not archive_url:
+            self.archive_url = ('http://www.causalbionet.com/Content'
+                                '/jgf_bulk_files/Human-2.0.zip')
+        else:
+            self.archive_url = archive_url
+        return
+
+    def _get_statements(self, db):
         logger.info('Retrieving CBN network zip archive')
         response = urllib_request.urlretrieve(url=self.archive_url,
                                               filename=self.tmp_archive)
         stmts = []
         with ZipFile(self.tmp_archive) as zipf:
-            logger.info(f'Extracting archive to {self.temp_extract}')
+            logger.info('Extracting archive to %s' % self.temp_extract)
             zipf.extractall(path=self.temp_extract)
             logger.info('Processing jgif files')
             for jgif in zipf.namelist():
                 if jgif.endswith('.jgf') or jgif.endswith('.jgif'):
-                    logger.info(f'Processing {jgif}')
+                    logger.info('Processing %s' % jgif)
                     pbp = process_cbn_jgif_file(self.temp_extract + jgif)
                     stmts = stmts + pbp.statements
 

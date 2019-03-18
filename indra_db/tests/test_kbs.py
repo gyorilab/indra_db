@@ -32,8 +32,11 @@ def test_cbn():
                          temp_extract=temp_extract,
                          archive_url=s3_url)
 
-    stmts = cbn_mgr._get_statements()
-    assert isinstance(stmts[0], Statement)
+    db = get_test_db()
+    db._clear(force=True)
+    cbn_mgr.upload(db)
+    db_stmts = db.select_all(db.RawStatements)
+    assert len(db_stmts)
 
 
 def test_simple_db_insert():

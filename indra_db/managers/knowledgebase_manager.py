@@ -1,5 +1,7 @@
 import os
+import boto3
 import shutil
+import pickle
 import logging
 
 from indra_db.util import insert_db_stmts
@@ -106,11 +108,21 @@ class BiogridManager(KnowledgebaseManager):
         return bp.statements
 
 
+class PathwayCommonsManager(KnowledgebaseManager):
+    name = 'pc'
+
+    def _get_statements(self, db):
+        s3 = boto3.client('s3')
+
+        resp = s3.get_object(Bucket='bioexp-paper',
+                             Key='bioexp_biopax_pc10.pkl')
+        return pickle.loads(resp['Body'].read())
+
+
 class BelLcManager(KnowledgebaseManager):
     name = 'bel_lc'
 
     def _get_statements(self, db):
-        import boto3
         import pybel
         from indra.sources import bel
 

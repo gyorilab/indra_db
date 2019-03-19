@@ -221,8 +221,15 @@ def _security_wrapper(fs):
 
         # VERIFY ACCESS TOKEN
         logger.info('Token found in cookie...')
-        if _verify_user(access_token):
+        user_verified = _verify_user(access_token)
+        if user_verified:
             logger.info('User verified with access token')
+            # Check if this is a curation POST
+            print('User info ----------')
+            print(user_verified)
+            print('--------------------')
+            if request.json and not request.json.get('curator'):
+                request.json['curator'] = user_verified['name']
             logger.info('Loading requested endpoint: %s' % endpoint)
             return fs(*args, **kwargs)
         else:
@@ -476,6 +483,7 @@ def describe_curation():
 
 @app.route('/api/curation/submit/<hash_val>', methods=['POST'])
 @app.route('/browser/curation/submit/<hash_val>', methods=['POST'])
+@_security_wrapper
 def submit_curation_endpoint(hash_val):
     logger.info("Adding curation for statement %s." % (hash_val))
     ev_hash = request.json.get('ev_hash')

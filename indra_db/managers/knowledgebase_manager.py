@@ -7,6 +7,7 @@ import pickle
 import logging
 
 from indra_db.util import insert_db_stmts
+from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class KnowledgebaseManager(object):
         """Upload the content for this dataset into the database."""
         dbid = self.check_reference(db)
         stmts = self._get_statements(db)
-        insert_db_stmts(db, set(stmts), dbid)
+        insert_db_stmts(db, stmts, dbid)
         return
 
     def check_reference(self, db):
@@ -54,11 +55,9 @@ class TasManager(KnowledgebaseManager):
     def _get_statements(self, db):
         from indra.sources.tas import process_csv
         proc = process_csv()
-        stmt_dict = {}
-        for s in proc.statements:
-            mk = s.matches_key()
-            stmt_dict[mk] = self.choose_better(s, stmt_dict.get(mk))
-        return list(stmt_dict.values())
+        stmts, dups = extract_duplicates(proc.statements)
+        print(dups)
+        return stmts
 
 
 class SignorManager(KnowledgebaseManager):
@@ -144,6 +143,7 @@ class HPRDManager(KnowledgebaseManager):
         import requests
         from indra.sources import hprd
 
+        # Download the files.
         hprd_base = 'http://www.hprd.org/RELEASE9/'
         resp = requests.get(hprd_base + 'HPRD_FLAT_FILES_041310.tar.gz')
         tmp_dir = tempfile.mkdtemp('hprd_files')
@@ -151,9 +151,11 @@ class HPRDManager(KnowledgebaseManager):
         with open(tmp_tarfile, 'wb') as f:
             f.write(resp.content)
 
+        # Extract the files.
         with tarfile.open(tmp_tarfile, 'r:gz') as tf:
             tf.extractall(tmp_dir)
 
+        # Find the relevant files.
         dirs = os.listdir(tmp_dir)
         for files_dir in dirs:
             if files_dir.startswith('FLAT_FILES'):
@@ -166,8 +168,17 @@ class HPRDManager(KnowledgebaseManager):
                       'seq_file': 'PROTEIN_SEQUENCES'}
         kwargs = {kw: os.path.join(files_path, fname + '.txt')
                   for kw, fname in file_names.items()}
+
+        # Run the processor
         hp = hprd.process_flat_files(**kwargs)
-        return hp.statements
+
+        # Filter out exact duplicates
+        unique_stmts, dups = \
+            extract_duplicates(hp.statements,
+                               key_func=KeyFunc.mk_and_one_ev_src)
+        print(dups)
+
+        return unique_stmts
 
 
 class BelLcManager(KnowledgebaseManager):

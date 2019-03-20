@@ -252,10 +252,16 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
     for i, stmt in enumerate(stmts):
         # Only one evidence is allowed for each statement.
         if len(stmt.evidence) > 1:
+            sh_set = set()
             for ev in stmt.evidence:
+                sh = ev.get_source_hash()
+                if sh in sh_set:
+                    continue
+                sh_set.add(sh)
+
                 new_stmt = stmt.make_generic_copy()
                 new_stmt.evidence.append(ev)
-                add_stmt_tuple(new_stmt, ev.get_source_hash())
+                add_stmt_tuple(new_stmt, sh)
         else:
             add_stmt_tuple(stmt, stmt.evidence[0].get_source_hash())
         if verbose and i % (len(stmts)//25) == 0:

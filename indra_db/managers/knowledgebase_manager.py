@@ -38,10 +38,25 @@ class TasManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the TAS dataset."""
     name = 'tas'
 
+    @staticmethod
+    def get_order_value(stmt):
+        cm = stmt.evidence[0].annotations['class_min']
+        return ['Kd < 100nM', '100nM < Kd < 1uM'].index(cm)
+
+    def choose_better(self, *stmts):
+        best_stmt = min([(self.get_order_value(stmt), stmt)
+                         for stmt in stmts if stmt is not None],
+                        key=lambda t: t[0])
+        return best_stmt[1]
+
     def _get_statements(self, db):
         from indra.sources.tas import process_csv
         proc = process_csv()
-        return proc.statements
+        stmt_dict = {}
+        for s in proc.statements:
+            mk = s.matches_key()
+            stmt_dict[mk] = self.choose_better(s, stmt_dict.get(mk))
+        return list(stmt_dict.values())
 
 
 class SignorManager(KnowledgebaseManager):

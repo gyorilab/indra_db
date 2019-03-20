@@ -1,4 +1,6 @@
 import os
+import tempfile
+
 import boto3
 import shutil
 import pickle
@@ -132,6 +134,40 @@ class PathwayCommonsManager(KnowledgebaseManager):
         resp = s3.get_object(Bucket='bioexp-paper',
                              Key='bioexp_biopax_pc10.pkl')
         return pickle.loads(resp['Body'].read())
+
+
+class HPRDManager(KnowledgebaseManager):
+    name = 'hprd'
+
+    def _get_statements(self, db):
+        import tarfile
+        import requests
+        from indra.sources import hprd
+
+        hprd_base = 'http://www.hprd.org/RELEASE9/'
+        resp = requests.get(hprd_base + 'HPRD_FLAT_FILES_041310.tar.gz')
+        tmp_dir = tempfile.mkdtemp('hprd_files')
+        tmp_tarfile = os.path.join(tmp_dir, 'hprd_files.tar.gz')
+        with open(tmp_tarfile, 'wb') as f:
+            f.write(resp.content)
+
+        with tarfile.open(tmp_tarfile, 'r:gz') as tf:
+            tf.extractall(tmp_dir)
+
+        dirs = os.listdir(tmp_dir)
+        for files_dir in dirs:
+            if files_dir.startswith('FLAT_FILES'):
+                break
+        files_path = os.path.join(tmp_dir, files_dir)
+        file_names = {'id_mappings_file': 'HPRD_ID_MAPPINGS',
+                      'complexes_file': 'PROTEIN_COMPLEXES',
+                      'ptm_file': 'POST_TRANSLATIONAL_MODIFICATIONS',
+                      'ppi_file': 'BINARY_PROTEIN_PROTEIN_INTERACTIONS',
+                      'seq_file': 'PROTEIN_SEQUENCES'}
+        kwargs = {kw: os.path.join(files_path, fname + '.txt')
+                  for kw, fname in file_names.items()}
+        hp = hprd.process_flat_files(**kwargs)
+        return hp.statements
 
 
 class BelLcManager(KnowledgebaseManager):

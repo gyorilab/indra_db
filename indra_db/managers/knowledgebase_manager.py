@@ -2,7 +2,6 @@ import os
 import tempfile
 
 import boto3
-import shutil
 import pickle
 import logging
 
@@ -92,14 +91,7 @@ class CBNManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of CBN network files"""
     name = 'cbn'
 
-    def __init__(self, tmp_archive=None, temp_extract=None, archive_url=None):
-        # Specifying arguments is intended for testing only.
-        if not tmp_archive:
-            self.tmp_archive = './temp_cbn_human.zip'
-        else:
-            self.tmp_archive = tmp_archive
-        self.temp_extract = './temp/' if not temp_extract else temp_extract
-
+    def __init__(self, archive_url=None):
         if not archive_url:
             self.archive_url = ('http://www.causalbionet.com/Content'
                                 '/jgf_bulk_files/Human-2.0.zip')
@@ -108,30 +100,40 @@ class CBNManager(KnowledgebaseManager):
         return
 
     def _get_statements(self):
+        import requests
         from zipfile import ZipFile
-        import urllib.request as urllib_request
         from indra.sources.bel.api import process_cbn_jgif_file
+        import tempfile
+
+        cbn_dir = tempfile.mkdtemp('cbn_manager')
 
         logger.info('Retrieving CBN network zip archive')
-        response = urllib_request.urlretrieve(url=self.archive_url,
-                                              filename=self.tmp_archive)
+        tmp_zip = os.path.join(cbn_dir, 'cbn_human.zip')
+        resp = requests.get(self.archive_url)
+        with open(tmp_zip, 'wb') as f:
+            f.write(resp.content)
+
         stmts = []
-        with ZipFile(self.tmp_archive) as zipf:
-            logger.info('Extracting archive to %s' % self.temp_extract)
-            zipf.extractall(path=self.temp_extract)
+        tmp_dir = os.path.join(cbn_dir, 'cbn')
+        os.mkdir(tmp_dir)
+        with ZipFile(tmp_zip) as zipf:
+            logger.info('Extracting archive to %s' % tmp_dir)
+            zipf.extractall(path=tmp_dir)
             logger.info('Processing jgif files')
             for jgif in zipf.namelist():
                 if jgif.endswith('.jgf') or jgif.endswith('.jgif'):
                     logger.info('Processing %s' % jgif)
-                    pbp = process_cbn_jgif_file(self.temp_extract + jgif)
-                    stmts = stmts + pbp.statements
+                    pbp = process_cbn_jgif_file(os.path.join(tmp_dir, jgif))
+                    stmts += pbp.statements
 
-        # Cleanup
-        logger.info('Cleaning up...')
-        shutil.rmtree(self.temp_extract)
-        os.remove(self.tmp_archive)
+        uniques, dups = extract_duplicates(stmts,
+                                           key_func=KeyFunc.mk_and_one_ev_src)
 
-        return stmts
+        logger.info("Deduplicating...")
+        print('\n'.join(str(dup) for dup in dups))
+        print(len(dups))
+
+        return uniques
 
 
 class BiogridManager(KnowledgebaseManager):

@@ -8,7 +8,7 @@ from indra_db.managers.knowledgebase_manager import TasManager, CBNManager, \
 from indra_db.util import get_test_db, insert_db_stmts
 
 
-def _check_kb(Kb):
+def _check_kbm(Kb):
     db = get_test_db()
     db._clear(force=True)
     dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == Kb.name)
@@ -26,44 +26,33 @@ def _check_kb(Kb):
 
 @attr("nonpublic")
 def test_tas():
-    _check_kb(TasManager)
+    _check_kbm(TasManager)
 
 
 @attr('nonpublic')
 def test_cbn():
     s3_url = 'https://s3.amazonaws.com/bigmech/travis/Hox-2.0-Hs.jgf.zip'
-    tmp_archive = './temp_Hox-2.0-Hs.jgf.zip'
-    temp_extract = './temp/'
-
-    cbn_mgr = CBNManager(tmp_archive=tmp_archive,
-                         temp_extract=temp_extract,
-                         archive_url=s3_url)
-
-    db = get_test_db()
-    db._clear(force=True)
-    cbn_mgr.upload(db)
-    db_stmts = db.select_all(db.RawStatements)
-    assert len(db_stmts)
+    _check_kbm(lambda: CBNManager(archive_url=s3_url))
 
 
 @attr('nonpublic')
 def test_hprd():
-    _check_kb(HPRDManager)
+    _check_kbm(HPRDManager)
 
 
 @attr('nonpublic')
 def test_signor():
-    _check_kb(SignorManager)
+    _check_kbm(SignorManager)
 
 
 @attr('nonpublic')
 def test_biogrid():
-    _check_kb(BiogridManager)
+    _check_kbm(BiogridManager)
 
 
 @attr('nonpublic')
 def test_bel_lc():
-    _check_kb(BelLcManager)
+    _check_kbm(BelLcManager)
 
 
 @attr('nonpublic')

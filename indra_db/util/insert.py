@@ -214,8 +214,9 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are loading statements.
     stmts : list [:py:class:`indra.statements.Statement`]
-        A list of un-assembled indra statements, each with EXACTLY one
-        evidence and no exact duplicates, to be uploaded to the database.
+        (Cannot be a generator) A list of un-assembled indra statements, each
+        with EXACTLY one evidence and no exact duplicates, to be uploaded to
+        the database.
     db_ref_id : int
         The id to the db_ref entry corresponding to these statements.
     verbose : bool

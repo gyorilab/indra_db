@@ -18,12 +18,12 @@ class KnowledgebaseManager(object):
 
     def upload(self, db):
         """Upload the content for this dataset into the database."""
-        dbid = self.check_reference(db)
+        dbid = self._check_reference(db)
         stmts = self._get_statements()
         insert_db_stmts(db, stmts, dbid)
         return
 
-    def check_reference(self, db):
+    def _check_reference(self, db):
         """Ensure that this database has an entry in the database."""
         dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == self.name)
         if dbid is None:
@@ -176,7 +176,7 @@ class HPRDManager(KnowledgebaseManager):
         unique_stmts, dups = \
             extract_duplicates(_expanded(hp.statements),
                                key_func=KeyFunc.mk_and_one_ev_src)
-        print(dups)
+        print('\n'.join(str(dup) for dup in dups))
 
         return unique_stmts
 
@@ -185,14 +185,19 @@ class BelLcManager(KnowledgebaseManager):
     name = 'bel_lc'
 
     def _get_statements(self):
-        import pybel
         from indra.sources import bel
 
         s3 = boto3.client('s3')
         resp = s3.get_object(Bucket='bigmech', Key='indra-db/large_corpus.bel')
-        pbg = pybel.from_bytes(resp['Body'].read())
-        pbp = bel.process_pybel_graph(pbg)
-        return pbp.statements
+        tmp_bel = tempfile.mktemp('lc.bel')
+        with open(tmp_bel, 'wb') as f:
+            f.write(resp['Body'].read())
+        pbp = bel.process_belscript(tmp_bel)
+        stmts, dups = extract_duplicates(pbp.statements,
+                                         key_func=KeyFunc.mk_and_one_ev_src)
+        print('\n'.join(str(dup) for dup in dups))
+        print(len(stmts), len(dups))
+        return stmts
 
 
 def _expanded(stmts):

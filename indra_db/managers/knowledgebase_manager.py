@@ -121,7 +121,7 @@ class BiogridManager(KnowledgebaseManager):
     def _get_statements(self, db):
         from indra.sources import biogrid
         bp = biogrid.BiogridProcessor()
-        return _expanded(bp.statements)
+        return list(_expanded(bp.statements))
 
 
 class PathwayCommonsManager(KnowledgebaseManager):

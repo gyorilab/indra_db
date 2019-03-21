@@ -19,7 +19,7 @@ class KnowledgebaseManager(object):
     def upload(self, db):
         """Upload the content for this dataset into the database."""
         dbid = self.check_reference(db)
-        stmts = self._get_statements(db)
+        stmts = self._get_statements()
         insert_db_stmts(db, stmts, dbid)
         return
 
@@ -32,7 +32,7 @@ class KnowledgebaseManager(object):
             dbid = dbid[0]
         return dbid
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         raise NotImplementedError("Statement retrieval must be defined in "
                                   "each child.")
 
@@ -52,7 +52,7 @@ class TasManager(KnowledgebaseManager):
                         key=lambda t: t[0])
         return best_stmt[1]
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         from indra.sources.tas import process_csv
         proc = process_csv()
         stmts, dups = extract_duplicates(proc.statements)
@@ -63,7 +63,7 @@ class TasManager(KnowledgebaseManager):
 class SignorManager(KnowledgebaseManager):
     name = 'signor'
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         from indra.sources.signor import process_from_web
         proc = process_from_web()
         return proc.statements
@@ -88,7 +88,7 @@ class CBNManager(KnowledgebaseManager):
             self.archive_url = archive_url
         return
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         from zipfile import ZipFile
         import urllib.request as urllib_request
         from indra.sources.bel.api import process_cbn_jgif_file
@@ -118,7 +118,7 @@ class CBNManager(KnowledgebaseManager):
 class BiogridManager(KnowledgebaseManager):
     name = 'biogrid'
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         from indra.sources import biogrid
         bp = biogrid.BiogridProcessor()
         return list(_expanded(bp.statements))
@@ -127,7 +127,7 @@ class BiogridManager(KnowledgebaseManager):
 class PathwayCommonsManager(KnowledgebaseManager):
     name = 'pc'
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         s3 = boto3.client('s3')
 
         resp = s3.get_object(Bucket='bioexp-paper',
@@ -135,22 +135,10 @@ class PathwayCommonsManager(KnowledgebaseManager):
         return pickle.loads(resp['Body'].read())
 
 
-def _expanded(stmts):
-    for stmt in stmts:
-        # Only one evidence is allowed for each statement.
-        if len(stmt.evidence) > 1:
-            for ev in stmt.evidence:
-                new_stmt = stmt.make_generic_copy()
-                new_stmt.evidence.append(ev)
-                yield new_stmt
-        else:
-            yield stmt
-
-
 class HPRDManager(KnowledgebaseManager):
     name = 'hprd'
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         import tarfile
         import requests
         from indra.sources import hprd
@@ -196,7 +184,7 @@ class HPRDManager(KnowledgebaseManager):
 class BelLcManager(KnowledgebaseManager):
     name = 'bel_lc'
 
-    def _get_statements(self, db):
+    def _get_statements(self):
         import pybel
         from indra.sources import bel
 
@@ -205,3 +193,15 @@ class BelLcManager(KnowledgebaseManager):
         pbg = pybel.from_bytes(resp['Body'].read())
         pbp = bel.process_pybel_graph(pbg)
         return pbp.statements
+
+
+def _expanded(stmts):
+    for stmt in stmts:
+        # Only one evidence is allowed for each statement.
+        if len(stmt.evidence) > 1:
+            for ev in stmt.evidence:
+                new_stmt = stmt.make_generic_copy()
+                new_stmt.evidence.append(ev)
+                yield new_stmt
+        else:
+            yield stmt

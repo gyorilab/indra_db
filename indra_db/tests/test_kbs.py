@@ -21,6 +21,7 @@ def _check_kb(Kb):
     print(len(db_stmts))
     assert len(db_stmts)
     assert all(s.db_info_id == dbid for s in db_stmts)
+    db.session.close()
 
 
 @attr("nonpublic")
@@ -75,3 +76,4 @@ def test_simple_db_insert():
     db_agents = db.select_all(db.RawAgents)
     assert len(db_stmts) == 2, len(db_stmts)
     assert len(db_agents) == 8, len(db_agents)
+    db.session.close()

@@ -23,11 +23,30 @@ class KnowledgebaseManager(object):
         insert_db_stmts(db, stmts, dbid)
         return
 
-    def _check_reference(self, db):
+    def update(self, db):
+        """Add any new statements that may have come into the dataset."""
+        dbid = self._check_reference(db, can_create=False)
+        if dbid is None:
+            raise ValueError("This knowledge base has not yet been "
+                             "registered.")
+        existing_keys = set(db.select_all([db.RawStatements.mk_hash,
+                                           db.RawStatements.source_hash],
+                                          db.RawStatements.db_info_id == dbid))
+        stmts = self._get_statements()
+        filtered_stmts = [s for s in stmts
+                          if (s.get_hash(), s.evidence[0].get_source_hash())
+                          not in existing_keys]
+        insert_db_stmts(db, filtered_stmts, dbid)
+        return
+
+    def _check_reference(self, db, can_create=True):
         """Ensure that this database has an entry in the database."""
         dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == self.name)
         if dbid is None:
-            dbid = db.insert(db.DBInfo, db_name=self.name)
+            if can_create:
+                dbid = db.insert(db.DBInfo, db_name=self.name)
+            else:
+                return None
         else:
             dbid = dbid[0]
         return dbid

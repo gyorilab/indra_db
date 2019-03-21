@@ -214,7 +214,8 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are loading statements.
     stmts : list [:py:class:`indra.statements.Statement`]
-        A list of un-assembled indra statements to be uploaded to the datbase.
+        A list of un-assembled indra statements, each with EXACTLY one
+        evidence and no exact duplicates, to be uploaded to the database.
     db_ref_id : int
         The id to the db_ref entry corresponding to these statements.
     verbose : bool
@@ -229,45 +230,30 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
         batch_id = db.make_copy_batch_id()
 
     stmt_data = []
-    insert_stmts = []
-
-    def add_stmt_tuple(stmt, src_hash=None):
-        stmt_rec = (
-            stmt.uuid,
-            stmt.get_hash(refresh=True),
-            src_hash,
-            db_ref_id,
-            stmt.__class__.__name__,
-            json.dumps(stmt.to_json()).encode('utf8'),
-            get_version(),
-            batch_id
-        )
-        insert_stmts.append(stmt)
-        stmt_data.append(stmt_rec)
 
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
             'indra_version', 'batch_id')
     if verbose:
         print("Loading:", end='', flush=True)
-    for i, stmt in enumerate(stmts):
-        # Only one evidence is allowed for each statement.
-        if len(stmt.evidence) > 1:
-            sh_set = set()
-            for ev in stmt.evidence:
-                sh = ev.get_source_hash()
-                if sh in sh_set:
-                    continue
-                sh_set.add(sh)
 
-                new_stmt = stmt.make_generic_copy()
-                new_stmt.evidence.append(ev)
-                add_stmt_tuple(new_stmt, sh)
-        else:
-            add_stmt_tuple(stmt, stmt.evidence[0].get_source_hash())
+    for i, stmt in enumerate(stmts):
+        assert len(stmt.evidence) == 1, \
+            'Statement with %s evidence.' % len(stmt.evidence)
+
+        stmt_rec = (stmt.uuid, stmt.get_hash(refresh=True),
+                    stmt.evidence[0].get_source_hash(refresh=True), db_ref_id,
+                    stmt.__class__.__name__,
+                    json.dumps(stmt.to_json()).encode('utf8'),
+                    get_version(), batch_id)
+
+        stmt_data.append(stmt_rec)
+
         if verbose and i % (len(stmts)//25) == 0:
             print('|', end='', flush=True)
+
     if verbose:
-        print(" Done loading %d statements." % len(stmts))
+        print(" Done preparing %d statements." % len(stmts))
+
     try:
         # TODO: Make it possible to not commit this immediately. That would
         # require developing a more sophisticated copy procedure for raw
@@ -278,7 +264,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
         with open('stmt_data_dump.pkl', 'wb') as f:
             pickle.dump(stmt_data, f)
         raise e
-    insert_raw_agents(db, batch_id, insert_stmts)
+    insert_raw_agents(db, batch_id, stmts)
     return
 
 

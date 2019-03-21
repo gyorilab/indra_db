@@ -49,7 +49,7 @@ def extract_duplicates(stmts, key_func=None):
         key = key_func(stmt)
         if key not in dup_dict.keys():
             if key in unique_dict.keys():
-                dup_dict[key] = [stmt, unique_dict.pop(key)]
+                dup_dict[key] = [stmt, unique_dict[key]]
             else:
                 unique_dict[key] = stmt
         else:

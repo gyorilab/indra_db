@@ -121,7 +121,7 @@ class BiogridManager(KnowledgebaseManager):
     def _get_statements(self, db):
         from indra.sources import biogrid
         bp = biogrid.BiogridProcessor()
-        return bp.statements
+        return _expanded(bp.statements)
 
 
 class PathwayCommonsManager(KnowledgebaseManager):
@@ -133,6 +133,18 @@ class PathwayCommonsManager(KnowledgebaseManager):
         resp = s3.get_object(Bucket='bioexp-paper',
                              Key='bioexp_biopax_pc10.pkl')
         return pickle.loads(resp['Body'].read())
+
+
+def _expanded(stmts):
+    for stmt in stmts:
+        # Only one evidence is allowed for each statement.
+        if len(stmt.evidence) > 1:
+            for ev in stmt.evidence:
+                new_stmt = stmt.make_generic_copy()
+                new_stmt.evidence.append(ev)
+                yield new_stmt
+        else:
+            yield stmt
 
 
 class HPRDManager(KnowledgebaseManager):
@@ -174,7 +186,7 @@ class HPRDManager(KnowledgebaseManager):
 
         # Filter out exact duplicates
         unique_stmts, dups = \
-            extract_duplicates(hp.statements,
+            extract_duplicates(_expanded(hp.statements),
                                key_func=KeyFunc.mk_and_one_ev_src)
         print(dups)
 

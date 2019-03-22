@@ -66,7 +66,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-r', '--readers',
         dest='readers',
-        choices=['reach', 'sparser'],
+        choices=['reach', 'sparser', 'trips'],
         nargs='+',
         help='Choose which reader(s) to use.'
         )

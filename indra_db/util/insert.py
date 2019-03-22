@@ -2,6 +2,7 @@ __all__ = ['insert_raw_agents', 'insert_pa_agents', 'insert_pa_stmts',
            'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data']
 
 import json
+import pickle
 import logging
 
 from indra.util import clockit
@@ -18,7 +19,8 @@ logger = logging.getLogger('util-insert')
 
 
 @clockit
-def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
+def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
+                      num_per_yield=100):
     """Insert agents for statements that don't have any agents.
 
     Parameters
@@ -28,6 +30,9 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     batch_id : int
         Every set of new raw statements must be given an id unique to that copy
         That id is used to get the set of statements that need agents added.
+    stmts : list[indra.statements.Statement]
+        The list of statements that include those whose agents are being
+        uploaded.
     verbose : bool
         If True, print extra information and a status bar while compiling
         agents for insert from statements. Default False.
@@ -38,8 +43,14 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     ref_tuples = []
     mod_tuples = []
     mut_tuples = []
-    q = db.filter_query([db.RawStatements.id, db.RawStatements],
-                        db.RawStatements.batch_id == batch_id)
+    if not stmts:
+        tbls = [db.RawStatements.id, db.RawStatements]
+        stmt_dict = None
+    else:
+        tbls = [db.RawStatements.id, db.RawStatements.uuid]
+        stmt_dict = {s.uuid: s for s in stmts}
+
+    q = db.filter_query(tbls, db.RawStatements.batch_id == batch_id)
     if verbose:
         num_stmts = q.count()
         print("Loading:", end='', flush=True)
@@ -47,7 +58,11 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     db_stmts = q.yield_per(num_per_yield)
 
     for i, (stmt_id, db_stmt) in enumerate(db_stmts):
-        stmt = get_statement_object(db_stmt)
+        if stmts is None:
+            stmt = get_statement_object(db_stmt)
+        else:
+            stmt = stmt_dict[db_stmt]
+
         ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
         ref_tuples.extend(ref_data)
         mod_tuples.extend(mod_data)
@@ -60,11 +75,13 @@ def insert_raw_agents(db, batch_id, verbose=False, num_per_yield=100):
     if verbose and num_stmts > 25:
         print()
 
-    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'))
+    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'),
+            commit=False)
     db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'position', 'residue',
-                                     'modified'))
+                                     'modified'), commit=False)
     db.copy('raw_muts', mut_tuples, ('stmt_id', 'position', 'residue_from',
-                                     'residue_to'))
+                                     'residue_to'), commit=False)
+    db.commit_copy('Error copying raw agents, mods, and muts.')
     return
 
 
@@ -100,13 +117,17 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
 
     if 'agents' not in skip:
         db.copy('pa_agents', ref_data,
-                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True,
+                commit=False)
     if 'mods' not in skip:
         db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
-                                      'residue', 'modified'))
+                                      'residue', 'modified'), commit=False)
     if 'muts' not in skip:
         db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position',
-                                      'residue_from', 'residue_to'))
+                                      'residue_from', 'residue_to'),
+                commit=False)
+    db.session.commit_copy('Error copying pa agents, mods, and muts, '
+                           'excluding: %s.' % (', '.join(skip)))
     return
 
 
@@ -181,7 +202,8 @@ def extract_agent_data(stmt, stmt_id):
     return ref_data, mod_data, mut_data
 
 
-def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
+def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
+                    lazy=False):
     """Insert statement, their database, and any affiliated agents.
 
     Note that this method is for uploading statements that came from a
@@ -192,43 +214,58 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False):
     db : :py:class:`DatabaseManager`
         The manager for the database into which you are loading statements.
     stmts : list [:py:class:`indra.statements.Statement`]
-        A list of un-assembled indra statements to be uploaded to the datbase.
+        (Cannot be a generator) A list of un-assembled indra statements, each
+        with EXACTLY one evidence and no exact duplicates, to be uploaded to
+        the database.
     db_ref_id : int
         The id to the db_ref entry corresponding to these statements.
     verbose : bool
         If True, print extra information and a status bar while compiling
         statements for insert. Default False.
+    batch_id : int or None
+        Select a batch id to use for this upload. It can be used to trace what
+        content has been added.
     """
     # Preparing the statements for copying
+    if batch_id is None:
+        batch_id = db.make_copy_batch_id()
+
     stmt_data = []
-    batch_id = db.make_copy_batch_id()
 
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
             'indra_version', 'batch_id')
     if verbose:
         print("Loading:", end='', flush=True)
+
     for i, stmt in enumerate(stmts):
-        # Only one evidence is allowed for each statement.
-        for ev in stmt.evidence:
-            new_stmt = stmt.make_generic_copy()
-            new_stmt.evidence.append(ev)
-            stmt_rec = (
-                new_stmt.uuid,
-                new_stmt.get_hash(),
-                ev.get_source_hash(),
-                db_ref_id,
-                new_stmt.__class__.__name__,
-                json.dumps(new_stmt.to_json()).encode('utf8'),
-                get_version(),
-                batch_id
-            )
-            stmt_data.append(stmt_rec)
+        assert len(stmt.evidence) == 1, \
+            'Statement with %s evidence.' % len(stmt.evidence)
+
+        stmt_rec = (stmt.uuid, stmt.get_hash(refresh=True),
+                    stmt.evidence[0].get_source_hash(refresh=True), db_ref_id,
+                    stmt.__class__.__name__,
+                    json.dumps(stmt.to_json()).encode('utf8'),
+                    get_version(), batch_id)
+
+        stmt_data.append(stmt_rec)
+
         if verbose and i % (len(stmts)//25) == 0:
             print('|', end='', flush=True)
+
     if verbose:
-        print(" Done loading %d statements." % len(stmts))
-    db.copy('raw_statements', stmt_data, cols, lazy=True, push_conflict=True)
-    insert_raw_agents(db, batch_id)
+        print(" Done preparing %d statements." % len(stmts))
+
+    try:
+        # TODO: Make it possible to not commit this immediately. That would
+        # require developing a more sophisticated copy procedure for raw
+        # statements and agents.
+        db.copy('raw_statements', stmt_data, cols, lazy=lazy,
+                push_conflict=lazy)
+    except Exception as e:
+        with open('stmt_data_dump.pkl', 'wb') as f:
+            pickle.dump(stmt_data, f)
+        raise e
+    insert_raw_agents(db, batch_id, stmts)
     return
 
 

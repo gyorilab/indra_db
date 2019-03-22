@@ -649,6 +649,8 @@ class DatabaseManager(object):
         else:
             self.__foreign_key_graph = None
 
+        self._conn = None
+
         return
 
     def __del__(self, *args, **kwargs):
@@ -832,6 +834,19 @@ class DatabaseManager(object):
             logger.error(err_msg)
             raise
 
+    def commit_copy(self, err_msg):
+        if self._conn is not None:
+            try:
+                logger.debug('Attempting to commit...')
+                self._conn.commit()
+                self._conn = None
+                logger.debug('Message committed.')
+            except Exception as e:
+                self._conn = None
+                logger.exception(e)
+                logger.error(err_msg)
+                raise
+
     def _get_foreign_key_constraint(self, table_name_1, table_name_2):
         cols = self.get_column_objects(self.tables[table_name_1])
         ret = None
@@ -957,7 +972,7 @@ class DatabaseManager(object):
         return random.randint(-2**30, 2**30)
 
     def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False,
-             constraint=None):
+             constraint=None, commit=True):
         "Use pg_copy to copy over a large amount of data."
         logger.info("Received request to copy %d entries into %s." %
                     (len(data), tbl_name))
@@ -1009,7 +1024,8 @@ class DatabaseManager(object):
                 data_bts.append(tuple(new_entry))
 
             # Actually do the copy.
-            conn = self.engine.raw_connection()
+            if self._conn is None:
+                self._conn = self.engine.raw_connection()
             if lazy:
                 # We need a constraint for if we are going to update on-
                 # conflict, so if we didn't get a constraint, we can try to
@@ -1049,19 +1065,22 @@ class DatabaseManager(object):
                                          "cannot guess a foreign key "
                                          "constraint.")
 
-                mngr = LazyCopyManager(conn, tbl_name, cols,
+                mngr = LazyCopyManager(self._conn, tbl_name, cols,
                                        push_conflict=push_conflict,
                                        constraint=constraint)
                 mngr.copy(data_bts, BytesIO)
             else:
-                mngr = CopyManager(conn, tbl_name, cols)
+                mngr = CopyManager(self._conn, tbl_name, cols)
                 mngr.copy(data_bts, BytesIO)
-            conn.commit()
+            if commit:
+                self._conn.commit()
+                self._conn = None
         else:
             # TODO: use bulk insert mappings?
             logger.warning("You are not using postgresql or do not have "
                            "pgcopy, so this will likely be very slow.")
             self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
+        return
 
     def create_materialized_view(self, table, with_data=True):
         """Create a materialize view."""

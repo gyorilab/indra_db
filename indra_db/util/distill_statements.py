@@ -15,6 +15,49 @@ from .helpers import _set_evidence_text_ref
 logger = logging.getLogger('util-distill')
 
 
+class KeyFunc:
+    @staticmethod
+    def mk(stmt):
+        return stmt.matches_key()
+
+    @staticmethod
+    def mk_and_one_ev_mk(stmt):
+        return stmt.matches_key(), stmt.evidence[0].matches_key()
+
+    @staticmethod
+    def mk_and_one_ev_src(stmt):
+        return stmt.matches_key(), stmt.evidence[0].get_source_hash()
+
+
+def extract_duplicates(stmts, key_func=None):
+    """A function to remove duplicates using matches keys, or another method.
+
+    To select or define a measure of uniqueness, you can set the `key_func`
+    parameter to a function that takes a statement as an argument and returns
+    a hashable key (string, int, tuple, anything that could be the key to a
+    python dictionary).
+
+    Some common options are available as static methods of the KeyFunc class.
+    The default is `mk`, which is a statement `matches_key`.
+    """
+    if key_func is None:
+        key_func = KeyFunc.mk
+
+    dup_dict = {}
+    unique_dict = {}
+    for stmt in stmts:
+        key = key_func(stmt)
+        if key not in dup_dict.keys():
+            if key in unique_dict.keys():
+                dup_dict[key] = [stmt, unique_dict[key]]
+            else:
+                unique_dict[key] = stmt
+        else:
+            dup_dict[key].append(stmt)
+
+    return list(unique_dict.values()), list(dup_dict.values())
+
+
 def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
     """Get a nested dict of statements, keyed by ref, content, and reading."""
     # Construct the query for metadata from the database.

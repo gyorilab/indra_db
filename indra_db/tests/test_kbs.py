@@ -4,7 +4,8 @@ from indra.statements.statements import Statement, Agent, Phosphorylation, \
     Complex, Evidence
 
 from indra_db.managers.knowledgebase_manager import TasManager, CBNManager, \
-    HPRDManager, SignorManager, BiogridManager, BelLcManager
+    HPRDManager, SignorManager, BiogridManager, BelLcManager, \
+    PathwayCommonsManager
 from indra_db.util import get_test_db, insert_db_stmts
 
 
@@ -53,6 +54,11 @@ def test_biogrid():
 @attr('nonpublic')
 def test_bel_lc():
     _check_kbm(BelLcManager)
+
+
+@attr('nonpublic')
+def test_pathway_commons():
+    _check_kbm(PathwayCommonsManager)
 
 
 @attr('nonpublic')

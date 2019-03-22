@@ -146,14 +146,26 @@ class BiogridManager(KnowledgebaseManager):
 
 
 class PathwayCommonsManager(KnowledgebaseManager):
-    name = 'pc'
+    name = 'pc10'
+    skips = {'psp', 'hprd'}
+
+    def _can_include(self, stmt):
+        num_ev = len(stmt.evidence)
+        assert num_ev == 1, "Found statement with %d evidence." % num_ev
+
+        ev = stmt.evidence[0]
+
+        return ev.annotations['source_sub_id'] not in self.skips
 
     def _get_statements(self):
         s3 = boto3.client('s3')
 
         resp = s3.get_object(Bucket='bioexp-paper',
                              Key='bioexp_biopax_pc10.pkl')
-        return pickle.loads(resp['Body'].read())
+        stmts = pickle.loads(resp['Body'].read())
+
+        filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
+        return filtered_stmts
 
 
 class HPRDManager(KnowledgebaseManager):

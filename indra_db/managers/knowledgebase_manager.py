@@ -1,5 +1,6 @@
 import os
 import tempfile
+from collections import defaultdict
 
 import boto3
 import pickle
@@ -149,13 +150,19 @@ class PathwayCommonsManager(KnowledgebaseManager):
     name = 'pc10'
     skips = {'psp', 'hprd'}
 
+    def __init__(self, *args, **kwargs):
+        self.counts = defaultdict(lambda: 0)
+        super(PathwayCommonsManager, self).__init__(*args, **kwargs)
+
     def _can_include(self, stmt):
         num_ev = len(stmt.evidence)
         assert num_ev == 1, "Found statement with %d evidence." % num_ev
 
         ev = stmt.evidence[0]
+        ssid = ev.annotations['source_sub_id']
+        self.counts[ssid] += 1
 
-        return ev.annotations['source_sub_id'] not in self.skips
+        return ssid not in self.skips
 
     def _get_statements(self):
         s3 = boto3.client('s3')

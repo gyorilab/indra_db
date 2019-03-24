@@ -24,7 +24,7 @@ from indra.util import zip_string, batch_iter
 from indra_db import get_primary_db, formats
 from indra_db.util import insert_raw_agents, unpack
 
-logger = logging.getLogger('make_db_readings')
+logger = logging.getLogger(__name__)
 
 
 class ReadDBError(Exception):
@@ -139,8 +139,7 @@ class DatabaseStatementData(object):
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
         return 'batch_id', 'reading_id', 'db_info_id', 'uuid', 'mk_hash', \
-               'source_hash', 'type', 'json', 'indra_version', 'shallow_hash',\
-               'text_hash'
+               'source_hash', 'type', 'json', 'indra_version', 'text_hash'
 
     def make_tuple(self, batch_id):
         """Make a tuple for copying into the database."""
@@ -149,7 +148,7 @@ class DatabaseStatementData(object):
                 self.statement.evidence[0].get_source_hash(),
                 self.statement.__class__.__name__,
                 json.dumps(self.statement.to_json()), self.indra_version,
-                self.statement.get_hash(), self._get_text_hash())
+                self._get_text_hash())
 
 
 def get_stmts_safely(reading_data):

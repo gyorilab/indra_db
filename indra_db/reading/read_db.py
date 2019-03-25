@@ -70,10 +70,13 @@ class DatabaseReadingData(ReadingData):
 
         As returned by SQL Alchemy.
         """
+        if db_reading.format == 'json':
+            content = json.loads(unpack(db_reading.bytes))
+        else:
+            content = unpack(db_reading.bytes)
         return cls(db_reading.text_content_id, db_reading.reader,
                    db_reading.reader_version, db_reading.format,
-                   json.loads(unpack(db_reading.bytes)),
-                   db_reading.id)
+                   content, db_reading.id)
 
     @staticmethod
     def get_cols():
@@ -85,7 +88,7 @@ class DatabaseReadingData(ReadingData):
         """Compress the content, returning bytes."""
         if self.format == formats.JSON:
             ret = zip_string(json.dumps(self.content))
-        elif self.format == formats.TEXT:
+        elif self.format == formats.TEXT or self.format == formats.EKB:
             ret = zip_string(self.content)
         else:
             raise Exception('Do not know how to zip format %s.' % self.format)
@@ -132,7 +135,10 @@ class DatabaseStatementData(object):
         return
 
     def _get_text_hash(self):
-        simple_text = self.__text_patt.sub('', self.statement.evidence[0].text)
+        ev = self.statement.evidence[0]
+        simple_text = self.__text_patt.sub('', ev.text)
+        if 'coords' in ev.annotations.keys():
+            simple_text += str(ev.annotations['coords'])
         return make_hash(simple_text.lower(), 16)
 
     @staticmethod
@@ -245,6 +251,10 @@ class DatabaseReader(object):
             self._db = db
         self._tc_rd_link = \
             self._db.TextContent.id == self._db.Reading.text_content_id
+        logger.info("Instantiating reading handler for reader %s with version "
+                    "%s using reading mode %s and statement mode %s for %d "
+                    "tcids." % (reader.name, reader.version, reading_mode,
+                                stmt_mode, len(tcids)))
 
         # To be filled.
         self.extant_readings = []
@@ -296,27 +306,29 @@ class DatabaseReader(object):
         outputs : list of ReadingData instances
             The results of the readings with relevant metadata.
         """
+        logger.info("Creating new readings from the database for %s."
+                    % self.reader.name)
         self.starts['new_readings'] = datetime.now()
         # Iterate
         logger.debug("Beginning to iterate.")
-        iterator = enumerate(batch_iter(self.iter_over_content(),
-                                        self.batch_size, return_func=list))
-        for i, batch in iterator:
-            logger.debug("Reading batch %d of files for %s."
-                         % (i, self.reader.name))
-            self.reader.read(batch, **kwargs)
+        self.reader.read(self.iter_over_content(), **kwargs)
         if self.reader.results:
             self.new_readings.extend(self.reader.results)
         logger.debug("Finished iteration.")
 
         self.stops['new_readings'] = datetime.now()
+        logger.info("Made %d new readings." % len(self.new_readings))
         return
 
     def _get_prior_readings(self):
         """Get readings from the database."""
+        logger.info("Loading pre-existing readings from the database for %s."
+                    % self.reader.name)
         self.starts['old_readings'] = datetime.now()
         db = self._db
         if self.tcids:
+            logger.info("Looking for content matching reader %s, version %s."
+                        % (self.reader.name, self.reader.version[:20]))
             readings_query = db.filter_query(
                 db.Reading,
                 db.Reading.reader == self.reader.name,
@@ -334,6 +346,8 @@ class DatabaseReader(object):
 
     def dump_readings_to_db(self):
         """Put the reading output on the database."""
+        logger.info("Beginning to dump %d readings for %s to the database."
+                    % (len(self.new_readings), self.reader.name))
         self.starts['dump_readings_db'] = datetime.now()
         db = self._db
 
@@ -341,20 +355,25 @@ class DatabaseReader(object):
         batch_id = db.make_copy_batch_id()
 
         # Make a list of data to copy, ensuring there are no conflicts.
-        upload_list = []
+        upload_dict = {}
         rd_dict = {}
         for rd in self.new_readings:
             # If there were no conflicts, we can add this to the copy list.
-            upload_list.append(rd.make_tuple(batch_id))
+            tpl = rd.make_tuple(batch_id)
+            key = (tpl[1], tpl[4], tpl[5], tpl[9])
+            if key in upload_dict.keys():
+                logger.warning('Duplicate key found: %s.' % key)
+            upload_dict[key] = tpl
             rd_dict[(rd.tcid, rd.reader, rd.reader_version[:20])] = rd
 
         # Copy into the database.
         logger.info("Adding %d/%d reading entries to the database." %
-                    (len(upload_list), len(self.new_readings)))
-        if upload_list:
+                    (len(upload_dict), len(self.new_readings)))
+        if upload_dict:
             is_all = self.reading_mode == 'all'
-            db.copy('reading', upload_list, DatabaseReadingData.get_cols(),
-                    lazy=is_all, push_conflict=is_all)
+            db.copy('reading', upload_dict.values(),
+                    DatabaseReadingData.get_cols(), lazy=is_all,
+                    push_conflict=is_all)
 
         # Update the reading_data objects with their reading_ids.
         rdata = db.select_all([db.Reading.id, db.Reading.text_content_id,
@@ -367,12 +386,14 @@ class DatabaseReader(object):
 
     def dump_readings_to_pickle(self, pickle_file):
         """Dump the reading results into a pickle file."""
+        logger.info("Beginning to dump %d readings for %s to %s."
+                    % (len(self.new_readings), self.reader.name, pickle_file))
         self.starts['dump_readings_pkl'] = datetime.now()
         with open(pickle_file, 'wb') as f:
             rdata = [output.make_tuple(None)
                      for output in self.new_readings + self.extant_readings]
             pickle.dump(rdata, f)
-            print("Reading outputs pickled in: %s" % pickle_file)
+            logger.info("Reading outputs pickled in: %s" % pickle_file)
 
         self.stops['dump_readings_pkl'] = datetime.now()
         return
@@ -380,7 +401,8 @@ class DatabaseReader(object):
     def get_readings(self):
         """Get the reading output for the given ids."""
         # Get a database instance.
-        logger.debug("Producing readings in %s mode." % self.reading_mode)
+        logger.info("Producing readings for %s in %s mode."
+                    % (self.reader.name, self.reading_mode))
 
         # Handle the cases where I need to retrieve old readings.
         if self.reading_mode != 'all' and self.stmt_mode == 'all':
@@ -389,7 +411,6 @@ class DatabaseReader(object):
         # Now produce any new readings that need to be produced.
         if self.reading_mode != 'none':
             self._make_new_readings()
-            logger.info("Made %d new readings." % len(self.new_readings))
 
         return
 
@@ -483,6 +504,7 @@ def run_reading(readers, tcids, verbose=True, reading_mode='unread',
     """Run the reading with the given readers on the given text content ids."""
     workers = []
     for reader in readers:
+        logger.info("Beginning reading for %s." % reader.name)
         db_reader = DatabaseReader(tcids, reader, verbose, stmt_mode=stmt_mode,
                                    reading_mode=reading_mode, db=db,
                                    batch_size=batch_size)
@@ -498,7 +520,8 @@ def run_reading(readers, tcids, verbose=True, reading_mode='unread',
             if upload_stmts:
                 db_reader.dump_statements_to_db()
             if stmts_pickle:
-                db_reader.dump_statements_to_pickle(stmts_pickle)
+                db_reader.dump_statements_to_pickle(reader.name + '_'
+                                                    + stmts_pickle)
     return workers
 
 
@@ -622,9 +645,11 @@ def main():
     base_dir = _get_dir(args.temp, 'run_%s' % ('_and_'.join(args.readers)))
 
     # Get the readers objects.
-    kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc,
-              'input_character_limit': args.max_reach_space_ratio,
-              'max_space_ratio': args.max_reach_input_len}
+    kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc}
+    if args.max_reach_space_ratio is not None:
+        kwargs['input_character_limit'] = args.max_reach_space_ratio
+    if args.max_reach_input_len is not None:
+        kwargs['max_space_ratio'] = args.max_reach_input_len
     readers = construct_readers(args.readers, **kwargs)
 
     # Set the verbosity. The quiet argument overrides the verbose argument.

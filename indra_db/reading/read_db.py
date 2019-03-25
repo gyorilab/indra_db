@@ -308,12 +308,7 @@ class DatabaseReader(object):
         self.starts['new_readings'] = datetime.now()
         # Iterate
         logger.debug("Beginning to iterate.")
-        iterator = enumerate(batch_iter(self.iter_over_content(),
-                                        self.batch_size, return_func=list))
-        for i, batch in iterator:
-            logger.debug("Reading batch %d of files for %s."
-                         % (i, self.reader.name))
-            self.reader.read(batch, **kwargs)
+        self.reader.read(self.iter_over_content(), **kwargs)
         if self.reader.results:
             self.new_readings.extend(self.reader.results)
         logger.debug("Finished iteration.")

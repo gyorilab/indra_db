@@ -641,9 +641,11 @@ def main():
     base_dir = _get_dir(args.temp, 'run_%s' % ('_and_'.join(args.readers)))
 
     # Get the readers objects.
-    kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc,
-              'input_character_limit': args.max_reach_space_ratio,
-              'max_space_ratio': args.max_reach_input_len}
+    kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc}
+    if args.max_reach_space_ratio is not None:
+        kwargs['input_character_limit'] = args.max_reach_space_ratio
+    if args.max_reach_input_len is not None:
+        kwargs['max_space_ratio'] = args.max_reach_input_len
     readers = construct_readers(args.readers, **kwargs)
 
     # Set the verbosity. The quiet argument overrides the verbose argument.

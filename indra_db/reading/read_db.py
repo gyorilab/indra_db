@@ -355,20 +355,23 @@ class DatabaseReader(object):
         batch_id = db.make_copy_batch_id()
 
         # Make a list of data to copy, ensuring there are no conflicts.
-        upload_list = []
+        upload_dict = {}
         rd_dict = {}
         for rd in self.new_readings:
             # If there were no conflicts, we can add this to the copy list.
-            upload_list.append(rd.make_tuple(batch_id))
+            tpl = rd.make_tuple(batch_id)
+            key = (tpl[1], tpl[4], tpl[5], tpl[9])
+            upload_dict[key] = tpl
             rd_dict[(rd.tcid, rd.reader, rd.reader_version[:20])] = rd
 
         # Copy into the database.
         logger.info("Adding %d/%d reading entries to the database." %
-                    (len(upload_list), len(self.new_readings)))
-        if upload_list:
+                    (len(upload_dict), len(self.new_readings)))
+        if upload_dict:
             is_all = self.reading_mode == 'all'
-            db.copy('reading', upload_list, DatabaseReadingData.get_cols(),
-                    lazy=is_all, push_conflict=is_all)
+            db.copy('reading', upload_dict.values(),
+                    DatabaseReadingData.get_cols(), lazy=is_all,
+                    push_conflict=is_all)
 
         # Update the reading_data objects with their reading_ids.
         rdata = db.select_all([db.Reading.id, db.Reading.text_content_id,

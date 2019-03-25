@@ -135,7 +135,10 @@ class DatabaseStatementData(object):
         return
 
     def _get_text_hash(self):
-        simple_text = self.__text_patt.sub('', self.statement.evidence[0].text)
+        ev = self.statement.evidence[0]
+        simple_text = self.__text_patt.sub('', ev.text)
+        if 'coords' in ev.annotations.keys():
+            simple_text += str(ev.annotations['coords'])
         return make_hash(simple_text.lower(), 16)
 
     @staticmethod

@@ -361,6 +361,8 @@ class DatabaseReader(object):
             # If there were no conflicts, we can add this to the copy list.
             tpl = rd.make_tuple(batch_id)
             key = (tpl[1], tpl[4], tpl[5], tpl[9])
+            if key in upload_dict.keys():
+                logger.warning('Duplicate key found: %s.' % key)
             upload_dict[key] = tpl
             rd_dict[(rd.tcid, rd.reader, rd.reader_version[:20])] = rd
 

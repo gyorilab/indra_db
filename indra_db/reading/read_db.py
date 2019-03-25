@@ -245,6 +245,10 @@ class DatabaseReader(object):
             self._db = db
         self._tc_rd_link = \
             self._db.TextContent.id == self._db.Reading.text_content_id
+        logger.info("Instantiating reading handler for reader %s with version "
+                    "%s using reading mode %s and statement mode %s for %d "
+                    "tcids." % (reader.name, reader.version, reading_mode,
+                                stmt_mode, len(tcids)))
 
         # To be filled.
         self.extant_readings = []
@@ -296,6 +300,8 @@ class DatabaseReader(object):
         outputs : list of ReadingData instances
             The results of the readings with relevant metadata.
         """
+        logger.info("Creating new readings from the database for %s."
+                    % self.reader.name)
         self.starts['new_readings'] = datetime.now()
         # Iterate
         logger.debug("Beginning to iterate.")
@@ -310,13 +316,18 @@ class DatabaseReader(object):
         logger.debug("Finished iteration.")
 
         self.stops['new_readings'] = datetime.now()
+        logger.info("Made %d new readings." % len(self.new_readings))
         return
 
     def _get_prior_readings(self):
         """Get readings from the database."""
+        logger.info("Loading pre-existing readings from the database for %s."
+                    % self.reader.name)
         self.starts['old_readings'] = datetime.now()
         db = self._db
         if self.tcids:
+            logger.info("Looking for content matching reader %s, version %s."
+                        % (self.reader.name, self.reader.version[:20]))
             readings_query = db.filter_query(
                 db.Reading,
                 db.Reading.reader == self.reader.name,
@@ -334,6 +345,8 @@ class DatabaseReader(object):
 
     def dump_readings_to_db(self):
         """Put the reading output on the database."""
+        logger.info("Beginning to dump %d readings for %s to the database."
+                    % (len(self.new_readings), self.reader.name))
         self.starts['dump_readings_db'] = datetime.now()
         db = self._db
 
@@ -367,12 +380,14 @@ class DatabaseReader(object):
 
     def dump_readings_to_pickle(self, pickle_file):
         """Dump the reading results into a pickle file."""
+        logger.info("Beginning to dump %d readings for %s to %s."
+                    % (len(self.new_readings), self.reader.name, pickle_file))
         self.starts['dump_readings_pkl'] = datetime.now()
         with open(pickle_file, 'wb') as f:
             rdata = [output.make_tuple(None)
                      for output in self.new_readings + self.extant_readings]
             pickle.dump(rdata, f)
-            print("Reading outputs pickled in: %s" % pickle_file)
+            logger.info("Reading outputs pickled in: %s" % pickle_file)
 
         self.stops['dump_readings_pkl'] = datetime.now()
         return
@@ -380,7 +395,8 @@ class DatabaseReader(object):
     def get_readings(self):
         """Get the reading output for the given ids."""
         # Get a database instance.
-        logger.debug("Producing readings in %s mode." % self.reading_mode)
+        logger.info("Producing readings for %s in %s mode."
+                    % (self.reader.name, self.reading_mode))
 
         # Handle the cases where I need to retrieve old readings.
         if self.reading_mode != 'all' and self.stmt_mode == 'all':
@@ -389,7 +405,6 @@ class DatabaseReader(object):
         # Now produce any new readings that need to be produced.
         if self.reading_mode != 'none':
             self._make_new_readings()
-            logger.info("Made %d new readings." % len(self.new_readings))
 
         return
 
@@ -483,6 +498,7 @@ def run_reading(readers, tcids, verbose=True, reading_mode='unread',
     """Run the reading with the given readers on the given text content ids."""
     workers = []
     for reader in readers:
+        logger.info("Beginning reading for %s." % reader.name)
         db_reader = DatabaseReader(tcids, reader, verbose, stmt_mode=stmt_mode,
                                    reading_mode=reading_mode, db=db,
                                    batch_size=batch_size)

@@ -517,7 +517,8 @@ def run_reading(readers, tcids, verbose=True, reading_mode='unread',
             if upload_stmts:
                 db_reader.dump_statements_to_db()
             if stmts_pickle:
-                db_reader.dump_statements_to_pickle(stmts_pickle)
+                db_reader.dump_statements_to_pickle(reader.name + '_'
+                                                    + stmts_pickle)
     return workers
 
 

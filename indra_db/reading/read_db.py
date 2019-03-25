@@ -70,10 +70,13 @@ class DatabaseReadingData(ReadingData):
 
         As returned by SQL Alchemy.
         """
+        if db_reading.format == 'json':
+            content = json.loads(unpack(db_reading.bytes))
+        else:
+            content = unpack(db_reading.bytes)
         return cls(db_reading.text_content_id, db_reading.reader,
                    db_reading.reader_version, db_reading.format,
-                   json.loads(unpack(db_reading.bytes)),
-                   db_reading.id)
+                   content, db_reading.id)
 
     @staticmethod
     def get_cols():
@@ -85,7 +88,7 @@ class DatabaseReadingData(ReadingData):
         """Compress the content, returning bytes."""
         if self.format == formats.JSON:
             ret = zip_string(json.dumps(self.content))
-        elif self.format == formats.TEXT:
+        elif self.format == formats.TEXT or self.format == formats.EKB:
             ret = zip_string(self.content)
         else:
             raise Exception('Do not know how to zip format %s.' % self.format)

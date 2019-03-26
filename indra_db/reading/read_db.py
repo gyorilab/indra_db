@@ -355,23 +355,19 @@ class DatabaseReader(object):
         batch_id = db.make_copy_batch_id()
 
         # Make a list of data to copy, ensuring there are no conflicts.
-        upload_dict = {}
+        upload_list = []
         rd_dict = {}
         for rd in self.new_readings:
             # If there were no conflicts, we can add this to the copy list.
-            tpl = rd.make_tuple(batch_id)
-            key = (tpl[1], tpl[4], tpl[5], tpl[9])
-            if key in upload_dict.keys():
-                logger.warning('Duplicate key found: %s.' % key)
-            upload_dict[key] = tpl
+            upload_list.append(rd.make_tuple(batch_id))
             rd_dict[(rd.tcid, rd.reader, rd.reader_version[:20])] = rd
 
         # Copy into the database.
         logger.info("Adding %d/%d reading entries to the database." %
-                    (len(upload_dict), len(self.new_readings)))
-        if upload_dict:
+                    (len(upload_list), len(self.new_readings)))
+        if upload_list:
             is_all = self.reading_mode == 'all'
-            db.copy('reading', upload_dict.values(),
+            db.copy('reading', upload_list,
                     DatabaseReadingData.get_cols(), lazy=is_all,
                     push_conflict=is_all)
 
@@ -420,8 +416,14 @@ class DatabaseReader(object):
         logger.info("Uploading %d statements to the database." %
                     len(self.statement_outputs))
         batch_id = self._db.make_copy_batch_id()
-        stmt_tuples = [s.make_tuple(batch_id) for s in self.statement_outputs]
-        self._db.copy('raw_statements', stmt_tuples,
+        stmt_tuples = {}
+        for s in self.statement_outputs:
+            tpl = s.make_tuple(batch_id)
+            key = (tpl[1], tpl[4], tpl[5], tpl[9])
+            if key in stmt_tuples.keys():
+                logger.warning('Duplicate key found: %s.' % key)
+            stmt_tuples[key] = tpl
+        self._db.copy('raw_statements', stmt_tuples.values(),
                       DatabaseStatementData.get_cols(), lazy=True,
                       push_conflict=True,
                       constraint='reading_raw_statement_uniqueness')

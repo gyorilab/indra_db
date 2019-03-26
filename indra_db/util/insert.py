@@ -175,6 +175,7 @@ def extract_agent_data(stmt, stmt_id):
     ref_data = []
     mod_data = []
     mut_data = []
+    warnings = set()
     for role, ag in agents:
         # If no agent, or no db_refs for the agent, skip the insert
         # that follows.
@@ -187,7 +188,9 @@ def extract_agent_data(stmt, stmt_id):
                 ref_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
                                  role))
             else:
-                logger.warning("Found agent for %s with None value." % ns)
+                if ns not in warnings:
+                    warnings.add(ns)
+                    logger.warning("Found agent for %s with None value." % ns)
 
         # Get the modification data
         for mod in ag.mods:

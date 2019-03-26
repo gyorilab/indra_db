@@ -126,7 +126,8 @@ def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
 reader_versions = {
     'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
                 'October2018-linux'],
-    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-']
+    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
+    'trips': ['STATIC']
 }
 
 # Specify sources of fulltext content, and order priorities.
@@ -204,6 +205,11 @@ def get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids=None):
         # Add the bettered duplicates found in this round.
         bettered_duplicate_sids |= \
             {sid for sid, _ in some_bettered_duplicate_tpls}
+
+    # Dump the bad duplicates, if any
+    if bad_dups:
+        with open('bad_duplicates_%s.pkl' % datetime.now(), 'wb') as f:
+            pickle.dump(bad_dups, f)
 
     if get_full_stmts:
         stmts = {stmt for _, stmt in stmt_tpls if stmt is not None}

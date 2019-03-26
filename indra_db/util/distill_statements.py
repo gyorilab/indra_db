@@ -3,7 +3,9 @@ __all__ = ['distill_stmts', 'get_filtered_rdg_stmts', 'get_filtered_db_stmts',
            'reader_versions', 'text_content_sources']
 
 import json
+import pickle
 import logging
+from datetime import datetime
 from collections import defaultdict
 
 from indra.util import clockit
@@ -143,6 +145,7 @@ def get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids=None):
         linked_sids = set()
 
     # Now we filter and get the set of statements/statement ids.
+    bad_dups = set()
     stmt_tpls = set()
     bettered_duplicate_sids = set()  # Statements with "better" alternatives
     for trid, src_dict in stmt_nd.items():
@@ -188,8 +191,10 @@ def get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids=None):
                     # If this error ever comes up, it means that the uniqueness
                     # constraint on raw statements per reading is not
                     # functioning correctly.
-                    assert len(s_set) == 1, \
-                        "Found exact duplicates from the same reading."
+                    if len(s_set) > 1:
+                        logger.warning("Found exact duplicates from the same "
+                                       "reading: %s" % str(s_set))
+                        bad_dups.add(tuple(s_set))
 
                     # Choose whether to keep the statement or not.
                     s_tpl = s_set.pop()

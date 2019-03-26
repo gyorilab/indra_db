@@ -3,7 +3,9 @@ __all__ = ['distill_stmts', 'get_filtered_rdg_stmts', 'get_filtered_db_stmts',
            'reader_versions', 'text_content_sources']
 
 import json
+import pickle
 import logging
+from datetime import datetime
 from collections import defaultdict
 
 from indra.util import clockit
@@ -126,7 +128,8 @@ def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
 reader_versions = {
     'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
                 'October2018-linux'],
-    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-']
+    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
+    'trips': ['STATIC']
 }
 
 # Specify sources of fulltext content, and order priorities.
@@ -142,6 +145,7 @@ def get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids=None):
         linked_sids = set()
 
     # Now we filter and get the set of statements/statement ids.
+    bad_dups = set()
     stmt_tpls = set()
     bettered_duplicate_sids = set()  # Statements with "better" alternatives
     for trid, src_dict in stmt_nd.items():
@@ -187,8 +191,10 @@ def get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids=None):
                     # If this error ever comes up, it means that the uniqueness
                     # constraint on raw statements per reading is not
                     # functioning correctly.
-                    assert len(s_set) == 1, \
-                        "Found exact duplicates from the same reading."
+                    if len(s_set) > 1:
+                        logger.warning("Found exact duplicates from the same "
+                                       "reading: %s" % str(s_set))
+                        bad_dups.add(tuple(s_set))
 
                     # Choose whether to keep the statement or not.
                     s_tpl = s_set.pop()
@@ -204,6 +210,11 @@ def get_filtered_rdg_stmts(stmt_nd, get_full_stmts, linked_sids=None):
         # Add the bettered duplicates found in this round.
         bettered_duplicate_sids |= \
             {sid for sid, _ in some_bettered_duplicate_tpls}
+
+    # Dump the bad duplicates, if any
+    if bad_dups:
+        with open('bad_duplicates_%s.pkl' % datetime.now(), 'wb') as f:
+            pickle.dump(bad_dups, f)
 
     if get_full_stmts:
         stmts = {stmt for _, stmt in stmt_tpls if stmt is not None}

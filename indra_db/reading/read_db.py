@@ -165,7 +165,7 @@ def get_stmts_safely(reading_data):
         logger.error("Got exception creating statements for %d."
                      % reading_data.reading_id)
         logger.exception(e)
-        return
+        return []
     if stmts is not None:
         if not len(stmts):
             logger.debug("Got no statements for %s." % reading_data.reading_id)
@@ -190,8 +190,7 @@ def make_statements(reading_data_list, num_proc=1):
         try:
             stmt_data_list_list = pool.map(get_stmts_safely, reading_data_list)
             for stmt_data_sublist in stmt_data_list_list:
-                if stmt_data_sublist is not None:
-                    stmt_data_list += stmt_data_sublist
+                stmt_data_list += stmt_data_sublist
         finally:
             pool.close()
             pool.join()

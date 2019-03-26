@@ -126,8 +126,8 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
         db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position',
                                       'residue_from', 'residue_to'),
                 commit=False)
-    db.session.commit_copy('Error copying pa agents, mods, and muts, '
-                           'excluding: %s.' % (', '.join(skip)))
+    db.commit_copy('Error copying pa agents, mods, and muts, excluding: %s.'
+                   % (', '.join(skip)))
     return
 
 

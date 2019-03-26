@@ -421,7 +421,7 @@ class DatabaseReader(object):
             tpl = s.make_tuple(batch_id)
             key = (tpl[1], tpl[4], tpl[5], tpl[9])
             if key in stmt_tuples.keys():
-                logger.warning('Duplicate key found: %s.' % key)
+                logger.warning('Duplicate key found: %s.' % str(key))
             stmt_tuples[key] = tpl
         self._db.copy('raw_statements', stmt_tuples.values(),
                       DatabaseStatementData.get_cols(), lazy=True,

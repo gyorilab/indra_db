@@ -239,9 +239,10 @@ class PreassemblyManager(object):
                           % len(done_pa_ids))
 
         # Get the set of unique statements
-        self._extract_and_push_unique_statements(db, stmt_ids, len(stmt_ids), done_pa_ids)
+        self._extract_and_push_unique_statements(db, stmt_ids, len(stmt_ids),
+                                                 done_pa_ids)
 
-        # If we are continuing, check for support links that were already found.
+        # If we are continuing, check for support links that were already found
         if continuing:
             self._log("Getting pre-existing links...")
             db_existing_links = db.select_all([
@@ -396,7 +397,7 @@ class PreassemblyManager(object):
 
         self._log("Found %d new pa statements." % len(new_mk_set))
 
-        # If we are continuing, check for support links that were already found.
+        # If we are continuing, check for support links that were already found
         support_link_stash = 'new_support_links.pkl'
         pickle_stashes.append(support_link_stash)
         if continuing and path.exists(support_link_stash):

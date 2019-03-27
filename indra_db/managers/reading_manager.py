@@ -285,12 +285,12 @@ def main():
         bulk_managers = [BulkLocalReadingManager(reader_name,
                                                  buffer_days=args.buffer,
                                                  n_proc=args.num_procs)
-                         for reader_name in ['SPARSER', 'REACH', 'TRIPS']]
+                         for reader_name in ['SPARSER', 'REACH']]
     elif args.method == 'aws':
         bulk_managers = [BulkAwsReadingManager(reader_name,
                                                buffer_days=args.buffer,
                                                project_name=args.project_name)
-                         for reader_name in ['SPARSER', 'REACH', 'TRIPS']]
+                         for reader_name in ['SPARSER', 'REACH']]
 
     for bulk_manager in bulk_managers:
         if args.task == 'read_all':

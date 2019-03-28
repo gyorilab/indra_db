@@ -418,9 +418,10 @@ class DatabaseReader(object):
 
         # Find and filter out duplicate statements.
         stmt_tuples = {}
+        stmts = []
         dups = {}
-        for s in self.statement_outputs:
-            tpl = s.make_tuple(batch_id)
+        for sd in self.statement_outputs:
+            tpl = sd.make_tuple(batch_id)
             key = (tpl[1], tpl[4], tpl[9])
             if key in stmt_tuples.keys():
                 logger.warning('Duplicate key found: %s.' % str(key))
@@ -430,6 +431,7 @@ class DatabaseReader(object):
                     dups[key] = [tpl]
             else:
                 stmt_tuples[key] = tpl
+                stmts.append(sd.statement)
 
         # Dump the good statements into the raw statements table.
         self._db.copy('raw_statements', stmt_tuples.values(),
@@ -440,13 +442,11 @@ class DatabaseReader(object):
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in dups.values()
                                               for tpl in dlist],
-                      DatabaseReadingData.get_cols())
+                      DatabaseStatementData.get_cols())
 
         # Add the agents for the accepted statements.
         logger.info("Uploading agents to the database.")
-        reading_id_set = {sd.reading_id for sd in self.statement_outputs}
-        if len(reading_id_set):
-            stmts = [s.statement for s in self.statement_outputs]
+        if len(stmts):
             insert_raw_agents(self._db, batch_id, stmts, verbose=True)
         self.stops['dump_statements_db'] = datetime.now()
         return

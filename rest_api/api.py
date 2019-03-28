@@ -1,12 +1,9 @@
 import sys
 import json
 import boto3
-import string
 import logging
-import secrets
 from os import path
 from io import StringIO
-from jinja2 import Template
 from functools import wraps
 from datetime import datetime
 from http.cookies import SimpleCookie

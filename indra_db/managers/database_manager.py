@@ -237,6 +237,7 @@ class DatabaseManager(object):
 
         class Updates(self.Base, Displayable):
             __tablename__ = 'updates'
+            _skip_disp = ['unresolved_conflicts_file']
             id = Column(Integer, primary_key=True)
             init_upload = Column(Boolean, nullable=False)
             source = Column(String(250), nullable=False)
@@ -327,14 +328,33 @@ class DatabaseManager(object):
             json = Column(Bytea, nullable=False)
             create_date = Column(DateTime, default=func.now())
             __table_args__ = (
-                UniqueConstraint('mk_hash', 'text_hash', 'source_hash',
-                                 'reading_id',
+                UniqueConstraint('mk_hash', 'text_hash', 'reading_id',
                                  name='reading_raw_statement_uniqueness'),
                 UniqueConstraint('mk_hash', 'source_hash', 'db_info_id',
                                  name='db_info_raw_statement_uniqueness'),
                 )
         self.RawStatements = RawStatements
         self.tables[RawStatements.__tablename__] = RawStatements
+
+        class RejectedStatements(self.Base, Displayable):
+            __tablename__ = 'rejected_statements'
+            _skip_disp = ['json']
+            id = Column(Integer, primary_key=True)
+            uuid = Column(String(40), unique=True, nullable=False)
+            batch_id = Column(Integer, nullable=False)
+            mk_hash = Column(BigInteger, nullable=False)
+            text_hash = Column(BigInteger)
+            source_hash = Column(BigInteger, nullable=False)
+            db_info_id = Column(Integer, ForeignKey('db_info.id'))
+            db_info = relationship(DBInfo)
+            reading_id = Column(Integer, ForeignKey('reading.id'))
+            reading = relationship(Reading)
+            type = Column(String(100), nullable=False)
+            indra_version = Column(String(100), nullable=False)
+            json = Column(Bytea, nullable=False)
+            create_date = Column(DateTime, default=func.now())
+        self.RejectedStatements = RejectedStatements
+        self.tables[RejectedStatements.__tablename__] = RejectedStatements
 
         class RawAgents(self.Base, Displayable):
             __tablename__ = 'raw_agents'

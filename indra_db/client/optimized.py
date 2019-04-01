@@ -14,11 +14,14 @@ from indra_db.util import get_primary_db, regularize_agent_id
 @clockit
 def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
                                          max_stmts=None, offset=None,
-                                         ev_limit=None):
+                                         ev_limit=None, mk_hashes_alias=None):
     # Handle limiting.
     mk_hashes_q = mk_hashes_q.distinct()
     if best_first:
-        mk_hashes_q = mk_hashes_q.order_by(desc(db.PaMeta.ev_count))
+        if mk_hashes_alias is not None:
+            mk_hashes_q = mk_hashes_q.order_by(desc(mk_hashes_alias.c.ev_count))
+        else:
+            mk_hashes_q = mk_hashes_q.order_by(desc(db.PaMeta.ev_count))
     if max_stmts is not None:
         mk_hashes_q = mk_hashes_q.limit(max_stmts)
     if offset is not None:
@@ -203,11 +206,12 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         queries.append(q)
     assert queries, "No conditions imposed."
 
-    mk_hashes_q = (db.session
-                   .query('mk_hash', 'ev_count')
-                   .filter(intersect_all(*queries)))
+    mk_hashes_al = intersect_all(*queries).alias('intersection')
+    mk_hashes_q = db.session.query(mk_hashes_al)
 
-    return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, **kwargs)
+    return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q,
+                                                mk_hashes_alias=mk_hashes_al,
+                                                **kwargs)
 
 
 @clockit

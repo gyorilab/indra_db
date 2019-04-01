@@ -4,7 +4,13 @@ import sys
 import pickle
 from itertools import permutations
 from collections import OrderedDict
-import pandas as pd
+
+try:
+    import pandas as pd
+except ImportError:
+    print("Pandas not available.")
+    pd = None
+
 from indra_db import util as dbu
 from indra.databases import hgnc_client, go_client, mesh_client
 

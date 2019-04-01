@@ -1,13 +1,15 @@
 import sys
 import json
+import boto3
 import logging
 from os import path
 from io import StringIO
-from jinja2 import Template
 from functools import wraps
 from datetime import datetime
+from http.cookies import SimpleCookie
+from http.cookiejar import CookieJar
 
-from flask import Flask, request, abort, Response, redirect
+from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
 from flask_cors import CORS
 
@@ -27,6 +29,9 @@ logger.setLevel(logging.INFO)
 app = Flask(__name__)
 Compress(app)
 CORS(app)
+SC = SimpleCookie()
+CJ = CookieJar()
+cognito_idp_client = boto3.client('cognito-idp')
 
 print("Loading file")
 logger.info("INFO working.")
@@ -37,9 +42,62 @@ logger.error("ERROR working.")
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 
+# COGNITO PARAMETERS
+STATE_COOKIE_NAME = 'indralabStateCookie'
+ACCESSTOKEN_COOKIE_NAME = 'indralabAccessCookie'
+IDTOKEN_COOKIE_NAME = 'indradb-authorization'
+
 
 class DbAPIError(Exception):
     pass
+
+
+def _verify_user(access_token):
+    """Verifies a user given an Access Token"""
+    try:
+        resp = cognito_idp_client.get_user(AccessToken=access_token)
+    except cognito_idp_client.exceptions.NotAuthorizedException:
+        resp = {}
+    return resp
+
+
+def _redirect_to_welcome(qp_object):
+    base_url = url_for('welcome')
+    if not qp_object.is_empty():
+        url = base_url + '?' + qp_object.to_url_str()
+    else:
+        url = base_url
+    return redirect(url, code=302)
+
+
+class QueryParam(object):
+    """class holding query parameters"""
+    def __init__(self, query_dict):
+        # edit content via self.query_params
+        self.query_params = query_dict
+
+    def is_empty(self):
+        return not bool(self.query_params)
+
+    def to_dict(self):
+        """Returns the query parameters as a dictionary"""
+        return self.query_params
+
+    def to_url_str(self):
+        """Returns the query parameters formatted for a url string"""
+        if self.query_params:
+            return '&'.join(
+                '%s=%s' % (k, v) for k, v in self.query_params.items())
+        else:
+            return ''
+
+    def to_cookie_str(self):
+        """Returns the query parameters formatted for a cookie string"""
+        if self.query_params:
+            return '_and_'.join(
+                '%s_eq_%s' % (k, v) for k, v in self.query_params.items())
+        else:
+            return ''
 
 
 def __process_agent(agent_param):
@@ -113,6 +171,70 @@ class LogTracker(object):
                 ret[level] = 0
             ret[level] += 1
         return ret
+
+
+def _security_wrapper(fs):
+    logger.info('security wrapper')
+
+    @wraps(fs)
+    def demon(*args, **kwargs):
+        logger.info("Got a demon request")
+        logger.info('Full url received: %s' % request.url)
+
+        # Order of things to check:
+        # If no endpoint:
+        #   redirect to welcome without queries
+        # If token:
+        #   if token valid:
+        #       load endpoint
+        # When above fails:
+        #   redirect to welcome with whatever query string it came with
+
+        # HANDLE ENDPOINT
+        url_in = request.url
+        if url_in.find('/browser/') < 0:
+            return _redirect_to_welcome(QueryParam({}))
+        endpoint = url_in[:url_in.find('?')] if url_in.find('?') > 0 else \
+            url_in
+
+        qp = QueryParam(query_dict=dict(request.args.copy()))
+
+        print("Args -----------")
+        print(qp.query_params)
+        print("Cookies ------------")
+        print(request.cookies)
+        print("------------------")
+
+        # TOKEN HANDLING
+        # Try to load tokens from cookie:
+        access_token = request.cookies.get(ACCESSTOKEN_COOKIE_NAME)
+
+        # No tokens, no access - redirect
+        if not access_token:
+            logger.info('No token found, redirecting to welcome for login...')
+            if not qp.query_params.get('endpoint'):
+                qp.query_params['endpoint'] = endpoint
+            return _redirect_to_welcome(qp)
+
+        # VERIFY ACCESS TOKEN
+        logger.info('Token found in cookie...')
+        user_verified = _verify_user(access_token)
+        if user_verified:
+            logger.info('User verified with access token')
+            # Check if this is a curation POST
+            print('User info ----------')
+            print(user_verified)
+            print('--------------------')
+            if request.json and not request.json.get('curator'):
+                request.json['curator'] = user_verified['name']
+            logger.info('Loading requested endpoint: %s' % endpoint)
+            return fs(*args, **kwargs)
+        else:
+            # Final fallback
+            logger.info('Could not verify user, redirecting to welcome...')
+            return _redirect_to_welcome(QueryParam({}))
+
+    return demon
 
 
 def _query_wrapper(f):
@@ -194,22 +316,39 @@ def _query_wrapper(f):
 
 
 @app.route('/', methods=['GET'])
-def welcome():
+def iamalive():
+    return redirect('browser/welcome', code=302)
+
+
+@app.route('/browser', methods=['GET'])
+def redirecet():
     logger.info("Got request for welcome info.")
-    return redirect('statements', code=302)
+    return redirect('browser/welcome', code=302)
 
 
-@app.route('/statements', methods=['GET'])
-def get_statements_query_format():
-    # Create a template object from the template file, load once
+@app.route('/browser/welcome', methods=['GET'])
+def welcome():
+    logger.info("Browser welcome page.")
     page_path = path.join(path.dirname(path.abspath(__file__)),
-                          'search_statements.html')
-    with open(page_path, 'rt') as f:
+                          'welcome.html')
+    with open(page_path, 'r') as f:
         page_html = f.read()
     return Response(page_html)
 
 
-@app.route('/statements/from_agents', methods=['GET'])
+@app.route('/browser/statements', methods=['GET'])
+def get_statements_query_format():
+    # Create a template object from the template file, load once
+    page_path = path.join(path.dirname(path.abspath(__file__)),
+                          'search_statements.html')
+    with open(page_path, 'r') as f:
+        page_html = f.read()
+    return Response(page_html)
+
+
+@app.route('/browser/statements/from_agents', methods=['GET'])
+@app.route('/api/statements/from_agents', methods=['GET'])
+@_security_wrapper
 @_query_wrapper
 def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get some statements constrained by query."""
@@ -269,7 +408,7 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/statements/from_hashes', methods=['POST'])
+@app.route('/api/statements/from_hashes', methods=['POST'])
 @_query_wrapper
 def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
     if ev_lim is None:
@@ -289,7 +428,9 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
     return result
 
 
-@app.route('/statements/from_hash/<hash_val>', methods=['GET'])
+@app.route('/api/statements/from_hash/<hash_val>', methods=['GET'])
+@app.route('/browser/statements/from_hash/<hash_val>', methods=['GET'])
+@_security_wrapper
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                           hash_val):
@@ -300,7 +441,7 @@ def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                                            best_first=best_first)
 
 
-@app.route('/statements/from_papers', methods=['POST'])
+@app.route('/api/statements/from_papers', methods=['POST'])
 @_query_wrapper
 def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get Statements from a papers with the given ids."""
@@ -332,12 +473,14 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/curation', methods=['GET'])
+@app.route('/api/curation', methods=['GET'])
 def describe_curation():
     return redirect('/statements', code=302)
 
 
-@app.route('/curation/submit/<hash_val>', methods=['POST'])
+@app.route('/api/curation/submit/<hash_val>', methods=['POST'])
+@app.route('/browser/curation/submit/<hash_val>', methods=['POST'])
+@_security_wrapper
 def submit_curation_endpoint(hash_val):
     logger.info("Adding curation for statement %s." % (hash_val))
     ev_hash = request.json.get('ev_hash')

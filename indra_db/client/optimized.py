@@ -203,7 +203,9 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         queries.append(q)
     assert queries, "No conditions imposed."
 
-    mk_hashes_q = intersect_all(*queries)
+    mk_hashes_q = (db.session
+                   .query('mk_hash', 'ev_count')
+                   .filter(intersect_all(*queries)))
 
     return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, **kwargs)
 

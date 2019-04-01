@@ -327,6 +327,16 @@ def test_nfkb_anomaly():
 
 
 @attr('nonpublic')
+def test_triple_agent_bug():
+    agents = [(None, '1834', 'HGNC'), (None, '6769', 'HGNC'),
+              (None, '12856', 'HGNC')]
+    res = dbc.get_statement_jsons_from_agents(agents=agents, max_stmts=100,
+                                              stmt_type='Complex',
+                                              ev_limit=5)
+    assert res
+
+
+@attr('nonpublic')
 def test_null_response():
     res = dbc.get_statement_jsons_from_hashes([0])
     assert isinstance(res, dict), type(res)

@@ -1,7 +1,7 @@
 import json
 import logging
 from collections import OrderedDict
-from sqlalchemy import or_, desc, true, select
+from sqlalchemy import or_, desc, true, select, intersect_all
 
 from indra.statements import get_statement_by_name, make_hash
 
@@ -14,11 +14,14 @@ from indra_db.util import get_primary_db, regularize_agent_id
 @clockit
 def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
                                          max_stmts=None, offset=None,
-                                         ev_limit=None):
+                                         ev_limit=None, mk_hashes_alias=None):
     # Handle limiting.
     mk_hashes_q = mk_hashes_q.distinct()
     if best_first:
-        mk_hashes_q = mk_hashes_q.order_by(desc(db.PaMeta.ev_count))
+        if mk_hashes_alias is not None:
+            mk_hashes_q = mk_hashes_q.order_by(desc(mk_hashes_alias.c.ev_count))
+        else:
+            mk_hashes_q = mk_hashes_q.order_by(desc(db.PaMeta.ev_count))
     if max_stmts is not None:
         mk_hashes_q = mk_hashes_q.limit(max_stmts)
     if offset is not None:
@@ -181,9 +184,9 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         db = get_primary_db()
 
     # TODO: Extend this to allow retrieval of raw statements.
-    mk_hashes_q = None
     mk_hash_c = db.PaMeta.mk_hash.label('mk_hash')
     ev_count_c = db.PaMeta.ev_count.label('ev_count')
+    queries = []
     for role, ag_dbid, ns in agents:
         # Make the id match paradigms for the database.
         ag_dbid = regularize_agent_id(ag_dbid, ns)
@@ -200,13 +203,15 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
             q = q.filter(db.PaMeta.role == role.upper())
 
         # Intersect with the previous query.
-        if mk_hashes_q:
-            mk_hashes_q = mk_hashes_q.intersect(q)
-        else:
-            mk_hashes_q = q
-    assert mk_hashes_q, "No conditions imposed."
+        queries.append(q)
+    assert queries, "No conditions imposed."
 
-    return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, **kwargs)
+    mk_hashes_al = intersect_all(*queries).alias('intersection')
+    mk_hashes_q = db.session.query(mk_hashes_al)
+
+    return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q,
+                                                mk_hashes_alias=mk_hashes_al,
+                                                **kwargs)
 
 
 @clockit

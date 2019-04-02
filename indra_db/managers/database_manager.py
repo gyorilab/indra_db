@@ -538,9 +538,9 @@ class DatabaseManager(object):
 
         class EvidenceCounts(self.Base, MaterializedView):
             __tablename__ = 'evidence_counts'
-            ___definition__ = ('SELECT count(id) AS ev_count, mk_hash '
-                               'FROM fast_raw_pa_link '
-                               'GROUP BY mk_hash')
+            __definition__ = ('SELECT count(id) AS ev_count, mk_hash '
+                              'FROM fast_raw_pa_link '
+                              'GROUP BY mk_hash')
             mk_hash = Column(BigInteger, primary_key=True)
             ev_count = Column(Integer)
         self.EvidenceCounts = EvidenceCounts
@@ -570,12 +570,12 @@ class DatabaseManager(object):
 
         class FastRawPaLink(self.Base, MaterializedView):
             __tablename__ = 'fast_raw_pa_link'
-            __definition__ = ('SELECT id, raw.json AS raw_json, '
+            __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
                               'raw.reading_id, raw.db_info_id, '
                               'pa.mk_hash, pa.json AS pa_json, pa.type '
                               'FROM raw_statements AS raw, '
                               'pa_statements AS pa, '
-                              'raw_unique_links AS link'
+                              'raw_unique_links AS link '
                               'WHERE link.raw_stmt_id = raw.id '
                               'AND link.pa_stmt_mk_hash = pa.mk_hash')
             _skip_disp = ['raw_json', 'pa_json']
@@ -632,8 +632,8 @@ class DatabaseManager(object):
             __definition__ = ("SELECT * FROM crosstab("
                               "'SELECT mk_hash, src, count(sid) "
                               "  FROM raw_stmt_src "
-                              "   JOIN fast_raw_pa_link ON sid = id"
-                              "  GROUP BY (mk_hash, src)' "
+                              "   JOIN fast_raw_pa_link ON sid = id "
+                              "  GROUP BY (mk_hash, src)'"
                               " ) final_result(mk_hash bigint, "
                               "    \"REACH\" bigint, \"SPARSER\" bigint, "
                               "    biopax bigint, biogrid bigint, tas bigint, "

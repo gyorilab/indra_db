@@ -1107,7 +1107,7 @@ class DatabaseManager(object):
         if isinstance(table, str):
             table = self.m_views[table]
 
-        if not isinstance(table, MaterializedView):
+        if not issubclass(table, MaterializedView):
             raise IndraDbException("Table used to create a materialized view "
                                    "must be of type MaterializedView.")
 

@@ -28,24 +28,29 @@ ORDERED_VIEWS = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
 OTHER_VIEWS = {'reading_ref_link'}
 
 
+def iter_views():
+    for i, view in enumerate(ORDERED_VIEWS):
+        yield str(i), view
+    for view in OTHER_VIEWS:
+        yield '-', view
+
+
 def create_views(db):
     """Create the materialized views."""
-    for i, view in enumerate(ORDERED_VIEWS):
-        logger.info('%d. Creating %s view...' % (i, view))
-        db.create_materialized_view(view)
-    for view in ORDERED_VIEWS:
-        logger.info('- Creating %s view...' % view)
+    views = db.get_active_views()
+    for idx, view in iter_views():
+        if view in views:
+            logger.info('%s. View %s already exists. Skipping.' % (idx, view))
+            continue
+        logger.info('%s. Creating %s view...' % (idx, view))
         db.create_materialized_view(view)
     return
 
 
 def refresh_views(db):
     """Update the materialized views."""
-    for i, view in enumerate(ORDERED_VIEWS):
+    for i, view in iter_views():
         logger.info('%d. Refreshing %s view...' % (i, view))
-        db.refresh_materialized_view(view)
-    for view in OTHER_VIEWS:
-        logger.info('- Refreshing %s view...' % view)
         db.refresh_materialized_view(view)
     return
 

@@ -148,6 +148,24 @@ class Displayable(object):
 class MaterializedView(Displayable):
     __definition__ = NotImplemented
 
+    @classmethod
+    def definition(cls, db):
+        return cls.__definition__
+
+    @classmethod
+    def get_make_sql(cls, db, mode, with_data):
+        if mode == 'create':
+            sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
+                  % (cls.__tablename__, cls.definition(db),
+                     '' if with_data else "NO")
+        elif mode == 'refresh':
+            sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
+                  % (cls.__tablename__, '' if with_data else 'NO')
+        else:
+            raise IndraDbException('Invalid mode: %s. Options are "create" '
+                                   'and "refresh".' % mode)
+        return sql
+
 
 class DatabaseManager(object):
     """An object used to access INDRA's database.
@@ -634,10 +652,26 @@ class DatabaseManager(object):
                               "  FROM raw_stmt_src "
                               "   JOIN fast_raw_pa_link ON sid = id "
                               "  GROUP BY (mk_hash, src)'"
-                              " ) final_result(mk_hash bigint, "
-                              "    \"REACH\" bigint, \"SPARSER\" bigint, "
-                              "    biopax bigint, biogrid bigint, tas bigint, "
-                              "    signor bigint, bel bigint)")
+                              " ) final_result(mk_hash bigint, %s)")
+
+            @classmethod
+            def definition(cls, db):
+                db.grab_session()
+                logger.info("Discovering the possible sources...")
+                src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
+                logger.info("Found the following sources: %s" % src_list)
+                sql = cls.__definition__ % (', '.join(['%s bigint' % src
+                                                       for src, in src_list]))
+                print(sql)
+                return sql
+
+            @classmethod
+            def get_make_sql(cls, db, mode, with_data):
+                sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
+                create_sql = super(cls, cls).get_make_sql(db, 'create', with_data)
+                sql = sql_fmt % (cls.__tablename__, create_sql)
+                return sql
+
             mk_hash = Column(BigInteger, primary_key=True)
             REACH = Column(BigInteger)
             SPARSER = Column(BigInteger)
@@ -1105,25 +1139,16 @@ class DatabaseManager(object):
             self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
         return
 
-    def generate_materialized_view(self, mode, table, with_data=True):
+    def generate_materialized_view(self, mode, view, with_data=True):
         """Create or refresh the given materialized view."""
-        if isinstance(table, str):
-            table = self.m_views[table]
+        if isinstance(view, str):
+            view = self.m_views[view]
 
-        if not issubclass(table, MaterializedView):
+        if not issubclass(view, MaterializedView):
             raise IndraDbException("Table used to %s a materialized view "
                                    "must be of type MaterializedView." % mode)
 
-        if mode == 'create':
-            sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-                  % (table.__tablename__, table.__definition__,
-                     '' if with_data else "NO")
-        elif mode == 'refresh':
-            sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
-                  % (table.__tablename__, '' if with_data else 'NO')
-        else:
-            raise IndraDbException('Invalid mode: %s. Options are "create" '
-                                   'and "refresh".' % mode)
+        sql = view.get_make_sql(self, mode, with_data)
 
         conn = self.engine.raw_connection()
         cursor = conn.cursor()

@@ -148,6 +148,24 @@ class Displayable(object):
 class MaterializedView(Displayable):
     __definition__ = NotImplemented
 
+    @classmethod
+    def definition(cls, db):
+        return cls.__definition__
+
+    @classmethod
+    def get_make_sql(cls, db, mode, with_data):
+        if mode == 'create':
+            sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
+                  % (cls.__tablename__, cls.definition(db),
+                     '' if with_data else "NO")
+        elif mode == 'refresh':
+            sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
+                  % (cls.__tablename__, '' if with_data else 'NO')
+        else:
+            raise IndraDbException('Invalid mode: %s. Options are "create" '
+                                   'and "refresh".' % mode)
+        return sql
+
 
 class DatabaseManager(object):
     """An object used to access INDRA's database.
@@ -538,9 +556,9 @@ class DatabaseManager(object):
 
         class EvidenceCounts(self.Base, MaterializedView):
             __tablename__ = 'evidence_counts'
-            ___definition__ = ('SELECT count(id) AS ev_count, mk_hash '
-                               'FROM fast_raw_pa_link '
-                               'GROUP BY mk_hash')
+            __definition__ = ('SELECT count(id) AS ev_count, mk_hash '
+                              'FROM fast_raw_pa_link '
+                              'GROUP BY mk_hash')
             mk_hash = Column(BigInteger, primary_key=True)
             ev_count = Column(Integer)
         self.EvidenceCounts = EvidenceCounts
@@ -570,12 +588,12 @@ class DatabaseManager(object):
 
         class FastRawPaLink(self.Base, MaterializedView):
             __tablename__ = 'fast_raw_pa_link'
-            __definition__ = ('SELECT id, raw.json AS raw_json, '
+            __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
                               'raw.reading_id, raw.db_info_id, '
                               'pa.mk_hash, pa.json AS pa_json, pa.type '
                               'FROM raw_statements AS raw, '
                               'pa_statements AS pa, '
-                              'raw_unique_links AS link'
+                              'raw_unique_links AS link '
                               'WHERE link.raw_stmt_id = raw.id '
                               'AND link.pa_stmt_mk_hash = pa.mk_hash')
             _skip_disp = ['raw_json', 'pa_json']
@@ -632,12 +650,28 @@ class DatabaseManager(object):
             __definition__ = ("SELECT * FROM crosstab("
                               "'SELECT mk_hash, src, count(sid) "
                               "  FROM raw_stmt_src "
-                              "   JOIN fast_raw_pa_link ON sid = id"
-                              "  GROUP BY (mk_hash, src)' "
-                              " ) final_result(mk_hash bigint, "
-                              "    \"REACH\" bigint, \"SPARSER\" bigint, "
-                              "    biopax bigint, biogrid bigint, tas bigint, "
-                              "    signor bigint, bel bigint)")
+                              "   JOIN fast_raw_pa_link ON sid = id "
+                              "  GROUP BY (mk_hash, src)'"
+                              " ) final_result(mk_hash bigint, %s)")
+
+            @classmethod
+            def definition(cls, db):
+                db.grab_session()
+                logger.info("Discovering the possible sources...")
+                src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
+                logger.info("Found the following sources: %s" % src_list)
+                sql = cls.__definition__ % (', '.join(['%s bigint' % src
+                                                       for src, in src_list]))
+                print(sql)
+                return sql
+
+            @classmethod
+            def get_make_sql(cls, db, mode, with_data):
+                sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
+                create_sql = super(cls, cls).get_make_sql(db, 'create', with_data)
+                sql = sql_fmt % (cls.__tablename__, create_sql)
+                return sql
+
             mk_hash = Column(BigInteger, primary_key=True)
             REACH = Column(BigInteger)
             SPARSER = Column(BigInteger)
@@ -828,6 +862,9 @@ class DatabaseManager(object):
     def get_active_tables(self):
         "Get the tables currently active in the database."
         return inspect(self.engine).get_table_names()
+
+    def get_active_views(self):
+        return inspect(self.engine).get_view_names()
 
     def get_column_names(self, tbl_name):
         "Get a list of the column labels for a table."
@@ -1102,40 +1139,21 @@ class DatabaseManager(object):
             self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
         return
 
-    def create_materialized_view(self, table, with_data=True):
-        """Create a materialize view."""
-        if isinstance(table, str):
-            table = self.m_views[table]
+    def generate_materialized_view(self, mode, view, with_data=True):
+        """Create or refresh the given materialized view."""
+        if isinstance(view, str):
+            view = self.m_views[view]
 
-        if not isinstance(table, MaterializedView):
-            raise IndraDbException("Table used to create a materialized view "
-                                   "must be of type MaterializedView.")
+        if not issubclass(view, MaterializedView):
+            raise IndraDbException("Table used to %s a materialized view "
+                                   "must be of type MaterializedView." % mode)
 
-        sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-              % (table.__tablename__, table.__definition__,
-                 '' if with_data else "NO")
+        sql = view.get_make_sql(self, mode, with_data)
+
         conn = self.engine.raw_connection()
         cursor = conn.cursor()
         cursor.execute(sql)
         conn.commit()
-        return
-
-    def refresh_materialized_view(self, table, with_data=True):
-        """Refresh the given materialized view."""
-        if isinstance(table, str):
-            table = self.m_views[table]
-
-        if not isinstance(table, MaterializedView):
-            raise IndraDbException("Table used to refresh a materialized view "
-                                   "must be of type MaterializedView.")
-
-        sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
-              % (table.__tablename__, '' if with_data else 'NO')
-        conn = self.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        conn.commit()
-        return
 
     def filter_query(self, tbls, *args):
         "Query a table and filter results."

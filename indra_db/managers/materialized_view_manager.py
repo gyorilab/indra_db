@@ -28,25 +28,42 @@ ORDERED_VIEWS = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
 OTHER_VIEWS = {'reading_ref_link'}
 
 
-def create_views(db):
-    """Create the materialized views."""
+def iter_views():
     for i, view in enumerate(ORDERED_VIEWS):
-        logger.info('%d. Creating %s view...' % (i, view))
-        db.create_materialized_view(view)
-    for view in ORDERED_VIEWS:
-        logger.info('- Creating %s view...' % view)
-        db.create_materialized_view(view)
+        yield str(i), view
+    for view in OTHER_VIEWS:
+        yield '-', view
+
+
+def create_views(db, new_views=None):
+    """Create the materialized views."""
+    views = db.get_active_views()
+    for idx, view in iter_views():
+        # Check if we want to handle this view.
+        if new_views is not None and view not in new_views:
+            continue
+
+        # Check against existing views
+        if view in views:
+            logger.info('%s. View %s already exists. Skipping.' % (idx, view))
+            continue
+
+        # Make the view.
+        logger.info('%s. Creating %s view...' % (idx, view))
+        db.generate_materialized_view('create', view)
     return
 
 
-def refresh_views(db):
+def refresh_views(db, new_views=None):
     """Update the materialized views."""
-    for i, view in enumerate(ORDERED_VIEWS):
-        logger.info('%d. Refreshing %s view...' % (i, view))
-        db.refresh_materialized_view(view)
-    for view in OTHER_VIEWS:
-        logger.info('- Refreshing %s view...' % view)
-        db.refresh_materialized_view(view)
+    for i, view in iter_views():
+        # Check if we want to refresh this view.
+        if new_views is not None and view not in new_views:
+            continue
+
+        # Refresh the view.
+        logger.info('%s. Refreshing %s view...' % (i, view))
+        db.generate_materialized_view('refresh', view)
     return
 
 
@@ -69,12 +86,23 @@ if __name__ == '__main__':
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'.')
         )
+    parser.add_argument(
+        '-m', '--m_views',
+        default='all',
+        nargs='+',
+        help='Specify certain views to create or refresh.'
+        )
 
     args = parser.parse_args()
 
+    if args.m_views == 'all':
+        views = None
+    else:
+        views = args.m_views
+
     db = get_db(args.database)
     if args.task == 'create':
-        create_views(db)
+        create_views(db, views)
     else:
-        refresh_views(db)
+        refresh_views(db, views)
 

@@ -50,7 +50,7 @@ def create_views(db, new_views=None):
 
         # Make the view.
         logger.info('%s. Creating %s view...' % (idx, view))
-        db.create_materialized_view(view)
+        db.generate_materialized_view('create', view)
     return
 
 
@@ -62,8 +62,8 @@ def refresh_views(db, new_views=None):
             continue
 
         # Refresh the view.
-        logger.info('%d. Refreshing %s view...' % (i, view))
-        db.refresh_materialized_view(view)
+        logger.info('%s. Refreshing %s view...' % (i, view))
+        db.generate_materialized_view('refresh', view)
     return
 
 
@@ -95,10 +95,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.views == 'all':
+    if args.m_views == 'all':
         views = None
     else:
-        views = args.views
+        views = args.m_views
 
     db = get_db(args.database)
     if args.task == 'create':

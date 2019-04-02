@@ -829,6 +829,9 @@ class DatabaseManager(object):
         "Get the tables currently active in the database."
         return inspect(self.engine).get_table_names()
 
+    def get_active_views(self):
+        return inspect(self.engine).get_view_names()
+
     def get_column_names(self, tbl_name):
         "Get a list of the column labels for a table."
         return self.get_column_objects(tbl_name).keys()

@@ -1105,40 +1105,30 @@ class DatabaseManager(object):
             self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
         return
 
-    def create_materialized_view(self, table, with_data=True):
-        """Create a materialize view."""
+    def generate_materialized_view(self, mode, table, with_data=True):
+        """Create or refresh the given materialized view."""
         if isinstance(table, str):
             table = self.m_views[table]
 
         if not issubclass(table, MaterializedView):
-            raise IndraDbException("Table used to create a materialized view "
-                                   "must be of type MaterializedView.")
+            raise IndraDbException("Table used to %s a materialized view "
+                                   "must be of type MaterializedView." % mode)
 
-        sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-              % (table.__tablename__, table.__definition__,
-                 '' if with_data else "NO")
+        if mode == 'create':
+            sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
+                  % (table.__tablename__, table.__definition__,
+                     '' if with_data else "NO")
+        elif mode == 'refresh':
+            sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
+                  % (table.__tablename__, '' if with_data else 'NO')
+        else:
+            raise IndraDbException('Invalid mode: %s. Options are "create" '
+                                   'and "refresh".' % mode)
+
         conn = self.engine.raw_connection()
         cursor = conn.cursor()
         cursor.execute(sql)
         conn.commit()
-        return
-
-    def refresh_materialized_view(self, table, with_data=True):
-        """Refresh the given materialized view."""
-        if isinstance(table, str):
-            table = self.m_views[table]
-
-        if not isinstance(table, MaterializedView):
-            raise IndraDbException("Table used to refresh a materialized view "
-                                   "must be of type MaterializedView.")
-
-        sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
-              % (table.__tablename__, '' if with_data else 'NO')
-        conn = self.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        conn.commit()
-        return
 
     def filter_query(self, tbls, *args):
         "Query a table and filter results."

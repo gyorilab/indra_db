@@ -194,8 +194,6 @@ def _security_wrapper(fs):
 
         # HANDLE ENDPOINT
         url_in = request.url
-        if url_in.find('/browser/') < 0:
-            return _redirect_to_welcome(QueryParam({}))
         endpoint = url_in[:url_in.find('?')] if url_in.find('?') > 0 else \
             url_in
 

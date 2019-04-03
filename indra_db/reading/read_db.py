@@ -437,7 +437,8 @@ class DatabaseReader(object):
         self._db.copy('raw_statements', stmt_tuples.values(),
                       DatabaseStatementData.get_cols(), lazy=True,
                       push_conflict=True,
-                      constraint='reading_raw_statement_uniqueness')
+                      constraint='reading_raw_statement_uniqueness',
+                      commit=False)
 
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in dups.values()

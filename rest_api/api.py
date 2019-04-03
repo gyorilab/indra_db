@@ -63,6 +63,22 @@ def _verify_user(access_token):
     return resp
 
 
+def _extract_user_info(user_json):
+    """Extracts user info returned by cognito"""
+    try:
+        info = {'Username': user_json['Username'],
+                'date': user_json['ResponseMetadata']['HTTPHeaders']['date']}
+        for attr in user_json['UserAttributes']:
+            if attr['Name'] == 'email':
+                info['email'] = attr['Value']
+                break
+    except KeyError as e:
+        logger.warning('Could not get Key: ' + repr(e))
+        return {}
+
+    return info
+
+
 def _redirect_to_welcome(qp_object):
     base_url = url_for('welcome')
     if not qp_object.is_empty():
@@ -226,7 +242,7 @@ def _security_wrapper(fs):
             print(user_verified)
             print('--------------------')
             if request.json and not request.json.get('curator'):
-                request.json['curator'] = user_verified['name']
+                request.json['curator'] = _extract_user_info(user_verified)
             logger.info('Loading requested endpoint: %s' % endpoint)
             return fs(*args, **kwargs)
         else:

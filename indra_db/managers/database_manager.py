@@ -297,7 +297,7 @@ class DatabaseManager(object):
             reader = Column(String(20), nullable=False)
             reader_version = Column(String(20), nullable=False)
             format = Column(String(20), nullable=False)  # xml, json, etc.
-            bytes = Column(Bytea, nullable=False)
+            bytes = Column(Bytea)
             create_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             __table_args__ = (

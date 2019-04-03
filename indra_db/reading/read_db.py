@@ -86,6 +86,9 @@ class DatabaseReadingData(ReadingData):
 
     def zip_content(self):
         """Compress the content, returning bytes."""
+        if self.content is None:
+            return None
+
         if self.format == formats.JSON:
             ret = zip_string(json.dumps(self.content))
         elif self.format == formats.TEXT or self.format == formats.EKB:

@@ -31,7 +31,6 @@ Compress(app)
 CORS(app)
 SC = SimpleCookie()
 CJ = CookieJar()
-cognito_idp_client = boto3.client('cognito-idp')
 
 print("Loading file")
 logger.info("INFO working.")
@@ -54,6 +53,7 @@ class DbAPIError(Exception):
 
 def _verify_user(access_token):
     """Verifies a user given an Access Token"""
+    cognito_idp_client = boto3.client('cognito-idp')
     try:
         resp = cognito_idp_client.get_user(AccessToken=access_token)
     except cognito_idp_client.exceptions.NotAuthorizedException:

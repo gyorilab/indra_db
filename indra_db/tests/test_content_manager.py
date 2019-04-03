@@ -191,7 +191,7 @@ def test_get_abstracts():
 #==============================================================================
 TEST_FTP = path.abspath(path.join(path.dirname(__file__), path.pardir,
                                   'resources', 'test_ftp'))
-if IS_PY3 and not path.exists(TEST_FTP):
+if not path.exists(TEST_FTP):
     print("Creating test directory. This could take a while...")
     from indra_db.resources.build_sample_set import build_set
     build_set(2, TEST_FTP)

@@ -823,6 +823,36 @@ class DatabaseManager(object):
             logger.debug("Table created.")
         return
 
+    def manage_views(self, mode, view_list=None, with_data=True):
+        ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
+                         'raw_stmt_src', 'pa_stmt_src']
+        other_views = {'reading_ref_link'}
+        active_views = self.get_active_views()
+
+        def iter_views():
+            for i, view in enumerate(ordered_views):
+                yield str(i), view
+            for view in other_views:
+                yield '-', view
+
+        for i, view_name in iter_views():
+            if view_list is not None and view_name not in view_list:
+                continue
+
+            view = self.m_views[view_name]
+
+            if mode == 'create':
+                if view_name in active_views:
+                    logger.info('[%s] View %s already exists. Skipping.'
+                                % (i, view))
+                    continue
+                logger.info('[%s] Creating %s view...' % (i, view))
+                view.create(self, with_data)
+            elif mode == 'update':
+                logger.info('[%s] Refreshing %s view...' % (i, view))
+                view.refresh(self, with_data)
+        return
+
     def drop_tables(self, tbl_list=None, force=False):
         """Drop the tables for INDRA database given in tbl_list.
 
@@ -1180,12 +1210,6 @@ class DatabaseManager(object):
 
     def generate_materialized_view(self, mode, view, with_data=True):
         """Create or refresh the given materialized view."""
-        if isinstance(view, str):
-            view = self.m_views[view]
-
-        if not issubclass(view, MaterializedView):
-            raise IndraDbException("Table used to %s a materialized view "
-                                   "must be of type MaterializedView." % mode)
 
     def filter_query(self, tbls, *args):
         "Query a table and filter results."

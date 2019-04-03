@@ -16,56 +16,9 @@ The following can be built at any time and in any order:
 Note that the order of views below is determined not by the above
 order but by constraints imposed by use-case.
 """
-import logging
 from argparse import ArgumentParser
 
 from indra_db.util import get_db
-
-logger = logging.getLogger(__name__)
-
-ORDERED_VIEWS = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
-                 'raw_stmt_src', 'pa_stmt_src']
-OTHER_VIEWS = {'reading_ref_link'}
-
-
-def iter_views():
-    for i, view in enumerate(ORDERED_VIEWS):
-        yield str(i), view
-    for view in OTHER_VIEWS:
-        yield '-', view
-
-
-def create_views(db, new_views=None):
-    """Create the materialized views."""
-    views = db.get_active_views()
-    for idx, view in iter_views():
-        # Check if we want to handle this view.
-        if new_views is not None and view not in new_views:
-            continue
-
-        # Check against existing views
-        if view in views:
-            logger.info('%s. View %s already exists. Skipping.' % (idx, view))
-            continue
-
-        # Make the view.
-        logger.info('%s. Creating %s view...' % (idx, view))
-        db.generate_materialized_view('create', view)
-    return
-
-
-def refresh_views(db, new_views=None):
-    """Update the materialized views."""
-    for i, view in iter_views():
-        # Check if we want to refresh this view.
-        if new_views is not None and view not in new_views:
-            continue
-
-        # Refresh the view.
-        logger.info('%s. Refreshing %s view...' % (i, view))
-        db.generate_materialized_view('refresh', view)
-    return
-
 
 if __name__ == '__main__':
     parser = ArgumentParser(
@@ -101,8 +54,4 @@ if __name__ == '__main__':
         views = args.m_views
 
     db = get_db(args.database)
-    if args.task == 'create':
-        create_views(db, views)
-    else:
-        refresh_views(db, views)
-
+    db.manage_views(args.task, view_list=views)

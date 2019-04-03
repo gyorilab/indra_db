@@ -53,9 +53,11 @@ class DbAPIError(Exception):
 
 def _verify_user(access_token):
     """Verifies a user given an Access Token"""
+    logger.info("Getting cognito client.")
     cognito_idp_client = boto3.client('cognito-idp')
     try:
         resp = cognito_idp_client.get_user(AccessToken=access_token)
+        logger.info("Got resp %s from cognito." % str(resp))
     except cognito_idp_client.exceptions.NotAuthorizedException:
         resp = {}
     return resp

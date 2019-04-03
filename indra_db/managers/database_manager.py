@@ -713,14 +713,7 @@ class DatabaseManager(object):
                 return
 
             mk_hash = Column(BigInteger, primary_key=True)
-            REACH = Column(BigInteger)
-            SPARSER = Column(BigInteger)
-            biopax = Column(BigInteger)
-            biogrid = Column(BigInteger)
-            tas = Column(BigInteger)
-            signor = Column(BigInteger)
-            bel = Column(BigInteger)
-        self.PaStmtSrc = PaStmtSrc
+        self.__PaStmtSrc = PaStmtSrc
         self.m_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
         self.engine = create_engine(host)
@@ -753,6 +746,12 @@ class DatabaseManager(object):
             self.session.rollback()
         except:
             print("Failed to execute rollback of database upon deletion.")
+
+    def __getattribute__(self, item):
+        if item == 'PaStmtSrc':
+            self.__PaStmtSrc.load_cols(self.engine)
+            return self.__PaStmtSrc
+        return super(DatabaseManager, self).__getattribute__(item)
 
     def _init_auth(self):
         """Create the auth table."""

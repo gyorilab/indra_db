@@ -61,6 +61,7 @@ script:
   - if [[ $RUN_SLOW != "true" ]]; then
       export NOSEATTR="!slow,$NOSEATTR";
     fi
+  - echo "NOSEATTR=" $NOSEATTR
   # Now run all INDRA_DB tests
   - nosetests indra_db -v -a $NOSEATTR
         --with-coverage --cover-inclusive --cover-package=indra

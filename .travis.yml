@@ -54,10 +54,10 @@ script:
   # Run standard unit tests
   - cd $TRAVIS_BUILD_DIR
   # doctests on Travis would otherwise fail
-  - export NOSEATTR="";
-  # - if [[ $TRAVIS_PULL_REQUEST ]]; then
-  #     export NOSEATTR="!nonpublic";
-  #   fi
+  - export NOSEATTR="!notravis";
+  - if [[ $TRAVIS_PULL_REQUEST != "false" ]]; then
+      export NOSEATTR="!nonpublic,$NOSEATTR";
+    fi
   - if [[ $RUN_SLOW != "true" ]]; then
       export NOSEATTR="!slow,$NOSEATTR";
     fi

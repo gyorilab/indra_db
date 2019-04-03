@@ -15,17 +15,8 @@ from indra_db.util import get_test_db
 from indra_db.client import get_content_by_refs
 from indra_db.managers.reading_manager import BulkLocalReadingManager
 
-from indra.tests.util import needs_py3, IS_PY3
-
-if IS_PY3:
-    from indra_db.managers.content_manager import Pubmed, PmcOA, Manuscripts,\
-        Elsevier
-
-# if '-a' in argv:
-#     attr_str = argv[argv.index('-a')+1]
-#     if any([not_attr in attr_str for not_attr in
-#            ('!nonpublic', '!webservice')]):
-#         raise SkipTest("Every test is nonpublic and a webservice.")
+from indra_db.managers.content_manager import Pubmed, PmcOA, Manuscripts,\
+    Elsevier
 
 try:
     get_test_db()
@@ -60,7 +51,6 @@ def get_db(clear=True):
     return db
 
 
-@needs_py3
 def get_db_with_pubmed_content():
     "Populate the database with sample content from pubmed."
     db = get_db()
@@ -68,7 +58,6 @@ def get_db_with_pubmed_content():
     return db
 
 
-@needs_py3
 def get_db_with_ftp_content():
     "Populate database with content from all the ftp services"
     db = get_db_with_pubmed_content()
@@ -208,7 +197,6 @@ if IS_PY3 and not path.exists(TEST_FTP):
     build_set(2, TEST_FTP)
 
 
-@needs_py3
 @attr('nonpublic', 'slow')
 def test_full_upload():
     "Test whether we can perform a targeted upload to a test db."
@@ -265,7 +253,6 @@ def test_full_upload():
     m.load_files(db, 'baseline', carefully=True)
 
 
-@needs_py3
 @attr('nonpublic')
 def test_multiple_pmids():
     "Test that pre-existing pmids are correctly handled."
@@ -279,7 +266,6 @@ def test_multiple_pmids():
     return
 
 
-@needs_py3
 @attr('nonpublic')
 def test_multible_pmc_oa_content():
     "Test to make sure repeated content is handled correctly."
@@ -293,7 +279,6 @@ def test_multible_pmc_oa_content():
     return
 
 
-@needs_py3
 @attr('nonpublic')
 def test_multiple_text_ref_pmc_oa():
     "Test whether a duplicate text ref in pmc oa is handled correctly."
@@ -311,7 +296,6 @@ def test_multiple_text_ref_pmc_oa():
     return
 
 
-@needs_py3
 @attr('nonpublic')
 def test_id_handling_pmc_oa():
     "Test every conceivable combination pmid/pmcid presence."
@@ -395,7 +379,6 @@ def test_id_handling_pmc_oa():
     return
 
 
-@needs_py3
 @attr('nonpublic')
 def test_medline_ref_checks():
     "Test the text ref checks used by medline."
@@ -495,7 +478,6 @@ def test_medline_ref_checks():
     return
 
 
-@needs_py3
 @attr('nonpublic')
 def test_elsevier_upload():
     "Test that we can upload elsevier content."
@@ -517,7 +499,6 @@ def test_elsevier_upload():
     assert num_elsevier > 0, "Got no elsevier content."
 
 
-@needs_py3
 @attr('nonpublic', 'slow')
 def test_sparser_initial_reading():
     "Test the initial reading of of sparser content"
@@ -555,7 +536,6 @@ def test_nested_dict():
                            str((('B', 'C'), d['B']['C']))])
 
 
-@needs_py3
 @attr('nonpublic', 'slow')
 def test_ftp_service():
     "Test the NIH FTP access client on the content managers."

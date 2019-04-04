@@ -237,12 +237,24 @@ def _security_wrapper(fs):
         user_verified = _verify_user(access_token)
         if user_verified:
             logger.info('User verified with access token')
-            # Check if this is a curation POST
             print('User info ----------')
             print(user_verified)
             print('--------------------')
-            if request.json and not request.json.get('curator'):
-                request.json['curator'] = _extract_user_info(user_verified)
+
+            # Check if this is a curation request
+            if 'curation/submit' in request.base_url and request.json and \
+                    not request.json.get('curator'):
+                logger.info('Curation submission received without associated '
+                            'curator. Attempting to extract email from user.')
+                user_info = _extract_user_info(user_verified)
+                if user_info:
+                    request.json['curator'] = user_info['email']
+                    logger.info(
+                        'Identified %s as curator.' % user_info['email'])
+                else:
+                    # Do not accept curation without email
+                    abort(Response('Could not associate curation with user. '
+                                   'Try logging in again', 400))
             logger.info('Loading requested endpoint: %s' % endpoint)
             return fs(*args, **kwargs)
         else:

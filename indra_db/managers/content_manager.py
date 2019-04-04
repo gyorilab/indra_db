@@ -529,6 +529,7 @@ class Pubmed(_NihManager):
             self.tables = tables[:]
 
         self.db_pmids = None
+        self.annotations = {}
         return
 
     def get_deleted_pmids(self):
@@ -551,7 +552,8 @@ class Pubmed(_NihManager):
         article_info = pubmed_client.get_metadata_from_xml_tree(
             tree,
             get_abstracts=True,
-            prepend_title=False
+            prepend_title=False,
+            mesh_annotations=True
             )
         if q is not None:
             q.put((xml_file, article_info))
@@ -570,6 +572,12 @@ class Pubmed(_NihManager):
             return doi
         logger.info("Fixing doubled doi: %s" % doi)
         return doi[:L//2]
+
+    def load_annotations(self, db, article_info):
+        "Load annotations into the database."
+        for pmid, info_dict in article_info.items():
+            self.annotations[pmid] = info_dict['mesh_annotations']
+        return
 
     def load_text_refs(self, db, article_info, carefully=False):
         "Sanitize, update old, and upload new text refs."
@@ -686,6 +694,9 @@ class Pubmed(_NihManager):
         "Process the content of an xml dataset and load into the database."
         logger.info("%d PMIDs in XML dataset" % len(article_info))
 
+        self.load_annotations(db, article_info)
+        return
+
         # Process and load the text refs, updating where appropriate.
         if 'text_ref' in self.tables:
             valid_pmids = self.load_text_refs(db, article_info, carefully)
@@ -792,9 +803,9 @@ class Pubmed(_NihManager):
     @ContentManager._record_for_review
     def update(self, db, n_procs=1):
         """Update the contents of the database with the latest articles."""
-        did_base = self.load_files(db, 'baseline', n_procs, True, True)
+        #did_base = self.load_files(db, 'baseline', n_procs, True, True)
         did_update = self.load_files(db, 'updatefiles', n_procs, True, True)
-        return did_base or did_update
+        return #did_base or did_update
 
 
 class PmcManager(_NihManager):

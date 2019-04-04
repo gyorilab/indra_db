@@ -641,12 +641,12 @@ class DatabaseManager(object):
         class RawStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'raw_stmt_src'
             __definition__ = ('SELECT raw_statements.id AS sid, '
-                              'reading.reader AS src '
+                              'lower(reading.reader) AS src '
                               'FROM raw_statements, reading '
                               'WHERE reading.id = raw_statements.reading_id '
                               'UNION '
                               'SELECT raw_statements.id AS sid, '
-                              'db_info.db_name AS src '
+                              'lower(db_info.db_name) AS src '
                               'FROM raw_statements, db_info '
                               'WHERE db_info.id = raw_statements.db_info_id')
             sid = Column(Integer, primary_key=True)
@@ -660,7 +660,8 @@ class DatabaseManager(object):
                                   "'SELECT mk_hash, src, count(sid) "
                                   "  FROM raw_stmt_src "
                                   "   JOIN fast_raw_pa_link ON sid = id "
-                                  "  GROUP BY (mk_hash, src)'"
+                                  "  GROUP BY (mk_hash, src)', "
+                                  "$$SELECT unnest('{%s}'::text[])$$"
                                   " ) final_result(mk_hash bigint, %s)")
             loaded = False
 
@@ -671,10 +672,13 @@ class DatabaseManager(object):
                 src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
                 logger.info("Found the following sources: %s" % src_list)
                 entries = []
+                cols = []
                 for src, in src_list:
                     setattr(cls, src, Column(BigInteger))
+                    cols.append(src)
                     entries.append('%s bigint' % src)
-                sql = cls.__definition_fmt__ % (', '.join(entries))
+                sql = cls.__definition_fmt__ % (', '.join(cols),
+                                                ', '.join(entries))
                 return sql
 
             @classmethod

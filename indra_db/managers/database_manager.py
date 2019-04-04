@@ -1,3 +1,5 @@
+from sqlalchemy.exc import NoSuchTableError
+
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
            'IndraDbException', 'sql_expressions']
 
@@ -149,22 +151,29 @@ class MaterializedView(Displayable):
     __definition__ = NotImplemented
 
     @classmethod
-    def definition(cls, db):
-        return cls.__definition__
+    def create(cls, db, with_data=True, commit=True):
+        sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
+              % (cls.__tablename__, cls.__definition__,
+                 '' if with_data else "NO")
+        if commit:
+            cls.execute(db, sql)
+        return sql
 
     @classmethod
-    def get_make_sql(cls, db, mode, with_data):
-        if mode == 'create':
-            sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-                  % (cls.__tablename__, cls.definition(db),
-                     '' if with_data else "NO")
-        elif mode == 'refresh':
-            sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
-                  % (cls.__tablename__, '' if with_data else 'NO')
-        else:
-            raise IndraDbException('Invalid mode: %s. Options are "create" '
-                                   'and "refresh".' % mode)
+    def refresh(cls, db, with_data=True, commit=True):
+        sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
+              % (cls.__tablename__, '' if with_data else 'NO')
+        if commit:
+            cls.execute(db, sql)
         return sql
+
+    @staticmethod
+    def execute(db, sql):
+        conn = db.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+        return
 
 
 class DatabaseManager(object):
@@ -647,12 +656,13 @@ class DatabaseManager(object):
 
         class PaStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'pa_stmt_src'
-            __definition__ = ("SELECT * FROM crosstab("
-                              "'SELECT mk_hash, src, count(sid) "
-                              "  FROM raw_stmt_src "
-                              "   JOIN fast_raw_pa_link ON sid = id "
-                              "  GROUP BY (mk_hash, src)'"
-                              " ) final_result(mk_hash bigint, %s)")
+            __definition_fmt__ = ("SELECT * FROM crosstab("
+                                  "'SELECT mk_hash, src, count(sid) "
+                                  "  FROM raw_stmt_src "
+                                  "   JOIN fast_raw_pa_link ON sid = id "
+                                  "  GROUP BY (mk_hash, src)'"
+                                  " ) final_result(mk_hash bigint, %s)")
+            loaded = False
 
             @classmethod
             def definition(cls, db):
@@ -660,27 +670,50 @@ class DatabaseManager(object):
                 logger.info("Discovering the possible sources...")
                 src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
                 logger.info("Found the following sources: %s" % src_list)
-                sql = cls.__definition__ % (', '.join(['%s bigint' % src
-                                                       for src, in src_list]))
-                print(sql)
+                entries = []
+                for src, in src_list:
+                    setattr(cls, src, Column(BigInteger))
+                    entries.append('%s bigint' % src)
+                sql = cls.__definition_fmt__ % (', '.join(entries))
                 return sql
 
             @classmethod
-            def get_make_sql(cls, db, mode, with_data):
-                sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
-                create_sql = super(cls, cls).get_make_sql(db, 'create', with_data)
-                sql = sql_fmt % (cls.__tablename__, create_sql)
+            def create(cls, db, with_data=True, commit=True):
+                cls.__definition__ = cls.definition(db)
+                sql = super(cls, cls).create(db, with_data, commit)
+                cls.loaded = True
                 return sql
 
+            @classmethod
+            def refresh(cls, db, with_data=True, commit=True):
+                sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
+                create_sql = cls.create(db, with_data, commit=False)
+                sql = sql_fmt % (cls.__tablename__, create_sql)
+                cls.execute(db, sql)
+                cls.load_cols(db.engine)
+                return sql
+
+            @classmethod
+            def load_cols(cls, engine):
+                if cls.loaded:
+                    return
+
+                try:
+                    cols = inspect(engine).get_columns('pa_stmt_src')
+                except NoSuchTableError:
+                    return
+
+                for col in cols:
+                    if col['name'] == 'mk_hash':
+                        continue
+
+                    setattr(cls, col['name'], Column(BigInteger))
+
+                cls.loaded = True
+                return
+
             mk_hash = Column(BigInteger, primary_key=True)
-            REACH = Column(BigInteger)
-            SPARSER = Column(BigInteger)
-            biopax = Column(BigInteger)
-            biogrid = Column(BigInteger)
-            tas = Column(BigInteger)
-            signor = Column(BigInteger)
-            bel = Column(BigInteger)
-        self.PaStmtSrc = PaStmtSrc
+        self.__PaStmtSrc = PaStmtSrc
         self.m_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
         self.engine = create_engine(host)
@@ -713,6 +746,12 @@ class DatabaseManager(object):
             self.session.rollback()
         except:
             print("Failed to execute rollback of database upon deletion.")
+
+    def __getattribute__(self, item):
+        if item == 'PaStmtSrc':
+            self.__PaStmtSrc.load_cols(self.engine)
+            return self.__PaStmtSrc
+        return super(DatabaseManager, self).__getattribute__(item)
 
     def _init_auth(self):
         """Create the auth table."""
@@ -782,6 +821,36 @@ class DatabaseManager(object):
             logger.debug("Creating %s..." % tbl_name)
             self.tables[tbl_name].__table__.create(bind=self.engine)
             logger.debug("Table created.")
+        return
+
+    def manage_views(self, mode, view_list=None, with_data=True):
+        ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
+                         'raw_stmt_src', 'pa_stmt_src']
+        other_views = {'reading_ref_link'}
+        active_views = self.get_active_views()
+
+        def iter_views():
+            for i, view in enumerate(ordered_views):
+                yield str(i), view
+            for view in other_views:
+                yield '-', view
+
+        for i, view_name in iter_views():
+            if view_list is not None and view_name not in view_list:
+                continue
+
+            view = self.m_views[view_name]
+
+            if mode == 'create':
+                if view_name in active_views:
+                    logger.info('[%s] View %s already exists. Skipping.'
+                                % (i, view))
+                    continue
+                logger.info('[%s] Creating %s view...' % (i, view))
+                view.create(self, with_data)
+            elif mode == 'update':
+                logger.info('[%s] Refreshing %s view...' % (i, view))
+                view.refresh(self, with_data)
         return
 
     def drop_tables(self, tbl_list=None, force=False):
@@ -1141,19 +1210,6 @@ class DatabaseManager(object):
 
     def generate_materialized_view(self, mode, view, with_data=True):
         """Create or refresh the given materialized view."""
-        if isinstance(view, str):
-            view = self.m_views[view]
-
-        if not issubclass(view, MaterializedView):
-            raise IndraDbException("Table used to %s a materialized view "
-                                   "must be of type MaterializedView." % mode)
-
-        sql = view.get_make_sql(self, mode, with_data)
-
-        conn = self.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        conn.commit()
 
     def filter_query(self, tbls, *args):
         "Query a table and filter results."

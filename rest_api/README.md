@@ -99,10 +99,10 @@ Statements, you can read the
 
 **HTML:** The other `format` parameter option, designed for easier manual 
 usage, is "html". The service will then return an HTML document that, when
-opened in a web browser, provides a graphical user interface for viewing and
-curating statements at the evidence level. The web page also allows you to
-easily query for more evidence for a given statement. Documentation for the
-html output (produced by INDRA's HTML assembler) can be found
+opened in a web browser and if logged in, provides a graphical user interface 
+for viewing and curating statements at the evidence level. The web page also 
+allows you to easily query for more evidence for a given statement. 
+Documentation for the html output (produced by INDRA's HTML assembler) can be found
 [here](https://indra.readthedocs.io/en/latest/modules/assemblers/index.html).
 
 
@@ -397,12 +397,16 @@ BRCA1 is subject and BRCA2 is object:
 ```url
 http://api.host/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
 ```
-The interface loads the queried statements and lets you curate statements on 
-the level of individual evidences for each statement. Links to various source 
-databases (depending on availability) are available for each piece of evidence 
-to facilitate accurate curation. Find out more about the HTML interface in the 
-[HTML assembler documentation](https://indra.readthedocs.io/en/latest/modules/assemblers/html_assembler.html) 
-and for instructions on how to use it, see the 
+The interface is restricted to users with login access. If you are not logged 
+in, you will be prompted to so before you can view the loaded statements. 
+Once logged in, the queried statements will be loaded and you will be 
+able to curate statements on the level of individual evidences. Links to 
+various source databases (depending on availability) are available for each 
+piece of evidence to facilitate accurate curation. Find out more about the 
+HTML interface in the 
+[HTML assembler documentation](https://indra.readthedocs.io/en/latest/modules/assemblers/html_assembler.html).
+For instructions on how to use it and more about the login restriction, see 
+the 
 [manual](https://indra.readthedocs.io/en/latest/tutorials/html_curation.html).
 
 #### Example 3:

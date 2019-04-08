@@ -44,7 +44,7 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
         for stmt_id, db_id in text_dict:
             if stmt_id not in hgnc_stmts:
                 continue
-        hgnc_rawtexts.add(db_id)
+            hgnc_rawtexts.add(db_id)
 
     result_dict = defaultdict(list)
     for stmt_id, db_id in text_dict:
@@ -85,28 +85,30 @@ def get_text_content_from_stmt_ids(stmt_ids):
     abstracts = {text_id: unpack(text)
                  for text_id, text, text_type in texts
                  if text_type == 'abstract'}
-    result = {}
+    ref_dict = {}
+    text_dict = {}
     for stmt_id in stmt_ids:
         # first check if we have text content for this statement
         try:
             text_ref = text_refs[stmt_id]
         except KeyError:
             # if not, set fulltext to None
-            result[stmt_id] = None
+            ref_dict[stmt_id] = None
             continue
+        ref_dict[stmt_id] = text_ref
         fulltext = fulltexts.get(text_ref)
         abstract = abstracts.get(text_ref)
         # use the fulltext if we have one
         if fulltext is not None:
             # if so, the text content is xml and will need to be processed
-            result[stmt_id] = fulltext
+            text_dict[text_ref] = fulltext
         # otherwise use the abstract
         elif abstract is not None:
-            result[stmt_id] = abstract
+            text_dict[text_ref] = abstract
         # if we have neither, set result to None
         else:
-            result[stmt_id] = None
-    return result
+            text_dict[text_ref] = None
+    return ref_dict, text_ref_dict
 
 
 def get_text_content_from_text_refs(text_refs):

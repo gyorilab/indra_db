@@ -23,7 +23,7 @@ def get_all_daily_counts(db):
         else:
             date_col = table.create_date
         print('Processing daily dates for %s.' % table.__tablename__)
-        dates = [date for date, in db.select_all(date_col)]
+        dates = [date for date, in db.select_all(date_col) if date is not None]
         t, n = get_daily_counts(dates)
         data_json[table.__tablename__ + '_daily_counts'] = [t, n]
 

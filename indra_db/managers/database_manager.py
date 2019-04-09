@@ -674,7 +674,8 @@ class DatabaseManager(object):
                 entries = []
                 cols = []
                 for src, in src_list:
-                    setattr(cls, src, Column(BigInteger))
+                    if not cls.loaded:
+                        setattr(cls, src, Column(BigInteger))
                     cols.append(src)
                     entries.append('%s bigint' % src)
                 sql = cls.__definition_fmt__ % (', '.join(cols),

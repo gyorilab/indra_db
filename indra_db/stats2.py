@@ -27,7 +27,7 @@ def get_all_daily_counts(db):
         t, n = get_daily_counts(dates)
         data_json[table.__tablename__ + '_daily_counts'] = [t, n]
 
-    return
+    return data_json
 
 def main(db_name):
     db = get_db(db_name)

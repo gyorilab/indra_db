@@ -13,6 +13,8 @@ from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
 from flask_cors import CORS
 
+from jinja2 import Template
+
 from indra.util import batch_iter
 from indra.databases import hgnc_client
 from indra.assemblers.html import HtmlAssembler
@@ -42,7 +44,7 @@ MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 
 # SET SECURITY
-SECURE = True
+SECURE = False
 
 # COGNITO PARAMETERS
 STATE_COOKIE_NAME = 'indralabStateCookie'
@@ -360,8 +362,15 @@ def welcome():
     logger.info("Browser welcome page.")
     page_path = path.join(path.dirname(path.abspath(__file__)),
                           'welcome.html')
+    if not SECURE:
+        onclick = "window.location = window.location.href.replace('welcome', 'statements')"
+    else:
+        onclick = "getTokenFromAuthEndpoint(window.location.href, " \
+                  "window.location.href.replace('welcome', 'statements')" \
+                  ".split('#')[0])"
     with open(page_path, 'r') as f:
-        page_html = f.read()
+        welcome_template = Template(f.read())
+        page_html = welcome_template.render(onclick_action=onclick)
     return Response(page_html)
 
 

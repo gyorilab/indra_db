@@ -41,6 +41,9 @@ logger.error("ERROR working.")
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 
+# SET SECURITY
+SECURE = True
+
 # COGNITO PARAMETERS
 STATE_COOKIE_NAME = 'indralabStateCookie'
 ACCESSTOKEN_COOKIE_NAME = 'indralabAccessCookie'
@@ -197,6 +200,10 @@ def _security_wrapper(fs):
     @wraps(fs)
     def demon(*args, **kwargs):
         logger.info("Got a demon request")
+        if not SECURE:
+            logger.info('SECURE is False, skipping checkin...')
+            return fs(*args, **kwargs)
+
         logger.info('Full url received: %s' % request.url)
 
         # Order of things to check:

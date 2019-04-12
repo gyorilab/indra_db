@@ -25,7 +25,8 @@ def get_all_daily_counts(db):
         print('Processing daily dates for %s.' % table.__tablename__)
         dates = [date for date, in db.select_all(date_col) if date is not None]
         t, n = get_daily_counts(dates)
-        data_json[table.__tablename__ + '_daily_counts'] = [t, n]
+        data_json[table.__tablename__ + '_daily_counts'] = \
+                [[str(d) for d in t], n]
 
     return data_json
 
@@ -37,7 +38,7 @@ def main(db_name):
 
     print('Dumping json...')
     with open(db_name + '_stats.json', 'w') as f:
-        json.dumps(data_json, f, indent=2)
+        json.dump(data_json, f, indent=2)
 
     return
 

@@ -248,21 +248,20 @@ def _security_wrapper(fs):
             print('User info ----------')
             print(user_verified)
             print('--------------------')
+            user_info = _extract_user_info(user_verified)
+            username = user_info['email'].split('@')[0]
+            logger.info('Identified %s as curator.' % username)
+            api_key = _get_api_key(username)
 
             # Check if this is a curation request
-            if 'curation/submit' in request.base_url and request.json and \
-                    not request.json.get('curator'):
+            if request.json and not request.json.get('curator'):
                 logger.info('Curation submission received without associated '
                             'curator. Attempting to extract email from user.')
-                user_info = _extract_user_info(user_verified)
-                if user_info:
-                    request.json['curator'] = user_info['email']
-                    logger.info(
-                        'Identified %s as curator.' % user_info['email'])
-                else:
-                    # Do not accept curation without email
-                    abort(Response('Could not associate curation with user. '
-                                   'Try logging in again', 400))
+                request.json['curator'] = username
+                request.json['api-key'] = api_key
+            else:
+                request.args['api-key'] = api_key
+
             logger.info('Loading requested endpoint: %s' % endpoint)
             return fs(*args, **kwargs)
         else:
@@ -527,7 +526,7 @@ def describe_curation():
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @_security_wrapper
 def submit_curation_endpoint(hash_val):
-    logger.info("Adding curation for statement %s." % (hash_val))
+    logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')
     source_api = request.json.pop('source', 'DB REST API')
     tag = request.json.get('tag')

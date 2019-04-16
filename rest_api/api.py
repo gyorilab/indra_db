@@ -22,8 +22,7 @@ from indra.statements import make_statement_camel, stmts_from_json
 
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation, _has_elsevier_auth, BadHashError
-
+   submit_curation, _has_auth, BadHashError, _get_api_key
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -302,14 +301,23 @@ def _query_wrapper(f):
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
 
-        # Redact elsevier content for those without permission.
-        if api_key is None or not _has_elsevier_auth(api_key):
+        # Handle any necessary redactions
+        if not all(_has_auth(src, api_key) for src in ['elsevier', 'medscan']):
             for stmt_json in result['statements'].values():
-                for ev_json in stmt_json['evidence']:
-                    if get_source(ev_json) == 'elsevier':
+                for ev_json in stmt_json['evidence'][:]:
+
+                    # Check for elsevier and redact if necessary
+                    if get_source(ev_json) == 'elsevier' \
+                            and not _has_auth('elsevier', api_key):
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
+
+                    # Check for medscan and redact if necessary
+                    elif get_source(ev_json) == 'medscan' \
+                            and not _has_auth('medscan', api_key):
+                        stmt_json['evidence'].remove(ev_json)
+
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result['offset'] = offs

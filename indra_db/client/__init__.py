@@ -22,8 +22,15 @@ from .optimized import *
 from .statements import *
 
 
-def _has_elsevier_auth(api_key, db=None):
+def _has_auth(resource, api_key, db=None):
     logger.info("Checking auth of secret key.")
     if db is None:
         db = get_primary_db()
-    return db._has_elsevier_auth(api_key)
+    return db._has_auth(resource, api_key)
+
+
+def _get_api_key(name, db=None):
+    logger.info("Looking up API key")
+    if db is None:
+        db = get_primary_db()
+    return db._get_api_key(name)

@@ -606,6 +606,7 @@ class DatabaseManager(object):
             name = Column(String, unique=True)
             api_key = Column(String, unique=True)
             elsevier_access = Column(Boolean, default=False)
+            medscan_access = Column(Boolean, default=False)
         self.__Auth = Auth
 
         # Materialized Views
@@ -929,6 +930,19 @@ class DatabaseManager(object):
         dbid = self.insert(self.__Auth, api_key=new_uuid, name=name,
                            elsevier_access=elsevier_access)
         return dbid, new_uuid
+
+    def _has_auth(self, resource, api_key):
+        if api_key is None:
+            return False
+        auth = self._get_auth(api_key)
+        if auth is None:
+            return False
+        if resource == 'elsevier':
+            return auth.elsevier_access
+        elif resource == 'medscan':
+            return auth.medscan_access
+        else:
+            return False
 
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."

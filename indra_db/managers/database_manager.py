@@ -900,9 +900,6 @@ class DatabaseManager(object):
 
     def _get_auth(self, api_key):
         res = self.select_all(self.__Auth, self.__Auth.api_key == api_key)
-        if len(res) > 1:
-            raise IndraTableError("auth",
-                                  "Multiple matches for api_key: %s" % res)
         if not res:
             return None
         return res[0]
@@ -917,13 +914,14 @@ class DatabaseManager(object):
         else:
             return auth.id, auth.name
 
-    def _has_elsevier_auth(self, api_key):
-        if api_key is None:
-            return False
-        auth = self._get_auth(api_key)
-        if auth is None:
-            return False
-        return auth.elsevier_access
+    def _get_api_key(self, name):
+        """Get an API key from the username."""
+        if name is None:
+            return None
+        api_key = self.select_one(self.__Auth, self.__Auth.name == name)
+        if not api_key:
+            return None
+        return api_key
 
     def _add_auth(self, name, elsevier_access=False):
         """Add a new api key to the database."""

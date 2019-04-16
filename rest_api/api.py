@@ -249,7 +249,7 @@ def _security_wrapper(fs):
             print(user_verified)
             print('--------------------')
             user_info = _extract_user_info(user_verified)
-            username = user_info['email'].split('@')[0]
+            username = user_info['userName']
             logger.info('Identified %s as curator.' % username)
             api_key = _get_api_key(username)
 

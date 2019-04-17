@@ -290,15 +290,16 @@ class DbReadingSubmitter(Submitter):
             ys = (s_ix, (e_ix - s_ix)*0.9)
             ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix)))
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
-            ax0.broken_barh(xs, ys, facecolors=('red', 'green', 'blue'))
+            reader_cycle = ('red', 'orange', 'black', 'yellow', 'black')
+            ax0.broken_barh(xs, ys, facecolors=reader_cycle*3 + ('blue',))
 
             for n, stg in enumerate(stages):
                 cs = counts[stg]
                 start = xs[n][0]
                 dur = xs[n][1]
-                cs[(t>start) & (t<(start + dur))] += 1
+                cs[(t > start) & (t < (start + dur))] += 1
             cs = counts['jobs']
-            cs[(t>xs[0][0]) & (t<(xs[-1][0] + xs[-1][1]))] += 1
+            cs[(t > xs[0][0]) & (t < (xs[-1][0] + xs[-1][1]))] += 1
 
         # Format the plot
         ax0.tick_params(top='off', left='off', right='off', bottom='off',
@@ -317,7 +318,7 @@ class DbReadingSubmitter(Submitter):
             # Infer if we don't have it.
             spacing = median([yticks[i+1] - yticks[i]
                               for i in range(len(yticks) - 1)])
-            spacing = max(1, spacing)
+            spacing = max([1, spacing])
         else:
             spacing = self.ids_per_job
         print(spacing)
@@ -339,11 +340,13 @@ class DbReadingSubmitter(Submitter):
         for k, cs in counts.items():
             legend_list.append(k)
             if 'old_readings' in k:
-                c = '#EE7D64'
+                c = 'red'
             elif 'new_readings' in k:
-                c = '#A43E27'
+                c = 'orange'
             elif 'make_statements' in k:
-                c = '#33BB26'
+                c = 'yellow'
+            elif 'dump' in k:
+                c = 'black'
             elif k == 'stats':
                 c = 'b'
             elif k == 'jobs':
@@ -365,7 +368,7 @@ class DbReadingSubmitter(Submitter):
         img_path = 'time_figure.png'
         fig.savefig(img_path)
         self.reporter.add_image(img_path, width=w, height=h, section='Plots')
-        return
+        return counts
 
     def _handle_sum_data(self, job_ref, summary_info, file_bytes):
         one_sum_data_dict = pickle.loads(file_bytes)
@@ -490,9 +493,11 @@ class DbReadingSubmitter(Submitter):
                     handle_stats(ref, my_agg, file_bytes)
 
             if report_stats is not None and len(my_agg):
-                report_stats(my_agg)
+                other_data = report_stats(my_agg)
 
             stat_aggs[stat_file] = my_agg
+            if other_data is not None:
+                stat_aggs['gen_from_' + stat_file] = other_data
 
         for end_type, jobs in self.run_record.items():
             self.reporter.add_text('Jobs %s: %d' % (end_type, len(jobs)),
@@ -502,7 +507,7 @@ class DbReadingSubmitter(Submitter):
         fname = self.reporter.make_report()
         with open(fname, 'rb') as f:
             s3.put_object(Bucket=bucket_name,
-                          Key= s3_prefix + fname,
+                          Key=s3_prefix + fname,
                           Body=f.read())
         s3.put_object(Bucket=bucket_name,
                       Key=s3_prefix + 'stat_aggregates_%s.pkl' % self.time_tag,

@@ -604,6 +604,7 @@ class DatabaseManager(object):
             __tablename__ = 'auth'
             id = Column(Integer, primary_key=True)
             name = Column(String, unique=True)
+            email = Column(String)
             api_key = Column(String, unique=True)
             elsevier_access = Column(Boolean, default=False)
             medscan_access = Column(Boolean, default=False)
@@ -924,11 +925,11 @@ class DatabaseManager(object):
             return None
         return api_key
 
-    def _add_auth(self, name, elsevier_access=False):
+    def _add_auth(self, name, email=None, **access_params):
         """Add a new api key to the database."""
         new_uuid = str(uuid4())
         dbid = self.insert(self.__Auth, api_key=new_uuid, name=name,
-                           elsevier_access=elsevier_access)
+                           email=email, **access_params)
         return dbid, new_uuid
 
     def _has_auth(self, resource, api_key):

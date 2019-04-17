@@ -41,19 +41,6 @@ class SecurityManager(object):
             self._creds['aws_' + key] = aro['Credentials'][cred_key]
         return
 
-    def get_gateway_client(self):
-        """Get a boto3 client to the gateway with SUDO role permissions.
-
-        It is assumed the base user is able to access this role. If not, some
-        boto error will be raised.
-        """
-        self._sudoify()
-        agc = boto3.client('apigateway', **self._creds)
-        return agc
-
-    def connect_lambdas(self):
-        """Connect the lambdas to the API Gateway."""
-
     def get_zappa_role(self):
         self._sudoify()
         iam = boto3.client('iam', **self._creds)

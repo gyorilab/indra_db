@@ -130,7 +130,7 @@ def __process_agent(agent_param):
             ag, ns = param_parts
         elif len(param_parts) == 1:
             ag = agent_param
-            ns = 'HGNC-SYMBOL'
+            ns = 'NAME'
         else:
             raise DbAPIError('Unrecognized agent spec: \"%s\"' % agent_param)
     else:

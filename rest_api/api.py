@@ -43,7 +43,7 @@ MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 
 # SET SECURITY
-SECURE = False
+SECURE = True
 
 # COGNITO PARAMETERS
 STATE_COOKIE_NAME = 'indralabStateCookie'
@@ -249,18 +249,16 @@ def _security_wrapper(fs):
             print(user_verified)
             print('--------------------')
             user_info = _extract_user_info(user_verified)
-            username = user_info['userName']
+            username = user_info['Username']
             logger.info('Identified %s as curator.' % username)
             api_key = _get_api_key(username)
 
             # Check if this is a curation request
             if request.json and not request.json.get('curator'):
                 logger.info('Curation submission received without associated '
-                            'curator. Attempting to extract email from user.')
+                            'curator. Inferred user %s.' % username)
                 request.json['curator'] = username
-                request.json['api-key'] = api_key
-            else:
-                request.args['api-key'] = api_key
+            kwargs['api_key'] = api_key
 
             logger.info('Loading requested endpoint: %s' % endpoint)
             return fs(*args, **kwargs)
@@ -293,7 +291,7 @@ def _query_wrapper(f):
                         MAX_STATEMENTS)
         format = query.pop('format', 'json')
 
-        api_key = query.pop('api_key', None)
+        api_key = query.pop('api_key', kwargs.pop('api_key'))
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
@@ -525,7 +523,7 @@ def describe_curation():
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @_security_wrapper
-def submit_curation_endpoint(hash_val):
+def submit_curation_endpoint(hash_val, **kwargs):
     logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')
     source_api = request.json.pop('source', 'DB REST API')
@@ -533,7 +531,9 @@ def submit_curation_endpoint(hash_val):
     ip = request.remote_addr
     text = request.json.get('text')
     curator = request.json.get('curator')
-    api_key = request.args.get('api_key', None)
+    api_key = request.args.get('api_key', kwargs.pop('api_key'))
+    logger.info("Curator %s %s key"
+                % (curator, 'with' if api_key else 'without'))
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'

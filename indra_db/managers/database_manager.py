@@ -608,7 +608,7 @@ class DatabaseManager(object):
             api_key = Column(String, unique=True)
             elsevier_access = Column(Boolean, default=False)
             medscan_access = Column(Boolean, default=False)
-        self.__Auth = Auth
+        self._Auth = Auth
 
         # Materialized Views
         # ---------------------------------------------------------------------
@@ -898,10 +898,10 @@ class DatabaseManager(object):
 
     def _init_auth(self):
         """Create the auth table."""
-        self.__Auth.__table__.create(bind=self.engine)
+        self._Auth.__table__.create(bind=self.engine)
 
     def _get_auth(self, api_key):
-        res = self.select_all(self.__Auth, self.__Auth.api_key == api_key)
+        res = self.session.query(self._Auth).filter(api_key == api_key)
         if not res:
             return None
         return res[0]
@@ -920,15 +920,15 @@ class DatabaseManager(object):
         """Get an API key from the username."""
         if name is None:
             return None
-        api_key = self.select_one(self.__Auth, self.__Auth.name == name)
-        if not api_key:
+        auth_record = self.select_one(self._Auth, self._Auth.name == name)
+        if not auth_record:
             return None
-        return api_key
+        return auth_record.api_key
 
     def _add_auth(self, name, email=None, **access_params):
         """Add a new api key to the database."""
         new_uuid = str(uuid4())
-        dbid = self.insert(self.__Auth, api_key=new_uuid, name=name,
+        dbid = self.insert(self._Auth, api_key=new_uuid, name=name,
                            email=email, **access_params)
         return dbid, new_uuid
 

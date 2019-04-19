@@ -272,13 +272,12 @@ def _security_wrapper(fs):
 
 
 curation_element = """
-<td width="6em" id="row{{loop.index0}}_click"
+<td width="6em" id="row{loop_index}_click"
   data-clicked="false" class="curation_toggle"
   onclick="addCurationRow(this.closest('tr')); this.onclick=null;">&#9998;</td>
-<td width="25em">{{ ev['source_api'] }}</td>
 """
 
-curation_js_link = "https://db.indra.bio/code/curationFunctions.js"
+curation_js_link = "code/curationFunctions.js"
 
 
 def _query_wrapper(f):
@@ -341,7 +340,8 @@ def _query_wrapper(f):
                                            title=TITLE,
                                            db_rest_url=request.url_root[:-1],
                                            ev_element=curation_element,
-                                           other_scripts=[curation_js_link])
+                                           other_scripts=[request.url_root
+                                                          + curation_js_link])
             content = html_assembler.make_model()
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
@@ -392,13 +392,22 @@ def welcome():
     return Response(page_html)
 
 
-with open(path.join(HERE, 'curationFunction.js'), 'r') as f:
+with open(path.join(HERE, 'curationFunctions.js'), 'r') as f:
     CURATION_JS = f.read()
 
 
-@app.route('/code/curationFunction.js')
+@app.route('/code/curationFunctions.js')
 def serve_js():
-    return CURATION_JS
+    return Response(CURATION_JS, mimetype='text/javascript')
+
+
+with open(path.join(HERE, 'favicon.ico'), 'rb') as f:
+    ICON = f.read()
+
+
+@app.route('/favicon.ico')
+def serve_icon():
+    return Response(ICON, mimetype='image/x-icon')
 
 
 @app.route('/statements', methods=['GET'])

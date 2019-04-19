@@ -24,6 +24,8 @@ from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
    submit_curation, _has_auth, BadHashError, _get_api_key
 
+from clare.capabilities.mechanism_search import make_templates
+
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
 
@@ -305,6 +307,9 @@ def _query_wrapper(f):
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
+        if isinstance(result, Response):
+            return result
+
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
 
@@ -376,20 +381,22 @@ def iamalive():
     return redirect('/welcome', code=302)
 
 
+with open(path.join(HERE, 'welcome.html'), 'r') as f:
+    welcome_template = Template(f.read())
+with open(path.join(HERE, 'search_statements.html'), 'r') as f:
+    search_template = Template(f.read())
+
+
 @app.route('/welcome', methods=['GET'])
 def welcome():
     logger.info("Browser welcome page.")
-    page_path = path.join(path.dirname(path.abspath(__file__)),
-                          'welcome.html')
     if not SECURE:
         onclick = "window.location = window.location.href.replace('welcome', 'statements')"
     else:
         onclick = "getTokenFromAuthEndpoint(window.location.href, " \
                   "window.location.href.replace('welcome', 'statements')" \
                   ".split('#')[0])"
-    with open(page_path, 'r') as f:
-        welcome_template = Template(f.read())
-        page_html = welcome_template.render(onclick_action=onclick)
+    page_html = welcome_template.render(onclick_action=onclick)
     return Response(page_html)
 
 
@@ -414,11 +421,39 @@ def serve_icon():
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
     # Create a template object from the template file, load once
-    page_path = path.join(path.dirname(path.abspath(__file__)),
-                          'search_statements.html')
-    with open(page_path, 'r') as f:
-        page_html = f.read()
+    page_html = search_template.render(
+        message="Welcome! Try asking a question.")
     return Response(page_html)
+
+
+def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
+                         ev_limit, best_first):
+    # Fix the case, if we got a statement type.
+    act = None if act_raw is None else make_statement_camel(act_raw)
+
+
+    # Make sure we got SOME agents. We will not simply return all
+    # phosphorylations, or all activations.
+    if not any(roled_agents.values()) and not free_agents:
+        logger.error("No agents.")
+        abort(Response(("No agents. Must have 'subject', 'object', or "
+                        "'other'!\n"), 400))
+
+    # Check to make sure none of the agents are None.
+    assert None not in roled_agents.values() and None not in free_agents, \
+        "None agents found. No agents should be None."
+
+    # Now find the statements.
+    logger.info("Getting statements...")
+    agent_iter = [(role, ag_dbid, ns)
+                  for role, (ag_dbid, ns) in roled_agents.items()]
+    agent_iter += [(None, ag_dbid, ns) for ag_dbid, ns in free_agents]
+
+    result = \
+        get_statement_jsons_from_agents(agent_iter, stmt_type=act, offset=offs,
+                                        max_stmts=max_stmts, ev_limit=ev_limit,
+                                        best_first=best_first)
+    return result
 
 
 @app.route('/statements/from_agents', methods=['GET'])
@@ -448,9 +483,6 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
 
-    # Fix the case, if we got a statement type.
-    act = None if act_raw is None else make_statement_camel(act_raw)
-
     # If there was something else in the query, there shouldn't be, so
     # someone's probably confused.
     if query_dict:
@@ -458,28 +490,68 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
                        % list(query_dict.keys()), 400))
         return
 
-    # Make sure we got SOME agents. We will not simply return all
-    # phosphorylations, or all activations.
-    if not any(roled_agents.values()) and not free_agents:
-        logger.error("No agents.")
-        abort(Response(("No agents. Must have 'subject', 'object', or "
-                        "'other'!\n"), 400))
+    return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
+                                max_stmts, ev_limit, best_first)
 
-    # Check to make sure none of the agents are None.
-    assert None not in roled_agents.values() and None not in free_agents, \
-        "None agents found. No agents should be None."
 
-    # Now find the statements.
-    logger.info("Getting statements...")
-    agent_iter = [(role, ag_dbid, ns)
-                  for role, (ag_dbid, ns) in roled_agents.items()]
-    agent_iter += [(None, ag_dbid, ns) for ag_dbid, ns in free_agents]
+templates = make_templates()
 
-    result = \
-        get_statement_jsons_from_agents(agent_iter, stmt_type=act, offset=offs,
-                                        max_stmts=max_stmts, ev_limit=ev_limit,
-                                        best_first=best_first)
-    return result
+
+def find_match(s):
+    for t in templates:
+        mtch = t.matches(s)
+        if mtch:
+            return mtch
+
+
+meth_mapping = {'activeforms': 'ActiveForm',
+                'complex_one_side': 'Complex',
+                'phos_activeforms': 'ActiveForm'}
+
+
+mod_map = {'demethylate': 'Demethylation',
+           'methylate': 'Methylation',
+           'phosphorylate': 'Phosphorylation',
+           'dephosphorylate': 'Dephosphorylation',
+           'ubiquitinate': 'Ubiquitination',
+           'deubiquitinate': 'Deubiquitination',
+           'inhibit': 'Inhibition',
+           'activate': 'Activation'}
+
+
+@app.route('/statements/ask', methods=['GET'])
+@_security_wrapper
+@_query_wrapper
+def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
+    if ev_limit is None:
+        ev_limit = 10
+    question = query_dict.pop('question')
+    print(question)
+    m = find_match(question)
+    print(m)
+
+    if not m or m['meth'] in ['common_upstreams', 'common_downstreams']:
+        return Response(search_template.render(
+            message="Sorry, I can't answer that."))
+
+    roled_agents = {}
+    free_agents = []
+    for k, v in m.items():
+        if k.startswith('entity'):
+            if 'target' in k:
+                roled_agents['object'] = (v, 'NAME')
+            if 'source' in k:
+                roled_agents['subject'] = (v, 'NAME')
+            else:
+                free_agents.append((v, 'NAME'))
+
+    if 'verb' in m.keys():
+        act_raw = mod_map[m['verb']]
+    elif m['meth'] in meth_mapping.keys():
+        act_raw = meth_mapping[m['meth']]
+
+    return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
+                                max_stmts, ev_limit, best_first)
 
 
 @app.route('/statements/from_hashes', methods=['POST'])

@@ -85,14 +85,8 @@
           }
           queryString += 'format=' + document.getElementById('format-select').value;
 
-          // Get tokens
-          let accToken = _readCookie(ACCESSTOKEN_COOKIE_NAME);
-          let idToken = _readCookie(IDTOKEN_COOKIE_NAME);
-          // document.submitForm.access_token.value = accToken;
-          // document.submitForm.id_token.value = idToken;
-
           // Build URL
-          let baseUrl = window.location.href.split('?')[0].split('#')[0] + '/from_agents?';
+          let baseUrl = window.location.href.split('?')[0].split('#')[0] + '/ask?';
           // let baseUrl = 'https://153pf2mdal.execute-api.us-east-1.amazonaws.com/dev/browser/statements/from_agents?'
           var getUrl = baseUrl + queryString;
 
@@ -102,27 +96,6 @@
           // Redirect
           window.location.replace(getUrl)
 
-          // let getPromise = $.ajax({
-          //   url: getUrl,
-          //   type: 'GET',
-          //   headers: {
-          //     'Authorization': 'Bearer ' + idToken
-          //   }
-          // })
-
-          // console.log('getPromise')
-          // console.log(getPromise)
-
-          // getPromise.then(function(data){
-          //   if (data) {
-          //     console.log('GET from db search')
-          //     console.log(data)
-          //     document.open();
-          //     document.write(data);
-          //     document.close();
-          //     // document.createElement('HTML').innerHtml = data;
-          //   }
-          // })
         }
 
       var ENV = 'indra';
@@ -210,30 +183,16 @@ nav {
     <!-- The main content -->
     <div class="content">
       <!-- <form name="submitForm" action="/browser/statements/from_agents" onsubmit="appendToFormSubmit()"> -->
-        <table>
-<!--             <tr>
-                <td id="type" class="field" onclick="addField('type', 1)">Select a type</td>
-                <td id="type-choices" value=""></td>
-            </tr> -->
-            <tr>
-                <td id="subject" class="field">Choose the subject</td>
-                <td id="subject-choices"><input class="input-form" type="text" name="subject"></td>
-            </tr>
-            <tr>
-                <td id="object" class="field">Choose the object</td>
-                <td id="object-choices"><input class="input-form" type="text" name="object"></td>
-            </tr>
-<!--             <tr>
-                <td id="agent" class="field" onclick="addField('agent', 50)">Choose an agent</td>
-                <td id="agent-choices"></td>
-            </tr> -->
-        </table>
+        <input class="input-form" type="text" name="question">
         <select name="format" id="format-select">
           <option value="html">HTML</option>
           <option value="json">JSON</option>
         </select>
         <input id="submitButton" type="button" value="Submit" onClick="appendToFormSubmit()">
       <!-- </form> -->
+    </div>
+    <div>
+        <p>{{ message }}</p>
     </div>
     </div>
 

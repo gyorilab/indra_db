@@ -41,6 +41,7 @@ logger.error("ERROR working.")
 
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
+HERE = path.abspath(path.dirname(__file__))
 
 # SET SECURITY
 SECURE = True
@@ -270,6 +271,16 @@ def _security_wrapper(fs):
     return demon
 
 
+curation_element = """
+<td width="6em" id="row{{loop.index0}}_click"
+  data-clicked="false" class="curation_toggle"
+  onclick="addCurationRow(this.closest('tr')); this.onclick=null;">&#9998;</td>
+<td width="25em">{{ ev['source_api'] }}</td>
+"""
+
+curation_js_link = "https://db.indra.bio/code/curationFunctions.js"
+
+
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
 
@@ -328,7 +339,9 @@ def _query_wrapper(f):
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
                                            title=TITLE,
-                                           db_rest_url=request.url_root[:-1])
+                                           db_rest_url=request.url_root[:-1],
+                                           ev_element=curation_element,
+                                           other_scripts=[curation_js_link])
             content = html_assembler.make_model()
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
@@ -377,6 +390,15 @@ def welcome():
         welcome_template = Template(f.read())
         page_html = welcome_template.render(onclick_action=onclick)
     return Response(page_html)
+
+
+with open(path.join(HERE, 'curationFunction.js'), 'r') as f:
+    CURATION_JS = f.read()
+
+
+@app.route('/code/curationFunction.js')
+def serve_js():
+    return CURATION_JS
 
 
 @app.route('/statements', methods=['GET'])

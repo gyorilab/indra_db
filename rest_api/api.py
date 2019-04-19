@@ -549,6 +549,8 @@ def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
         act_raw = mod_map[m['verb']]
     elif m['meth'] in meth_mapping.keys():
         act_raw = meth_mapping[m['meth']]
+    else:
+        act_raw = None
 
     return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
                                 max_stmts, ev_limit, best_first)

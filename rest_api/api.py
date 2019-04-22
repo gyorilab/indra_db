@@ -1,6 +1,8 @@
+import re
 import sys
 import json
 import boto3
+import pickle
 import logging
 from os import path
 from io import StringIO
@@ -23,8 +25,6 @@ from indra.statements import make_statement_camel, stmts_from_json
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
    submit_curation, _has_auth, BadHashError, _get_api_key
-
-from clare.capabilities.mechanism_search import make_templates
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -431,7 +431,6 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
     # Fix the case, if we got a statement type.
     act = None if act_raw is None else make_statement_camel(act_raw)
 
-
     # Make sure we got SOME agents. We will not simply return all
     # phosphorylations, or all activations.
     if not any(roled_agents.values()) and not free_agents:
@@ -494,19 +493,20 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
                                 max_stmts, ev_limit, best_first)
 
 
-templates = make_templates()
+trash = re.compile('[.,?!-;`’\']')
+with open('bioquery_regex.pkl', 'rb') as f:
+    regs = pickle.load(f)
 
 
-def find_match(s):
-    for t in templates:
-        mtch = t.matches(s)
-        if mtch:
-            return mtch
-
-
-meth_mapping = {'activeforms': 'ActiveForm',
-                'complex_one_side': 'Complex',
-                'phos_activeforms': 'ActiveForm'}
+def match(msg):
+    text = trash.sub(' ', msg)
+    text = ' '.join(text.strip().split())
+    for verb, names, reg in regs:
+        m = reg.match(text)
+        if m is not None:
+            ret = {'verb': verb} if verb is not None else {}
+            ret.update({name: value for name, value in zip(names, m.groups())})
+            return ret
 
 
 mod_map = {'demethylate': 'Demethylation',
@@ -527,12 +527,8 @@ def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
         ev_limit = 10
     question = query_dict.pop('question')
     print(question)
-    m = find_match(question)
+    m = match(question)
     print(m)
-
-    if not m or m['meth'] in ['common_upstreams', 'common_downstreams']:
-        return Response(search_template.render(
-            message="Sorry, I can't answer that."))
 
     roled_agents = {}
     free_agents = []
@@ -546,9 +542,10 @@ def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
                 free_agents.append((v, 'NAME'))
 
     if 'verb' in m.keys():
-        act_raw = mod_map[m['verb']]
-    elif m['meth'] in meth_mapping.keys():
-        act_raw = meth_mapping[m['meth']]
+        if m['verb'] not in mod_map.keys():
+            act_raw = m['verb']
+        else:
+            act_raw = mod_map[m['verb']]
     else:
         act_raw = None
 

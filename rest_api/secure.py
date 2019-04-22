@@ -102,7 +102,10 @@ class SecurityManager(object):
             lamb = boto3.client('lambda', **self._creds)
             with open(zip_path, 'rb') as zf:
                 fname = self.function_name + '-auth'
-                env = {'Variables': self.info['environment_variables']}
+                vars = {k: v
+                        for k, v in self.info['environment_variables'].items()
+                        if not k.startswith('AWS')}
+                env = {'Variables': vars}
                 lamb.create_function(
                     FunctionName=fname, Runtime=self.info['runtime'],
                     Role=self.get_zappa_role(), Code={'ZipFile': zf.read()},

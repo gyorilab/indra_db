@@ -535,11 +535,11 @@ def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
     for k, v in m.items():
         if k.startswith('entity'):
             if 'target' in k:
-                roled_agents['object'] = (v, 'NAME')
+                roled_agents['object'] = (v, None)
             if 'source' in k:
-                roled_agents['subject'] = (v, 'NAME')
+                roled_agents['subject'] = (v, None)
             else:
-                free_agents.append((v, 'NAME'))
+                free_agents.append((v, None))
 
     if 'verb' in m.keys():
         if m['verb'] not in mod_map.keys():

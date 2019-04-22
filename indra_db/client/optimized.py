@@ -252,7 +252,6 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         ag_dbid = regularize_agent_id(ag_dbid, ns)
 
         # Create this query (for this agent)
-        # If we are looking for a name...
         if ns == 'NAME':
             q = (db.session
                  .query(*labelled_hash_and_count(db.NameMeta))
@@ -266,8 +265,9 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         else:
             q = (db.session
                  .query(*labelled_hash_and_count(db.OtherMeta))
-                 .filter(db.OtherMeta.db_id.like(ag_dbid),
-                         db.OtherMeta.db_name.like(ns)))
+                 .filter(db.OtherMeta.db_id.like(ag_dbid))
+            if ns is not None:
+                q = q.filter(db.OtherMeta.db_name.like(ns))
             meta = db.OtherMeta
 
         if stmt_type is not None:

@@ -20,6 +20,8 @@ class SecurityManager(object):
         with open(join(HERE, pardir, 'zappa_settings.json'), 'r') as f:
             zappa_info = json.load(f)
         self.info = zappa_info[stage]
+        self.zappa_role_name = self.info['project_name'] + '-' + stage \
+                               + '-ZappaLambdaExecutionRole'
         self.function_name = self.info['project_name'] \
                              + '-create-account-indralab-auth-' + stage
         self._zip_files = []
@@ -46,7 +48,7 @@ class SecurityManager(object):
         self._sudoify()
         iam = boto3.client('iam', **self._creds)
         resp = iam.list_roles()
-        expected_name = self.function_name + '-ZappaLambdaExecutionRole'
+        expected_name = self.zappa_role_name
         arn = None
         for role_info in resp['Roles']:
             if role_info['RoleName'] == expected_name:

@@ -20,7 +20,8 @@ class SecurityManager(object):
         with open(join(HERE, pardir, 'zappa_settings.json'), 'r') as f:
             zappa_info = json.load(f)
         self.info = zappa_info[stage]
-        self.function_name = self.info['project_name'] + '-' + stage
+        self.function_name = self.info['project_name'] \
+                             + '-create-account-indralab-auth-' + stage
         self._zip_files = []
         self._creds = None
         return
@@ -101,13 +102,13 @@ class SecurityManager(object):
             self._sudoify()
             lamb = boto3.client('lambda', **self._creds)
             with open(zip_path, 'rb') as zf:
-                fname = self.function_name + 'create-account-indralab-auth'
                 vars = {k: v
                         for k, v in self.info['environment_variables'].items()
                         if not k.startswith('AWS')}
                 env = {'Variables': vars}
                 lamb.create_function(
-                    FunctionName=fname, Runtime=self.info['runtime'],
+                    FunctionName=self.function_name,
+                    Runtime=self.info['runtime'],
                     Role=self.get_zappa_role(), Code={'ZipFile': zf.read()},
                     VpcConfig=self.info['vpc_config'], Environment=env,
                     Handler='create_account_script.lambda_handler',
@@ -131,9 +132,8 @@ class SecurityManager(object):
             print("Updating the lambda function...")
             lamb = boto3.client('lambda')
             with open(zip_path, 'rb') as zf:
-                fname = self.function_name + 'create-account-indralab-auth'
                 ret = lamb.update_function_code(ZipFile=zf.read(),
-                                                FunctionName=fname)
+                                               FunctionName=self.function_name)
                 print(ret)
         finally:
             self._clear_packages()

@@ -78,8 +78,8 @@ class SecurityManager(object):
                      'indra_db/config.py')
             zf.write(join(idbr_dir, 'exceptions.py'),
                      'indra_db/exceptions.py')
-            zf.write(join(HERE, 'security_lambdas', 'verify_key_script.py'),
-                     'verify_key_script.py')
+            zf.write(join(HERE, 'security_lambdas', 'create_account_script.py'),
+                     'create_account_script.py')
             size = sum([f.file_size for f in zf.filelist])/1e6  # MB
         print(size, 'MB')
         return zip_path
@@ -107,7 +107,7 @@ class SecurityManager(object):
                     FunctionName=fname, Runtime=self.info['runtime'],
                     Role=self.get_zappa_role(), Code={'ZipFile': zf.read()},
                     VpcConfig=self.info['vpc_config'], Environment=env,
-                    Handler='verify_key_script.lambda_handler',
+                    Handler='create_account_script.lambda_handler',
                     Tags={'project': 'cwc'}
                     )
         finally:

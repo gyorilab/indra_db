@@ -101,7 +101,7 @@ class SecurityManager(object):
             self._sudoify()
             lamb = boto3.client('lambda', **self._creds)
             with open(zip_path, 'rb') as zf:
-                fname = self.function_name + '-auth'
+                fname = self.function_name + 'create-account-indralab-auth'
                 vars = {k: v
                         for k, v in self.info['environment_variables'].items()
                         if not k.startswith('AWS')}
@@ -131,7 +131,7 @@ class SecurityManager(object):
             print("Updating the lambda function...")
             lamb = boto3.client('lambda')
             with open(zip_path, 'rb') as zf:
-                fname = self.function_name + '-auth'
+                fname = self.function_name + 'create-account-indralab-auth'
                 ret = lamb.update_function_code(ZipFile=zf.read(),
                                                 FunctionName=fname)
                 print(ret)

@@ -8,6 +8,7 @@ from os import path
 from io import StringIO
 from functools import wraps
 from datetime import datetime
+from botocore.client import Config
 from http.cookies import SimpleCookie
 from http.cookiejar import CookieJar
 
@@ -61,7 +62,8 @@ class DbAPIError(Exception):
 def _verify_user(access_token):
     """Verifies a user given an Access Token"""
     logger.info("Getting cognito client.")
-    cognito_idp_client = boto3.client('cognito-idp')
+    config = Config(connect_timeout=5, retries={'max_attempts': 0})
+    cognito_idp_client = boto3.client('cognito-idp', config=config)
     try:
         resp = cognito_idp_client.get_user(AccessToken=access_token)
         logger.info("Got resp %s from cognito." % str(resp))

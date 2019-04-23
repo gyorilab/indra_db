@@ -494,7 +494,7 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 
 
 trash = re.compile('[.,?!-;`’\']')
-with open(path.join(HERE, 'bioquery_regex.pkl', 'rb')) as f:
+with open(path.join(HERE, 'bioquery_regex.pkl'), 'rb') as f:
     regs = pickle.load(f)
 
 

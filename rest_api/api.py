@@ -305,7 +305,7 @@ def _query_wrapper(f):
                         MAX_STATEMENTS)
         format = query.pop('format', 'json')
 
-        api_key = query.pop('api_key', kwargs.pop('api_key'))
+        api_key = query.pop('api_key', kwargs.pop('api_key', None))
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)

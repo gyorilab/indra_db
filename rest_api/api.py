@@ -504,18 +504,23 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 
 
 trash = re.compile('[.,?!-;`’\']')
-with open(path.join(HERE, 'bioquery_regex.pkl'), 'rb') as f:
+with open(path.join(HERE, 'bioquery_regex.bin'), 'rb') as f:
     regs = pickle.load(f)
+
+
+with open(path.join(HERE, 'name_lookup.bin'), 'rb') as f:
+    text_lookups = pickle.load(f)
 
 
 def match(msg):
     text = trash.sub(' ', msg)
     text = ' '.join(text.strip().split())
-    for verb, names, reg in regs:
+    for i, (verb, names, reg) in enumerate(regs):
         m = reg.match(text)
         if m is not None:
             ret = {'verb': verb} if verb is not None else {}
             ret.update({name: value for name, value in zip(names, m.groups())})
+            logger.info("Matched pattern %s." % i)
             return ret
 
 
@@ -543,13 +548,20 @@ def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
     roled_agents = {}
     free_agents = []
     for k, v in m.items():
+        name = text_lookups.get(v)
+        if name is not None:
+            v = name
+            ns = 'NAME'
+        else:
+            ns = None
+
         if k.startswith('entity'):
             if 'target' in k:
-                roled_agents['object'] = (v, None)
+                roled_agents['object'] = (v, ns)
             if 'source' in k:
-                roled_agents['subject'] = (v, None)
+                roled_agents['subject'] = (v, ns)
             else:
-                free_agents.append((v, None))
+                free_agents.append((v, ns))
 
     if 'verb' in m.keys():
         if m['verb'] not in mod_map.keys():
@@ -559,6 +571,7 @@ def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
     else:
         act_raw = None
 
+    print(act_raw, roled_agents, free_agents)
     return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
                                 max_stmts, ev_limit, best_first)
 

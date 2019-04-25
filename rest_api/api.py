@@ -318,6 +318,7 @@ def _query_wrapper(f):
         # Handle any necessary redactions
         stmts_json = result.pop('statements')
         has = {src: _has_auth(src, api_key) for src in ['elsevier', 'medscan']}
+        logger.info('Auths: %s' % str(has))
         if not all(has.values()):
             for stmt_json in stmts_json.values():
                 for ev_json in stmt_json['evidence'][:]:
@@ -331,7 +332,7 @@ def _query_wrapper(f):
                             logger.info("Redacting elsevier content.")
 
                     # Check for medscan and redact if necessary
-                    elif get_source(ev_json) == 'medscan' \
+                    elif ev_json['source_api'] == 'medscan' \
                             and not has['medscan']:
                         stmt_json['evidence'].remove(ev_json)
                         logger.info("Redacting medscan.")

@@ -349,10 +349,12 @@ def _query_wrapper(f):
         result['statements_returned'] = len(stmts_json)
 
         if format == 'html':
+            link_title = '<a href=%s >%s</a>' \
+                        % (request.url_root + 'statements', TITLE)
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
-                                           title=TITLE,
+                                           title=link_title,
                                            db_rest_url=request.url_root[:-1],
                                            ev_element=curation_element,
                                            other_scripts=[request.url_root

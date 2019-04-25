@@ -1,3 +1,4 @@
+import re
 import json
 import logging
 from collections import OrderedDict, defaultdict
@@ -250,6 +251,10 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
     for role, ag_dbid, ns in agents:
         # Make the id match paradigms for the database.
         ag_dbid = regularize_agent_id(ag_dbid, ns)
+
+        # Sanitize wildcards.
+        for char in ['%', '_']:
+            ag_dbid = ag_dbid.replace(char, '\%s' % char)
 
         # Create this query (for this agent)
         if ns == 'NAME':

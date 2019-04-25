@@ -23,10 +23,13 @@ from .statements import *
 
 
 def _has_auth(resource, api_key, db=None):
-    logger.info("Checking auth of secret key.")
+    logger.info("Checking auth of secret key for %s." % resource)
     if db is None:
         db = get_primary_db()
-    return db._has_auth(resource, api_key)
+    res = db._has_auth(resource, api_key)
+    logger.info("User %s access to %s."
+                % ('has' if res else 'lacks', resource))
+    return res
 
 
 def _get_api_key(name, db=None):

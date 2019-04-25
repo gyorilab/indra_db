@@ -316,9 +316,10 @@ def _query_wrapper(f):
                     % (f.__name__, sec_since(start_time)))
 
         # Handle any necessary redactions
+        stmts_json = result.pop('statements')
         has = {src: _has_auth(src, api_key) for src in ['elsevier', 'medscan']}
         if not all(has.values()):
-            for stmt_json in result['statements'].values():
+            for stmt_json in stmts_json.values():
                 for ev_json in stmt_json['evidence'][:]:
 
                     # Check for elsevier and redact if necessary
@@ -327,11 +328,13 @@ def _query_wrapper(f):
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
+                            logger.info("Redacting elsevier content.")
 
                     # Check for medscan and redact if necessary
                     elif get_source(ev_json) == 'medscan' \
                             and not has['medscan']:
                         stmt_json['evidence'].remove(ev_json)
+                        logger.info("Redacting medscan.")
 
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
@@ -341,7 +344,6 @@ def _query_wrapper(f):
         result['statements_returned'] = len(result['statements'])
 
         if format == 'html':
-            stmts_json = result.pop('statements')
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
@@ -359,6 +361,7 @@ def _query_wrapper(f):
             mimetype = 'text/html'
         else:  # Return JSON for all other values of the format argument
             result.update(tracker.get_level_stats())
+            result['statements'] = stmts_json
             content = json.dumps(result)
             mimetype = 'application/json'
 

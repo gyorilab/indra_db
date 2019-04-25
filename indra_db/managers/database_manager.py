@@ -901,9 +901,12 @@ class DatabaseManager(object):
         self._Auth.__table__.create(bind=self.engine)
 
     def _get_auth(self, api_key):
-        res = self.session.query(self._Auth).filter(api_key == api_key)
+        res = (self.session
+               .query(self._Auth)
+               .filter(self._Auth.api_key == api_key).all())
         if not res:
             return None
+        assert len(res) == 1
         return res[0]
 
     def _get_auth_info(self, api_key):
@@ -934,15 +937,18 @@ class DatabaseManager(object):
 
     def _has_auth(self, resource, api_key):
         if api_key is None:
+            logger.info("API key is None. Denied.")
             return False
         auth = self._get_auth(api_key)
         if auth is None:
+            logger.info("No auth record found. Denied.")
             return False
         if resource == 'elsevier':
             return auth.elsevier_access
         elif resource == 'medscan':
             return auth.medscan_access
         else:
+            logger.info("Invalid resource: %s. Denied." % resource)
             return False
 
     def create_tables(self, tbl_list=None):

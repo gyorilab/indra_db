@@ -36,4 +36,7 @@ def _get_api_key(name, db=None):
     logger.info("Looking up API key")
     if db is None:
         db = get_primary_db()
-    return db._get_api_key(name)
+    ret = db._get_api_key(name)
+    logger.info("%s api key." % ("Found" if ret is not None
+                                 else "Did not find"))
+    return ret

@@ -341,7 +341,7 @@ def _query_wrapper(f):
         result['offset'] = offs
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
-        result['statements_returned'] = len(result['statements'])
+        result['statements_returned'] = len(stmts_json)
 
         if format == 'html':
             ev_totals = result.pop('evidence_totals')

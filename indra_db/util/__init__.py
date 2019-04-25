@@ -13,7 +13,6 @@ __all__ = ['get_primary_db', 'get_db', 'insert_raw_agents', 'insert_pa_stmts',
 
 from .insert import *
 from .helpers import *
-from .dump_sif import *
 from .constructors import *
 from .content_scripts import *
 from .distill_statements import *

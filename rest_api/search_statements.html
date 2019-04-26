@@ -164,38 +164,37 @@ nav {
 
 </style>
 </head>
-
-   <body data-spy="scroll" data-target="#toc">
+  <body data-spy="scroll" data-target="#toc">
     <!-- Here put scripts that need to be executed before page load -->
     <script type="text/javascript">
       setEnv('indra');
-      checkSignIn();
     </script>
 
-    <!-- Page Header -->
-    <div class="container">
+    <div class="container" id="mainContent">
+      <!-- Page Header -->
       <div class="page-header">
         <h1>The INDRA Database</h1>
-        <p> This project, <a href='https://github.com/indralab/indra_db'>indra_db</a>, is developed by the <a href='https://indralab.github.io'>indralab</a> team.<button class="btn btn-outline-primary" id="status-notify" onClick="getTokenFromAuthEndpoint(window.location.href)">Sign up/Sign in</button></p>
+        <p>
+            This project, <a href='https://github.com/indralab/indra_db'>indra_db</a>,
+            is developed by the <a href='https://indralab.github.io'>indralab</a> team.
+            <button class="btn btn-outline-primary" id="status-notify" onClick="getTokenFromAuthEndpoint(window.location.href)">Sign up/Sign in</button>
+        </p>
       </div>
-    <hr>
+      <hr>
 
-    <!-- The main content -->
-    <div class="content">
-      <!-- <form name="submitForm" action="/browser/statements/from_agents" onsubmit="appendToFormSubmit()"> -->
-        <input class="input-form" type="text" name="question">
-        <select name="format" id="format-select">
-          <option value="html">HTML</option>
-          <option value="json">JSON</option>
-        </select>
-        <input id="submitButton" type="button" value="Submit" onClick="appendToFormSubmit()">
-      <!-- </form> -->
-    </div>
-    <div>
-        <p>{{ message }}</p>
-    </div>
+      <!-- The main content -->
+      <div class="content">
+          <input class="input-form" type="text" name="question">
+          <select name="format" id="format-select">
+            <option value="html">HTML</option>
+            <option value="json">JSON</option>
+          </select>
+          <input id="submitButton" type="button" value="Submit" onClick="appendToFormSubmit('ask')">
+      </div>
     </div>
 
-
-</body>
+    <div class="container" id="messagePannel">
+      <p>{{ message }}</p>
+    </div>
+  </body>
 </html>

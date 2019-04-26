@@ -1,5 +1,8 @@
 // CURATION FUNCTIONS
 
+// Global constants
+var ALL_COLLAPSED = true;
+
 // Force activate the sub items of the table of contents after page load
 $(document).ready(function(){
     $('a[href="#statements"]').addClass('active')
@@ -506,6 +509,29 @@ function populatePMIDlinkTitles() {
     for (link_obj of pmid_link_array) {
         pmid = link_obj.textContent;
         setPMIDlinkTitle(pmid, link_obj)
+    }
+}
+
+// Expand/collapse all
+function expandCollapseAll() {
+    var expColBtn = document.getElementById('expand-collapse-all')
+    var setCss = ''
+
+    // Expand all; set ALL_COLLAPSED = false;
+    if (ALL_COLLAPSED) {
+        setCss = 'display: block;'
+        ALL_COLLAPSED = false;
+        expColBtn.textContent = 'Collapse All';
+    // Collapse all; set ALL_COLLAPSED = true;
+    } else {
+        setCss = 'display: none;';
+        ALL_COLLAPSED = true;
+        expColBtn.textContent = 'Expand All';
+    }
+
+    // Loop all tags
+    for ( tag of document.getElementsByClassName('group') ) {
+        tag.style.cssText = setCss
     }
 }
 

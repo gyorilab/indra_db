@@ -135,7 +135,12 @@ def __process_agent(agent_param):
             ag, ns = param_parts
         elif len(param_parts) == 1:
             ag = agent_param
-            ns = 'NAME'
+            name = text_looups.get(ag)
+            if name is not None:
+                ag = name
+                ns = 'NAME'
+            else:
+                ns = None
         else:
             raise DbAPIError('Unrecognized agent spec: \"%s\"' % agent_param)
     else:
@@ -524,6 +529,7 @@ def match(msg):
             ret.update({name: value for name, value in zip(names, m.groups())})
             logger.info("Matched pattern %s." % i)
             return ret
+    return None
 
 
 mod_map = {'demethylate': 'Demethylation',

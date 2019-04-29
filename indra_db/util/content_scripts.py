@@ -163,7 +163,7 @@ def get_text_content_from_stmt_ids(stmt_ids):
         # if we have neither, set result to None
         else:
             text_dict[text_ref] = None
-    return ref_dict, text_ref_dict
+    return ref_dict, text_dict
 
 
 def get_text_content_from_text_refs(text_refs):

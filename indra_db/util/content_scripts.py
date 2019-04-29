@@ -155,3 +155,30 @@ def get_text_content_from_text_refs(text_refs):
     if abstract:
         return abstract[0]
     return None
+
+
+def _extract_db_refs(stmt_json):
+    agent_types = ['subj', 'obj', 'enz', 'agent', 'gef;', 'ras',
+                   'gap', 'obj_from', 'obj_to']
+    db_ref_list = []
+
+    for agent_type in agent_types:
+        try:
+            agent = stmt_json[agent_type]
+        except KeyError:
+            continue
+        try:
+            db_refs = agent['db_refs']
+        except KeyError:
+            continue
+        db_ref_list.append(db_refs)
+
+    members = stmt_json.get('members')
+    if members is not None:
+        for member in members:
+            try:
+                db_refs = member['db_refs']
+            except KeyError:
+                continue
+            db_ref_list.append(db_refs)
+    return db_ref_list

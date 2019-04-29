@@ -1,5 +1,7 @@
 __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
+
+import json
 from collections import defaultdict
 
 from .constructors import get_primary_db
@@ -51,6 +53,59 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
         if not filter_genes or db_id in hgnc_rawtexts:
             result_dict[db_id].append(stmt_id)
     return dict(result_dict)
+
+
+def get_stmts_with_agent_text_in(texts, filter_genes=False,
+                                 batch_size=1000):
+    """Get statement ids with agent with rawtext in list
+
+
+    Parameters
+    ----------
+    tests : list of str
+        a list of agent texts
+
+    filter_genes : Optional[bool]
+       if True, only considers agents matching the pattern for which there
+       is an HGNC grounding
+
+    Returns
+    -------
+    dict
+        dict mapping agent texts to lists of stmt_ids for statements
+        containing an agent with the given text
+    """
+    db = get_primary_db()
+
+    output = defaultdict(list)
+
+    i = 0
+    while batch_size*i < len(texts):
+        interval = (batch_size*i, min((batch_size+1)*i, len(texts)))
+        stmt_agent = db.select_all([db.RawAgents.stmt_id,
+                                    db.RawAgents.db_id],
+                                   db.RawAgents.db_name == 'TEXT',
+                                   db.RawAgents.db_id.in_(texts[interval[0]:
+                                                                interval[1]]),
+                                   db.RawAgents.stmt_id.isnot(None))
+        stmts, _ = zip(*stmt_agent)
+        if filter_genes:
+            jsons = db.select_all([db.RawStatements.id,
+                                   db.RawStatements.json],
+                                  db.RawStatements.id.in_(stmts))
+            json_dict = {stmt_id: json for stmt_id, json in jsons}
+            for stmt_id, agent_text in stmt_agent:
+                stmt_json = json_dict[stmt_id]
+                stmt_info = json.loads(stmt_json)
+                db_refs = _extract_db_refs(stmt_info)
+                for ref in db_refs:
+                    if 'TEXT' in ref and 'HGNC' in ref:
+                        if ref['TEXT'] == agent_text:
+                            output[agent_text].append(stmt_id)
+        else:
+            for stmt_id, agent_text in stmt_agent:
+                output[agent_text].append(stmt_id)
+    return output
 
 
 def get_text_content_from_stmt_ids(stmt_ids):

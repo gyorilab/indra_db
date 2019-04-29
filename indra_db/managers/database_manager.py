@@ -332,6 +332,7 @@ class DatabaseManager(object):
             __tablename__ = 'db_info'
             id = Column(Integer, primary_key=True)
             db_name = Column(String(20), nullable=False)
+            source_api = Column(String, nullable=False)
             create_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
         self.DBInfo = DBInfo

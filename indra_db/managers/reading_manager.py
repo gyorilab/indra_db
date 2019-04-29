@@ -22,15 +22,17 @@ class ReadingManager(object):
 
     Parameters
     ----------
-    reader_name : str
-        The name of the reader to be used in a given run of reading.
+    reader_names : lsit [str]
+        A list of the names of the readers to be used in a given run of
+        reading.
     buffer_days : int
         The number of days before the previous update/initial upload to look for
         "new" content to be read. This prevents any issues with overlaps between
         the content upload pipeline and the reading pipeline.
     """
-    def __init__(self, reader_name, buffer_days=1):
-        self.reader = get_reader_class(reader_name)
+    def __init__(self, reader_names, buffer_days=1):
+        self.reader_classes = [get_reader_class(reader_name)
+                               for reader_name in reader_names]
         self.buffer = timedelta(days=buffer_days)
         self.reader_version = self.reader.get_version()
         self.run_datetime = None
@@ -39,27 +41,28 @@ class ReadingManager(object):
         return
 
     @classmethod
-    def _handle_update_table(cls, func):
+    def _run_all_readers(cls, func):
         @wraps(func)
         def run_and_record_update(self, db, *args, **kwargs):
-            self.run_datetime = datetime.utcnow()
-            completed = func(self, db, *args, **kwargs)
-            if completed:
-                is_complete_read = (func.__name__ == 'read_all')
-                db.insert('reading_updates', complete_read=is_complete_read,
-                          reader=self.reader.name,
-                          reader_version=self.reader_version,
-                          run_datetime=self.run_datetime,
-                          earliest_datetime=self.begin_datetime,
-                          latest_datetime=self.end_datetime)
+            for reader_class in self.reader_classes:
+                self.run_datetime = datetime.utcnow()
+                completed = func(self, db, reader_class, *args, **kwargs)
+                if completed:
+                    is_read_all = (func.__name__ == 'read_all')
+                    db.insert('reading_updates', complete_read=is_read_all,
+                              reader=reader_class.name,
+                              reader_version=reader_class.get_version(),
+                              run_datetime=self.run_datetime,
+                              earliest_datetime=self.begin_datetime,
+                              latest_datetime=self.end_datetime)
             return completed
         return run_and_record_update
 
-    def _get_latest_updatetime(self, db):
+    def _get_latest_updatetime(self, db, reader_class):
         """Get the date of the latest update."""
         update_list = db.select_all(
             db.ReadingUpdates,
-            db.ReadingUpdates.reader == self.reader.name
+            db.ReadingUpdates.reader == reader_class.name
             )
         if not len(update_list):
             logger.warning("The database has not had an initial upload, or "
@@ -68,14 +71,14 @@ class ReadingManager(object):
 
         return max([u.latest_datetime for u in update_list])
 
-    def read_all(self, db):
+    def read_all(self, db, reader):
         """Perform an initial reading all content in the database (populate).
 
         This must be defined in a child class.
         """
         raise NotImplementedError
 
-    def read_new(self, db):
+    def read_new(self, db, reader):
         """Read only new content (update).
 
         This must be defined in a child class.
@@ -88,22 +91,22 @@ class BulkReadingManager(ReadingManager):
 
     This takes exactly the parameters used by :py:class:`ReadingManager`.
     """
-    def _run_reading(self, db, tcids, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_class, ids_per_job=5000):
         raise NotImplementedError("_run_reading must be defined in child.")
 
-    @ReadingManager._handle_update_table
-    def read_all(self, db):
+    @ReadingManager._run_all_readers
+    def read_all(self, db, reader_class):
         """Read everything available on the database."""
         self.end_datetime = self.run_datetime
         tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
-        self._run_reading(db, tcids)
+        self._run_reading(db, tcids, reader_class)
         return True
 
-    @ReadingManager._handle_update_table
-    def read_new(self, db):
+    @ReadingManager._run_all_readers
+    def read_new(self, db, reader_class):
         """Update the readings and raw statements in the database."""
         self.end_datetime = self.run_datetime
-        latest_updatetime = self._get_latest_updatetime(db)
+        latest_updatetime = self._get_latest_updatetime(db, reader_class)
         if latest_updatetime is not None:
             self.begin_datetime = latest_updatetime - self.buffer
         else:
@@ -137,20 +140,21 @@ class BulkAwsReadingManager(BulkReadingManager):
         super(BulkAwsReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, tcids, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_class, ids_per_job=5000):
         if len(tcids)/ids_per_job >= 1000:
             raise ReadingUpdateError("Too many id's for one submission. "
                                      "Break it up and do it manually.")
 
         logger.info("Producing readings on aws for %d text refs with new "
-                    "content not read by %s." % (len(tcids), self.reader.name))
+                    "content not read by %s."
+                    % (len(tcids), reader_class.name))
         job_prefix = ('%s_reading_%s'
-                      % (self.reader.name.lower(),
+                      % (reader_class.name.lower(),
                          self.run_datetime.strftime('%Y%m%d_%H%M%S')))
         with open(job_prefix + '.txt', 'w') as f:
             f.write('\n'.join(['%s' % tcid for tcid in tcids]))
         logger.info("Submitting jobs...")
-        sub = DbReadingSubmitter(job_prefix, [self.reader.name.lower()],
+        sub = DbReadingSubmitter(job_prefix, [reader_class.name.lower()],
                                  self.project_name)
         sub.submit_reading(job_prefix + '.txt', 0, None, ids_per_job)
 
@@ -180,14 +184,14 @@ class BulkLocalReadingManager(BulkReadingManager):
         super(BulkLocalReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, tcids, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_class, ids_per_job=5000):
         if len(tcids) > ids_per_job:
             raise ReadingUpdateError("Too many id's to run locally. Try "
                                      "running on batch (use_batch).")
         logger.info("Producing readings locally for %d new text refs."
                     % len(tcids))
-        base_dir = path.join(THIS_DIR, 'read_all_%s' % self.reader.name)
-        reader = self.reader(base_dir=base_dir, n_proc=self.n_proc)
+        base_dir = path.join(THIS_DIR, 'read_all_%s' % reader_class.name)
+        reader = reader_class(base_dir=base_dir, n_proc=self.n_proc)
 
         rdb.run_reading([reader], tcids, db=db, batch_size=ids_per_job,
                         verbose=self.verbose)
@@ -281,22 +285,22 @@ def main():
     else:
         db = get_db(args.database)
 
+    readers = ['SPARSER', 'REACH']
     if args.method == 'local':
-        bulk_managers = [BulkLocalReadingManager(reader_name,
-                                                 buffer_days=args.buffer,
-                                                 n_proc=args.num_procs)
-                         for reader_name in ['SPARSER', 'REACH']]
-    elif args.method == 'aws':
-        bulk_managers = [BulkAwsReadingManager(reader_name,
+        bulk_manager = BulkLocalReadingManager(readers,
                                                buffer_days=args.buffer,
-                                               project_name=args.project_name)
-                         for reader_name in ['SPARSER', 'REACH']]
+                                               n_procs=args.num_procs)
+    elif args.method == 'aws':
+        bulk_manager = BulkAwsReadingManager(readers,
+                                             buffer_days=args.buffer,
+                                             project_name=args.project_name)
+    else:
+        assert False, "This shouldn't be allowed."
 
-    for bulk_manager in bulk_managers:
-        if args.task == 'read_all':
-            bulk_manager.read_all(db)
-        elif args.task == 'read_new':
-            bulk_manager.read_new(db)
+    if args.task == 'read_all':
+        bulk_manager.read_all(db)
+    elif args.task == 'read_new':
+        bulk_manager.read_new(db)
     return
 
 

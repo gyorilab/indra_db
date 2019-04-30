@@ -77,28 +77,75 @@
             container.removeChild(button);
         }
 
-        function appendToFormSubmit() {
-          // Loop form fields
-          let queryString = '';
-          for (el of document.getElementsByClassName('input-form')) {
-            queryString += el.name + '=' + el.value + '&';
+      function appendToFormSubmit() {
+        // Initialize queryString
+        let queryString = '';
+
+        // Get agents OR subject/object
+        let actorsString = agentsOrNot()
+        if (!actorsString) return;
+
+        queryString += actorsString;
+
+        // Loop form fields
+        for (el of document.getElementsByClassName('form-control')) {
+          if (!(['subject', 'object', 'agents'].indexOf(el.name) > -1)) {
+            if (el.value) {
+              if (el.name == 'type') {
+                queryString += el.name + '=' + el.value.replace(/\s+/g, '') + '&';
+              } else {
+                queryString += el.name + '=' + el.value + '&';
+              }
+            }
           }
-          queryString += 'format=' + document.getElementById('format-select').value;
+        }
+        queryString += 'format=html';
 
-          // Build URL
-          let baseUrl = window.location.href.split('?')[0].split('#')[0] + '/ask?';
-          // let baseUrl = 'https://153pf2mdal.execute-api.us-east-1.amazonaws.com/dev/browser/statements/from_agents?'
-          var getUrl = baseUrl + queryString;
+        // Build URL
+        let baseUrl = 'https://db.indra.bio/statements/from_agents?';
+        var getUrl = baseUrl + queryString;
 
-          // Submit by sync ajax
-          console.log('getUrl: ' + getUrl)
+        // Check output
+        console.log('getUrl: ' + getUrl)
 
-          // Redirect
-          window.location.replace(getUrl)
+        // Redirect
+        // window.location.replace(getUrl)
 
+      }
+
+      function agentsOrNot() {
+        let agentsArray = document.getElementById('agents').value.match(/\S+/g) || []
+        let subject = document.getElementById('subject').value.replace(/\s+/g, '')
+        let object = document.getElementById('object').value.replace(/\s+/g, '')
+
+        // Check if user entered both agents AND at least one of subject and object
+        if (Boolean(agentsArray.length) && (Boolean(subject) || Boolean(object) ) ) {
+          alert('Only input subject/object OR agents')
+          return;
         }
 
-      var ENV = 'indra';
+        // Check if only one of subject/object is filled while agents array is empty
+        if ( !Boolean(agentsArray.length) && (Boolean(subject) ^ Boolean(object)) ) {
+          alert('Must input subject and object')
+          return;
+        }
+
+        let queryString = ''
+
+        // Get subject/object or agents
+        if ( Boolean(subject) && Boolean(object) ) {
+          queryString += 'subject=' + subject + '&';
+          queryString += 'object=' + object + '&';
+        } else if (agentsArray.length > 0) {
+          let i = 0;
+          for ( ag of agentsArray ) {
+            queryString += 'agent' + i + '=' + ag + '&';
+            i++;
+          }
+        }
+
+        return queryString;
+      }
     </script>
   <style>
 
@@ -183,13 +230,53 @@ nav {
       <hr>
 
       <!-- The main content -->
-      <div class="content">
-          <input class="input-form" type="text" name="question">
-          <select name="format" id="format-select">
-            <option value="html">HTML</option>
-            <option value="json">JSON</option>
-          </select>
-          <input id="submitButton" type="button" value="Submit" onClick="appendToFormSubmit('ask')">
+      <div class="container">
+        <form>
+          <b>Mandatory Parameters</b><br>Enter subject and object
+          <div class="row">
+            <div class="col">
+              <input type="text" id="subject" name="subject" class="form-control" placeholder="subject...">
+            </div>
+            <div class="col">
+              <input type="text" id="object" name="object" class="form-control" placeholder="object...">
+            </div>
+          </div>
+          <i>or</i> enter agents separated by space
+          <div class="row">
+            <div class="col">
+              <input type="text" id="agents" name="agents" class="form-control" placeholder="Agents separated by space...">
+            </div>
+          </div>
+          <br><b>Optional parameters</b><br>Statement type (<i>see the <a href="https://indra.readthedocs.io/en/latest/modules/statements.html">INDRA documentation</a> for more info on statement types.</i>)
+          <div class="row">
+            <div class="col">
+              <input type="text" name="type" id="stmt-type" class="form-control" placeholder="Enter statement type">
+            </div>
+          </div>
+          Number of statements returned (max 1000)
+          <div class="row">
+            <div class="col">
+              <div class="container" style="width: 90px; float: left; padding: 0px;">
+                <input class="form-control" type="number" name="max_stmts" id="max-stmts" min="1" max="1000">
+              </div>
+            </div>
+          </div>
+          Evidence count per statement (max 10000)
+          <div class="row">
+            <div class="col">
+              <div class="container" style="width: 110px; float: left; padding: 0px;">
+                <input class="form-control" type="number" name="ev_limit" id="ev-limit" min="1" max="10000">
+              </div>
+            </div>
+          </div>
+          <br><b>Submit</b>
+          <div class="row">
+            <div class="col">
+              <button type="button" class="btn btn-primary" onclick="appendToFormSubmit()">Submit query</button>  
+            </div>
+          </div>
+          
+        </form>
       </div>
     </div>
 

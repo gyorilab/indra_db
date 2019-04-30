@@ -395,7 +395,7 @@ def _query_wrapper(f):
 
 @app.route('/', methods=['GET'])
 def iamalive():
-    return redirect('/welcome', code=302)
+    return redirect('welcome', code=302)
 
 
 with open(path.join(HERE, 'welcome.html'), 'r') as f:
@@ -439,7 +439,8 @@ def serve_icon():
 def get_statements_query_format():
     # Create a template object from the template file, load once
     page_html = search_template.render(
-        message="Welcome! Try asking a question.")
+        message="Welcome! Try asking a question.",
+        endpoint=request.url_root)
     return Response(page_html)
 
 

@@ -71,7 +71,7 @@
         queryString += 'format=html';
 
         // Build URL
-        let baseUrl = 'https://db.indra.bio/statements/from_agents?';
+        let baseUrl = '{{ endpoint }}statements/from_agents?';
         var getUrl = baseUrl + queryString;
 
         // Check output

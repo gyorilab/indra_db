@@ -43,39 +43,8 @@
       $(document).ready(function(){
         checkSignIn() // Check if user is signed in
       })
-        function addField(name, max) {
-            var container = document.getElementById(name + "-choices");
-            var input = document.createElement("input");
-            input.className = "input-form";
-            var suffix = '';
-            if (document.getElementById(name + '-input')) {
-                var n = 0;
-                while (document.getElementById(name + n.toString() + '-input')) {
-                    n += 1;
-                }
-                if (n <= max) {
-                    suffix = n.toString();
-                } else {
-                    return;  // abort
-                }
-            }
-            input.id = name + suffix + '-input';
-            input.type = "text";
-            input.name = name + suffix;
-            container.appendChild(input);
-            var button = document.createElement("button");
-            button.id = input.id + '-button'
-            button.appendChild(document.createTextNode('\u2718'));
-            button.onclick = function() { removeField(input.id, container.id, button.id); };
-            container.appendChild(button);
-        }
-        function removeField(input_id, container_id, button_id) {
-            var container = document.getElementById(container_id);
-            var input = document.getElementById(input_id);
-            var button = document.getElementById(button_id);
-            container.removeChild(input);
-            container.removeChild(button);
-        }
+
+      var ENV = 'indra';
 
       function appendToFormSubmit() {
         // Initialize queryString
@@ -224,7 +193,7 @@ nav {
         <p>
             This project, <a href='https://github.com/indralab/indra_db'>indra_db</a>,
             is developed by the <a href='https://indralab.github.io'>indralab</a> team.
-            <button class="btn btn-outline-primary" id="status-notify" onClick="getTokenFromAuthEndpoint(window.location.href)">Sign up/Sign in</button>
+            <button class="btn btn-outline-primary" style="color: #256DC5;" id="status-notify" onClick="getTokenFromAuthEndpoint(window.location.href)">Sign up/Sign in</button>
         </p>
       </div>
       <hr>

@@ -34,7 +34,6 @@ class ReadingManager(object):
         self.reader_classes = [get_reader_class(reader_name)
                                for reader_name in reader_names]
         self.buffer = timedelta(days=buffer_days)
-        self.reader_version = self.reader.get_version()
         self.run_datetime = None
         self.begin_datetime = None
         self.end_datetime = None

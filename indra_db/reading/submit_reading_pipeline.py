@@ -16,13 +16,13 @@ bash$ python submit_reading_pipeline.py --help
 
 In your favorite command line.
 """
-
+from collections import defaultdict
 
 import re
 import boto3
 import pickle
 import logging
-from numpy import median, arange, array
+from numpy import median, arange, array, zeros
 import matplotlib as mpl; mpl.use('Agg')
 from matplotlib import pyplot as plt
 from datetime import datetime, timedelta
@@ -266,44 +266,68 @@ class DbReadingSubmitter(Submitter):
                     plot_set.add(key)
         stages = [stg for _, stg in sorted(stages)]
 
+        # Handle the start and end times.
+        if self.start_time is None or self.end_time is None:
+            all_times = [dt for job in job_segs.values() for stage in job.values()
+                         for metric, dt in stage.items() if metric != 'duration']
+
+            if self.start_time is None:
+                self.start_time = min(all_times)
+
+            if self.end_time is None:
+                self.end_time = max(all_times)
+
         # Use this for getting the minimum and maximum.
+        t_gap = 5
+
         def get_time_tuple(stage_data):
             start_seconds = (stage_data['start'] - self.start_time).total_seconds()
-            return start_seconds, stage_data['duration'].total_seconds()
+            dur = stage_data['duration'].total_seconds()
+            if start_seconds > t_gap:
+                start_seconds -= t_gap/2
 
+            if dur > t_gap:
+                dur -= t_gap
+            else:
+                dur = t_gap
+
+            return start_seconds, dur
+
+        label_size = 5
         # Make the broken barh plots from internal info -----------------------
         w = 6.5
-        h = 10
-        fig = plt.figure(figsize=(w, h))
-        gs = plt.GridSpec(2, 1, height_ratios=[10, 1.5])
+        h = 9
+        fig = plt.figure(figsize=(w, h), dpi=600)
+        gs = plt.GridSpec(2, 1, height_ratios=[10, 0.7])
         ax0 = plt.subplot(gs[0])
         ytick_pairs = []
         total_time = (self.end_time - self.start_time).total_seconds()
         t = arange(total_time)
 
         # Initialize counts
-        counts = dict.fromkeys(['jobs'] + stages)
-        for k in counts.keys():
-            counts[k] = array([0 for _ in t])
+        counts = defaultdict(lambda: {'data': zeros(len(t)), 'color': None})
 
         # Make the plot
         for i, job_tpl in enumerate(sorted(plot_set)):
             s_ix, e_ix, job_name = job_tpl
             job_d = job_segs[job_name]
             xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
-            ys = (s_ix, (e_ix - s_ix)*0.9)
+            ys = (s_ix, (e_ix - s_ix)*0.8)
             ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix)))
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
-            facecolors = [get_color(stg) for stg in stages]
+            facecolors = [get_stage_choices(stg)[1] for stg in stages]
             ax0.broken_barh(xs, ys, facecolors=facecolors)
 
-            for n, stg in enumerate(stages):
-                cs = counts[stg]
-                start = xs[n][0]
-                dur = xs[n][1]
-                cs[(t > start) & (t < (start + dur))] += 1
-            cs = counts['jobs']
-            cs[(t > xs[0][0]) & (t < (xs[-1][0] + xs[-1][1]))] += 1
+            for n, stg in enumerate(stages + ['jobs']):
+                label, color = get_stage_choices(stg)
+                counts[label]['color'] = color
+                cs = counts[label]['data']
+                if stg != 'jobs':
+                    start = xs[n][0]
+                    dur = xs[n][1]
+                    cs[(t > start) & (t < (start + dur))] += 1
+                else:
+                    cs[(t > xs[0][0]) & (t < (xs[-1][0] + xs[-1][1]))] += 1
 
         # Format the plot
         ax0.tick_params(top='off', left='off', right='off', bottom='off',
@@ -332,17 +356,21 @@ class DbReadingSubmitter(Submitter):
         ax0.set_ylim(0, max(ytick_range) + spacing)
         ax0.set_yticks(ytick_range)
         ax0.set_yticklabels(ylabel_filled)
-        ax0.tick_params(labelsize=9)
+        ax0.tick_params(labelsize=label_size)
 
-        # Plot the lower axis.
-        legend_list = []
+        # Plot the lower axis -------------------------------------------------
         ax1 = plt.subplot(gs[1], sharex=ax0)
-        for stage, cs in counts.items():
-            legend_list.append(stage)
-            ax1.plot(t, cs, color=get_color(stage))
+
+        # make the plot
+        for label, cd in counts.items():
+            ax1.plot(t, cd['data'], color=cd['color'], label=label)
+
+        # Remove the axis bars.
         for lbl, spine in ax1.spines.items():
             spine.set_visible(False)
-        max_n = max(counts['jobs'])
+
+        # Format the plot.
+        max_n = int(counts['total']['data'].max())
         ax1.set_ylim(0, max_n + 1)
         ax1.set_xlim(0, total_time)
         yticks = list(range(0, max_n-max_n//5, max(1, max_n//5)))
@@ -350,13 +378,15 @@ class DbReadingSubmitter(Submitter):
         ax1.set_yticklabels([str(n) for n in yticks] + ['max=%d' % max_n])
         ax1.set_ylabel('N_jobs')
         ax1.set_xlabel('Time since beginning [seconds]')
+        ax1.tick_params(labelsize=label_size)
+        ax1.legend(loc='best', fontsize=label_size)
 
-        # Make the figure borders more sensible.
+        # Make the figure borders more sensible -------------------------------
         fig.tight_layout()
         img_path = 'time_figure.png'
         fig.savefig(img_path)
         self.reporter.add_image(img_path, width=w, height=h, section='Plots')
-        return counts
+        return dict(counts)
 
     def _handle_sum_data(self, job_ref, summary_info, file_bytes):
         one_sum_data_dict = pickle.loads(file_bytes)
@@ -480,6 +510,7 @@ class DbReadingSubmitter(Submitter):
                 if handle_stats is not None:
                     handle_stats(ref, my_agg, file_bytes)
 
+            other_data = None
             if report_stats is not None and len(my_agg):
                 other_data = report_stats(my_agg)
 
@@ -503,20 +534,28 @@ class DbReadingSubmitter(Submitter):
         return file_tree, stat_aggs
 
 
-def get_color(stage):
+def get_stage_choices(stage):
     if 'old_readings' in stage:
-        c = 'red'
-    elif 'new_readings' in stage:
-        c = 'orange'
-    elif 'make_statements' in stage:
-        c = 'yellow'
-    elif 'dump' in stage:
+        label = 'old reading'
         c = 'cyan'
+    elif 'new_readings' in stage:
+        label = 'new reading'
+        c = 'blue'
+    elif 'make_statements' in stage:
+        label = 'making statements'
+        c = 'red'
+    elif 'dump' in stage:
+        label = 'dumping'
+        c = 'black'
     elif stage == 'stats':
-        c = 'b'
+        label = 'generating stats'
+        c = 'green'
     elif stage == 'jobs':
-        c = 'k'
-    return c
+        label = 'total'
+        c = 'grey'
+    else:
+        assert False, 'Unhandled stage: %s' % stage
+    return label, c
 
 
 if __name__ == '__main__':

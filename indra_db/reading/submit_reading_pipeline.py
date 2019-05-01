@@ -264,8 +264,6 @@ class DbReadingSubmitter(Submitter):
                         continue
                     key = tuple([int(n) for n in m.groups()] + [job_name])
                     plot_set.add(key)
-        plot_list = list(plot_set)
-        plot_list.sort()
         stages = [stg for _, stg in sorted(stages)]
 
         # Use this for getting the minimum and maximum.
@@ -273,11 +271,11 @@ class DbReadingSubmitter(Submitter):
             start_seconds = (stage_data['start'] - self.start_time).total_seconds()
             return start_seconds, stage_data['duration'].total_seconds()
 
-        # Make the broken barh plots.
+        # Make the broken barh plots from internal info -----------------------
         w = 6.5
-        h = 9
+        h = 10
         fig = plt.figure(figsize=(w, h))
-        gs = plt.GridSpec(2, 1, height_ratios=[10, 1])
+        gs = plt.GridSpec(2, 1, height_ratios=[10, 1.5])
         ax0 = plt.subplot(gs[0])
         ytick_pairs = []
         total_time = (self.end_time - self.start_time).total_seconds()
@@ -287,15 +285,17 @@ class DbReadingSubmitter(Submitter):
         counts = dict.fromkeys(['jobs'] + stages)
         for k in counts.keys():
             counts[k] = array([0 for _ in t])
-        for i, job_tpl in enumerate(plot_list):
+
+        # Make the plot
+        for i, job_tpl in enumerate(sorted(plot_set)):
             s_ix, e_ix, job_name = job_tpl
             job_d = job_segs[job_name]
             xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
             ys = (s_ix, (e_ix - s_ix)*0.9)
             ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix)))
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
-            reader_cycle = ('red', 'orange', 'black', 'yellow', 'black')
-            ax0.broken_barh(xs, ys, facecolors=reader_cycle*3 + ('blue',))
+            facecolors = [get_color(stg) for stg in stages]
+            ax0.broken_barh(xs, ys, facecolors=facecolors)
 
             for n, stg in enumerate(stages):
                 cs = counts[stg]
@@ -332,25 +332,14 @@ class DbReadingSubmitter(Submitter):
         ax0.set_ylim(0, max(ytick_range) + spacing)
         ax0.set_yticks(ytick_range)
         ax0.set_yticklabels(ylabel_filled)
+        ax0.tick_params(labelsize=9)
 
         # Plot the lower axis.
         legend_list = []
         ax1 = plt.subplot(gs[1], sharex=ax0)
-        for k, cs in counts.items():
-            legend_list.append(k)
-            if 'old_readings' in k:
-                c = 'red'
-            elif 'new_readings' in k:
-                c = 'orange'
-            elif 'make_statements' in k:
-                c = 'yellow'
-            elif 'dump' in k:
-                c = 'black'
-            elif k == 'stats':
-                c = 'b'
-            elif k == 'jobs':
-                c = 'k'
-            ax1.plot(t, cs, color=c)
+        for stage, cs in counts.items():
+            legend_list.append(stage)
+            ax1.plot(t, cs, color=get_color(stage))
         for lbl, spine in ax1.spines.items():
             spine.set_visible(False)
         max_n = max(counts['jobs'])
@@ -512,6 +501,22 @@ class DbReadingSubmitter(Submitter):
                       Key=s3_prefix + 'stat_aggregates_%s.pkl' % self.time_tag,
                       Body=pickle.dumps(stat_aggs))
         return file_tree, stat_aggs
+
+
+def get_color(stage):
+    if 'old_readings' in stage:
+        c = 'red'
+    elif 'new_readings' in stage:
+        c = 'orange'
+    elif 'make_statements' in stage:
+        c = 'yellow'
+    elif 'dump' in stage:
+        c = 'cyan'
+    elif stage == 'stats':
+        c = 'b'
+    elif stage == 'jobs':
+        c = 'k'
+    return c
 
 
 if __name__ == '__main__':

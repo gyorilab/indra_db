@@ -269,13 +269,8 @@ class DbReadingSubmitter(Submitter):
         stages = [stg for _, stg in sorted(stages)]
 
         # Use this for getting the minimum and maximum.
-        all_times = [dt for job in job_segs.values() for stage in job.values()
-                     for metric, dt in stage.items() if metric != 'duration']
-        all_start = min(all_times)
-        all_end = max(all_times)
-
         def get_time_tuple(stage_data):
-            start_seconds = (stage_data['start'] - all_start).total_seconds()
+            start_seconds = (stage_data['start'] - self.start_time).total_seconds()
             return start_seconds, stage_data['duration'].total_seconds()
 
         # Make the broken barh plots.
@@ -317,9 +312,7 @@ class DbReadingSubmitter(Submitter):
             spine.set_visible(False)
         ax0.set_xlim(0, total_time)
         ax0.set_ylabel(self.basename + '_ ...')
-        print(ytick_pairs)
         yticks, ylabels = zip(*ytick_pairs)
-        print(yticks)
         if not self.ids_per_job:
             print([yticks[i+1] - yticks[i]
                    for i in range(len(yticks) - 1)])
@@ -329,8 +322,6 @@ class DbReadingSubmitter(Submitter):
             spacing = max([1, spacing])
         else:
             spacing = self.ids_per_job
-        print(spacing)
-        print(yticks[0], yticks[-1])
         ytick_range = list(arange(yticks[0], yticks[-1] + spacing, spacing))
         ylabel_filled = []
         for ytick in ytick_range:

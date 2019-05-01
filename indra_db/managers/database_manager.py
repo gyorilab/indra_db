@@ -393,6 +393,7 @@ class DatabaseManager(object):
             statements = relationship(RawStatements)
             db_name = Column(String(40), nullable=False)
             db_id = Column(String, nullable=False)
+            ag_num = Column(Integer, nullable=False)
             role = Column(String(20), nullable=False)
             __table_args = (
                 UniqueConstraint('stmt_id', 'db_name', 'db_id', 'role',
@@ -411,6 +412,7 @@ class DatabaseManager(object):
             position = Column(String(10))
             residue = Column(String(5))
             modified = Column(Boolean)
+            ag_num = Column(Integer, nullable=False)
         self.RawMods = RawMods
         self.tables[RawMods.__tablename__] = RawMods
 
@@ -423,6 +425,7 @@ class DatabaseManager(object):
             position = Column(String(10))
             residue_from = Column(String(5))
             residue_to = Column(String(5))
+            ag_num = Column(Integer, nullable=False)
         self.RawMuts = RawMuts
         self.tables[RawMuts.__tablename__] = RawMuts
 
@@ -472,6 +475,7 @@ class DatabaseManager(object):
             db_name = Column(String(40), nullable=False)
             db_id = Column(String, nullable=False)
             role = Column(String(20), nullable=False)
+            ag_num = Column(Integer, nullable=False)
             __table_args__ = (
                 UniqueConstraint('stmt_mk_hash', 'db_name', 'db_id', 'role',
                                  name='pa-agent-uniqueness'),
@@ -490,6 +494,7 @@ class DatabaseManager(object):
             position = Column(String(10))
             residue = Column(String(5))
             modified = Column(Boolean)
+            ag_num = Column(Integer, nullable=False)
         self.PAMods = PAMods
         self.tables[PAMods.__tablename__] = PAMods
 
@@ -503,6 +508,7 @@ class DatabaseManager(object):
             position = Column(String(10))
             residue_from = Column(String(5))
             residue_to = Column(String(5))
+            ag_num = Column(Integer, nullable=False)
         self.PAMuts = PAMuts
         self.tables[PAMuts.__tablename__] = PAMuts
 

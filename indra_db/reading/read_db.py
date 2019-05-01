@@ -451,7 +451,7 @@ class DatabaseReader(object):
         # Add the agents for the accepted statements.
         logger.info("Uploading agents to the database.")
         if len(stmts):
-            insert_raw_agents(self._db, batch_id, stmts, verbose=True)
+            insert_raw_agents(self._db, batch_id, stmts, verbose=False)
         self.stops['dump_statements_db'] = datetime.now()
         return
 

@@ -149,12 +149,10 @@ class DbReadingSubmitter(Submitter):
             for any reason external measures are needed, this option may be set
             to True.
         """
-        # Don't wait if there is no job list.
-        if not self.job_list:
-            return
         kwargs['result_record'] = self.run_record
         super(DbReadingSubmitter, self).watch_and_wait(*args, **kwargs)
-        self.produce_report()
+        if self.job_list:
+            self.produce_report()
 
     @staticmethod
     def _parse_time(time_str):

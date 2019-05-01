@@ -75,12 +75,14 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     if verbose and num_stmts > 25:
         print()
 
-    db.copy('raw_agents', ref_tuples, ('stmt_id', 'db_name', 'db_id', 'role'),
+    db.copy('raw_agents', ref_tuples,
+            ('stmt_id', 'ag_num', 'db_name', 'db_id', 'role'), commit=False)
+    db.copy('raw_mods', mod_tuples,
+            ('stmt_id', 'ag_num', 'type', 'position', 'residue', 'modified'),
             commit=False)
-    db.copy('raw_mods', mod_tuples, ('stmt_id', 'type', 'position', 'residue',
-                                     'modified'), commit=False)
-    db.copy('raw_muts', mut_tuples, ('stmt_id', 'position', 'residue_from',
-                                     'residue_to'), commit=False)
+    db.copy('raw_muts', mut_tuples,
+            ('stmt_id', 'ag_num', 'position', 'residue_from', 'residue_to'),
+            commit=False)
     db.commit_copy('Error copying raw agents, mods, and muts.')
     return
 
@@ -117,15 +119,16 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
 
     if 'agents' not in skip:
         db.copy('pa_agents', ref_data,
-                ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True,
-                commit=False)
+                ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
+                lazy=True, commit=False)
     if 'mods' not in skip:
-        db.copy('pa_mods', mod_data, ('stmt_mk_hash', 'type', 'position',
-                                      'residue', 'modified'), commit=False)
+        db.copy('pa_mods', mod_data,
+                ('stmt_mk_hash', 'ag_num', 'type', 'position', 'residue',
+                 'modified'), commit=False)
     if 'muts' not in skip:
-        db.copy('pa_muts', mut_data, ('stmt_mk_hash', 'position',
-                                      'residue_from', 'residue_to'),
-                commit=False)
+        db.copy('pa_muts', mut_data,
+                ('stmt_mk_hash', 'ag_num', 'position', 'residue_from',
+                 'residue_to'), commit=False)
     db.commit_copy('Error copying pa agents, mods, and muts, excluding: %s.'
                    % (', '.join(skip)))
     return
@@ -149,13 +152,14 @@ def regularize_agent_id(id_val, id_ns):
 def extract_agent_data(stmt, stmt_id):
     """Create the tuples for copying agents into the database."""
     # Figure out how the agents are structured and assign roles.
-    ag_list = stmt.agent_list()
+    ag_list = stmt.agent_list(deep_sorted=True)
     nary_stmt_types = [Complex, SelfModification, ActiveForm, Conversion,
                        Translocation]
     if any([isinstance(stmt, tp) for tp in nary_stmt_types]):
-        agents = {('OTHER', ag) for ag in ag_list}
+        agents = {('OTHER', ag, i) for i, ag in enumerate(ag_list)}
     elif len(ag_list) == 2:
-        agents = {('SUBJECT', ag_list[0]), ('OBJECT', ag_list[1])}
+        agents = {(role, ag_list[i], i)
+                  for i, role in enumerate(['SUBJECT', 'OBJECT'])}
     else:
         raise IndraDbException("Unhandled agent structure for stmt %s "
                                "with agents: %s."
@@ -176,7 +180,7 @@ def extract_agent_data(stmt, stmt_id):
     mod_data = []
     mut_data = []
     warnings = set()
-    for role, ag in agents:
+    for role, ag, idx in agents:
         # If no agent, or no db_refs for the agent, skip the insert
         # that follows.
         if ag is None or ag.db_refs is None:
@@ -185,8 +189,8 @@ def extract_agent_data(stmt, stmt_id):
         # Get the db refs data.
         for ns, ag_id in all_agent_refs(ag):
             if ag_id is not None:
-                ref_data.append((stmt_id, ns, regularize_agent_id(ag_id, ns),
-                                 role))
+                ref_data.append((stmt_id, idx, ns,
+                                 regularize_agent_id(ag_id, ns), role))
             else:
                 if ns not in warnings:
                     warnings.add(ns)
@@ -194,12 +198,12 @@ def extract_agent_data(stmt, stmt_id):
 
         # Get the modification data
         for mod in ag.mods:
-            mod_data.append((stmt_id, mod.mod_type, mod.position, mod.residue,
-                             mod.is_modified))
+            mod_data.append((stmt_id, idx, mod.mod_type, mod.position,
+                             mod.residue, mod.is_modified))
 
         # Get the mutation data
         for mut in ag.mutations:
-            mut_data.append((stmt_id, mut.position, mut.residue_from,
+            mut_data.append((stmt_id, idx, mut.position, mut.residue_from,
                              mut.residue_to))
 
     return ref_data, mod_data, mut_data

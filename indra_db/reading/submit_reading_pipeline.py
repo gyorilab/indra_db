@@ -66,6 +66,13 @@ class DbReadingSubmitter(Submitter):
         self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
         self.reporter.set_section_order(['Git', 'Totals', 'Plots'])
         self.run_record = {}
+        self.start_time = None
+        self.end_time = None
+        return
+
+    def submit_reading(self, *args, **kwargs):
+        self.start_time = datetime.utcnow()
+        super(DbReadingSubmitter, self).submit_reading(*args, **kwargs)
         return
 
     def _get_base(self, job_name, start_ix, end_ix):
@@ -151,6 +158,7 @@ class DbReadingSubmitter(Submitter):
         """
         kwargs['result_record'] = self.run_record
         super(DbReadingSubmitter, self).watch_and_wait(*args, **kwargs)
+        self.end_time = datetime.utcnow()
         if self.job_list:
             self.produce_report()
 
@@ -277,7 +285,10 @@ class DbReadingSubmitter(Submitter):
         gs = plt.GridSpec(2, 1, height_ratios=[10, 1])
         ax0 = plt.subplot(gs[0])
         ytick_pairs = []
-        t = arange((all_end - all_start).total_seconds())
+        total_time = (self.end_time - self.start_time).total_seconds()
+        t = arange(total_time)
+
+        # Initialize counts
         counts = dict.fromkeys(['jobs'] + stages)
         for k in counts.keys():
             counts[k] = array([0 for _ in t])
@@ -304,7 +315,6 @@ class DbReadingSubmitter(Submitter):
                         labelleft='on', labelbottom='off')
         for spine in ax0.spines.values():
             spine.set_visible(False)
-        total_time = (all_end - all_start).total_seconds()
         ax0.set_xlim(0, total_time)
         ax0.set_ylabel(self.basename + '_ ...')
         print(ytick_pairs)

@@ -271,7 +271,7 @@ class DbReadingSubmitter(Submitter):
         stages = [stg for _, stg in sorted(stages)]
 
         # Add data from local records, if available.
-        if self.run_record is not None:
+        if self.run_record:
             for final_status in ['failed', 'succeeded']:
                 for job in self.run_record[final_status]:
                     if job['jobName'] in job_segs.keys():
@@ -337,7 +337,7 @@ class DbReadingSubmitter(Submitter):
             job_d = job_segs[job_name]
 
             # Plot the overall job run info, if known.
-            if self.run_record is not None:
+            if self.run_record:
                 ts = [(job_d[k] - self.start_time).total_seconds()
                       for k in ['job_created', 'job_started', 'job_stopped']]
                 xs = [(ts[0], ts[1] - ts[0]), (ts[1], ts[2] - ts[1])]

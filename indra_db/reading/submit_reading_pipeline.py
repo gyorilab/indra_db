@@ -246,25 +246,46 @@ class DbReadingSubmitter(Submitter):
     def _report_timing(self, timing_info):
         # Pivot the timing info.
         idx_patt = re.compile('%s_(\d+)_(\d+)' % self.basename)
-        job_segs = NestedDict()
         plot_set = set()
+
+        def add_job_to_plot_set(job_name):
+            m = idx_patt.match(job_name)
+            if m is None:
+                logger.error("Unexpectedly formatted name: %s."
+                             % job_name)
+                return None
+            key = tuple([int(n) for n in m.groups()] + [job_name])
+            plot_set.add(key)
+
+        job_segs = NestedDict()
         stages = []
         for stage, stage_d in timing_info.items():
-            stages.append((list(stage_d['start'].values())[0], stage))
             # e.g. reading, statement production...
+            stages.append((list(stage_d['start'].values())[0], stage))
             for metric, metric_d in stage_d.items():
                 # e.g. start, end, ...
                 for job_name, t in metric_d.items():
                     # e.g. job_basename_startIx_endIx
                     job_segs[job_name][stage][metric] = t
-                    m = idx_patt.match(job_name)
-                    if m is None:
-                        logger.error("Unexpectedly formatted name: %s."
-                                     % job_name)
-                        continue
-                    key = tuple([int(n) for n in m.groups()] + [job_name])
-                    plot_set.add(key)
+                    add_job_to_plot_set(job_name)
         stages = [stg for _, stg in sorted(stages)]
+
+        # Add data from local records, if available.
+        if self.run_record is not None:
+            for final_status in ['failed', 'succeeded']:
+                for job in self.run_record[final_status]:
+                    if job['jobName'] in job_segs.keys():
+                        job_d = job_segs[job['jobName']]
+                    else:
+                        job_d = {}
+                        job_segs[job['jobName']] = job_d
+                        add_job_to_plot_set(job['jobName'])
+                    terminated = job['jobId'] in self.run_record['terminated']
+                    job_d['final'] = final_status
+                    job_d['terminated'] = terminated
+                    for time_key in ['createdAt', 'startedAt', 'stoppedAt']:
+                        job_d['job_' + time_key.replace('At', '')] = \
+                            datetime.utcfromtimestamp(job[time_key])
 
         # Handle the start and end times.
         if self.start_time is None or self.end_time is None:
@@ -293,6 +314,9 @@ class DbReadingSubmitter(Submitter):
 
             return start_seconds, dur
 
+        def make_y(start, end, scale):
+            return start, (end - start)*scale
+
         label_size = 5
         # Make the broken barh plots from internal info -----------------------
         w = 6.5
@@ -307,12 +331,23 @@ class DbReadingSubmitter(Submitter):
         # Initialize counts
         counts = defaultdict(lambda: {'data': zeros(len(t)), 'color': None})
 
-        # Make the plot
+        # Plot data from remote resources
         for i, job_tpl in enumerate(sorted(plot_set)):
             s_ix, e_ix, job_name = job_tpl
             job_d = job_segs[job_name]
+
+            # Plot the overall job run info, if known.
+            if self.run_record is not None:
+                ts = [(job_d[k] - self.start_time).total_seconds()
+                      for k in ['job_created', 'job_started', 'job_stopped']]
+                xs = [(ts[0], ts[1] - ts[0]), (ts[1], ts[2] - ts[1])]
+                ys = make_y(s_ix, e_ix, 0.9)
+                facecolors = ['lightgray', 'gray']
+                ax0.broken_barh(xs, ys, facecolors=facecolors)
+
+            # Plot the more detailed info
             xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
-            ys = (s_ix, (e_ix - s_ix)*0.8)
+            ys = make_y(s_ix, e_ix, 0.6)
             ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix)))
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
             facecolors = [get_stage_choices(stg)[1] for stg in stages]
@@ -352,7 +387,7 @@ class DbReadingSubmitter(Submitter):
             if ytick in yticks:
                 ylabel_filled.append(ylabels[yticks.index(ytick)])
             else:
-                ylabel_filled.append('FAILED')
+                ylabel_filled.append('NO DATA')
         ax0.set_ylim(0, max(ytick_range) + spacing)
         ax0.set_yticks(ytick_range)
         ax0.set_yticklabels(ylabel_filled)

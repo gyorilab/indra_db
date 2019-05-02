@@ -353,6 +353,7 @@ class DatabaseReader(object):
         self.starts['dump_readings_db'] = datetime.utcnow()
         if not self.new_readings:
             logger.info("No new readings to load.")
+            self.stops['dump_readings_db'] = datetime.utcnow()
             return
 
         db = self._db

@@ -284,8 +284,13 @@ class DbReadingSubmitter(Submitter):
                     job_d['final'] = final_status
                     job_d['terminated'] = terminated
                     for time_key in ['createdAt', 'startedAt', 'stoppedAt']:
-                        job_d['job_' + time_key.replace('At', '')] = \
-                            datetime.utcfromtimestamp(job[time_key])
+                        stage = 'job_' + time_key.replace('At', '')
+                        ts = job.get(time_key)
+                        if ts is None:
+                            job_d[stage] = ts
+                        else:
+                            job_d[stage] = \
+                                datetime.utcfromtimestamp(job[time_key]/1000)
 
         # Handle the start and end times.
         if self.start_time is None or self.end_time is None:
@@ -338,17 +343,31 @@ class DbReadingSubmitter(Submitter):
 
             # Plot the overall job run info, if known.
             if self.run_record:
-                ts = [(job_d[k] - self.start_time).total_seconds()
+                ts = [None if job_d[k] is None
+                      else (job_d[k] - self.start_time).total_seconds()
                       for k in ['job_created', 'job_started', 'job_stopped']]
-                xs = [(ts[0], ts[1] - ts[0]), (ts[1], ts[2] - ts[1])]
+                if ts[1] is None:
+                    xs = [(ts[0], ts[2] - ts[0])]
+                    facecolors = ['lightgray']
+                elif None not in ts:
+                    xs = [(ts[0], ts[1] - ts[0]), (ts[1], ts[2] - ts[1])]
+                    facecolors = ['lightgray', 'gray']
+                else:
+                    xs = []
+                    facecolors = []
+                    print("Unhandled.")
                 ys = make_y(s_ix, e_ix, 0.9)
-                facecolors = ['lightgray', 'gray']
                 ax0.broken_barh(xs, ys, facecolors=facecolors)
+
+            ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix),
+                                job_name))
+
+            if job_d['final'] == 'failed':
+                continue
 
             # Plot the more detailed info
             xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
             ys = make_y(s_ix, e_ix, 0.6)
-            ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix)))
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
             facecolors = [get_stage_choices(stg)[1] for stg in stages]
             ax0.broken_barh(xs, ys, facecolors=facecolors)
@@ -371,7 +390,7 @@ class DbReadingSubmitter(Submitter):
             spine.set_visible(False)
         ax0.set_xlim(0, total_time)
         ax0.set_ylabel(self.basename + '_ ...')
-        yticks, ylabels = zip(*ytick_pairs)
+        yticks, ylabels, names = zip(*ytick_pairs)
         if not self.ids_per_job:
             print([yticks[i+1] - yticks[i]
                    for i in range(len(yticks) - 1)])
@@ -381,13 +400,18 @@ class DbReadingSubmitter(Submitter):
             spacing = max([1, spacing])
         else:
             spacing = self.ids_per_job
+
         ytick_range = list(arange(yticks[0], yticks[-1] + spacing, spacing))
         ylabel_filled = []
         for ytick in ytick_range:
             if ytick in yticks:
-                ylabel_filled.append(ylabels[yticks.index(ytick)])
+                ylabel = ylabels[yticks.index(ytick)]
+                job_d = job_segs[names[yticks.index(ytick)]]
+                if job_d.get('terminated'):
+                    ylabel = '*' + ylabel
+                ylabel_filled.append(ylabel)
             else:
-                ylabel_filled.append('NO DATA')
+                ylabel_filled.append('MISSING')
         ax0.set_ylim(0, max(ytick_range) + spacing)
         ax0.set_yticks(ytick_range)
         ax0.set_yticklabels(ylabel_filled)

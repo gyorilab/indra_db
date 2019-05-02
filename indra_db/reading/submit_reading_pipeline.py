@@ -310,7 +310,7 @@ class DbReadingSubmitter(Submitter):
             start_seconds = (stage_data['start'] - self.start_time).total_seconds()
             dur = stage_data['duration'].total_seconds()
             if start_seconds > t_gap:
-                start_seconds -= t_gap/2
+                start_seconds += t_gap/2
 
             if dur > t_gap:
                 dur -= t_gap
@@ -320,7 +320,9 @@ class DbReadingSubmitter(Submitter):
             return start_seconds, dur
 
         def make_y(start, end, scale):
-            return start, (end - start)*scale
+            h = end - start
+            start += (1 - scale)*h/2
+            return start, h*scale
 
         label_size = 5
         # Make the broken barh plots from internal info -----------------------
@@ -367,7 +369,7 @@ class DbReadingSubmitter(Submitter):
 
             # Plot the more detailed info
             xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
-            ys = make_y(s_ix, e_ix, 0.6)
+            ys = make_y(s_ix, e_ix, 0.4)
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
             facecolors = [get_stage_choices(stg)[1] for stg in stages]
             ax0.broken_barh(xs, ys, facecolors=facecolors)

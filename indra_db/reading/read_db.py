@@ -351,6 +351,10 @@ class DatabaseReader(object):
         logger.info("Beginning to dump %d readings for %s to the database."
                     % (len(self.new_readings), self.reader.name))
         self.starts['dump_readings_db'] = datetime.utcnow()
+        if not self.new_readings:
+            logger.info("No new readings to load.")
+            return
+
         db = self._db
 
         # Get the id for this batch of uploads.

@@ -403,19 +403,27 @@ class DbReadingSubmitter(Submitter):
 
         ytick_range = list(arange(yticks[0], yticks[-1] + spacing, spacing))
         ylabel_filled = []
-        for ytick in ytick_range:
+        colored_labels = {}
+        for i, ytick in enumerate(ytick_range):
             if ytick in yticks:
                 ylabel = ylabels[yticks.index(ytick)]
                 job_d = job_segs[names[yticks.index(ytick)]]
                 if job_d.get('terminated'):
-                    ylabel = '*' + ylabel
+                    ylabel = 'T ' + ylabel
+                    colored_labels[i] = 'red'
+                elif job_d.get('final') == 'failed':
+                    ylabel = 'F ' + ylabel
+                    colored_labels[i] = 'orange'
                 ylabel_filled.append(ylabel)
             else:
-                ylabel_filled.append('MISSING')
+                ylabel_filled.append('FAILED')
         ax0.set_ylim(0, max(ytick_range) + spacing)
         ax0.set_yticks(ytick_range)
         ax0.set_yticklabels(ylabel_filled)
         ax0.tick_params(labelsize=label_size)
+        for i, ytick in enumerate(ax0.get_yticklabels()):
+            if i in colored_labels.keys():
+                ytick.set_color(colored_labels[i])
 
         # Plot the lower axis -------------------------------------------------
         ax1 = plt.subplot(gs[1], sharex=ax0)

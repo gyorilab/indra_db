@@ -1,7 +1,7 @@
 from sqlalchemy.exc import NoSuchTableError
 
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
-           'IndraDbException', 'sql_expressions']
+           'IndraDbException', 'sql_expressions', 'readers', 'reader_versions']
 
 import re
 import random
@@ -118,6 +118,18 @@ class formats(_map_class):
     TEXT = 'text'
     JSON = 'json'
     EKB = 'ekb'
+
+
+readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3}
+
+
+# Specify versions of readers, and preference. Later in the list is better.
+reader_versions = {
+    'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
+                'October2018-linux'],
+    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
+    'trips': ['STATIC']
+}
 
 
 class IndraTableError(IndraDbException):

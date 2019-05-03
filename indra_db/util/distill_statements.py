@@ -11,6 +11,7 @@ from collections import defaultdict
 from indra.util import clockit
 from indra.statements import Statement
 from indra.util.nested_dict import NestedDict
+from indra_db.managers.database_manager import reader_versions
 
 from .helpers import _set_evidence_text_ref
 
@@ -123,14 +124,6 @@ def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
     print("number of unique statements: %d" % num_unique_evidence)
     return stmt_nd
 
-
-# Specify versions of readers, and preference. Later in the list is better.
-reader_versions = {
-    'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
-                'October2018-linux'],
-    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
-    'trips': ['STATIC']
-}
 
 # Specify sources of fulltext content, and order priorities.
 text_content_sources = [('pubmed', 'title'), ('pubmed', 'abstract'),

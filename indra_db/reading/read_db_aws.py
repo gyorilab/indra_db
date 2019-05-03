@@ -114,10 +114,6 @@ if __name__ == '__main__':
         ("The combination of reading mode %s and statement mode %s is not "
          "allowed." % (args.reading_mode, args.stmt_mode))
 
-    # Init some timing dicts
-    starts = {}
-    ends = {}
-
     # Get a handle for the database
     if args.test:
         from indra_db import util as dbu
@@ -129,11 +125,9 @@ if __name__ == '__main__':
                      % (args.basename, args.job_name))
 
     # Read everything ========================================
-    starts['reading'] = datetime.now()
     workers = run_reading(readers, tcids, verbose=True, db=db,
                           reading_mode=args.read_mode,
                           stmt_mode=args.stmt_mode)
-    ends['reading'] = datetime.now()
 
     # Preserve the sparser logs
     contents = os.listdir('.')
@@ -150,7 +144,4 @@ if __name__ == '__main__':
 
     # Create a summary report.
     rep = DbAwsStatReporter(args.job_name, s3_log_prefix, client, bucket_name)
-    reading_outputs = [rd for worker in workers
-                       for rd in worker.extant_readings + worker.new_readings]
-    stmt_outputs = [s for worker in workers for s in worker.statement_outputs]
     rep.report_statistics(workers)

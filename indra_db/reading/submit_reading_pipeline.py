@@ -16,13 +16,13 @@ bash$ python submit_reading_pipeline.py --help
 
 In your favorite command line.
 """
-
+from collections import defaultdict
 
 import re
 import boto3
 import pickle
 import logging
-from numpy import median, arange, array
+from numpy import median, arange, array, zeros
 import matplotlib as mpl; mpl.use('Agg')
 from matplotlib import pyplot as plt
 from datetime import datetime, timedelta
@@ -66,6 +66,13 @@ class DbReadingSubmitter(Submitter):
         self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
         self.reporter.set_section_order(['Git', 'Totals', 'Plots'])
         self.run_record = {}
+        self.start_time = None
+        self.end_time = None
+        return
+
+    def submit_reading(self, *args, **kwargs):
+        self.start_time = datetime.utcnow()
+        super(DbReadingSubmitter, self).submit_reading(*args, **kwargs)
         return
 
     def _get_base(self, job_name, start_ix, end_ix):
@@ -151,6 +158,7 @@ class DbReadingSubmitter(Submitter):
         """
         kwargs['result_record'] = self.run_record
         super(DbReadingSubmitter, self).watch_and_wait(*args, **kwargs)
+        self.end_time = datetime.utcnow()
         if self.job_list:
             self.produce_report()
 
@@ -238,78 +246,153 @@ class DbReadingSubmitter(Submitter):
     def _report_timing(self, timing_info):
         # Pivot the timing info.
         idx_patt = re.compile('%s_(\d+)_(\d+)' % self.basename)
-        job_segs = NestedDict()
         plot_set = set()
+
+        def add_job_to_plot_set(job_name):
+            m = idx_patt.match(job_name)
+            if m is None:
+                logger.error("Unexpectedly formatted name: %s."
+                             % job_name)
+                return None
+            key = tuple([int(n) for n in m.groups()] + [job_name])
+            plot_set.add(key)
+
+        job_segs = NestedDict()
         stages = []
         for stage, stage_d in timing_info.items():
-            stages.append((list(stage_d['start'].values())[0], stage))
             # e.g. reading, statement production...
+            stages.append((list(stage_d['start'].values())[0], stage))
             for metric, metric_d in stage_d.items():
                 # e.g. start, end, ...
                 for job_name, t in metric_d.items():
                     # e.g. job_basename_startIx_endIx
                     job_segs[job_name][stage][metric] = t
-                    m = idx_patt.match(job_name)
-                    if m is None:
-                        logger.error("Unexpectedly formatted name: %s."
-                                     % job_name)
-                        continue
-                    key = tuple([int(n) for n in m.groups()] + [job_name])
-                    plot_set.add(key)
-        plot_list = list(plot_set)
-        plot_list.sort()
+                    add_job_to_plot_set(job_name)
         stages = [stg for _, stg in sorted(stages)]
 
+        # Add data from local records, if available.
+        if self.run_record:
+            for final_status in ['failed', 'succeeded']:
+                for job in self.run_record[final_status]:
+                    if job['jobName'] in job_segs.keys():
+                        job_d = job_segs[job['jobName']]
+                    else:
+                        job_d = {}
+                        job_segs[job['jobName']] = job_d
+                        add_job_to_plot_set(job['jobName'])
+                    terminated = job['jobId'] in self.run_record['terminated']
+                    job_d['final'] = final_status
+                    job_d['terminated'] = terminated
+                    for time_key in ['createdAt', 'startedAt', 'stoppedAt']:
+                        stage = 'job_' + time_key.replace('At', '')
+                        ts = job.get(time_key)
+                        if ts is None:
+                            job_d[stage] = ts
+                        else:
+                            job_d[stage] = \
+                                datetime.utcfromtimestamp(job[time_key]/1000)
+
+        # Handle the start and end times.
+        if self.start_time is None or self.end_time is None:
+            all_times = [dt for job in job_segs.values() for stage in job.values()
+                         for metric, dt in stage.items() if metric != 'duration']
+
+            if self.start_time is None:
+                self.start_time = min(all_times)
+
+            if self.end_time is None:
+                self.end_time = max(all_times)
+
         # Use this for getting the minimum and maximum.
-        all_times = [dt for job in job_segs.values() for stage in job.values()
-                     for metric, dt in stage.items() if metric != 'duration']
-        all_start = min(all_times)
-        all_end = max(all_times)
+        t_gap = 5
 
         def get_time_tuple(stage_data):
-            start_seconds = (stage_data['start'] - all_start).total_seconds()
-            return start_seconds, stage_data['duration'].total_seconds()
+            start_seconds = (stage_data['start'] - self.start_time).total_seconds()
+            dur = stage_data['duration'].total_seconds()
+            if start_seconds > t_gap:
+                start_seconds += t_gap/2
 
-        # Make the broken barh plots.
+            if dur > t_gap:
+                dur -= t_gap
+            else:
+                dur = t_gap
+
+            return start_seconds, dur
+
+        def make_y(start, end, scale):
+            h = end - start
+            start += (1 - scale)*h/2
+            return start, h*scale
+
+        label_size = 5
+        # Make the broken barh plots from internal info -----------------------
         w = 6.5
         h = 9
-        fig = plt.figure(figsize=(w, h))
-        gs = plt.GridSpec(2, 1, height_ratios=[10, 1])
+        fig = plt.figure(figsize=(w, h), dpi=600)
+        gs = plt.GridSpec(2, 1, height_ratios=[10, 0.7])
         ax0 = plt.subplot(gs[0])
         ytick_pairs = []
-        t = arange((all_end - all_start).total_seconds())
-        counts = dict.fromkeys(['jobs'] + stages)
-        for k in counts.keys():
-            counts[k] = array([0 for _ in t])
-        for i, job_tpl in enumerate(plot_list):
+        total_time = (self.end_time - self.start_time).total_seconds()
+        t = arange(total_time)
+
+        # Initialize counts
+        counts = defaultdict(lambda: {'data': zeros(len(t)), 'color': None})
+
+        # Plot data from remote resources
+        for i, job_tpl in enumerate(sorted(plot_set)):
             s_ix, e_ix, job_name = job_tpl
             job_d = job_segs[job_name]
-            xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
-            ys = (s_ix, (e_ix - s_ix)*0.9)
-            ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix)))
-            logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
-            reader_cycle = ('red', 'orange', 'black', 'yellow', 'black')
-            ax0.broken_barh(xs, ys, facecolors=reader_cycle*3 + ('blue',))
 
-            for n, stg in enumerate(stages):
-                cs = counts[stg]
-                start = xs[n][0]
-                dur = xs[n][1]
-                cs[(t > start) & (t < (start + dur))] += 1
-            cs = counts['jobs']
-            cs[(t > xs[0][0]) & (t < (xs[-1][0] + xs[-1][1]))] += 1
+            # Plot the overall job run info, if known.
+            if self.run_record:
+                ts = [None if job_d[k] is None
+                      else (job_d[k] - self.start_time).total_seconds()
+                      for k in ['job_created', 'job_started', 'job_stopped']]
+                if ts[1] is None:
+                    xs = [(ts[0], ts[2] - ts[0])]
+                    facecolors = ['lightgray']
+                elif None not in ts:
+                    xs = [(ts[0], ts[1] - ts[0]), (ts[1], ts[2] - ts[1])]
+                    facecolors = ['lightgray', 'gray']
+                else:
+                    xs = []
+                    facecolors = []
+                    print("Unhandled.")
+                ys = make_y(s_ix, e_ix, 0.9)
+                ax0.broken_barh(xs, ys, facecolors=facecolors)
+
+            ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix),
+                                job_name))
+
+            if job_d['final'] == 'failed':
+                continue
+
+            # Plot the more detailed info
+            xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
+            ys = make_y(s_ix, e_ix, 0.4)
+            logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
+            facecolors = [get_stage_choices(stg)[1] for stg in stages]
+            ax0.broken_barh(xs, ys, facecolors=facecolors)
+
+            for n, stg in enumerate(stages + ['jobs']):
+                label, color = get_stage_choices(stg)
+                counts[label]['color'] = color
+                cs = counts[label]['data']
+                if stg != 'jobs':
+                    start = xs[n][0]
+                    dur = xs[n][1]
+                    cs[(t > start) & (t < (start + dur))] += 1
+                else:
+                    cs[(t > xs[0][0]) & (t < (xs[-1][0] + xs[-1][1]))] += 1
 
         # Format the plot
         ax0.tick_params(top='off', left='off', right='off', bottom='off',
                         labelleft='on', labelbottom='off')
         for spine in ax0.spines.values():
             spine.set_visible(False)
-        total_time = (all_end - all_start).total_seconds()
         ax0.set_xlim(0, total_time)
         ax0.set_ylabel(self.basename + '_ ...')
-        print(ytick_pairs)
-        yticks, ylabels = zip(*ytick_pairs)
-        print(yticks)
+        yticks, ylabels, names = zip(*ytick_pairs)
         if not self.ids_per_job:
             print([yticks[i+1] - yticks[i]
                    for i in range(len(yticks) - 1)])
@@ -319,40 +402,44 @@ class DbReadingSubmitter(Submitter):
             spacing = max([1, spacing])
         else:
             spacing = self.ids_per_job
-        print(spacing)
-        print(yticks[0], yticks[-1])
+
         ytick_range = list(arange(yticks[0], yticks[-1] + spacing, spacing))
         ylabel_filled = []
-        for ytick in ytick_range:
+        colored_labels = {}
+        for i, ytick in enumerate(ytick_range):
             if ytick in yticks:
-                ylabel_filled.append(ylabels[yticks.index(ytick)])
+                ylabel = ylabels[yticks.index(ytick)]
+                job_d = job_segs[names[yticks.index(ytick)]]
+                if job_d.get('terminated'):
+                    ylabel = 'T ' + ylabel
+                    colored_labels[i] = 'red'
+                elif job_d.get('final') == 'failed':
+                    ylabel = 'F ' + ylabel
+                    colored_labels[i] = 'orange'
+                ylabel_filled.append(ylabel)
             else:
                 ylabel_filled.append('FAILED')
         ax0.set_ylim(0, max(ytick_range) + spacing)
         ax0.set_yticks(ytick_range)
         ax0.set_yticklabels(ylabel_filled)
+        ax0.tick_params(labelsize=label_size)
+        for i, ytick in enumerate(ax0.get_yticklabels()):
+            if i in colored_labels.keys():
+                ytick.set_color(colored_labels[i])
 
-        # Plot the lower axis.
-        legend_list = []
+        # Plot the lower axis -------------------------------------------------
         ax1 = plt.subplot(gs[1], sharex=ax0)
-        for k, cs in counts.items():
-            legend_list.append(k)
-            if 'old_readings' in k:
-                c = 'red'
-            elif 'new_readings' in k:
-                c = 'orange'
-            elif 'make_statements' in k:
-                c = 'yellow'
-            elif 'dump' in k:
-                c = 'black'
-            elif k == 'stats':
-                c = 'b'
-            elif k == 'jobs':
-                c = 'k'
-            ax1.plot(t, cs, color=c)
+
+        # make the plot
+        for label, cd in counts.items():
+            ax1.plot(t, cd['data'], color=cd['color'], label=label)
+
+        # Remove the axis bars.
         for lbl, spine in ax1.spines.items():
             spine.set_visible(False)
-        max_n = max(counts['jobs'])
+
+        # Format the plot.
+        max_n = int(counts['total']['data'].max())
         ax1.set_ylim(0, max_n + 1)
         ax1.set_xlim(0, total_time)
         yticks = list(range(0, max_n-max_n//5, max(1, max_n//5)))
@@ -360,13 +447,15 @@ class DbReadingSubmitter(Submitter):
         ax1.set_yticklabels([str(n) for n in yticks] + ['max=%d' % max_n])
         ax1.set_ylabel('N_jobs')
         ax1.set_xlabel('Time since beginning [seconds]')
+        ax1.tick_params(labelsize=label_size)
+        ax1.legend(loc='best', fontsize=label_size)
 
-        # Make the figure borders more sensible.
+        # Make the figure borders more sensible -------------------------------
         fig.tight_layout()
         img_path = 'time_figure.png'
         fig.savefig(img_path)
         self.reporter.add_image(img_path, width=w, height=h, section='Plots')
-        return counts
+        return dict(counts)
 
     def _handle_sum_data(self, job_ref, summary_info, file_bytes):
         one_sum_data_dict = pickle.loads(file_bytes)
@@ -490,6 +579,7 @@ class DbReadingSubmitter(Submitter):
                 if handle_stats is not None:
                     handle_stats(ref, my_agg, file_bytes)
 
+            other_data = None
             if report_stats is not None and len(my_agg):
                 other_data = report_stats(my_agg)
 
@@ -511,6 +601,30 @@ class DbReadingSubmitter(Submitter):
                       Key=s3_prefix + 'stat_aggregates_%s.pkl' % self.time_tag,
                       Body=pickle.dumps(stat_aggs))
         return file_tree, stat_aggs
+
+
+def get_stage_choices(stage):
+    if 'old_readings' in stage:
+        label = 'old reading'
+        c = 'cyan'
+    elif 'new_readings' in stage:
+        label = 'new reading'
+        c = 'blue'
+    elif 'make_statements' in stage:
+        label = 'making statements'
+        c = 'red'
+    elif 'dump' in stage:
+        label = 'dumping'
+        c = 'black'
+    elif stage == 'stats':
+        label = 'generating stats'
+        c = 'green'
+    elif stage == 'jobs':
+        label = 'total'
+        c = 'grey'
+    else:
+        assert False, 'Unhandled stage: %s' % stage
+    return label, c
 
 
 if __name__ == '__main__':

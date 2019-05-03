@@ -264,7 +264,7 @@ class DbAwsStatReporter(Reporter):
             for key, val in worker.stops.items():
                 ends[worker.reader.name + '_' + key] = val
 
-        starts['stats'] = datetime.now()
+        starts['stats'] = datetime.utcnow()
         for k, end in ends.items():
             self._make_job_line(k + ' start', str(starts[k]))
             self._make_job_line(k + ' end', str(end))
@@ -299,7 +299,7 @@ class DbAwsStatReporter(Reporter):
         self._populate_hist_data(readings_with_stmts, readings_with_no_stmts)
         self._make_histograms()
         self._make_text_summary()
-        ends['stats'] = datetime.now()
+        ends['stats'] = datetime.utcnow()
 
         fname = self.make_report()
         with open(fname, 'rb') as f:

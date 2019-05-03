@@ -309,7 +309,7 @@ class DatabaseManager(object):
         class Reading(self.Base, Displayable):
             __tablename__ = 'reading'
             _skip_disp = ['bytes']
-            id = Column(Integer, primary_key=True)
+            id = Column(BigInteger, primary_key=True, default=None)
             text_content_id = Column(Integer,
                                      ForeignKey('text_content.id'),
                                      nullable=False)

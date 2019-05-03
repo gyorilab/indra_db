@@ -22,6 +22,7 @@ from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
 from indra.util import zip_string, batch_iter
 
 from indra_db import get_primary_db, formats
+from indra_db.managers.database_manager import readers, reader_versions
 from indra_db.util import insert_raw_agents, unpack
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ class DatabaseReadingData(ReadingData):
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
-        return ('text_content_id', 'reader', 'reader_version', 'format',
+        return ('id', 'text_content_id', 'reader', 'reader_version', 'format',
                 'bytes', 'batch_id')
 
     def zip_content(self):
@@ -99,8 +100,16 @@ class DatabaseReadingData(ReadingData):
 
     def make_tuple(self, batch_id):
         """Make the tuple expected by the database."""
-        return (self.content_id, self.reader, self.reader_version, self.format,
-                self.zip_content(), batch_id)
+        return (self.get_id(), self.content_id, self.reader,
+                self.reader_version, self.format, self.zip_content(), batch_id)
+
+    def get_id(self):
+        if self.reading_id is None:
+            self.reading_id = readers[self.reader.upper()]*10e12
+            self.reading_id += (reader_versions[self.reader.lower()]
+                                .index(self.reader_version)*10e10)
+            self.reading_id += self.tcid
+        return self.reading_id
 
     def matches(self, r_entry):
         """Determine if reading data matches the a reading entry from the db.

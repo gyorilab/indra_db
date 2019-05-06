@@ -387,13 +387,6 @@ class DatabaseReader(object):
                     DatabaseReadingData.get_cols(), lazy=is_all,
                     push_conflict=is_all)
 
-            # Update the reading_data objects with their reading_ids.
-            rdata = db.select_all([db.Reading.id, db.Reading.text_content_id,
-                                   db.Reading.reader, db.Reading.reader_version],
-                                  db.Reading.batch_id == batch_id)
-            for tpl in rdata:
-                rd_dict[tuple(tpl[1:])].reading_id = tpl[0]
-
         self.stops['dump_readings_db'] = datetime.utcnow()
         return
 

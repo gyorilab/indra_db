@@ -361,7 +361,7 @@ class DatabaseManager(object):
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
             db_info = relationship(DBInfo)
-            reading_id = Column(Integer, ForeignKey('reading.id'))
+            reading_id = Column(BigInteger, ForeignKey('reading.id'))
             reading = relationship(Reading)
             type = Column(String(100), nullable=False)
             indra_version = Column(String(100), nullable=False)

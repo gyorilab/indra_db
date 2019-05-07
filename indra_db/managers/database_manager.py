@@ -387,7 +387,7 @@ class DatabaseManager(object):
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
             db_info = relationship(DBInfo)
-            reading_id = Column(Integer, ForeignKey('reading.id'))
+            reading_id = Column(BigInteger, ForeignKey('reading.id'))
             reading = relationship(Reading)
             type = Column(String(100), nullable=False)
             indra_version = Column(String(100), nullable=False)
@@ -627,7 +627,7 @@ class DatabaseManager(object):
             _skip_disp = ['raw_json', 'pa_json']
             id = Column(Integer, primary_key=True)
             raw_json = Column(BYTEA)
-            reading_id = Column(Integer, ForeignKey('reading_ref_link.rid'))
+            reading_id = Column(BigInteger, ForeignKey('reading_ref_link.rid'))
             reading_ref = relationship(ReadingRefLink)
             db_info_id = Column(Integer)
             mk_hash = Column(BigInteger, ForeignKey('evidence_counts.mk_hash'))

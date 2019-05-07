@@ -116,7 +116,7 @@ class BulkReadingManager(ReadingManager):
             db.TextContent.insert_date > self.begin_datetime
             )
         tcids = {tcid for tcid, in tcid_q.all()}
-        self._run_reading(db, tcids)
+        self._run_reading(db, tcids, reader_class)
         return True
 
 

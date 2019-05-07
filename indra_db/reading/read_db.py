@@ -12,6 +12,8 @@ from datetime import datetime
 from math import ceil
 from multiprocessing.pool import Pool
 
+import boto3
+
 from indra.statements import make_hash
 
 from indra.tools.reading.util.script_tools import get_parser
@@ -369,6 +371,14 @@ class DatabaseReader(object):
 
         # Get the id for this batch of uploads.
         batch_id = db.make_copy_batch_id()
+
+        # DEBUG =========
+        pkl = pickle.dumps(self.new_readings)
+        s3 = boto3.client('s3')
+        s3.put_object(Bucket='bigmech',
+                      Key='indra-db/new_readings_%s.pkl' % self.tcids[0],
+                      Body=pkl)
+        # ================
 
         # Make a list of data to copy, ensuring there are no conflicts.
         upload_list = []

@@ -109,7 +109,7 @@ class DatabaseReadingData(ReadingData):
         if self.reading_id is None:
             self.reading_id = readers[self.reader.upper()]*10e12
             self.reading_id += (reader_versions[self.reader.lower()]
-                                .index(self.reader_version)*10e10)
+                                .index(self.reader_version[:20])*10e10)
             self.reading_id += self.tcid
         return self.reading_id
 

@@ -111,6 +111,7 @@ class DatabaseReadingData(ReadingData):
             self.reading_id += (reader_versions[self.reader.lower()]
                                 .index(self.reader_version[:20])*10e10)
             self.reading_id += self.tcid
+            self.reading_id = int(self.reading_id)
         return self.reading_id
 
     def matches(self, r_entry):

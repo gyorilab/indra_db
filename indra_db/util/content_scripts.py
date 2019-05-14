@@ -4,7 +4,6 @@ __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 import json
 from collections import defaultdict
 
-from indra.util import batch_iter
 
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
@@ -90,34 +89,27 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False,
                            db.RawAgents.stmt_id.isnot(None))
     stmt_dict = defaultdict(list)
     for agent_text, stmt_id in agents:
-        stmt_dict[agent_text].append(stmt_id)
+        if agent_text in texts:
+            stmt_dict[agent_text].append(stmt_id)
     if not filter_genes:
         return dict(stmt_dict)
 
     output = defaultdict(list)
-    i = 0
-    for batch in batch_iter(stmt_dict.items(), batch_size=batch_size,
-                            return_func=dict):
-        print(i)
-        unique_stmts = list(set(stmt_id for stmts in batch.values()
-                                for stmt_id in stmts))
-        jsons = db.select_all([db.RawStatements.id,
-                               db.RawStatements.json],
-                              db.RawStatements.id.in_(unique_stmts))
-        json_dict = {stmt_id: json for stmt_id, json in jsons}
-        for agent_text, stmts in batch.items():
-            print('***')
-            print(type(stmt_id))
-            print(list(json_dict.keys())[0:10])
-            print(type(list(json_dict.keys())[0]))
+    unique_stmts = set(stmt_id for stmts in stmt_dict.values()
+                       for stmt_id in stmts)
+    stmt_jsons = db.select_all([db.RawStatements.id,
+                                db.RawStatements.json],
+                               db.RawStatements.id.in_(unique_stmts))
+    json_dict = {stmt_id: json.loads(jsn) for stmt_id, jsn in stmt_jsons}
+    for agent_text, stmts in stmt_dict.items():
+        for stmt_id in stmts:
             stmt_json = json_dict[stmt_id]
-            stmt_json = json.loads(stmt_json)
             db_refs = _extract_db_refs(stmt_json)
             for ref in db_refs:
-                if 'TEXT' in ref and 'HGNC' in ref:
-                    if ref['TEXT'] == agent_text:
-                        output[agent_text].append(stmt_id)
-        i += 1
+                if ('TEXT' in ref and 'HGNC' in ref and
+                    ref['TEXT'] == agent_text and
+                        stmt_id not in output[agent_text]):
+                    output[agent_text].append(stmt_id)
     return dict(output)
 
 
@@ -226,7 +218,7 @@ def get_text_content_from_text_refs(text_refs):
 
 
 def _extract_db_refs(stmt_json):
-    agent_types = ['subj', 'obj', 'enz', 'agent', 'gef;', 'ras',
+    agent_types = ['sub', 'subj', 'obj', 'enz', 'agent', 'gef;', 'ras',
                    'gap', 'obj_from', 'obj_to']
     db_ref_list = []
 

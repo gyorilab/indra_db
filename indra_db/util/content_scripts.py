@@ -37,33 +37,20 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
                            db.RawAgents.db_name == 'TEXT',
                            db.RawAgents.db_id.like(pattern),
                            db.RawAgents.stmt_id.isnot(None))
-    stmt_dict = defaultdict(list)
+    agent_stmts_dict = defaultdict(list)
     for agent_text, stmt_id in agents:
-        stmt_dict[agent_text].append(stmt_id)
+        agent_stmts_dict[agent_text].append(stmt_id)
+    agent_stmts_dict = dict(agent_stmts_dict)
     if not filter_genes:
-        return dict(stmt_dict)
-
-    output = defaultdict(list)
-    unique_stmts = set(stmt_id for stmts in stmt_dict.values()
-                       for stmt_id in stmts)
-    stmt_jsons = db.select_all([db.RawStatements.id,
-                                db.RawStatements.json],
-                               db.RawStatements.id.in_(unique_stmts))
-    json_dict = {stmt_id: json.loads(jsn) for stmt_id, jsn in stmt_jsons}
-    for agent_text, stmts in stmt_dict.items():
-        for stmt_id in stmts:
-            stmt_json = json_dict[stmt_id]
-            db_refs = _extract_db_refs(stmt_json)
-            for ref in db_refs:
-                if ('TEXT' in ref and 'HGNC' in ref and
-                    ref['TEXT'] == agent_text and
-                        stmt_id not in output[agent_text]):
-                    output[agent_text].append(stmt_id)
-    return dict(output)
+        return agent_stmts_dict
+    else:
+        hgnc_agents = _get_hgnc_agents(db, agent_stmts_dict)
+        output = {agent: stmts for agent, stmts in agent_stmts_dict.items()
+                  if agent in hgnc_agents}
+        return output
 
 
-def get_stmts_with_agent_text_in(texts, filter_genes=False,
-                                 batch_size=100):
+def get_stmts_with_agent_text_in(texts, filter_genes=False):
     """Get statement ids with agent with rawtext in list
 
 
@@ -87,30 +74,17 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False,
                             db.RawAgents.stmt_id],
                            db.RawAgents.db_name == 'TEXT',
                            db.RawAgents.stmt_id.isnot(None))
-    stmt_dict = defaultdict(list)
+    agent_stmts_dict = defaultdict(list)
     for agent_text, stmt_id in agents:
         if agent_text in texts:
-            stmt_dict[agent_text].append(stmt_id)
+            agent_stmts_dict[agent_text].append(stmt_id)
+    agent_stmts_dict = dict(agent_stmts_dict)
     if not filter_genes:
-        return dict(stmt_dict)
-
-    output = defaultdict(list)
-    unique_stmts = set(stmt_id for stmts in stmt_dict.values()
-                       for stmt_id in stmts)
-    stmt_jsons = db.select_all([db.RawStatements.id,
-                                db.RawStatements.json],
-                               db.RawStatements.id.in_(unique_stmts))
-    json_dict = {stmt_id: json.loads(jsn) for stmt_id, jsn in stmt_jsons}
-    for agent_text, stmts in stmt_dict.items():
-        for stmt_id in stmts:
-            stmt_json = json_dict[stmt_id]
-            db_refs = _extract_db_refs(stmt_json)
-            for ref in db_refs:
-                if ('TEXT' in ref and 'HGNC' in ref and
-                    ref['TEXT'] == agent_text and
-                        stmt_id not in output[agent_text]):
-                    output[agent_text].append(stmt_id)
-    return dict(output)
+        return agent_stmts_dict
+    else:
+        hgnc_agents = _get_hgnc_agents(db, agent_stmts_dict)
+        return {agent: stmts for agent, stmts in agent_stmts_dict.items()
+                if agent in hgnc_agents}
 
 
 def get_text_content_from_stmt_ids(stmt_ids):
@@ -242,6 +216,7 @@ def _extract_db_refs(stmt_json):
                 continue
             db_ref_list.append(db_refs)
     return db_ref_list
+
 
 def _get_hgnc_agents(db, agent_stmts_dict):
     hgnc_agents = set()

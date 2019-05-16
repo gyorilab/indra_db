@@ -302,6 +302,20 @@ class RlimspManager(KnowledgebaseManager):
         return stmts
 
 
+class TrrustManager(KnowledgebaseManager):
+    name = 'trrust'
+    source = 'trrust'
+
+    def _get_statements(self):
+        from indra.sources import trrust
+        tp = trrust.process_from_web()
+        unique_stmts, dups = \
+            extract_duplicates(_expanded(tp.statements),
+                               key_func=KeyFunc.mk_and_one_ev_src)
+        print(len(dups))
+        return unique_stmts
+
+
 def _expanded(stmts):
     for stmt in stmts:
         # Only one evidence is allowed for each statement.

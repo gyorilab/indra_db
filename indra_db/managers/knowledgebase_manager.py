@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 class KnowledgebaseManager(object):
     """This is a class to lay out the methods for updating a dataset."""
     name = NotImplemented
+    source = NotImplemented
 
     def upload(self, db):
         """Upload the content for this dataset into the database."""
@@ -41,14 +42,19 @@ class KnowledgebaseManager(object):
 
     def _check_reference(self, db, can_create=True):
         """Ensure that this database has an entry in the database."""
-        dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == self.name)
-        if dbid is None:
+        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.name)
+        if dbinfo is None:
             if can_create:
-                dbid = db.insert(db.DBInfo, db_name=self.name)
+                dbid = db.insert(db.DBInfo, db_name=self.name,
+                                 source_api=self.source)
             else:
                 return None
         else:
-            dbid = dbid[0]
+            dbid = dbinfo.id
+            if dbinfo.source_api != self.source:
+                dbinfo.source_api = self.source
+                db.commit("Could no update source_api for %s."
+                          % dbinfo.db_name)
         return dbid
 
     def _get_statements(self):
@@ -59,6 +65,7 @@ class KnowledgebaseManager(object):
 class TasManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the TAS dataset."""
     name = 'tas'
+    source = 'tas'
 
     @staticmethod
     def get_order_value(stmt):
@@ -81,6 +88,7 @@ class TasManager(KnowledgebaseManager):
 
 class SignorManager(KnowledgebaseManager):
     name = 'signor'
+    source = 'signor'
 
     def _get_statements(self):
         from indra.sources.signor import process_from_web
@@ -91,6 +99,7 @@ class SignorManager(KnowledgebaseManager):
 class CBNManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of CBN network files"""
     name = 'cbn'
+    source = 'bel'
 
     def __init__(self, archive_url=None):
         if not archive_url:
@@ -139,6 +148,7 @@ class CBNManager(KnowledgebaseManager):
 
 class BiogridManager(KnowledgebaseManager):
     name = 'biogrid'
+    source = 'biogrid'
 
     def _get_statements(self):
         from indra.sources import biogrid
@@ -147,8 +157,9 @@ class BiogridManager(KnowledgebaseManager):
 
 
 class PathwayCommonsManager(KnowledgebaseManager):
-    name = 'pc10'
-    skips = {'psp', 'hprd'}
+    name = 'pc11'
+    source = 'biopax'
+    skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus'}
 
     def __init__(self, *args, **kwargs):
         self.counts = defaultdict(lambda: 0)
@@ -177,6 +188,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
 
 class HPRDManager(KnowledgebaseManager):
     name = 'hprd'
+    source = 'hprd'
 
     def _get_statements(self):
         import tarfile
@@ -223,6 +235,7 @@ class HPRDManager(KnowledgebaseManager):
 
 class BelLcManager(KnowledgebaseManager):
     name = 'bel_lc'
+    source = 'bel'
 
     def _get_statements(self):
         from indra.sources import bel

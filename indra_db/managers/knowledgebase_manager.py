@@ -178,8 +178,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
     def _get_statements(self):
         s3 = boto3.client('s3')
 
-        resp = s3.get_object(Bucket='bioexp-paper',
-                             Key='bioexp_biopax_pc10.pkl')
+        resp = s3.get_object(Bucket='indra-db', Key='biopax_pc11.pkl')
         stmts = pickle.loads(resp['Body'].read())
 
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]

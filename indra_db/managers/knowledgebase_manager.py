@@ -273,6 +273,35 @@ class PhosphositeManager(KnowledgebaseManager):
         return stmts
 
 
+class RlimspManager(KnowledgebaseManager):
+    name = 'rlimsp'
+    source = 'rlimsp'
+    _rlimsp_root = 'https://hershey.dbi.udel.edu/textmining/export/'
+    _rlimsp_files = [('rlims.medline.json', 'pmid'),
+                     ('rlims.pmc.json', 'pmcid')]
+
+    def _get_statements(self):
+        from indra.sources import rlimsp
+        import requests
+
+        stmts = []
+        for fname, id_type in self._rlimsp_files:
+            print("Processing %s..." % fname)
+            res = requests.get(self._rlimsp_root + fname)
+            jsonish_str = res.content.decode('utf-8')
+            rp = rlimsp.process_from_jsonish_str(jsonish_str, id_type)
+            stmts += rp.statements
+            print("Added %d more statements from %s..."
+                  % (len(rp.statements), fname))
+
+        stmts, dups = extract_duplicates(_expanded(stmts),
+                                         key_func=KeyFunc.mk_and_one_ev_src)
+        print('\n'.join(str(dup) for dup in dups))
+        print(len(stmts), len(dups))
+
+        return stmts
+
+
 def _expanded(stmts):
     for stmt in stmts:
         # Only one evidence is allowed for each statement.

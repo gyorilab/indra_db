@@ -1,5 +1,6 @@
 import os
 import tempfile
+import zlib
 from collections import defaultdict
 
 import boto3
@@ -246,6 +247,26 @@ class BelLcManager(KnowledgebaseManager):
             f.write(resp['Body'].read())
         pbp = bel.process_belscript(tmp_bel)
         stmts, dups = extract_duplicates(pbp.statements,
+                                         key_func=KeyFunc.mk_and_one_ev_src)
+        print('\n'.join(str(dup) for dup in dups))
+        print(len(stmts), len(dups))
+        return stmts
+
+
+class PhosphositeManager(KnowledgebaseManager):
+    name = 'phosphosite'
+    source = 'biopax'
+
+    def _get_statements(self):
+        from indra.sources import biopax
+
+        s3 = boto3.client('s3')
+        resp = s3.get_object(Bucket='bigmech',
+                             Key='indra-db/Kinase_substrates.owl.gz')
+        owl_gz = resp['Body'].read()
+        owl_bytes = zlib.decompress(owl_gz, zlib.MAX_WBITS + 32)
+        bp = biopax.process_owl_str(owl_bytes.decode('utf-8'))
+        stmts, dups = extract_duplicates(bp.statements,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))
         print(len(stmts), len(dups))

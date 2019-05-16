@@ -1,7 +1,7 @@
 from sqlalchemy.exc import NoSuchTableError
 
 __all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
-           'IndraDbException', 'sql_expressions']
+           'IndraDbException', 'sql_expressions', 'readers', 'reader_versions']
 
 import re
 import random
@@ -118,6 +118,18 @@ class formats(_map_class):
     TEXT = 'text'
     JSON = 'json'
     EKB = 'ekb'
+
+
+readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3}
+
+
+# Specify versions of readers, and preference. Later in the list is better.
+reader_versions = {
+    'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
+                'October2018-linux'],
+    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
+    'trips': ['STATIC']
+}
 
 
 class IndraTableError(IndraDbException):
@@ -297,7 +309,7 @@ class DatabaseManager(object):
         class Reading(self.Base, Displayable):
             __tablename__ = 'reading'
             _skip_disp = ['bytes']
-            id = Column(Integer, primary_key=True)
+            id = Column(BigInteger, primary_key=True, default=None)
             text_content_id = Column(Integer,
                                      ForeignKey('text_content.id'),
                                      nullable=False)
@@ -349,7 +361,7 @@ class DatabaseManager(object):
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
             db_info = relationship(DBInfo)
-            reading_id = Column(Integer, ForeignKey('reading.id'))
+            reading_id = Column(BigInteger, ForeignKey('reading.id'))
             reading = relationship(Reading)
             type = Column(String(100), nullable=False)
             indra_version = Column(String(100), nullable=False)
@@ -375,7 +387,7 @@ class DatabaseManager(object):
             source_hash = Column(BigInteger, nullable=False)
             db_info_id = Column(Integer, ForeignKey('db_info.id'))
             db_info = relationship(DBInfo)
-            reading_id = Column(Integer, ForeignKey('reading.id'))
+            reading_id = Column(BigInteger, ForeignKey('reading.id'))
             reading = relationship(Reading)
             type = Column(String(100), nullable=False)
             indra_version = Column(String(100), nullable=False)
@@ -615,7 +627,7 @@ class DatabaseManager(object):
             _skip_disp = ['raw_json', 'pa_json']
             id = Column(Integer, primary_key=True)
             raw_json = Column(BYTEA)
-            reading_id = Column(Integer, ForeignKey('reading_ref_link.rid'))
+            reading_id = Column(BigInteger, ForeignKey('reading_ref_link.rid'))
             reading_ref = relationship(ReadingRefLink)
             db_info_id = Column(Integer)
             mk_hash = Column(BigInteger, ForeignKey('evidence_counts.mk_hash'))

@@ -1,20 +1,18 @@
 from nose.plugins.attrib import attr
 
-from indra.statements.statements import Statement, Agent, Phosphorylation, \
-    Complex, Evidence
+from indra.statements.statements import Agent, Phosphorylation, Complex, \
+    Evidence
 
-from indra_db.managers.knowledgebase_manager import TasManager, CBNManager, \
-    HPRDManager, SignorManager, BiogridManager, BelLcManager, \
-    PathwayCommonsManager
+from indra_db.managers.knowledgebase_manager import *
 from indra_db.util import get_test_db, insert_db_stmts
 
 
-def _check_kbm(Kb):
+def _check_kbm(Kb, *args, **kwargs):
     db = get_test_db()
     db._clear(force=True)
     dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == Kb.name)
     assert dbid is None
-    kbm = Kb()
+    kbm = Kb(*args, **kwargs)
     kbm.upload(db)
     dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == Kb.name)[0]
     assert dbid is not None
@@ -33,7 +31,7 @@ def test_tas():
 @attr('nonpublic')
 def test_cbn():
     s3_url = 'https://s3.amazonaws.com/bigmech/travis/Hox-2.0-Hs.jgf.zip'
-    _check_kbm(lambda: CBNManager(archive_url=s3_url))
+    _check_kbm(CBNManager, archive_url=s3_url)
 
 
 @attr('nonpublic')
@@ -62,6 +60,21 @@ def test_pathway_commons():
 
 
 @attr('nonpublic')
+def test_rlimsp():
+    _check_kbm(RlimspManager)
+
+
+@attr('nonpublic')
+def test_trrust():
+    _check_kbm(TrrustManager)
+
+
+@attr('nonpublic')
+def test_phosphosite():
+    _check_kbm(PhosphositeManager)
+
+
+@attr('nonpublic')
 def test_simple_db_insert():
     db = get_test_db()
     db._clear(force=True)
@@ -70,7 +83,7 @@ def test_simple_db_insert():
                              evidence=Evidence(source_api='test')),
              Complex([Agent(n, db_refs={'FPLX': n}) for n in ('MEK', 'ERK')],
                      evidence=Evidence(source_api='test'))]
-    dbid = db.insert(db.DBInfo, db_name='test')
+    dbid = db.insert(db.DBInfo, db_name='test', source_api='tester')
     insert_db_stmts(db, stmts, dbid)
     db_stmts = db.select_all(db.RawStatements)
     db_agents = db.select_all(db.RawAgents)

@@ -1,11 +1,14 @@
-import os
-import tempfile
-import zlib
-from collections import defaultdict
+__all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
+           'BiogridManager', 'BelLcManager', 'PathwayCommonsManager',
+           'RlimspManager', 'TrrustManager', 'PhosphositeManager']
 
+import os
+import zlib
 import boto3
 import pickle
 import logging
+import tempfile
+from collections import defaultdict
 
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
@@ -54,7 +57,7 @@ class KnowledgebaseManager(object):
             dbid = dbinfo.id
             if dbinfo.source_api != self.source:
                 dbinfo.source_api = self.source
-                db.commit("Could no update source_api for %s."
+                db.commit("Could not update source_api for %s."
                           % dbinfo.db_name)
         return dbid
 
@@ -179,7 +182,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
     def _get_statements(self):
         s3 = boto3.client('s3')
 
-        resp = s3.get_object(Bucket='indra-db', Key='biopax_pc11.pkl')
+        resp = s3.get_object(Bucket='bigmech', Key='indra-db/biopax_pc11.pkl')
         stmts = pickle.loads(resp['Body'].read())
 
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
@@ -265,7 +268,7 @@ class PhosphositeManager(KnowledgebaseManager):
                              Key='indra-db/Kinase_substrates.owl.gz')
         owl_gz = resp['Body'].read()
         owl_bytes = zlib.decompress(owl_gz, zlib.MAX_WBITS + 32)
-        bp = biopax.process_owl_str(owl_bytes.decode('utf-8'))
+        bp = biopax.process_owl_str(owl_bytes)
         stmts, dups = extract_duplicates(bp.statements,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))

@@ -1,6 +1,6 @@
 import json
 import logging
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from sqlalchemy import or_, desc, true, select, intersect_all
 
 from indra.statements import get_statement_by_name, make_hash
@@ -9,6 +9,51 @@ logger = logging.getLogger('db_optimized_client')
 
 from indra.util import clockit
 from indra_db.util import get_primary_db, regularize_agent_id
+
+
+@clockit
+def get_raw_stmt_jsons_from_papers(db, id_list, id_type='pmid'):
+
+    # Get the attribute for this id type. Handle special case of trid.
+    if id_type == 'trid':
+        id_attr = db.TextRef.id
+    else:
+        try:
+            id_attr = getattr(db.TextRef, id_type)
+        except AttributeError:
+            raise ValueError("Invalid id_type: %s" % id_type)
+
+    # Select the elements to be pulled down. If id_type is pmid, don't need
+    # separate row for pmid.
+    elems = [id_attr, db.RawStatements.json]
+    if id_type != 'pmid':
+        elems = [db.TextRef.pmid, id_attr, db.RawStatements.json]
+
+    # Get the results.
+    res = db.select_all(elems, id_attr.in_(id_list),
+                        *db.link(db.RawStatements, db.TextRef))
+
+    # Organized the results into a dict of lists keyed by id value.
+    # Fix pmids along the way.
+    result_dict = defaultdict(list)
+    for row in res:
+        # Handle the special case where id_type is pmid.
+        if id_type == 'pmid':
+            pmid, rjson_bytes = row
+            id_val = pmid
+        else:
+            pmid, id_val, rjson_bytes = row
+
+        # Decode and unpack the json
+        rjson = json.loads(rjson_bytes.decode('utf-8'))
+
+        # Fix the pmids in this json.
+        rjson['evidence'][0]['pmid'] = pmid
+
+        # Add this to the results.
+        result_dict[id_val].append(rjson)
+
+    return result_dict
 
 
 @clockit

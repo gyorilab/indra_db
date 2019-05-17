@@ -329,3 +329,20 @@ def _expanded(stmts):
                 yield new_stmt
         else:
             yield stmt
+
+
+if __name__ == '__main__':
+    import sys
+    from indra_db.util import get_db
+    mode = sys.argv[1]
+    db = get_db('primary')
+    for Manager in KnowledgebaseManager.__subclasses__():
+        kbm = Manager()
+        print(kbm.name, '...')
+        if mode == 'upload':
+            kbm.upload(db)
+        elif mode == 'update':
+            kbm.update(db)
+        else:
+            print("Invalid mode: %s" % mode)
+            sys.exit(1)

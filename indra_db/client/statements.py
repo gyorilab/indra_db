@@ -134,8 +134,7 @@ def get_statements_by_paper(id_list, id_type='pmid', db=None,
     Parameters
     ----------
     id_list : list
-        The value of the id for the paper whose statements you wish to
-        retrieve.
+        A list of ints or strs that are ids of papers of type `id_type`.
     id_type : str
         The type of id used (default is pmid). Options include pmid, pmcid,
         doi, pii, url, or manuscript_id. Note that pmid is generally the

@@ -473,13 +473,28 @@ def test_raw_stmt_jsons_from_papers():
     with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
         id_samples = pickle.load(f)
 
-    pmid_dict = dbc.get_raw_stmt_jsons_from_papers(id_samples['pmid'])
-    assert len(pmid_dict)
+    for id_type, id_list in id_samples.items():
+        print(id_type)
+        res_dict = dbc.get_raw_stmt_jsons_from_papers(id_list, id_type=id_type)
+        assert len(res_dict), 'Failure with %s' % id_type
 
-    trid_dict = dbc.get_raw_stmt_jsons_from_papers(id_samples['trid'],
-                                                   id_type='trid')
-    assert len(trid_dict)
+    return
 
-    pmcid_dict = dbc.get_raw_stmt_jsons_from_papers(id_samples['pmcid'],
-                                                    id_type='pmcid')
-    assert len(pmcid_dict)
+
+@attr('nonpublic')
+def test_stmts_from_papers():
+    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
+        id_samples = pickle.load(f)
+
+    for id_type, id_list in id_samples.items():
+        print(id_type)
+
+        # Test pa retrieval
+        pa_dict = dbc.get_statements_by_paper(id_list)
+        assert len(pa_dict), 'Failure with %s %s' % ('pa', id_type)
+
+        # Test raw retrieval
+        raw_dict = dbc.get_statements_by_paper(id_list, preassembled=False)
+        assert len(raw_dict), 'Failure with %s %s' % ('raw', id_type)
+
+    return

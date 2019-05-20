@@ -11,6 +11,17 @@ from indra.util import clockit
 from indra_db.util import get_primary_db, regularize_agent_id
 
 
+def _get_id_col(tr, id_type):
+    if id_type == 'trid':
+        id_attr = tr.id
+    else:
+        try:
+            id_attr = getattr(tr, id_type)
+        except AttributeError:
+            raise ValueError("Invalid id_type: %s" % id_type)
+    return id_attr
+
+
 @clockit
 def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
     """Get raw statement jsons for a given list of papers.
@@ -36,41 +47,29 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
     if db is None:
         db = get_primary_db()
 
-    # Get the attribute for this id type. Handle special case of trid.
-    if id_type == 'trid':
-        id_attr = db.TextRef.id
-    else:
-        try:
-            id_attr = getattr(db.TextRef, id_type)
-        except AttributeError:
-            raise ValueError("Invalid id_type: %s" % id_type)
-
-    # Select the elements to be pulled down. If id_type is pmid, don't need
-    # separate row for pmid.
-    elems = [id_attr, db.RawStatements.json]
-    if id_type != 'pmid':
-        elems = [db.TextRef.pmid, id_attr, db.RawStatements.json]
+    # Get the attribute for this id type.
+    id_attr = _get_id_col(db.TextRef, id_type)
 
     # Get the results.
-    res = db.select_all(elems, id_attr.in_(id_list),
+    res = db.select_all([db.TextRef, db.RawStatements.json],
+                        id_attr.in_(id_list),
                         *db.link(db.RawStatements, db.TextRef))
 
     # Organized the results into a dict of lists keyed by id value.
     # Fix pmids along the way.
     result_dict = defaultdict(list)
-    for row in res:
-        # Handle the special case where id_type is pmid.
-        if id_type == 'pmid':
-            pmid, rjson_bytes = row
-            id_val = pmid
-        else:
-            pmid, id_val, rjson_bytes = row
+    for tr, rjson_bytes in res:
+        id_val = _get_id_col(tr, id_type)
 
         # Decode and unpack the json
         rjson = json.loads(rjson_bytes.decode('utf-8'))
 
         # Fix the pmids in this json.
-        rjson['evidence'][0]['pmid'] = pmid
+        rjson['evidence'][0]['pmid'] = tr.pmid
+
+        # Set the text_refs in this json
+        for idt in ['trid', 'pmid', 'pmcid', 'doi']:
+            rjson['evidence'][0]['text_refs'][idt] = _get_id_col(tr, idt)
 
         # Add this to the results.
         result_dict[id_val].append(rjson)

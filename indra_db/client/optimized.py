@@ -5,7 +5,7 @@ from sqlalchemy import or_, desc, true, select, intersect_all
 
 from indra.statements import get_statement_by_name, make_hash
 
-logger = logging.getLogger('db_optimized_client')
+logger = logging.getLogger(__file__)
 
 from indra.util import clockit
 from indra_db.util import get_primary_db, regularize_agent_id
@@ -13,6 +13,26 @@ from indra_db.util import get_primary_db, regularize_agent_id
 
 @clockit
 def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
+    """Get raw statement jsons for a given list of papers.
+
+    Parameters
+    ----------
+    id_list : list
+        A list of ints or strs that are ids of papers of type `id_type`.
+    id_type : str
+        Default is 'pmid'. The type of ids given in id_list, e.g. 'pmid',
+        'pmcid', 'trid'.
+    db : :py:class:`DatabaseManager`
+        Optionally specify a database manager that attaches to something
+        besides the primary database, for example a local database instance.
+
+    Returns
+    -------
+    result_dict : dict
+        A dictionary keyed by id (of `id_type`) with a list of raw statement
+        json objects as each value. Ids for which no statements are found will
+        not be included in the dict.
+    """
     if db is None:
         db = get_primary_db()
 

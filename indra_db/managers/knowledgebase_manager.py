@@ -1,10 +1,14 @@
-import os
-import tempfile
-from collections import defaultdict
+__all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
+           'BiogridManager', 'BelLcManager', 'PathwayCommonsManager',
+           'RlimspManager', 'TrrustManager', 'PhosphositeManager']
 
+import os
+import zlib
 import boto3
 import pickle
 import logging
+import tempfile
+from collections import defaultdict
 
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
@@ -15,6 +19,7 @@ logger = logging.getLogger(__name__)
 class KnowledgebaseManager(object):
     """This is a class to lay out the methods for updating a dataset."""
     name = NotImplemented
+    source = NotImplemented
 
     def upload(self, db):
         """Upload the content for this dataset into the database."""
@@ -41,14 +46,19 @@ class KnowledgebaseManager(object):
 
     def _check_reference(self, db, can_create=True):
         """Ensure that this database has an entry in the database."""
-        dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == self.name)
-        if dbid is None:
+        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.name)
+        if dbinfo is None:
             if can_create:
-                dbid = db.insert(db.DBInfo, db_name=self.name)
+                dbid = db.insert(db.DBInfo, db_name=self.name,
+                                 source_api=self.source)
             else:
                 return None
         else:
-            dbid = dbid[0]
+            dbid = dbinfo.id
+            if dbinfo.source_api != self.source:
+                dbinfo.source_api = self.source
+                db.commit("Could not update source_api for %s."
+                          % dbinfo.db_name)
         return dbid
 
     def _get_statements(self):
@@ -59,6 +69,7 @@ class KnowledgebaseManager(object):
 class TasManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the TAS dataset."""
     name = 'tas'
+    source = 'tas'
 
     @staticmethod
     def get_order_value(stmt):
@@ -81,6 +92,7 @@ class TasManager(KnowledgebaseManager):
 
 class SignorManager(KnowledgebaseManager):
     name = 'signor'
+    source = 'signor'
 
     def _get_statements(self):
         from indra.sources.signor import process_from_web
@@ -91,6 +103,7 @@ class SignorManager(KnowledgebaseManager):
 class CBNManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of CBN network files"""
     name = 'cbn'
+    source = 'bel'
 
     def __init__(self, archive_url=None):
         if not archive_url:
@@ -139,6 +152,7 @@ class CBNManager(KnowledgebaseManager):
 
 class BiogridManager(KnowledgebaseManager):
     name = 'biogrid'
+    source = 'biogrid'
 
     def _get_statements(self):
         from indra.sources import biogrid
@@ -147,8 +161,9 @@ class BiogridManager(KnowledgebaseManager):
 
 
 class PathwayCommonsManager(KnowledgebaseManager):
-    name = 'pc10'
-    skips = {'psp', 'hprd'}
+    name = 'pc11'
+    source = 'biopax'
+    skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus'}
 
     def __init__(self, *args, **kwargs):
         self.counts = defaultdict(lambda: 0)
@@ -167,8 +182,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
     def _get_statements(self):
         s3 = boto3.client('s3')
 
-        resp = s3.get_object(Bucket='bioexp-paper',
-                             Key='bioexp_biopax_pc10.pkl')
+        resp = s3.get_object(Bucket='bigmech', Key='indra-db/biopax_pc11.pkl')
         stmts = pickle.loads(resp['Body'].read())
 
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
@@ -177,6 +191,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
 
 class HPRDManager(KnowledgebaseManager):
     name = 'hprd'
+    source = 'hprd'
 
     def _get_statements(self):
         import tarfile
@@ -223,6 +238,7 @@ class HPRDManager(KnowledgebaseManager):
 
 class BelLcManager(KnowledgebaseManager):
     name = 'bel_lc'
+    source = 'bel'
 
     def _get_statements(self):
         from indra.sources import bel
@@ -240,6 +256,69 @@ class BelLcManager(KnowledgebaseManager):
         return stmts
 
 
+class PhosphositeManager(KnowledgebaseManager):
+    name = 'phosphosite'
+    source = 'biopax'
+
+    def _get_statements(self):
+        from indra.sources import biopax
+
+        s3 = boto3.client('s3')
+        resp = s3.get_object(Bucket='bigmech',
+                             Key='indra-db/Kinase_substrates.owl.gz')
+        owl_gz = resp['Body'].read()
+        owl_bytes = zlib.decompress(owl_gz, zlib.MAX_WBITS + 32)
+        bp = biopax.process_owl_str(owl_bytes)
+        stmts, dups = extract_duplicates(bp.statements,
+                                         key_func=KeyFunc.mk_and_one_ev_src)
+        print('\n'.join(str(dup) for dup in dups))
+        print(len(stmts), len(dups))
+        return stmts
+
+
+class RlimspManager(KnowledgebaseManager):
+    name = 'rlimsp'
+    source = 'rlimsp'
+    _rlimsp_root = 'https://hershey.dbi.udel.edu/textmining/export/'
+    _rlimsp_files = [('rlims.medline.json', 'pmid'),
+                     ('rlims.pmc.json', 'pmcid')]
+
+    def _get_statements(self):
+        from indra.sources import rlimsp
+        import requests
+
+        stmts = []
+        for fname, id_type in self._rlimsp_files:
+            print("Processing %s..." % fname)
+            res = requests.get(self._rlimsp_root + fname)
+            jsonish_str = res.content.decode('utf-8')
+            rp = rlimsp.process_from_jsonish_str(jsonish_str, id_type)
+            stmts += rp.statements
+            print("Added %d more statements from %s..."
+                  % (len(rp.statements), fname))
+
+        stmts, dups = extract_duplicates(_expanded(stmts),
+                                         key_func=KeyFunc.mk_and_one_ev_src)
+        print('\n'.join(str(dup) for dup in dups))
+        print(len(stmts), len(dups))
+
+        return stmts
+
+
+class TrrustManager(KnowledgebaseManager):
+    name = 'trrust'
+    source = 'trrust'
+
+    def _get_statements(self):
+        from indra.sources import trrust
+        tp = trrust.process_from_web()
+        unique_stmts, dups = \
+            extract_duplicates(_expanded(tp.statements),
+                               key_func=KeyFunc.mk_and_one_ev_src)
+        print(len(dups))
+        return unique_stmts
+
+
 def _expanded(stmts):
     for stmt in stmts:
         # Only one evidence is allowed for each statement.
@@ -250,3 +329,20 @@ def _expanded(stmts):
                 yield new_stmt
         else:
             yield stmt
+
+
+if __name__ == '__main__':
+    import sys
+    from indra_db.util import get_db
+    mode = sys.argv[1]
+    db = get_db('primary')
+    for Manager in KnowledgebaseManager.__subclasses__():
+        kbm = Manager()
+        print(kbm.name, '...')
+        if mode == 'upload':
+            kbm.upload(db)
+        elif mode == 'update':
+            kbm.update(db)
+        else:
+            print("Invalid mode: %s" % mode)
+            sys.exit(1)

@@ -490,11 +490,12 @@ def test_stmts_from_papers():
         print(id_type)
 
         # Test pa retrieval
-        pa_dict = dbc.get_statements_by_paper(id_list)
+        pa_dict = dbc.get_statements_by_paper(id_list, id_type=id_type)
         assert len(pa_dict), 'Failure with %s %s' % ('pa', id_type)
 
         # Test raw retrieval
-        raw_dict = dbc.get_statements_by_paper(id_list, preassembled=False)
+        raw_dict = dbc.get_statements_by_paper(id_list, id_type=id_type,
+                                               preassembled=False)
         assert len(raw_dict), 'Failure with %s %s' % ('raw', id_type)
 
     return

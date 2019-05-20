@@ -12,7 +12,9 @@ from indra_db.util import get_primary_db, regularize_agent_id
 
 
 @clockit
-def get_raw_stmt_jsons_from_papers(db, id_list, id_type='pmid'):
+def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
+    if db is None:
+        db = get_primary_db()
 
     # Get the attribute for this id type. Handle special case of trid.
     if id_type == 'trid':

@@ -1,18 +1,18 @@
 import json
 import logging
-from collections import defaultdict
 from sqlalchemy import or_
+from collections import defaultdict
 
-from indra.statements import Unresolved, Evidence
+logger = logging.getLogger(__file__)
 
-logger = logging.getLogger('db_statements_client')
-
-from indra.util import batch_iter, clockit
 from indra.databases import hgnc_client
+from indra.util import batch_iter, clockit
+from indra.statements import Unresolved, Evidence, Statement
 
 from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
-    get_statement_object, regularize_agent_id, _get_trids
+    get_statement_object, regularize_agent_id
 from indra_db.client.datasets import get_statement_essentials
+from indra_db.client.optimized import get_raw_stmt_jsons_from_papers
 
 
 def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
@@ -126,59 +126,37 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
     return stmts
 
 
-def get_statements_by_paper(id_val, id_type='pmid', count=1000, db=None,
-                            do_stmt_count=False, preassembled=True):
-    """Get the statements from a particular paper.
+def get_raw_statements_from_papers(id_list, id_type='pmid', db=None):
+    """Get the raw statements from a list of paper ids.
 
     Parameters
     ----------
-    id_val : int or str
+    id_list : list
         The value of the id for the paper whose statements you wish to
         retrieve.
     id_type : str
         The type of id used (default is pmid). Options include pmid, pmcid,
         doi, pii, url, or manuscript_id. Note that pmid is generally the
         best means of getting a paper.
-    count : int
-        Number of statements to retrieve in each batch (passed to
-        :py:func:`get_statements`).
     db : :py:class:`DatabaseManager`
         Optionally specify a database manager that attaches to something
         besides the primary database, for example a local databse instance.
-    do_stmt_count : bool
-        Whether or not to perform an initial statement counting step to give
-        more meaningful progress messages.
-    preassembled : bool
-        If True, statements will be selected from the table of pre-assembled
-        statements. Otherwise, they will be selected from the raw statements.
-        Default is True.
 
     Returns
     -------
-    A list of Statements from the database corresponding to the paper id given.
+    stmt_dict : dict
+        A dict of Statements from the database keyed the paper id given. Papers
+        that yielded no statements are not included.
     """
-    # TODO: Make this get from multiple papers.
-    if db is None:
-        db = get_primary_db()
+    # Get the raw statement jsons.
+    json_dict = get_raw_stmt_jsons_from_papers(id_list, id_type=id_type, db=db)
 
-    trid_list = _get_trids(db, id_val, id_type)
-    if not trid_list:
-        return None
-
-    stmts = []
-    for trid in trid_list:
-        clauses = [db.TextContent.id == db.Reading.text_content_id,
-                   db.Reading.id == db.RawStatements.reading_id,
-                   db.TextContent.text_ref_id == trid]
-        if preassembled:
-            clauses += [
-                db.RawStatements.id == db.RawUniqueLinks.raw_stmt_id,
-                db.PAStatements.mk_hash == db.RawUniqueLinks.pa_stmt_mk_hash
-                ]
-        stmts.extend(get_statements(clauses, count=count, db=db,
-                                    preassembled=preassembled,
-                                    do_stmt_count=do_stmt_count))
-    return stmts
+    # Get the Statement objects from the jsons.
+    result_dict = {}
+    for id_val, json_list in json_dict.items():
+        result_dict[id_val] = [Statement._from_json(sjson)
+                               for sjson in json_list]
+    return result_dict
 
 
 @clockit

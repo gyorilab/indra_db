@@ -96,3 +96,32 @@ def get_curations(db=None, **params):
             constraints.append(getattr(cur, key) == val)
 
     return db.select_all(cur, *constraints)
+
+
+def get_grounding_curations(db=None, **params):
+    curs = get_curations(db=db, tag='grounding')
+    groundings = {}
+    for cur in curs:
+        if not cur.text:
+            continue
+        cur_text = cur.text.strip()
+        match = re.match('^\[(.*)\] -> ([^ ]+)$', cur_text)
+        if not match:
+            logger.info('"%s" by %s does not match the grounding curation '
+                        'pattern.' % (cur_text, cur.curator))
+            continue
+        txt, dbid_str = match.groups()
+        try:
+            dbid_entries = [entry.split(':', maxsplit=1)
+                            for entry in dbid_str.split('|')]
+            dbids = {k: v for k, v in dbid_entries}
+        except Exception as e:
+            logger.info('Could not interpret DB IDs: %s for %s' %
+                        (dbid_str, txt))
+            continue
+        if txt in groundings and groundings[txt] != dbids:
+            logger.info('There is already a curation for %s: %s, '
+                        'overwriting with %s' % (txt, str(groundings[txt]),
+                                                 str(dbids)))
+        groundings[txt] = dbids
+    return groundings

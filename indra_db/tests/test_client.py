@@ -466,3 +466,36 @@ def test_source_hash():
         assert sh_rec == sh,\
             "Recreated source hash %s does not match database sourch hash %s."\
             % (sh_rec, sh)
+
+
+@attr('nonpublic')
+def test_raw_stmt_jsons_from_papers():
+    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
+        id_samples = pickle.load(f)
+
+    for id_type, id_list in id_samples.items():
+        print(id_type)
+        res_dict = dbc.get_raw_stmt_jsons_from_papers(id_list, id_type=id_type)
+        assert len(res_dict), 'Failure with %s' % id_type
+
+    return
+
+
+@attr('nonpublic')
+def test_stmts_from_papers():
+    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
+        id_samples = pickle.load(f)
+
+    for id_type, id_list in id_samples.items():
+        print(id_type)
+
+        # Test pa retrieval
+        pa_dict = dbc.get_statements_by_paper(id_list, id_type=id_type)
+        assert len(pa_dict), 'Failure with %s %s' % ('pa', id_type)
+
+        # Test raw retrieval
+        raw_dict = dbc.get_statements_by_paper(id_list, id_type=id_type,
+                                               preassembled=False)
+        assert len(raw_dict), 'Failure with %s %s' % ('raw', id_type)
+
+    return

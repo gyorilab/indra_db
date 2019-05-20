@@ -3,11 +3,10 @@ import logging
 from collections import OrderedDict, defaultdict
 from sqlalchemy import or_, desc, true, select, intersect_all
 
-from indra.statements import get_statement_by_name, make_hash
-
 logger = logging.getLogger(__file__)
 
 from indra.util import clockit
+from indra.statements import get_statement_by_name, make_hash
 from indra_db.util import get_primary_db, regularize_agent_id
 
 

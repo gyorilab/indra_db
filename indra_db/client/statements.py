@@ -12,7 +12,8 @@ from indra.statements import Unresolved, Evidence, Statement
 from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
     get_statement_object, regularize_agent_id
 from indra_db.client.datasets import get_statement_essentials
-from indra_db.client.optimized import get_raw_stmt_jsons_from_papers
+from indra_db.client.optimized import get_raw_stmt_jsons_from_papers, \
+    get_statement_jsons_from_papers
 
 
 def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
@@ -126,8 +127,9 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
     return stmts
 
 
-def get_raw_statements_from_papers(id_list, id_type='pmid', db=None):
-    """Get the raw statements from a list of paper ids.
+def get_statements_by_paper(id_list, id_type='pmid', db=None,
+                            preassembled=True):
+    """Get the statements from a list of paper ids.
 
     Parameters
     ----------
@@ -141,21 +143,46 @@ def get_raw_statements_from_papers(id_list, id_type='pmid', db=None):
     db : :py:class:`DatabaseManager`
         Optionally specify a database manager that attaches to something
         besides the primary database, for example a local databse instance.
+    preassembled : bool
+        If True, statements will be selected from the table of pre-assembled
+        statements. Otherwise, they will be selected from the raw statements.
+        Default is True.
 
     Returns
     -------
     stmt_dict : dict
         A dict of Statements from the database keyed the paper id given. Papers
-        that yielded no statements are not included.
+        that yielded no statements are not included. If `preassembled` is True,
+        there may be ids which were not present in the original dataset, and
+        there may be a key None for statements that has evidence from refs that
+        did not have that id_type of reference.
     """
-    # Get the raw statement jsons.
-    json_dict = get_raw_stmt_jsons_from_papers(id_list, id_type=id_type, db=db)
+    if preassembled:
+        # Get the preassembled statements.
+        result = get_statement_jsons_from_papers([(id_type, id_val)
+                                                  for id_val in id_list],
+                                                 max_stmts=None, db=db)
 
-    # Get the Statement objects from the jsons.
-    result_dict = {}
-    for id_val, json_list in json_dict.items():
-        result_dict[id_val] = [Statement._from_json(sjson)
-                               for sjson in json_list]
+        # Get the Statement object from the jsons. A statement shows up for
+        # all papers that it references.
+        result_dict = defaultdict(list)
+        for _, sjson in result['statements']:
+            stmt = Statement._from_json(sjson)
+            for ev in stmt.evidence:
+                result_dict[ev.text_refs.get(id_type)].append(stmt)
+
+        # Convert from defaultdict to ordinary dict.
+        result_dict = dict(result_dict)
+    else:
+        # Get the raw statement jsons.
+        json_dict = get_raw_stmt_jsons_from_papers(id_list, id_type=id_type,
+                                                   db=db)
+
+        # Get the Statement objects from the jsons.
+        result_dict = {}
+        for id_val, json_list in json_dict.items():
+            result_dict[id_val] = [Statement._from_json(sjson)
+                                   for sjson in json_list]
     return result_dict
 
 

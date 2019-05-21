@@ -246,7 +246,7 @@ def get_filtered_db_stmts(db, get_full_stmts=False, clauses=None):
 
 @clockit
 def distill_stmts(db, get_full_stmts=False, clauses=None,
-                  handle_duplicates='ignore', weed_evidence=True):
+                  handle_duplicates='error', weed_evidence=True):
     """Get a corpus of statements from clauses and filters duplicate evidence.
 
     Parameters
@@ -262,11 +262,11 @@ def distill_stmts(db, get_full_stmts=False, clauses=None,
         By default None. Specify sqlalchemy clauses to reduce the scope of
         statements, e.g. `clauses=[db.Statements.type == 'Phosphorylation']` or
         `clauses=[db.Statements.uuid.in_([<uuids>])]`.
-    handle_duplicates : 'ignore', 'delete', or a string file path
+    handle_duplicates : 'error', 'delete', or a string file path
         Choose whether you want to delete the statements that are found to be
         duplicates ('delete'), or write a pickle file with their ids (at the
-        string file path) for later handling, or simply do nothing ('ignore').
-        The default behavior is 'ignore'.
+        string file path) for later handling, or raise an exception ('error').
+        The default behavior is 'error'.
     weed_evidence : bool
         If True, evidence links that exist for raw statements that now have
         better alternatives will be removed. If False, such links will remain,
@@ -278,7 +278,7 @@ def distill_stmts(db, get_full_stmts=False, clauses=None,
         A set of either statement ids or serialized statements, depending on
         `get_full_stmts`.
     """
-    if handle_duplicates == 'delete' or handle_duplicates != 'ignore':
+    if handle_duplicates == 'delete' or handle_duplicates == 'error':
         logger.info("Looking for ids from existing links...")
         linked_sids = {sid for sid,
                        in db.select_all(db.RawUniqueLinks.raw_stmt_id)}

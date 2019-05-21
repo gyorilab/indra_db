@@ -196,7 +196,7 @@ class PreassemblyManager(object):
         return new_unique_stmts, evidence_links, agent_tuples
 
     @_handle_update_table
-    def create_corpus(self, db, continuing=False, dups_file=None):
+    def create_corpus(self, db, continuing=False):
         """Initialize the table of preassembled statements.
 
         This method will find the set of unique knowledge represented in the
@@ -210,8 +210,6 @@ class PreassemblyManager(object):
         """
         self.__tag = 'create'
 
-        dup_handling = dups_file if dups_file else 'delete'
-
         # Get filtered statement ID's.
         sid_cache_fname = path.join(HERE, 'stmt_id_cache.pkl')
         if continuing and path.exists(sid_cache_fname):
@@ -219,7 +217,7 @@ class PreassemblyManager(object):
                 stmt_ids = pickle.load(f)
         else:
             # Get the statement ids.
-            stmt_ids = distill_stmts(db, handle_duplicates=dup_handling)
+            stmt_ids = distill_stmts(db)
             with open(sid_cache_fname, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
@@ -608,13 +606,6 @@ def _make_parser():
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'.')
     )
-    parser.add_argument(
-        '--store_duplicates',
-        help=('If you do not want duplicates deleted in this run, their ids '
-              'can instead be stored in a pickle file. The file given here '
-              'will be used. If this option is not used, they will simply be '
-              'deleted now.')
-    )
     return parser
 
 
@@ -634,9 +625,9 @@ def _main():
     desc = 'Continuing' if args.continuing else 'Beginning'
     print("%s to %s preassembled corpus." % (desc, args.task))
     if args.task == 'create':
-        pm.create_corpus(db, args.continuing, args.store_duplicates)
+        pm.create_corpus(db, args.continuing)
     elif args.task == 'update':
-        pm.supplement_corpus(db, args.continuing, args.store_duplicates)
+        pm.supplement_corpus(db, args.continuing)
     else:
         raise IndraDBPreassemblyError('Unrecognized task: %s.' % args.task)
 

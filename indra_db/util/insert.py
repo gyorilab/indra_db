@@ -277,7 +277,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
 
 
 def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
-                    ignore_agents=False):
+                    ignore_agents=False, commit=True):
     """Insert pre-assembled statements, and any affiliated agents.
 
     Parameters
@@ -314,9 +314,9 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
     if verbose:
         print(" Done loading %d statements." % len(stmts))
     if do_copy:
-        db.copy('pa_statements', stmt_data, cols)
+        db.copy('pa_statements', stmt_data, cols, commit=commit)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
     if not ignore_agents:
-        insert_pa_agents(db, stmts, verbose=verbose)
+        insert_pa_agents(db, stmts, verbose=verbose, commit=commit)
     return

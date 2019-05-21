@@ -317,7 +317,7 @@ class PreassemblyManager(object):
         return all_new_stmt_ids
 
     @_handle_update_table
-    def supplement_corpus(self, db, continuing=False, dups_file=None):
+    def supplement_corpus(self, db, continuing=False):
         """Update the table of preassembled statements.
 
         This method will take any new raw statements that have not yet been
@@ -329,8 +329,6 @@ class PreassemblyManager(object):
         raw statements.
         """
         self.__tag = 'supplement'
-
-        dup_handling = dups_file if dups_file else 'delete'
 
         pickle_stashes = []
         last_update = self._get_latest_updatetime(db)
@@ -361,8 +359,7 @@ class PreassemblyManager(object):
             with open(dist_stash, 'rb') as f:
                 stmt_ids = pickle.load(f)
         else:
-            stmt_ids = distill_stmts(db, get_full_stmts=False,
-                                     handle_duplicates=dup_handling)
+            stmt_ids = distill_stmts(db, get_full_stmts=False)
             with open(dist_stash, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 

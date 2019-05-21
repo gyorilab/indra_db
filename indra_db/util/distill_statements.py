@@ -246,7 +246,7 @@ def get_filtered_db_stmts(db, get_full_stmts=False, clauses=None):
 
 @clockit
 def distill_stmts(db, get_full_stmts=False, clauses=None,
-                  handle_duplicates='error', weed_evidence=True):
+                  handle_duplicates='error'):
     """Get a corpus of statements from clauses and filters duplicate evidence.
 
     Parameters
@@ -267,10 +267,6 @@ def distill_stmts(db, get_full_stmts=False, clauses=None,
         duplicates ('delete'), or write a pickle file with their ids (at the
         string file path) for later handling, or raise an exception ('error').
         The default behavior is 'error'.
-    weed_evidence : bool
-        If True, evidence links that exist for raw statements that now have
-        better alternatives will be removed. If False, such links will remain,
-        which may cause problems in incremental pre-assembly.
 
     Returns
     -------
@@ -302,8 +298,9 @@ def distill_stmts(db, get_full_stmts=False, clauses=None,
 
     # Remove support links for statements that have better versions available.
     bad_link_sids = bettered_duplicate_sids & linked_sids
-    if len(bad_link_sids) and weed_evidence:
-        logger.info("Removing bettered evidence links...")
+    if len(bad_link_sids):
+        logger.error("Found pre-existing evidence links that were bettered...")
+        logger.info("Removing the links...")
         rm_links = db.select_all(
             db.RawUniqueLinks,
             db.RawUniqueLinks.raw_stmt_id.in_(bad_link_sids)

@@ -10,6 +10,8 @@ from argparse import ArgumentParser
 from indra.util import batch_iter, clockit
 from indra.statements import Statement
 from indra.tools import assemble_corpus as ac
+from indra.preassembler.sitemapper import logger as site_logger
+from indra.preassembler.grounding_mapper import logger as grounding_logger
 from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
@@ -17,10 +19,12 @@ from indra.preassembler.hierarchy_manager import hierarchies
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
     extract_agent_data, insert_pa_agents
 
+site_logger.setLevel(logging.INFO)
+grounding_logger.setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 HERE = path.dirname(path.abspath(__file__))
-ipa_logger.setLevel(logging.DEBUG)
+ipa_logger.setLevel(logging.INFO)
 
 
 def _handle_update_table(func):

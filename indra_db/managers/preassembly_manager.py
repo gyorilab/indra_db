@@ -158,14 +158,16 @@ class PreassemblyManager(object):
 
             # Insert the statements and their links.
             self._log("Insert new statements into database...")
-            insert_pa_stmts(db, new_unique_stmts, ignore_agents=True)
+            insert_pa_stmts(db, new_unique_stmts, ignore_agents=True,
+                            commit=False)
             self._log("Insert new raw_unique links into the database...")
             db.copy('raw_unique_links', flatten_evidence_dict(evidence_links),
-                    ('pa_stmt_mk_hash', 'raw_stmt_id'))
+                    ('pa_stmt_mk_hash', 'raw_stmt_id'), commit=False)
             db.copy('pa_agents', agent_tuples,
-                    ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+                    ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
+                    lazy=True, commit=False)
             insert_pa_agents(db, new_unique_stmts, verbose=True,
-                             skip=['agents'])
+                             skip=['agents'])  # This will commit
 
         self._log("Added %d new pa statements into the database."
                    % len(new_mk_set))

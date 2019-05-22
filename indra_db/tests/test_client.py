@@ -58,7 +58,8 @@ class _PrePaDatabaseTestSetup(object):
             inputs = {tbl: set() for tbl in tables}
 
             # Take all the db_info (there aren't many).
-            inputs['db_info'] = set(td['db_info']['tuples'])
+            inputs['db_info'] = {t + (t[1],) for t in td['db_info']['tuples']}
+            td['db_info']['cols'] += ('source_api',)
 
             # Filter out un-needed reading provenance.
             for stmt_tpl in self.stmt_tuples:

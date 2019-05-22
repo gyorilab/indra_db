@@ -15,7 +15,7 @@ install:
   - wget http://sorger.med.harvard.edu/data/bachman/reach-82631d-biores-e9ee36.jar -nv
   - export REACHPATH=$TRAVIS_BUILD_DIR/reach-82631d-biores-e9ee36.jar
   # INDRA dependencies
-  - pip install coverage python-coveralls boto3 sqlalchemy psycopg2-binary pgcopy nose-timer flask nltk reportlab
+  - pip install coverage python-coveralls boto3 sqlalchemy psycopg2-binary pgcopy nose-timer flask nltk reportlab pybel
   - pip install git+https://github.com/bgyori/paths_graph.git@networkx2
   - pip install doctest-ignore-unicode
   - pip install git+https://github.com/sorgerlab/indra.git

@@ -1,3 +1,56 @@
+from indra.util import zip_string
+
+import indra_db.util as dbu
+from indra_db.util.content_scripts import (get_stmts_with_agent_text_like,
+                                           get_stmts_with_agent_text_in,
+                                           get_text_content_from_stmt_ids,
+                                           get_text_content_from_text_refs)
+
+
+def test_get_stmts_with_agent_text_like():
+    db = _get_prepped_db()
+    agent_stmts0 = get_stmts_with_agent_text_like('__', db=db)
+    assert len(agent_stmts0) == 1
+    assert 'ER' in agent_stmts0
+    assert agent_stmts0['ER'] == [0]
+
+    agent_stmts1 = get_stmts_with_agent_text_like('__s', filter_genes=True,
+                                                  db=db)
+    assert len(agent_stmts1) == 1
+    assert 'NPs' in agent_stmts1
+    assert agent_stmts1['NPs'] == [1]
+
+
+def test_get_stmts_with_agent_test_in():
+    db = _get_prepped_db()
+    agent_stmts = get_stmts_with_agent_text_in(['damage', 'impact'],
+                                               filter_genes=True, db=db)
+    assert set(agent_stmts.keys()) == set(['damage', 'impact'])
+    assert agent_stmts['damage'] == [0]
+    assert agent_stmts['impact'] == [1]
+
+
+def test_get_text_content_from_stmt_ids():
+    fulltext0 = ('We investigate properties of the estrogen receptor (ER).'
+                 ' Our investigation made no new findings about ER, leading to'
+                 ' damage in our groups abilty to secure funding.')
+    fulltext1 = ('We describe an experiment about nanoparticles (NPs).'
+                 ' The experiment was a complete failure. Our inability to'
+                 ' produce sufficient quantities of NPs has made a troubling'
+                 ' impact on the future of our lab. The following figure'
+                 ' contains a schematic diagram of the apparatus of our'
+                 ' experiment.')
+    db = _get_prepped_db()
+    ref_dict, text_dict = get_text_content_from_stmt_ids([0, 1], db=db)
+    assert ref_dict == {0: 0, 1: 1}
+    assert text_dict[0] == fulltext0
+    assert text_dict[1] == fulltext1
+
+
+def _get_prepped_db():
+    dts = _DatabaseTestSetup()
+    dts.load_tables()
+    return dts.test_db
 
 
 class _DatabaseTestSetup(object):

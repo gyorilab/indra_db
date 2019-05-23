@@ -9,7 +9,8 @@ from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
 
 
-def get_stmts_with_agent_text_like(pattern, filter_genes=False):
+def get_stmts_with_agent_text_like(pattern, filter_genes=False,
+                                   db=None):
     """Get statement ids with agent with rawtext matching pattern
 
 
@@ -23,6 +24,10 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
        if True, only considers agents matching the pattern for which there
        is an HGNC grounding
 
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
     Returns
     -------
     dict
@@ -30,7 +35,8 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
         ids for statements with at least one agent with raw text matching
         the pattern.
     """
-    db = get_primary_db()
+    if db is None:
+        db = get_primary_db()
 
     agents = db.select_all([db.RawAgents.db_id,
                             db.RawAgents.stmt_id],
@@ -40,7 +46,7 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
     agent_stmts_dict = defaultdict(list)
     for agent_text, stmt_id in agents:
         agent_stmts_dict[agent_text].append(stmt_id)
-    agent_stmts_dict = dict(agent_stmts_dict)
+        agent_stmts_dict = dict(agent_stmts_dict)
     if not filter_genes:
         return agent_stmts_dict
     else:
@@ -50,7 +56,7 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
         return output
 
 
-def get_stmts_with_agent_text_in(texts, filter_genes=False):
+def get_stmts_with_agent_text_in(texts, filter_genes=False, db=None):
     """Get statement ids with agent with rawtext in list
 
 
@@ -63,13 +69,19 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False):
        if True, only considers agents matching the pattern for which there
        is an HGNC grounding
 
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
     Returns
     -------
     dict
         dict mapping agent texts to lists of stmt_ids for statements
         containing an agent with the given text
     """
-    db = get_primary_db()
+    if db is None:
+        db = get_primary_db()
+
     agents = db.select_all([db.RawAgents.db_id,
                             db.RawAgents.stmt_id],
                            db.RawAgents.db_name == 'TEXT',
@@ -87,7 +99,7 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False):
                 if agent in hgnc_agents}
 
 
-def get_text_content_from_stmt_ids(stmt_ids):
+def get_text_content_from_stmt_ids(stmt_ids, db=None):
     """Get text content for statements from a list of ids
 
     Gets the fulltext if it is available, even if the statement came from an
@@ -97,6 +109,11 @@ def get_text_content_from_stmt_ids(stmt_ids):
     ----------
     stmt_ids : list of str
 
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
+
     Returns
     -------
     dict of str: str
@@ -104,7 +121,9 @@ def get_text_content_from_stmt_ids(stmt_ids):
         if one is available, falls back upon using the abstract.
         A statement id will map to None if no text content is available.
     """
-    db = get_primary_db()
+    if db is None:
+        db = get_primary_db()
+
     text_refs = db.select_all([db.RawStatements.id, db.TextRef.id],
                               db.RawStatements.id.in_(stmt_ids),
                               *db.link(db.RawStatements, db.TextRef))
@@ -145,7 +164,8 @@ def get_text_content_from_stmt_ids(stmt_ids):
     return ref_dict, text_dict
 
 
-def get_text_content_from_text_refs(text_refs):
+
+def get_text_content_from_text_refs(text_refs, db=None):
     """Get text_content from an evidence object's text_refs attribute
 
 
@@ -156,6 +176,11 @@ def get_text_content_from_text_refs(text_refs):
         The dictionary should be keyed on id_types. The valid keys
         are 'PMID', 'PMCID', 'DOI', 'PII', 'URL', 'MANUSCRIPT_ID'.
 
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+        
+
     Returns
     -------
     text : str
@@ -163,7 +188,9 @@ def get_text_content_from_text_refs(text_refs):
         database, otherwise the abstract. Returns None if no content
         exists for the text_refs in the database
     """
-    db = get_primary_db()
+    if db is None:
+        db = get_primary_db()
+
     text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:

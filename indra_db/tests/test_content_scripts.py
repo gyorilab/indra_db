@@ -86,7 +86,7 @@ def _make_raw_statements_input():
                              b'"evidence": [{"source_api": "rdr", "text":'
                              b'"Our inability to produce sufficient quantities'
                              b' of NPs has made a troubling impact on the'
-                             b' future of our lab."}]}')]
+                             b' future of our lab."}]}', 1, 1)]
 
     raw_statement_dict = {x[0]: x for x in raw_statement_tuples}
     return raw_statement_cols, raw_statement_tuples, raw_statement_dict

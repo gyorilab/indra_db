@@ -65,7 +65,8 @@ def _make_test_db_input():
 
 def _make_raw_statements_input():
     raw_statement_cols = ('id', 'uuid', 'indra_version', 'mk_hash',
-                          'reading_id', 'db_info_id', 'type', 'json')
+                          'reading_id', 'db_info_id', 'type', 'json',
+                          'batch_id', 'source_hash')
     raw_statement_tuples = [(0, '0', '3.14', 0, 0, None, 'Activation',
                              b'{"type": "Activation", "sub": {"name": "ESR1",'
                              b'"db_refs": {"TEXT": "ER", "HGNC": "3467"}},'

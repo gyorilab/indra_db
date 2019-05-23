@@ -1,7 +1,5 @@
-from .test_client import _PrePaDatabaseTestSetup
 
 
-class _DatabaseTestSetup(_PrePaDatabaseTestSetup):
     """Sets up the test database"""
     def __init__(self):
         raise NotImplementedError

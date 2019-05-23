@@ -55,8 +55,8 @@ def _make_raw_statements_input():
                              b'{"TEXT": "damage", "HGNC": "24934"}},'
                              b'"evidence": [{"source_api": "rdr", "text":'
                              b'"Our investigation made no new findings about'
-                             b'ER, leading to damage in our groups ability to'
-                             b'secure funding."}]}'),
+                             b' ER, leading to damage in our groups ability to'
+                             b' secure funding."}]}'),
                             (1, '1', '3.14', 1, 1, None, 'IncreaseAmount',
                              b'{"type": "IncreaseAmount", "sub":'
                              b' {"name": "NPS", "db_refs":'
@@ -67,7 +67,7 @@ def _make_raw_statements_input():
                              b'"evidence": [{"source_api": "rdr", "text":'
                              b'"Our inability to produce sufficient quantities'
                              b' of NPs has made a troubling impact on the'
-                             b'future of our lab."}]}')]
+                             b' future of our lab."}]}')]
 
     raw_statement_dict = {x[0]: x for x in raw_statement_tuples}
     return raw_statement_cols, raw_statement_tuples, raw_statement_dict
@@ -110,7 +110,7 @@ def _make_text_content_input():
                  ' troubling impact on the future of our lab.')
     fulltext1 = ('We describe an experiment about nanoparticles (NPs).'
                  ' The experiment was a complete failure. Our inability to'
-                 'produce sufficient quantities of NPs has made a troubling'
+                 ' produce sufficient quantities of NPs has made a troubling'
                  ' impact on the future of our lab. The following figure'
                  ' contains a schematic diagram of the apparatus of our'
                  ' experiment.')

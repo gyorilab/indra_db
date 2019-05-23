@@ -25,10 +25,10 @@ if __name__ == '__main__':
         description='Manage the materialized views.'
         )
     parser.add_argument(
-        choices=['create', 'refresh'],
+        choices=['create', 'update'],
         dest='task',
         help=('Choose whether you want to create the materialized views for '
-              'the first time, or simply refresh existing views. Create is '
+              'the first time, or simply update existing views. Create is '
               'necessary if the definition of the view changes.')
         )
     parser.add_argument(

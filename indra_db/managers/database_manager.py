@@ -172,7 +172,7 @@ class MaterializedView(Displayable):
         return sql
 
     @classmethod
-    def refresh(cls, db, with_data=True, commit=True):
+    def update(cls, db, with_data=True, commit=True):
         sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
               % (cls.__tablename__, '' if with_data else 'NO')
         if commit:
@@ -709,7 +709,7 @@ class DatabaseManager(object):
                 return sql
 
             @classmethod
-            def refresh(cls, db, with_data=True, commit=True):
+            def update(cls, db, with_data=True, commit=True):
                 sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
                 create_sql = cls.create(db, with_data, commit=False)
                 sql = sql_fmt % (cls.__tablename__, create_sql)
@@ -874,7 +874,9 @@ class DatabaseManager(object):
                 view.create(self, with_data)
             elif mode == 'update':
                 logger.info('[%s] Refreshing %s view...' % (i, view))
-                view.refresh(self, with_data)
+                view.update(self, with_data)
+            else:
+                raise ValueError("Invalid mode: %s." % mode)
         return
 
     def drop_tables(self, tbl_list=None, force=False):

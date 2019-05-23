@@ -10,6 +10,8 @@ from argparse import ArgumentParser
 from indra.util import batch_iter, clockit
 from indra.statements import Statement
 from indra.tools import assemble_corpus as ac
+from indra.preassembler.sitemapper import logger as site_logger
+from indra.preassembler.grounding_mapper import logger as grounding_logger
 from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
@@ -17,10 +19,12 @@ from indra.preassembler.hierarchy_manager import hierarchies
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
     extract_agent_data, insert_pa_agents
 
+site_logger.setLevel(logging.INFO)
+grounding_logger.setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 HERE = path.dirname(path.abspath(__file__))
-ipa_logger.setLevel(logging.DEBUG)
+ipa_logger.setLevel(logging.INFO)
 
 
 def _handle_update_table(func):
@@ -158,14 +162,16 @@ class PreassemblyManager(object):
 
             # Insert the statements and their links.
             self._log("Insert new statements into database...")
-            insert_pa_stmts(db, new_unique_stmts, ignore_agents=True)
+            insert_pa_stmts(db, new_unique_stmts, ignore_agents=True,
+                            commit=False)
             self._log("Insert new raw_unique links into the database...")
             db.copy('raw_unique_links', flatten_evidence_dict(evidence_links),
-                    ('pa_stmt_mk_hash', 'raw_stmt_id'))
+                    ('pa_stmt_mk_hash', 'raw_stmt_id'), commit=False)
             db.copy('pa_agents', agent_tuples,
-                    ('stmt_mk_hash', 'db_name', 'db_id', 'role'), lazy=True)
+                    ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
+                    lazy=True, commit=False)
             insert_pa_agents(db, new_unique_stmts, verbose=True,
-                             skip=['agents'])
+                             skip=['agents'])  # This will commit
 
         self._log("Added %d new pa statements into the database."
                    % len(new_mk_set))
@@ -196,7 +202,7 @@ class PreassemblyManager(object):
         return new_unique_stmts, evidence_links, agent_tuples
 
     @_handle_update_table
-    def create_corpus(self, db, continuing=False, dups_file=None):
+    def create_corpus(self, db, continuing=False):
         """Initialize the table of preassembled statements.
 
         This method will find the set of unique knowledge represented in the
@@ -210,8 +216,6 @@ class PreassemblyManager(object):
         """
         self.__tag = 'create'
 
-        dup_handling = dups_file if dups_file else 'delete'
-
         # Get filtered statement ID's.
         sid_cache_fname = path.join(HERE, 'stmt_id_cache.pkl')
         if continuing and path.exists(sid_cache_fname):
@@ -219,7 +223,7 @@ class PreassemblyManager(object):
                 stmt_ids = pickle.load(f)
         else:
             # Get the statement ids.
-            stmt_ids = distill_stmts(db, handle_duplicates=dup_handling)
+            stmt_ids = distill_stmts(db)
             with open(sid_cache_fname, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
@@ -319,7 +323,7 @@ class PreassemblyManager(object):
         return all_new_stmt_ids
 
     @_handle_update_table
-    def supplement_corpus(self, db, continuing=False, dups_file=None):
+    def supplement_corpus(self, db, continuing=False):
         """Update the table of preassembled statements.
 
         This method will take any new raw statements that have not yet been
@@ -331,8 +335,6 @@ class PreassemblyManager(object):
         raw statements.
         """
         self.__tag = 'supplement'
-
-        dup_handling = dups_file if dups_file else 'delete'
 
         pickle_stashes = []
         last_update = self._get_latest_updatetime(db)
@@ -363,8 +365,7 @@ class PreassemblyManager(object):
             with open(dist_stash, 'rb') as f:
                 stmt_ids = pickle.load(f)
         else:
-            stmt_ids = distill_stmts(db, get_full_stmts=False,
-                                     handle_duplicates=dup_handling)
+            stmt_ids = distill_stmts(db, get_full_stmts=False)
             with open(dist_stash, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
@@ -608,13 +609,6 @@ def _make_parser():
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'.')
     )
-    parser.add_argument(
-        '--store_duplicates',
-        help=('If you do not want duplicates deleted in this run, their ids '
-              'can instead be stored in a pickle file. The file given here '
-              'will be used. If this option is not used, they will simply be '
-              'deleted now.')
-    )
     return parser
 
 
@@ -634,9 +628,9 @@ def _main():
     desc = 'Continuing' if args.continuing else 'Beginning'
     print("%s to %s preassembled corpus." % (desc, args.task))
     if args.task == 'create':
-        pm.create_corpus(db, args.continuing, args.store_duplicates)
+        pm.create_corpus(db, args.continuing)
     elif args.task == 'update':
-        pm.supplement_corpus(db, args.continuing, args.store_duplicates)
+        pm.supplement_corpus(db, args.continuing)
     else:
         raise IndraDBPreassemblyError('Unrecognized task: %s.' % args.task)
 

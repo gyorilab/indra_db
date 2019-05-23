@@ -58,10 +58,11 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def __time_get_query(self, end_point, query_str):
-        return self.__time_query('get', 'api/' + end_point, query_str)
+        return self.__time_query('get', end_point, query_str)
 
     def __time_query(self, method, end_point, query_str=None, url_fmt='/%s?%s',
                      **data):
+        print(end_point)
         start_time = datetime.now()
         if query_str is not None:
             url = url_fmt % (end_point, query_str)
@@ -309,7 +310,7 @@ class DbApiTestCase(unittest.TestCase):
         assert len(resp_dict['statements']) == 2, len(resp_dict['statements'])
 
     def test_statements_by_hashes_query(self):
-        resp, dt, size = self.__time_query('post', 'api/statements/from_hashes',
+        resp, dt, size = self.__time_query('post', 'statements/from_hashes',
                                            hashes=[-36028793042562873,
                                                    -12978096432588272,
                                                    -12724735151233845])
@@ -328,7 +329,7 @@ class DbApiTestCase(unittest.TestCase):
         hash_cnt_dict = {ev_cts.mk_hash: ev_cts.ev_count for ev_cts in res}
 
         # Run the test.
-        resp, dt, size = self.__time_query('post', 'api/statements/from_hashes',
+        resp, dt, size = self.__time_query('post', 'statements/from_hashes',
                                            hashes=list(hash_cnt_dict.keys()))
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
@@ -339,7 +340,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_get_statement_by_single_hash_query(self):
         resp, dt, size = self.__time_query('get',
-            'api/statements/from_hash/-36028793042562873')
+            'statements/from_hash/-36028793042562873')
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)
@@ -350,7 +351,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_get_big_statement_by_single_hash_query(self):
         resp, dt, size = self.__time_query('get',
-            'api/statements/from_hash/15317156147479913')
+            'statements/from_hash/15317156147479913')
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)
@@ -362,7 +363,7 @@ class DbApiTestCase(unittest.TestCase):
     def __test_basic_paper_query(self, id_val, id_type, min_num_results=1):
         id_list = [{'id': id_val, 'type': id_type}]
         resp, dt, size = self.__time_query('post',
-                                           'api/statements/from_papers',
+                                           'statements/from_papers',
                                            ids=id_list)
         self.__check_time(dt)
         assert size <= SIZELIMIT, size
@@ -437,12 +438,12 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def test_redaction_on_agents_query(self):
-        return self.__test_redaction('get', 'api/statements/from_agents',
+        return self.__test_redaction('get', 'statements/from_agents',
                                      'agent1=STAT5@FPLX&agent2=CRKL')
 
     def test_redaction_on_paper_query(self):
         ids = [{'id': '20914619', 'type': 'tcid'}]
-        return self.__test_redaction('post', 'api/statements/from_papers', None,
+        return self.__test_redaction('post', 'statements/from_papers', None,
                                      url_fmt='%s?%s', ids=ids)
 
     def test_redaction_on_hash_query(self):
@@ -452,7 +453,7 @@ class DbApiTestCase(unittest.TestCase):
             35045936321307934, -21857044700777238, 26048368199546337,
             -13784512593103829
             ]
-        return self.__test_redaction('post', 'api/statements/from_hashes', None,
+        return self.__test_redaction('post', 'statements/from_hashes', None,
                                      url_fmt='%s?%s', hashes=sample_hashes)
 
     def test_curation_submission(self):

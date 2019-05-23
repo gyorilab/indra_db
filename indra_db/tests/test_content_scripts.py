@@ -9,7 +9,7 @@ class _DatabaseTestSetup(_PrePaDatabaseTestSetup):
 
 def _make_test_db_input():
     test_database = {}
-    raw_statement_cols, raw_statement_tuples = raw_statement_dict = \
+    raw_statement_cols, raw_statement_tuples, raw_statement_dict = \
         _make_raw_statements_input()
     test_database['raw_statements'] = {'cols': raw_statement_cols,
                                        'tuples': raw_statement_tuples,
@@ -85,7 +85,7 @@ def _make_raw_agents_input():
                         (7, 1, 'HGNC', '20387', 'OBJECT')]
 
     raw_agent_dict = {x[0]: x for x in raw_agent_tuples}
-    return raw_agent_cols, raw_agent_dict
+    return raw_agent_cols, raw_agent_tuples, raw_agent_dict
 
 
 def _make_readings_input():

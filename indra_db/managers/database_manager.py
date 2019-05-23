@@ -689,7 +689,8 @@ class DatabaseManager(object):
                 db.grab_session()
                 logger.info("Discovering the possible sources...")
                 src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
-                logger.info("Found the following sources: %s" % src_list)
+                logger.info("Found the following sources: %s"
+                            % [src for src, in src_list])
                 entries = []
                 cols = []
                 for src, in src_list:

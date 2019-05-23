@@ -868,12 +868,12 @@ class DatabaseManager(object):
             if mode == 'create':
                 if view_name in active_views:
                     logger.info('[%s] View %s already exists. Skipping.'
-                                % (i, view))
+                                % (i, view_name))
                     continue
-                logger.info('[%s] Creating %s view...' % (i, view))
+                logger.info('[%s] Creating %s view...' % (i, view_name))
                 view.create(self, with_data)
             elif mode == 'update':
-                logger.info('[%s] Refreshing %s view...' % (i, view))
+                logger.info('[%s] Updating %s view...' % (i, view_name))
                 view.update(self, with_data)
             else:
                 raise ValueError("Invalid mode: %s." % mode)

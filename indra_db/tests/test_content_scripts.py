@@ -138,11 +138,6 @@ def _make_text_content_input():
                  ' impact on the future of our lab. The following figure'
                  ' contains a schematic diagram of the apparatus of our'
                  ' experiment.')
-
-    text_content_tuples = [(0, 0, 'pubmed', 'abstract', 'text', abstract0),
-                           (1, 0, 'pmc', 'fulltext', 'text', fulltext0),
-                           (2, 1, 'pubmed', 'abstract', 'text', abstract1),
-                           (3, 1, 'pmc', 'fulltext', 'text', fulltext1)]
     abstract2 = ('We describe applications of nanoparticles (NPs) to'
                  ' grant procurement. We find that mentions of NPs in'
                  ' grant proposals has a positive correlation with the'
@@ -150,6 +145,16 @@ def _make_text_content_input():
                  ' NPs is shown to increase the health of research'
                  ' programs')
 
+    text_content_tuples = [(0, 0, 'pubmed', 'abstract', 'text',
+                            zip_string(abstract0)),
+                           (1, 0, 'pmc', 'fulltext', 'text',
+                            zip_string(fulltext0)),
+                           (2, 1, 'pubmed', 'abstract', 'text',
+                            zip_string(abstract1)),
+                           (3, 1, 'pmc', 'fulltext', 'text',
+                            zip_string(fulltext1)),
+                           (4, 2, 'pubmed', 'abstract', 'text',
+                            zip_string(abstract2))]
     text_content_dict = {x[0]: x for x in text_content_tuples}
     return text_content_cols, text_content_tuples, text_content_dict
 

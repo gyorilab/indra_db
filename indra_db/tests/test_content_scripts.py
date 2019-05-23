@@ -1,8 +1,29 @@
 
 
+class _DatabaseTestSetup(object):
     """Sets up the test database"""
     def __init__(self):
-        raise NotImplementedError
+        self.test_db = dbu.get_test_db()
+        self.test_db._clear(force=True)
+        self.test_data = _make_test_db_input()
+        self.test_db._init_auth()
+        _, api_key = self.test_db._add_auth('tester')
+        self.tester_key = api_key
+
+    def load_tables(self):
+        """Load in all the background provenance metadata (e.g. text_ref).
+
+        This must be done before you load any statements.
+        """
+        test_data = self.test_data
+        tables = ['text_ref', 'text_content', 'reading', 'db_info',
+                  'raw_statements', 'raw_agents']
+        db_inputs = {table: set(test_data[table]['tuples'])
+                     for table in tables}
+        for table in tables:
+            self.test_db.copy(table, db_inputs[table],
+                              test_data[table]['cols'])
+        return
 
 
 def _make_test_db_input():

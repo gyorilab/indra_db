@@ -474,7 +474,6 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
 
 
 @app.route('/statements/from_agents', methods=['GET'])
-@_security_wrapper
 @_query_wrapper
 def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get some statements constrained by query."""
@@ -544,7 +543,6 @@ mod_map = {'demethylate': 'Demethylation',
 
 
 @app.route('/statements/ask', methods=['GET'])
-@_security_wrapper
 @_query_wrapper
 def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
     if ev_limit is None:
@@ -586,7 +584,6 @@ def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
 
 
 @app.route('/statements/from_hashes', methods=['POST'])
-@_security_wrapper
 @_query_wrapper
 def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
     if ev_lim is None:
@@ -607,7 +604,6 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
 
 
 @app.route('/statements/from_hash/<hash_val>', methods=['GET'])
-@_security_wrapper
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                           hash_val):
@@ -619,7 +615,6 @@ def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
 
 
 @app.route('/statements/from_papers', methods=['POST'])
-@_security_wrapper
 @_query_wrapper
 def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get Statements from a papers with the given ids."""
@@ -657,7 +652,6 @@ def describe_curation():
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
-@_security_wrapper
 def submit_curation_endpoint(hash_val, **kwargs):
     logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')

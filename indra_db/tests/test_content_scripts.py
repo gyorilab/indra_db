@@ -75,7 +75,7 @@ def _make_raw_statements_input():
                              b'"evidence": [{"source_api": "rdr", "text":'
                              b'"Our investigation made no new findings about'
                              b' ER, leading to damage in our groups ability to'
-                             b' secure funding."}]}'),
+                             b' secure funding."}]}', 1, 0),
                             (1, '1', '3.14', 1, 1, None, 'IncreaseAmount',
                              b'{"type": "IncreaseAmount", "sub":'
                              b' {"name": "NPS", "db_refs":'

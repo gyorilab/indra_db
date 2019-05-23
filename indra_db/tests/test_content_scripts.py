@@ -93,25 +93,29 @@ def _make_raw_statements_input():
 
 
 def _make_raw_agents_input():
-    raw_agent_cols = ('id', 'stmt_id', 'db_name', 'db_id', 'role')
-    raw_agent_tuples = [(0, 0, 'TEXT', 'ER', 'SUBJECT'),
-                        (1, 0, 'HGNC', 'ESR1', 'SUBJECT'),
-                        (2, 1, 'TEXT', 'NPs', 'SUBJECT'),
-                        (3, 1, 'HGNC', '33940', 'SUBJECT'),
-                        (4, 0, 'TEXT', 'damage', 'OBJECT'),
-                        (5, 0, 'HGNC', '24934', 'OBJECT'),
-                        (6, 1, 'TEXT', 'impact', 'OBJECT'),
-                        (7, 1, 'HGNC', '20387', 'OBJECT')]
-
+    raw_agent_cols = ('id', 'stmt_id', 'db_name', 'db_id', 'role', 'ag_num')
+    raw_agent_tuples = [(0, 0, 'TEXT', 'ER', 'SUBJECT', 0),
+                        (1, 0, 'HGNC', 'ESR1', 'SUBJECT', 0),
+                        (2, 1, 'TEXT', 'NPs', 'SUBJECT', 0),
+                        (3, 1, 'HGNC', '33940', 'SUBJECT', 0),
+                        (4, 0, 'TEXT', 'damage', 'OBJECT', 0),
+                        (5, 0, 'HGNC', '24934', 'OBJECT', 0),
+                        (6, 1, 'TEXT', 'impact', 'OBJECT', 0),
+                        (7, 1, 'HGNC', '20387', 'OBJECT', 0),
+                        (8, 2, 'TEXT', 'NPs', 'SUBJECT', 0),
+                        (9, 2, 'MESH', 'D053758', 'SUBJECT', 0),
+                        (10, 2, 'TEXT', 'health', 'OBJECT', 0),
+                        (11, 2, 'MESH', 'D006262', 'OBJECT', 0)]
     raw_agent_dict = {x[0]: x for x in raw_agent_tuples}
     return raw_agent_cols, raw_agent_tuples, raw_agent_dict
 
 
 def _make_readings_input():
     reading_cols = ('id', 'text_content_id', 'reader', 'reader_version',
-                    'bytes', 'format')
-    reading_tuples = [(0, 1, 'RDR', '2.78', b'\x1f', 'json'),
-                      (1, 2, 'RDR', '2.78', b'\x82', 'json')]
+                    'bytes', 'format', 'batch_id')
+    reading_tuples = [(0, 1, 'RDR', '2.78', b'\x1f', 'json', 1),
+                      (1, 2, 'RDR', '2.78', b'\x82', 'json', 1),
+                      (2, 4, 'RDR', '2.78', b'\x17', 'json', 1)]
     reading_dict = {x[0]: x for x in reading_tuples}
     return reading_cols, reading_tuples, reading_dict
 
@@ -138,6 +142,13 @@ def _make_text_content_input():
                            (1, 0, 'pmc', 'fulltext', 'text', fulltext0),
                            (2, 1, 'pubmed', 'abstract', 'text', abstract1),
                            (3, 1, 'pmc', 'fulltext', 'text', fulltext1)]
+    abstract2 = ('We describe applications of nanoparticles (NPs) to'
+                 ' grant procurement. We find that mentions of NPs in'
+                 ' grant proposals has a positive correlation with the'
+                 ' likelihood an application is accepted. Research into'
+                 ' NPs is shown to increase the health of research'
+                 ' programs')
+
     text_content_dict = {x[0]: x for x in text_content_tuples}
     return text_content_cols, text_content_tuples, text_content_dict
 
@@ -145,6 +156,7 @@ def _make_text_content_input():
 def _make_text_ref_input():
     text_ref_cols = ('id', 'pmid', 'pmcid', 'doi', 'manuscript_id', 'pii')
     text_ref_tuples = [(0, '000000', 'PMC777777', None, None, None),
-                       (1, '777777', 'PMC000000', None, None, None)]
+                       (1, '777777', 'PMC000000', None, None, None),
+                       (2, '000001', None, None, None, None)]
     text_ref_dict = {x[0]: x for x in text_ref_tuples}
     return text_ref_cols, text_ref_tuples, text_ref_dict

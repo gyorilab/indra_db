@@ -34,10 +34,9 @@ We also collect information from these databases:
 - [BioGRID](https://thebiogrid.org/)
 - [TAS](https://www.biorxiv.org/content/10.1101/358978v1)
 - [TRRUST](https://omictools.com/trrust-tool)
-- [MedScan Extractions](http://www.medscanlab.com/) (requires special access)
-- [Rlims-P](https://research.bioinformatics.udel.edu/rlimsp/)
-- [Phosphosite Plus](https://www.phosphosite.org/)
-- [Causal Bio Network](http://www.causalbionet.com/)
+- [RLIMS-P](https://research.bioinformatics.udel.edu/rlimsp/)
+- [PhosphoSitePlus](https://www.phosphosite.org/)
+- [Causal Biological Networks Database](http://www.causalbionet.com/)
 
 These databases are retrieved using the tools in `indra.sources`. The statements
 extracted from all of these sources are stored and updated in the database.

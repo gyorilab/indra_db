@@ -342,7 +342,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_get_statement_by_single_hash_query(self):
         resp, dt, size = self.__time_query('get',
-            'statements/from_hash/-36028793042562873')
+            'statements/from_hash/25011516823924690')
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)
@@ -353,7 +353,7 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_get_big_statement_by_single_hash_query(self):
         resp, dt, size = self.__time_query('get',
-            'statements/from_hash/15317156147479913')
+            'statements/from_hash/-29396420431585282')
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)

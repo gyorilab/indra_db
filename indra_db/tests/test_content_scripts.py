@@ -30,7 +30,7 @@ def test_get_stmts_with_agent_text_like():
     assert agent_stmts2['NPs'] == [1]
 
 
-def test_get_stmts_with_agent_test_in():
+def test_get_stmts_with_agent_text_in():
     db = _get_prepped_db()
     agent_stmts = get_stmts_with_agent_text_in(['damage', 'impact'],
                                                filter_genes=True, db=db)

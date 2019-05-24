@@ -2,7 +2,8 @@
 
 # INDRA DB
 
-<img align="left" src="/doc/indra_db_logo.png?raw=True" width="480" height="200" />
+<img align="left" src="https://s3.amazonaws.com/bigmech/indra-db/indra_db_logo.png"
+ width="480" height="200" />
 
 The INDRA (Integrated Network and Dynamical Reasoning Assembler) Database is a
 framework for creating, maintaining, and accessing a database of content,

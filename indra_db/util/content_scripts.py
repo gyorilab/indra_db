@@ -41,7 +41,7 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
 
     agents = db.select_all([db.RawAgents.db_id,
                             db.RawAgents.stmt_id],
-                           db.RawAgents.db_name == 'TEXT',
+                           db.RawAgents.db_name.like('TEXT'),
                            db.RawAgents.db_id.like(pattern),
                            db.RawAgents.stmt_id.isnot(None))
     agent_stmts_dict = defaultdict(list)

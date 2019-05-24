@@ -22,10 +22,12 @@ def test_get_stmts_with_agent_text_like():
     assert 'DL' in agent_stmts1
     assert agent_stmts1['ER'] == [0]
     assert agent_stmts1['DL'] == [2]
+
+    agent_stmts2 = get_stmts_with_agent_text_like('__s', filter_genes=True,
                                                   db=db)
-    assert len(agent_stmts1) == 1
-    assert 'NPs' in agent_stmts1
-    assert agent_stmts1['NPs'] == [1]
+    assert len(agent_stmts2) == 1
+    assert 'NPs' in agent_stmts2
+    assert agent_stmts2['NPs'] == [1]
 
 
 def test_get_stmts_with_agent_test_in():

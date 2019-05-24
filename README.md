@@ -33,6 +33,11 @@ We also collect information from these databases:
 - [SIGNOR](https://signor.uniroma2.it/)
 - [BioGRID](https://thebiogrid.org/)
 - [TAS](https://www.biorxiv.org/content/10.1101/358978v1)
+- [TRRUST](https://omictools.com/trrust-tool)
+- [MedScan](http://www.medscanlab.com/) (requires special access)
+- [Rlims-P](https://research.bioinformatics.udel.edu/rlimsp/)
+- [Phosphosite Plus](https://www.phosphosite.org/homeAction.action)
+- [Causal Bio Network](http://www.causalbionet.com/)
 
 These databases are retrieved using the tools in `indra.sources`. The statements
 extracted from all of these sources are stored and updated in the database.

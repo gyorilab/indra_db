@@ -46,7 +46,8 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
     agent_stmts_dict = defaultdict(list)
     for agent_text, stmt_id in agents:
         agent_stmts_dict[agent_text].append(stmt_id)
-        agent_stmts_dict = dict(agent_stmts_dict)
+
+    agent_stmts_dict = dict(agent_stmts_dict)
     if not filter_genes:
         return agent_stmts_dict
     else:

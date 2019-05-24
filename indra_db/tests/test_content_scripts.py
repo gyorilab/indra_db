@@ -9,12 +9,19 @@ from indra_db.util.content_scripts import (get_stmts_with_agent_text_like,
 
 def test_get_stmts_with_agent_text_like():
     db = _get_prepped_db()
-    agent_stmts0 = get_stmts_with_agent_text_like('__', db=db)
+    agent_stmts0 = get_stmts_with_agent_text_like('__', filter_genes=True,
+                                                  db=db)
     assert len(agent_stmts0) == 1
     assert 'ER' in agent_stmts0
     assert agent_stmts0['ER'] == [0]
 
-    agent_stmts1 = get_stmts_with_agent_text_like('__s', filter_genes=True,
+    agent_stmts1 = get_stmts_with_agent_text_like('__', filter_genes=False,
+                                                  db=db)
+    assert len(agent_stmts1) == 2
+    assert 'ER' in agent_stmts1
+    assert 'DL' in agent_stmts1
+    assert agent_stmts1['ER'] == [0]
+    assert agent_stmts1['DL'] == [2]
                                                   db=db)
     assert len(agent_stmts1) == 1
     assert 'NPs' in agent_stmts1

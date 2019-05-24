@@ -21,8 +21,8 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
         For example '__' for two letter agents
 
     filter_genes : Optional[bool]
-       if True, only considers agents matching the pattern for which there
-       is an HGNC grounding
+       if True, only returns map for agent texts for which there is at least
+       one HGNC grounding in the database. Default: False
 
     db : Optional[:py:class:`DatabaseManager`]
         User has the option to pass in a database manager. If None
@@ -31,9 +31,10 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
     Returns
     -------
     dict
-        dict mapping agent texts matching the input pattern to lists of
-        ids for statements with at least one agent with raw text matching
-        the pattern.
+        dict mapping agent texts to statement ids. agent text are those
+        matching the input pattern. Each agent text maps to the list of
+        statement ids for statements containing an agent with that TEXT
+        in its db_refs
     """
     if db is None:
         db = get_primary_db()
@@ -67,8 +68,8 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False, db=None):
         a list of agent texts
 
     filter_genes : Optional[bool]
-       if True, only considers agents matching the pattern for which there
-       is an HGNC grounding
+        if True, only returns map for agent texts for which there is at least
+        one HGNC grounding in the database. Default: False
 
     db : Optional[:py:class:`DatabaseManager`]
         User has the option to pass in a database manager. If None
@@ -77,8 +78,8 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False, db=None):
     Returns
     -------
     dict
-        dict mapping agent texts to lists of stmt_ids for statements
-        containing an agent with the given text
+        dict mapping agent texts to lists of statement ids for statements
+        containing an agent with that TEXT in its db_refs.
     """
     if db is None:
         db = get_primary_db()
@@ -117,10 +118,16 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
 
     Returns
     -------
-    dict of str: str
-        dictionary mapping statement ids to text content. Uses fulltext
-        if one is available, falls back upon using the abstract.
-        A statement id will map to None if no text content is available.
+    ref_dict: dict
+        dict mapping statement ids to associated text ref ids. Some
+        statement ids will map to None if there is no associated text
+        content.
+
+    text_dict: dict
+        dict mapping text ref ids to best possible text content.
+        fulltext xml from elsevier or pmc if it exists in the database,
+        otherwise an abstract if there is one in the database. Maps text_ref
+        to None if there is no text content available.
     """
     if db is None:
         db = get_primary_db()
@@ -165,7 +172,6 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     return ref_dict, text_dict
 
 
-
 def get_text_content_from_text_refs(text_refs, db=None):
     """Get text_content from an evidence object's text_refs attribute
 
@@ -180,7 +186,6 @@ def get_text_content_from_text_refs(text_refs, db=None):
     db : Optional[:py:class:`DatabaseManager`]
         User has the option to pass in a database manager. If None
         the primary database is used. Default: None
-        
 
     Returns
     -------

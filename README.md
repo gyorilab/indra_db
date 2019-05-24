@@ -36,7 +36,7 @@ We also collect information from these databases:
 - [TRRUST](https://omictools.com/trrust-tool)
 - [MedScan Extractions](http://www.medscanlab.com/) (requires special access)
 - [Rlims-P](https://research.bioinformatics.udel.edu/rlimsp/)
-- [Phosphosite Plus](https://www.phosphosite.org/homeAction.action)
+- [Phosphosite Plus](https://www.phosphosite.org/)
 - [Causal Bio Network](http://www.causalbionet.com/)
 
 These databases are retrieved using the tools in `indra.sources`. The statements

@@ -1,5 +1,7 @@
+import pickle
 import unittest
 import json
+from os import path
 import sys
 
 from itertools import combinations
@@ -14,6 +16,9 @@ from indra.databases import hgnc_client
 from indra_db import get_primary_db
 
 from .api import app, MAX_STATEMENTS, get_source, REDACT_MESSAGE
+
+
+HERE = path.dirname(path.abspath(__file__))
 
 TIMEGOAL = 1
 TIMELIMIT = 30
@@ -310,10 +315,9 @@ class DbApiTestCase(unittest.TestCase):
         assert len(resp_dict['statements']) == 2, len(resp_dict['statements'])
 
     def test_statements_by_hashes_query(self):
+        hashes = [25011516823924690, -29396420431585282, 12592460208021981]
         resp, dt, size = self.__time_query('post', 'statements/from_hashes',
-                                           hashes=[-36028793042562873,
-                                                   -12978096432588272,
-                                                   -12724735151233845])
+                                           hashes=hashes)
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)
@@ -322,15 +326,13 @@ class DbApiTestCase(unittest.TestCase):
         return
 
     def test_statements_by_hashes_large_query(self):
-        # TODO: Figure out a way to query hashes that is faster.
-        # Get a set of hashes.
-        db = get_primary_db()
-        res = db.select_sample_from_table(MAX_STATEMENTS, db.EvidenceCounts)
-        hash_cnt_dict = {ev_cts.mk_hash: ev_cts.ev_count for ev_cts in res}
+        with open(path.join(HERE, 'sample_hashes.pkl'), 'rb') as f:
+            hashes = pickle.load(f)
+        hash_sample = hashes[:MAX_STATEMENTS]
 
         # Run the test.
         resp, dt, size = self.__time_query('post', 'statements/from_hashes',
-                                           hashes=list(hash_cnt_dict.keys()))
+                                           hashes=hash_sample)
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)
@@ -447,12 +449,9 @@ class DbApiTestCase(unittest.TestCase):
                                      url_fmt='%s?%s', ids=ids)
 
     def test_redaction_on_hash_query(self):
-        sample_hashes = [
-            -32827941998109538, -20158153585845131, 15974582929874023,
-            -11800901683709001, 32808234842849068, -31465406544763237,
-            35045936321307934, -21857044700777238, 26048368199546337,
-            -13784512593103829
-            ]
+        sample_hashes = [24340898017079193, -18002830651869995,
+                         11108256246535015, 27972673344272623,
+                         29058537924450063, -13534950859792956]
         return self.__test_redaction('post', 'statements/from_hashes', None,
                                      url_fmt='%s?%s', hashes=sample_hashes)
 

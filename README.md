@@ -15,20 +15,28 @@ knowledge at your fingertips through a direct Python client and a REST api.
 
 ### Knowledge sources
 
-The INDRA Database currently integrates the following biology-focused natural language
-processing systems at scale:
+The INDRA Database currently integrates and distills knowledge from several
+different sources, both biology-focused natural language processing systems and
+other pre-existing databases
+
+#### Daily Readers
+We have read all available content, and every day we run the following readers:
 - [REACH](https://github.com/clulab/reach)
 - [Sparser](https://github.com/ddmcdonald/sparser)
-- [TRIPS](http://trips.ihmc.us/trac/drum/wiki/TripsDrumSystemInstallation)
-- [RLIMS-P](https://research.bioinformatics.udel.edu/rlimsp/)
 
-with content drawn from:
+on the latest content drawn from:
 - [PubMed](https://www.ncbi.nlm.nih.gov/pubmed/) - ~19 million abstracts and ~29 million titles
 - [PubMed Central](/www.ncbi.nlm.nih.gov/pmc/) - ~2.7 million fulltext
 - [Elsevier](https://www.elsevier.com/) - ~0.7 million fulltext 
 (requires special access)
 
-We also collect information from these databases:
+#### Other Readers
+We also include more or less static content extracted from the following readers:
+- [TRIPS](http://trips.ihmc.us/trac/drum/wiki/TripsDrumSystemInstallation)
+- [RLIMS-P](https://research.bioinformatics.udel.edu/rlimsp/)
+
+#### Other Databases
+We include the information from these pre-existing databases:
 - [Pathway Commons database](http://pathwaycommons.org/)
 - [BEL Large Corpus](https://github.com/OpenBEL/)
 - [SIGNOR](https://signor.uniroma2.it/)
@@ -38,8 +46,9 @@ We also collect information from these databases:
 - [PhosphoSitePlus](https://www.phosphosite.org/)
 - [Causal Biological Networks Database](http://www.causalbionet.com/)
 
-These databases are retrieved using the tools in `indra.sources`. The statements
-extracted from all of these sources are stored and updated in the database.
+These databases are retrieved primarily using the tools in `indra.sources`. The
+statements extracted from all of these sources are stored and updated in the
+database.
 
 ### Knowledge Assembly
 

@@ -32,11 +32,17 @@ def test_get_stmts_with_agent_text_like():
 
 def test_get_stmts_with_agent_text_in():
     db = _get_prepped_db()
-    agent_stmts = get_stmts_with_agent_text_in(['damage', 'impact'],
-                                               filter_genes=True, db=db)
-    assert set(agent_stmts.keys()) == set(['damage', 'impact'])
-    assert agent_stmts['damage'] == [0]
-    assert agent_stmts['impact'] == [1]
+    agent_stmts0 = get_stmts_with_agent_text_in(['damage', 'impact', 'health'],
+                                                filter_genes=True, db=db)
+    assert set(agent_stmts0.keys()) == set(['damage', 'impact'])
+    assert agent_stmts0['damage'] == [0]
+    assert agent_stmts0['impact'] == [1]
+    agent_stmts1 = get_stmts_with_agent_text_in(['damage', 'impact', 'health'],
+                                                filter_genes=False, db=db)
+    assert set(agent_stmts1.keys()) == set(['damage', 'impact', 'health'])
+    assert agent_stmts1['damage'] == [0]
+    assert agent_stmts1['impact'] == [1]
+    assert agent_stmts1['health'] == [2]
 
 
 def test_get_text_content_from_stmt_ids():

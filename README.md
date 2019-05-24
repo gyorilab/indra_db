@@ -20,6 +20,7 @@ processing systems at scale:
 - [REACH](https://github.com/clulab/reach)
 - [Sparser](https://github.com/ddmcdonald/sparser)
 - [TRIPS](http://trips.ihmc.us/trac/drum/wiki/TripsDrumSystemInstallation)
+- [RLIMS-P](https://research.bioinformatics.udel.edu/rlimsp/)
 
 with content drawn from:
 - [PubMed](https://www.ncbi.nlm.nih.gov/pubmed/) - ~19 million abstracts and ~29 million titles
@@ -34,7 +35,6 @@ We also collect information from these databases:
 - [BioGRID](https://thebiogrid.org/)
 - [TAS](https://www.biorxiv.org/content/10.1101/358978v1)
 - [TRRUST](https://omictools.com/trrust-tool)
-- [RLIMS-P](https://research.bioinformatics.udel.edu/rlimsp/)
 - [PhosphoSitePlus](https://www.phosphosite.org/)
 - [Causal Biological Networks Database](http://www.causalbionet.com/)
 

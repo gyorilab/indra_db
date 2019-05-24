@@ -140,7 +140,17 @@ def _make_raw_statements_input():
                              b'"evidence": [{"source_api": "rdr", "text":'
                              b'"Our inability to produce sufficient quantities'
                              b' of NPs has made a troubling impact on the'
-                             b' future of our lab."}]}', 1, 1)]
+                             b' future of our lab ."}]}', 1, 1),
+                            (2, '2', '3.14', 2, 2, None, 'IncreaseAmount',
+                             b'{"type": "IncreaseAmount", "sub":'
+                             b' {"name": "Deep Learning", "db_refs":'
+                             b'{"TEXT": "DL", "MESH": "D000077321"}},'
+                             b'"obj": {"name": "Health",'
+                             b'"db_refs":'
+                             b'{"TEXT": "health", "MESH": "D006262"}},'
+                             b'"evidence": [{"source_api": "rdr", "text":'
+                             b'"Research into DL is shown to increase'
+                             b' the health of research programs."}]}', 1, 1)]
 
     raw_statement_dict = {x[0]: x for x in raw_statement_tuples}
     return raw_statement_cols, raw_statement_tuples, raw_statement_dict
@@ -156,8 +166,8 @@ def _make_raw_agents_input():
                         (5, 0, 'HGNC', '24934', 'OBJECT', 0),
                         (6, 1, 'TEXT', 'impact', 'OBJECT', 0),
                         (7, 1, 'HGNC', '20387', 'OBJECT', 0),
-                        (8, 2, 'TEXT', 'NPs', 'SUBJECT', 0),
-                        (9, 2, 'MESH', 'D053758', 'SUBJECT', 0),
+                        (8, 2, 'TEXT', 'DL', 'SUBJECT', 0),
+                        (9, 2, 'MESH', 'D000077321', 'SUBJECT', 0),
                         (10, 2, 'TEXT', 'health', 'OBJECT', 0),
                         (11, 2, 'MESH', 'D006262', 'OBJECT', 0)]
     raw_agent_dict = {x[0]: x for x in raw_agent_tuples}
@@ -191,11 +201,11 @@ def _make_text_content_input():
                  ' impact on the future of our lab. The following figure'
                  ' contains a schematic diagram of the apparatus of our'
                  ' experiment.')
-    abstract2 = ('We describe applications of nanoparticles (NPs) to'
-                 ' grant procurement. We find that mentions of NPs in'
+    abstract2 = ('We describe applications of deep learning (DL) to'
+                 ' grant procurement. We find that mentions of DL in'
                  ' grant proposals has a positive correlation with the'
                  ' likelihood an application is accepted. Research into'
-                 ' NPs is shown to increase the health of research'
+                 ' DL is shown to increase the health of research'
                  ' programs')
 
     text_content_tuples = [(0, 0, 'pubmed', 'abstract', 'text',

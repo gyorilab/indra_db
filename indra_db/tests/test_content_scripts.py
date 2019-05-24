@@ -62,6 +62,23 @@ def test_get_text_content_from_stmt_ids():
     assert text_dict[1] == fulltext1
 
 
+def test_get_text_content_from_text_refs():
+    fulltext0 = ('We investigate properties of the estrogen receptor (ER).'
+                 ' Our investigation made no new findings about ER, leading to'
+                 ' damage in our groups abilty to secure funding.')
+    fulltext1 = ('We describe an experiment about nanoparticles (NPs).'
+                 ' The experiment was a complete failure. Our inability to'
+                 ' produce sufficient quantities of NPs has made a troubling'
+                 ' impact on the future of our lab. The following figure'
+                 ' contains a schematic diagram of the apparatus of our'
+                 ' experiment.')
+    db = _get_prepped_db()
+    text = get_text_content_from_text_refs({'PMID': '000000'}, db=db)
+    assert text == fulltext0
+    text = get_text_content_from_text_refs({'PMID': '777777'}, db=db)
+    assert text == fulltext1
+
+
 def _get_prepped_db():
     dts = _DatabaseTestSetup()
     dts.load_tables()

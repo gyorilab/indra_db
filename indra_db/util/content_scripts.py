@@ -86,7 +86,7 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False, db=None):
 
     agents = db.select_all([db.RawAgents.db_id,
                             db.RawAgents.stmt_id],
-                           db.RawAgents.db_name == 'TEXT',
+                           db.RawAgents.db_name.like('TEXT'),
                            db.RawAgents.stmt_id.isnot(None))
     agent_stmts_dict = defaultdict(list)
     for agent_text, stmt_id in agents:

@@ -1,9 +1,7 @@
 __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
 
-import json
 from collections import defaultdict
-
 
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
@@ -271,29 +269,3 @@ def _extract_db_refs(stmt_json):
                 continue
             db_ref_list.append(db_refs)
     return db_ref_list
-
-
-def _get_hgnc_agents(db, agent_stmts_dict):
-    hgnc_agents = set()
-    unique_stmts = set(stmt_id for stmts in agent_stmts_dict.values()
-                       for stmt_id in stmts)
-    stmt_jsons = db.select_all([db.RawStatements.id,
-                                db.RawStatements.json],
-                               db.RawStatements.id.in_(unique_stmts))
-    json_dict = {stmt_id: json.loads(jsn) for stmt_id, jsn in stmt_jsons}
-    flag = False
-    for agent_text, stmts in agent_stmts_dict.items():
-        for stmt_id in stmts:
-            stmt_json = json_dict[stmt_id]
-            db_refs = _extract_db_refs(stmt_json)
-            for ref in db_refs:
-                if ('TEXT' in ref and 'HGNC' in ref and
-                        ref['TEXT'] == agent_text):
-                    hgnc_agents.add(agent_text)
-                    # if an agent text is determined to be grounded to HGNC
-                    # in at least one statement, break early
-                    flag = True
-                    break
-            if flag:
-                break
-    return hgnc_agents

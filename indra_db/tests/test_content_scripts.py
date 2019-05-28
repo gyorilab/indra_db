@@ -200,14 +200,14 @@ def _make_raw_agents_input():
                         (1, 0, 'HGNC', 'ESR1', 'SUBJECT', 0),
                         (2, 1, 'TEXT', 'NPs', 'SUBJECT', 0),
                         (3, 1, 'HGNC', '33940', 'SUBJECT', 0),
-                        (4, 0, 'TEXT', 'damage', 'OBJECT', 0),
-                        (5, 0, 'HGNC', '24934', 'OBJECT', 0),
-                        (6, 1, 'TEXT', 'impact', 'OBJECT', 0),
-                        (7, 1, 'HGNC', '20387', 'OBJECT', 0),
+                        (4, 0, 'TEXT', 'damage', 'OBJECT', 1),
+                        (5, 0, 'HGNC', '24934', 'OBJECT', 1),
+                        (6, 1, 'TEXT', 'impact', 'OBJECT', 1),
+                        (7, 1, 'HGNC', '20387', 'OBJECT', 1),
                         (8, 2, 'TEXT', 'DL', 'SUBJECT', 0),
                         (9, 2, 'MESH', 'D000077321', 'SUBJECT', 0),
-                        (10, 2, 'TEXT', 'health', 'OBJECT', 0),
-                        (11, 2, 'MESH', 'D006262', 'OBJECT', 0)]
+                        (10, 2, 'TEXT', 'health', 'OBJECT', 1),
+                        (11, 2, 'MESH', 'D006262', 'OBJECT', 1)]
     raw_agent_dict = {x[0]: x for x in raw_agent_tuples}
     return raw_agent_cols, raw_agent_tuples, raw_agent_dict
 

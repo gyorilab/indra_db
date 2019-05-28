@@ -39,23 +39,15 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
     if db is None:
         db = get_primary_db()
 
+    # Query Raw agents table for agents with TEXT db_ref matching pattern
+    # Selects agent texts, statement ids and agent numbers. The agent number
+    # corresponds to the agents index into the agent list
     agents = db.select_all([db.RawAgents.db_id,
-                            db.RawAgents.stmt_id],
+                            db.RawAgents.stmt_id,
+                            db.RawAgents.ag_num],
                            db.RawAgents.db_name.like('TEXT'),
                            db.RawAgents.db_id.like(pattern),
                            db.RawAgents.stmt_id.isnot(None))
-    agent_stmts_dict = defaultdict(list)
-    for agent_text, stmt_id in agents:
-        agent_stmts_dict[agent_text].append(stmt_id)
-
-    agent_stmts_dict = dict(agent_stmts_dict)
-    if not filter_genes:
-        return agent_stmts_dict
-    else:
-        hgnc_agents = _get_hgnc_agents(db, agent_stmts_dict)
-        output = {agent: stmts for agent, stmts in agent_stmts_dict.items()
-                  if agent in hgnc_agents}
-        return output
 
 
 def get_stmts_with_agent_text_in(texts, filter_genes=False, db=None):

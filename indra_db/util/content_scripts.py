@@ -48,9 +48,23 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
                            db.RawAgents.db_name.like('TEXT'),
                            db.RawAgents.db_id.like(pattern),
                            db.RawAgents.stmt_id.isnot(None))
-
-
-def get_stmts_with_agent_text_in(texts, filter_genes=False, db=None):
+    if filter_genes:
+        # If filtering to only genes, get statement ids and agent numbers
+        # for all agents grounded to HGNC. Check if agent text has been
+        # grounded to HGNC at least once
+        hgnc_agents = db.select_all([db.RawAgents.stmt_id,
+                                     db.RawAgents.ag_num],
+                                    db.RawAgents.db_name.like('HGNC'),
+                                    db.RawAgents.stmt_id.isnot(None))
+        hgnc_agents = set(hgnc_agents)
+        agents = [(agent_text, stmt_id, ag_num)
+                  for agent_text, stmt_id, ag_num in agents
+                  if (stmt_id, ag_num) in hgnc_agents]
+    output = defaultdict(list)
+    for agent_text, stmt_id, ag_num in agents:
+        if stmt_id not in output[agent_text]:
+            output[agent_text].append(stmt_id)
+    return dict(output)
     """Get statement ids with agent with rawtext in list
 
 
@@ -76,21 +90,34 @@ def get_stmts_with_agent_text_in(texts, filter_genes=False, db=None):
     if db is None:
         db = get_primary_db()
 
+    # Query Raw agents table for agents with TEXT db_ref matching pattern
+    # Selects agent texts, statement ids and agent numbers. The agent number
+    # corresponds to the agents index into the agent list
     agents = db.select_all([db.RawAgents.db_id,
-                            db.RawAgents.stmt_id],
+                            db.RawAgents.stmt_id,
+                            db.RawAgents.ag_num],
                            db.RawAgents.db_name.like('TEXT'),
                            db.RawAgents.stmt_id.isnot(None))
-    agent_stmts_dict = defaultdict(list)
-    for agent_text, stmt_id in agents:
-        if agent_text in texts:
-            agent_stmts_dict[agent_text].append(stmt_id)
-    agent_stmts_dict = dict(agent_stmts_dict)
-    if not filter_genes:
-        return agent_stmts_dict
-    else:
-        hgnc_agents = _get_hgnc_agents(db, agent_stmts_dict)
-        return {agent: stmts for agent, stmts in agent_stmts_dict.items()
-                if agent in hgnc_agents}
+    agents = [(agent_text, stmt_id, ag_num)
+              for agent_text, stmt_id, ag_num in agents
+              if agent_text in agent_texts]
+    if filter_genes:
+        # If filtering to only genes, get statement ids and agent numbers
+        # for all agents grounded to HGNC. Check if agent text has been
+        # grounded to HGNC at least once
+        hgnc_agents = db.select_all([db.RawAgents.stmt_id,
+                                     db.RawAgents.ag_num],
+                                    db.RawAgents.db_name.like('HGNC'),
+                                    db.RawAgents.stmt_id.isnot(None))
+        hgnc_agents = set(hgnc_agents)
+        agents = [(agent_text, stmt_id, ag_num)
+                  for agent_text, stmt_id, ag_num in agents
+                  if (stmt_id, ag_num) in hgnc_agents]
+    output = defaultdict(list)
+    for agent_text, stmt_id, ag_num in agents:
+        if stmt_id not in output[agent_text]:
+            output[agent_text].append(stmt_id)
+    return dict(output)
 
 
 def get_text_content_from_stmt_ids(stmt_ids, db=None):

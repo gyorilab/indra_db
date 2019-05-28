@@ -65,12 +65,15 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
         if stmt_id not in output[agent_text]:
             output[agent_text].append(stmt_id)
     return dict(output)
+
+
+def get_stmts_with_agent_text_in(agent_texts, filter_genes=False, db=None):
     """Get statement ids with agent with rawtext in list
 
 
     Parameters
     ----------
-    tests : list of str
+    agent_texts : list of str
         a list of agent texts
 
     filter_genes : Optional[bool]

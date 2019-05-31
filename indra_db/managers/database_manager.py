@@ -172,7 +172,7 @@ class MaterializedView(Displayable):
         return sql
 
     @classmethod
-    def refresh(cls, db, with_data=True, commit=True):
+    def update(cls, db, with_data=True, commit=True):
         sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
               % (cls.__tablename__, '' if with_data else 'NO')
         if commit:
@@ -689,7 +689,8 @@ class DatabaseManager(object):
                 db.grab_session()
                 logger.info("Discovering the possible sources...")
                 src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
-                logger.info("Found the following sources: %s" % src_list)
+                logger.info("Found the following sources: %s"
+                            % [src for src, in src_list])
                 entries = []
                 cols = []
                 for src, in src_list:
@@ -709,7 +710,7 @@ class DatabaseManager(object):
                 return sql
 
             @classmethod
-            def refresh(cls, db, with_data=True, commit=True):
+            def update(cls, db, with_data=True, commit=True):
                 sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
                 create_sql = cls.create(db, with_data, commit=False)
                 sql = sql_fmt % (cls.__tablename__, create_sql)
@@ -868,13 +869,15 @@ class DatabaseManager(object):
             if mode == 'create':
                 if view_name in active_views:
                     logger.info('[%s] View %s already exists. Skipping.'
-                                % (i, view))
+                                % (i, view_name))
                     continue
-                logger.info('[%s] Creating %s view...' % (i, view))
+                logger.info('[%s] Creating %s view...' % (i, view_name))
                 view.create(self, with_data)
             elif mode == 'update':
-                logger.info('[%s] Refreshing %s view...' % (i, view))
-                view.refresh(self, with_data)
+                logger.info('[%s] Updating %s view...' % (i, view_name))
+                view.update(self, with_data)
+            else:
+                raise ValueError("Invalid mode: %s." % mode)
         return
 
     def drop_tables(self, tbl_list=None, force=False):

@@ -1,12 +1,14 @@
 __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
+
 from collections import defaultdict
 
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
 
 
-def get_stmts_with_agent_text_like(pattern, filter_genes=False):
+def get_stmts_with_agent_text_like(pattern, filter_genes=False,
+                                   db=None):
     """Get statement ids with agent with rawtext matching pattern
 
 
@@ -17,43 +19,109 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False):
         For example '__' for two letter agents
 
     filter_genes : Optional[bool]
-       if True, only considers agents matching the pattern for which there
-       is an HGNC grounding
+       if True, only returns map for agent texts for which there is at least
+       one HGNC grounding in the database. Default: False
+
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
 
     Returns
     -------
     dict
-        dict mapping agent texts matching the input pattern to lists of
-        ids for statements with at least one agent with raw text matching
-        the pattern.
+        dict mapping agent texts to statement ids. agent text are those
+        matching the input pattern. Each agent text maps to the list of
+        statement ids for statements containing an agent with that TEXT
+        in its db_refs
     """
-    db = get_primary_db()
+    if db is None:
+        db = get_primary_db()
 
-    text_dict = db.select_all([db.RawAgents.stmt_id,
-                               db.RawAgents.db_id],
-                              db.RawAgents.db_name == 'TEXT',
-                              db.RawAgents.db_id.like(pattern),
-                              db.RawAgents.stmt_id.isnot(None))
-
+    # Query Raw agents table for agents with TEXT db_ref matching pattern
+    # Selects agent texts, statement ids and agent numbers. The agent number
+    # corresponds to the agents index into the agent list
+    agents = db.select_all([db.RawAgents.db_id,
+                            db.RawAgents.stmt_id,
+                            db.RawAgents.ag_num],
+                           db.RawAgents.db_name.like('TEXT'),
+                           db.RawAgents.db_id.like(pattern),
+                           db.RawAgents.stmt_id.isnot(None))
     if filter_genes:
-        hgnc_stmts = db.select_all(db.RawAgents.stmt_id,
-                                   db.RawAgents.db_name == 'HGNC',
-                                   db.RawAgents.stmt_id.isnot(None))
-        hgnc_stmts = set(stmt_id[0] for stmt_id in hgnc_stmts)
-        hgnc_rawtexts = set()
-        for stmt_id, db_id in text_dict:
-            if stmt_id not in hgnc_stmts:
-                continue
-        hgnc_rawtexts.add(db_id)
+        # If filtering to only genes, get statement ids and agent numbers
+        # for all agents grounded to HGNC. Check if agent text has been
+        # grounded to HGNC at least once
+        hgnc_agents = db.select_all([db.RawAgents.stmt_id,
+                                     db.RawAgents.ag_num],
+                                    db.RawAgents.db_name.like('HGNC'),
+                                    db.RawAgents.stmt_id.isnot(None))
+        hgnc_agents = set(hgnc_agents)
+        agents = [(agent_text, stmt_id, ag_num)
+                  for agent_text, stmt_id, ag_num in agents
+                  if (stmt_id, ag_num) in hgnc_agents]
+    output = defaultdict(list)
+    for agent_text, stmt_id, ag_num in agents:
+        if stmt_id not in output[agent_text]:
+            output[agent_text].append(stmt_id)
+    return dict(output)
 
-    result_dict = defaultdict(list)
-    for stmt_id, db_id in text_dict:
-        if not filter_genes or db_id in hgnc_rawtexts:
-            result_dict[db_id].append(stmt_id)
-    return dict(result_dict)
+
+def get_stmts_with_agent_text_in(agent_texts, filter_genes=False, db=None):
+    """Get statement ids with agent with rawtext in list
 
 
-def get_text_content_from_stmt_ids(stmt_ids):
+    Parameters
+    ----------
+    agent_texts : list of str
+        a list of agent texts
+
+    filter_genes : Optional[bool]
+        if True, only returns map for agent texts for which there is at least
+        one HGNC grounding in the database. Default: False
+
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
+    Returns
+    -------
+    dict
+        dict mapping agent texts to lists of statement ids for statements
+        containing an agent with that TEXT in its db_refs.
+    """
+    if db is None:
+        db = get_primary_db()
+
+    # Query Raw agents table for agents with TEXT db_ref matching pattern
+    # Selects agent texts, statement ids and agent numbers. The agent number
+    # corresponds to the agents index into the agent list
+    agents = db.select_all([db.RawAgents.db_id,
+                            db.RawAgents.stmt_id,
+                            db.RawAgents.ag_num],
+                           db.RawAgents.db_name.like('TEXT'),
+                           db.RawAgents.stmt_id.isnot(None))
+    agents = [(agent_text, stmt_id, ag_num)
+              for agent_text, stmt_id, ag_num in agents
+              if agent_text in agent_texts]
+    if filter_genes:
+        # If filtering to only genes, get statement ids and agent numbers
+        # for all agents grounded to HGNC. Check if agent text has been
+        # grounded to HGNC at least once
+        hgnc_agents = db.select_all([db.RawAgents.stmt_id,
+                                     db.RawAgents.ag_num],
+                                    db.RawAgents.db_name.like('HGNC'),
+                                    db.RawAgents.stmt_id.isnot(None))
+        hgnc_agents = set(hgnc_agents)
+        agents = [(agent_text, stmt_id, ag_num)
+                  for agent_text, stmt_id, ag_num in agents
+                  if (stmt_id, ag_num) in hgnc_agents]
+    output = defaultdict(list)
+    for agent_text, stmt_id, ag_num in agents:
+        if stmt_id not in output[agent_text]:
+            output[agent_text].append(stmt_id)
+    return dict(output)
+
+
+def get_text_content_from_stmt_ids(stmt_ids, db=None):
     """Get text content for statements from a list of ids
 
     Gets the fulltext if it is available, even if the statement came from an
@@ -63,14 +131,27 @@ def get_text_content_from_stmt_ids(stmt_ids):
     ----------
     stmt_ids : list of str
 
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
+
     Returns
     -------
-    dict of str: str
-        dictionary mapping statement ids to text content. Uses fulltext
-        if one is available, falls back upon using the abstract.
-        A statement id will map to None if no text content is available.
+    ref_dict: dict
+        dict mapping statement ids to associated text ref ids. Some
+        statement ids will map to None if there is no associated text
+        content.
+
+    text_dict: dict
+        dict mapping text ref ids to best possible text content.
+        fulltext xml from elsevier or pmc if it exists in the database,
+        otherwise an abstract if there is one in the database. Maps text_ref
+        to None if there is no text content available.
     """
-    db = get_primary_db()
+    if db is None:
+        db = get_primary_db()
+
     text_refs = db.select_all([db.RawStatements.id, db.TextRef.id],
                               db.RawStatements.id.in_(stmt_ids),
                               *db.link(db.RawStatements, db.TextRef))
@@ -85,31 +166,33 @@ def get_text_content_from_stmt_ids(stmt_ids):
     abstracts = {text_id: unpack(text)
                  for text_id, text, text_type in texts
                  if text_type == 'abstract'}
-    result = {}
+    ref_dict = {}
+    text_dict = {}
     for stmt_id in stmt_ids:
         # first check if we have text content for this statement
         try:
             text_ref = text_refs[stmt_id]
         except KeyError:
             # if not, set fulltext to None
-            result[stmt_id] = None
+            ref_dict[stmt_id] = None
             continue
+        ref_dict[stmt_id] = text_ref
         fulltext = fulltexts.get(text_ref)
         abstract = abstracts.get(text_ref)
         # use the fulltext if we have one
         if fulltext is not None:
             # if so, the text content is xml and will need to be processed
-            result[stmt_id] = fulltext
+            text_dict[text_ref] = fulltext
         # otherwise use the abstract
         elif abstract is not None:
-            result[stmt_id] = abstract
+            text_dict[text_ref] = abstract
         # if we have neither, set result to None
         else:
-            result[stmt_id] = None
-    return result
+            text_dict[text_ref] = None
+    return ref_dict, text_dict
 
 
-def get_text_content_from_text_refs(text_refs):
+def get_text_content_from_text_refs(text_refs, db=None):
     """Get text_content from an evidence object's text_refs attribute
 
 
@@ -120,6 +203,10 @@ def get_text_content_from_text_refs(text_refs):
         The dictionary should be keyed on id_types. The valid keys
         are 'PMID', 'PMCID', 'DOI', 'PII', 'URL', 'MANUSCRIPT_ID'.
 
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
     Returns
     -------
     text : str
@@ -127,7 +214,9 @@ def get_text_content_from_text_refs(text_refs):
         database, otherwise the abstract. Returns None if no content
         exists for the text_refs in the database
     """
-    db = get_primary_db()
+    if db is None:
+        db = get_primary_db()
+
     text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:
@@ -153,3 +242,30 @@ def get_text_content_from_text_refs(text_refs):
     if abstract:
         return abstract[0]
     return None
+
+
+def _extract_db_refs(stmt_json):
+    agent_types = ['sub', 'subj', 'obj', 'enz', 'agent', 'gef;', 'ras',
+                   'gap', 'obj_from', 'obj_to']
+    db_ref_list = []
+
+    for agent_type in agent_types:
+        try:
+            agent = stmt_json[agent_type]
+        except KeyError:
+            continue
+        try:
+            db_refs = agent['db_refs']
+        except KeyError:
+            continue
+        db_ref_list.append(db_refs)
+
+    members = stmt_json.get('members')
+    if members is not None:
+        for member in members:
+            try:
+                db_refs = member['db_refs']
+            except KeyError:
+                continue
+            db_ref_list.append(db_refs)
+    return db_ref_list

@@ -63,6 +63,7 @@ class PreassemblyManager(object):
         self.pa = Preassembler(hierarchies)
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
+        self.pickle_stashes = None
         return
 
     def _get_latest_updatetime(self, db):
@@ -322,21 +323,10 @@ class PreassemblyManager(object):
         self._log("Found %d new statement ids." % len(all_new_stmt_ids))
         return all_new_stmt_ids
 
-    @_handle_update_table
-    def supplement_corpus(self, db, continuing=False):
-        """Update the table of preassembled statements.
-
-        This method will take any new raw statements that have not yet been
-        incorporated into the preassembled table, and use them to augment the
-        preassembled table.
-
-        The resulting updated table is indistinguishable from the result you
-        would achieve if you had simply re-run preassembly on _all_ the
-        raw statements.
-        """
+    def _supplement_statements(self, db, continuing=False):
+        """Supplement the preassembled statements with the latest content."""
         self.__tag = 'supplement'
 
-        pickle_stashes = []
         last_update = self._get_latest_updatetime(db)
         start_date = datetime.utcnow()
         self._log("Latest update was: %s" % last_update)
@@ -345,7 +335,7 @@ class PreassemblyManager(object):
         self._log("Loading info about the existing state of preassembly. "
                   "(This may take a little time)")
         new_id_stash = 'new_ids.pkl'
-        pickle_stashes.append(new_id_stash)
+        self.pickle_stashes.append(new_id_stash)
         if continuing and path.exists(new_id_stash):
             self._log("Loading new statement ids from cache...")
             with open(new_id_stash, 'rb') as f:
@@ -359,7 +349,7 @@ class PreassemblyManager(object):
 
         # Weed out exact duplicates.
         dist_stash = 'stmt_ids.pkl'
-        pickle_stashes.append(dist_stash)
+        self.pickle_stashes.append(dist_stash)
         if continuing and path.exists(dist_stash):
             self._log("Loading distilled statement ids from cache...")
             with open(dist_stash, 'rb') as f:
@@ -375,7 +365,7 @@ class PreassemblyManager(object):
         old_mk_set = {mk for mk, in db.select_all(db.PAStatements.mk_hash)}
         self._log("Found %d old pa statements." % len(old_mk_set))
         new_mk_stash = 'new_mk_set.pkl'
-        pickle_stashes.append(new_mk_stash)
+        self.pickle_stashes.append(new_mk_stash)
         if continuing and path.exists(new_mk_stash):
             self._log("Loading hashes for new pa statements from cache...")
             with open(new_mk_stash, 'rb') as f:
@@ -397,10 +387,16 @@ class PreassemblyManager(object):
             self._log("Adjusted old mk set: %d" % len(old_mk_set))
 
         self._log("Found %d new pa statements." % len(new_mk_set))
+        self.__tag = 'Unpurposed'
+        return start_date, end_date
+
+    def _supplement_support(self, db, start_date, end_date, continuing=False):
+        """Calculate the support for the given date range of pa statements."""
+        self.__tag = 'supplement'
 
         # If we are continuing, check for support links that were already found
         support_link_stash = 'new_support_links.pkl'
-        pickle_stashes.append(support_link_stash)
+        self.pickle_stashes.append(support_link_stash)
         if continuing and path.exists(support_link_stash):
             with open(support_link_stash, 'rb') as f:
                 status_dict = pickle.load(f)
@@ -444,7 +440,7 @@ class PreassemblyManager(object):
                     *batching_args,
                     order_by=db.PAStatements.mk_hash,
                     skip_idx=outer_idx
-                    )
+                )
                 for inner_idx, other_npa_json_batch in other_npa_json_iter:
                     other_npa_batch = [_stmt_from_json(s_json)
                                        for s_json, in other_npa_json_batch]
@@ -460,7 +456,7 @@ class PreassemblyManager(object):
                     self.batch_size,
                     db.PAStatements.json,
                     db.PAStatements.create_date < start_date
-                    )
+                )
                 for opa_idx, opa_json_batch in opa_json_iter:
                     opa_batch = [_stmt_from_json(s_json)
                                  for s_json, in opa_json_batch]
@@ -484,11 +480,32 @@ class PreassemblyManager(object):
                       % len(new_support_links))
             db.copy('pa_support_links', new_support_links,
                     ('supported_mk_hash', 'supporting_mk_hash'))
+        self.__tag = 'Unpurposed'
+        return
+
+    @_handle_update_table
+    def supplement_corpus(self, db, continuing=False):
+        """Update the table of preassembled statements.
+
+        This method will take any new raw statements that have not yet been
+        incorporated into the preassembled table, and use them to augment the
+        preassembled table.
+
+        The resulting updated table is indistinguishable from the result you
+        would achieve if you had simply re-run preassembly on _all_ the
+        raw statements.
+        """
+
+        self.pickle_stashes = []
+
+        start_date, end_date = self._supplement_statements(db, continuing)
+        self._supplement_support(db, start_date, end_date, continuing)
 
         # Remove all the caches so they can't be picked up accidentally later.
-        for cache in pickle_stashes:
+        for cache in self.pickle_stashes:
             if path.exists(cache):
                 remove(cache)
+        self.pickle_stashes = None
 
         return True
 
@@ -604,7 +621,7 @@ def _make_parser():
     parser.add_argument(
         '-D', '--database',
         default='primary',
-        help=('Select a database from the names given in the config or '
+        help=('Choose a database from the names given in the config or '
               'environment, for example primary is INDRA_DB_PRIMAY in the '
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'.')

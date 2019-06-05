@@ -86,10 +86,6 @@ class _PrePaDatabaseTestSetup(object):
         else:
             inputs = {tbl: set(td[tbl]['tuples']) for tbl in tables}
 
-            # Add the batch ids to the reading tuples.
-            inputs['reading'] = {t + (reading_batch_id,)
-                                 for t in inputs['reading']}
-
         # Insert the necessary content.
         for tbl in tables:
             print("Loading %s..." % tbl)
@@ -114,7 +110,9 @@ class _PrePaDatabaseTestSetup(object):
                           constraint='reading_raw_statement_uniqueness')
 
         print("Inserting agents...")
-        dbu.insert_raw_agents(self.test_db, batch_id)
+        for batch_id in batch_id_set:
+            dbu.insert_raw_agents(self.test_db, batch_id, verbose=False)
+
         return
 
     def add_statements(self):

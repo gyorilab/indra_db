@@ -114,8 +114,12 @@ class DbApiTestCase(unittest.TestCase):
         assert len(json_stmts) is not 0, \
             'Did not get any statements.'
         stmts = stmts_from_json(json_stmts)
-        assert all([s.evidence for s in stmts]), \
-            "Some statements lack evidence."
+        for s in stmts:
+            assert s.evidence, "Statement lacks evidence."
+            for ev in s.evidence:
+                if ev.source_api in {'reach', 'sparser', 'trips'} \
+                        and ev.pmid is None:
+                    assert False, 'Statement from reading is missing a pmid.'
 
         # To allow for faster response-times, we currently do not include
         # support links in the response.

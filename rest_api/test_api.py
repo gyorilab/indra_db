@@ -248,13 +248,23 @@ class DbApiTestCase(unittest.TestCase):
         _check_stmt_agents(resp, agents=[(0, 'CHEBI', 'CHEBI:6801')])
         return
 
-    def test_query_with_bad_hgnc(self):
-        resp, dt, size = self.__time_get_query('statements/from_agents',
-                                               ('subject=MEK&object=ERK'
-                                                '&type=Phosphorylation'))
-        assert resp.status_code != 200, "Got good status code."
-        self.__check_time(dt)
-        assert size <= SIZELIMIT, size
+    def test_query_with_chebi_ns_vemurafenib(self):
+        """Test specifying CHEBI as a namespace."""
+        resp = self.__check_good_statement_query(subject='CHEBI:63637@CHEBI')
+        _check_stmt_agents(resp, agents=[(0, 'CHEBI', 'CHEBI:63637')])
+        return
+
+    def test_query_with_names(self):
+        resp = self.__check_good_statement_query(subject='MEK', object='ERK',
+                                                 type='Phosphorylation')
+        _check_stmt_agents(resp, agents=[(0, 'FPLX', 'MEK'),
+                                         (1, 'FPLX', 'ERK')])
+        return
+
+    def test_query_with_names_that_were_breaking(self):
+        resp = self.__check_good_statement_query(subject='MAP2K1',
+                                                 object='ERK')
+        return
 
     def test_famplex_query(self):
         resp, dt, size = self.__time_get_query('statements/from_agents',

@@ -1,19 +1,11 @@
 import os
-import json
 import pickle
 import random
 
-from unittest import SkipTest
-from uuid import uuid4
-
 from nose.plugins.attrib import attr
 
-from indra.tests.util import IS_PY3
-if not IS_PY3:
-    raise SkipTest("This test requires Python 3.")
-
 from indra.literature import pubmed_client as pubc
-from indra.statements import stmts_from_json, Statement
+from indra.statements import stmts_from_json
 
 from indra_db import util as dbu
 from indra_db import client as dbc

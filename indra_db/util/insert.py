@@ -140,7 +140,7 @@ def regularize_agent_id(id_val, id_ns):
                   ('IP', '')]
     for ns, div in ns_abbrevs:
         if id_ns.upper() == ns and id_val.startswith(ns):
-            new_id_val = id_val[len(ns) + len(div)]
+            new_id_val = id_val[len(ns) + len(div):]
             break
     else:
         return id_val

@@ -19,7 +19,6 @@ from flask_cors import CORS
 from jinja2 import Template
 
 from indra.util import batch_iter
-from indra.databases import hgnc_client
 from indra.assemblers.html import HtmlAssembler
 from indra.statements import make_statement_camel, stmts_from_json
 
@@ -148,11 +147,7 @@ def __process_agent(agent_param):
         ns = 'TEXT'
 
     if ns == 'HGNC-SYMBOL':
-        original_ag = ag
-        ag = hgnc_client.get_hgnc_id(original_ag)
-        if ag is None and 'None' not in agent_param:
-            raise DbAPIError('Invalid agent name: \"%s\"' % original_ag)
-        ns = 'HGNC'
+        ns = 'NAME'
 
     return ag, ns
 

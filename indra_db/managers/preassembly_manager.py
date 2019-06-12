@@ -601,7 +601,7 @@ def _make_parser():
         '-n', '--num_procs',
         dest='num_procs',
         type=int,
-        default=1,
+        default=None,
         help=('Select the number of processors to use during this operation. '
               'Default is 1.')
     )

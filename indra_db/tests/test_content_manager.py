@@ -1,8 +1,4 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 from os import remove, path
-from sys import argv
 
 from sqlalchemy.exc import IntegrityError
 
@@ -11,7 +7,7 @@ from nose.tools import assert_equal
 from nose.plugins.attrib import attr
 from indra.util.nested_dict import NestedDict
 
-from indra_db.util import get_test_db
+from .util import get_test_db, get_test_ftp_url
 from indra_db.client import get_content_by_refs
 from indra_db.managers.reading_manager import BulkLocalReadingManager
 
@@ -42,27 +38,18 @@ def capitalize_list_of_tpls(l):
             for e in l]
 
 
-def get_db(clear=True):
-    "Set up the database for testing."
-    db = get_test_db()
-    db.grab_session()
-    if clear:
-        db._clear(force=True)
-    return db
-
-
-def get_db_with_pubmed_content():
+def get_test_db_with_pubmed_content():
     "Populate the database with sample content from pubmed."
-    db = get_db()
-    Pubmed(ftp_url=TEST_FTP, local=True).populate(db)
+    db = get_test_db()
+    Pubmed(ftp_url=get_test_ftp_url(), local=True).populate(db)
     return db
 
 
-def get_db_with_ftp_content():
+def get_test_db_with_ftp_content():
     "Populate database with content from all the ftp services"
-    db = get_db_with_pubmed_content()
-    PmcOA(ftp_url=TEST_FTP, local=True).populate(db)
-    Manuscripts(ftp_url=TEST_FTP, local=True).populate(db)
+    db = get_test_db_with_pubmed_content()
+    PmcOA(ftp_url=get_test_ftp_url(), local=True).populate(db)
+    Manuscripts(ftp_url=get_test_ftp_url(), local=True).populate(db)
     return db
 
 
@@ -72,7 +59,7 @@ def get_db_with_ftp_content():
 @attr('nonpublic')
 def test_create_tables():
     "Test the create_tables feature"
-    db = get_db()
+    db = get_test_db()
     db.drop_tables(force=True)
     db.create_tables()
     assert_contents_equal(db.get_active_tables(), db.get_tables())
@@ -81,7 +68,7 @@ def test_create_tables():
 @attr('nonpublic')
 def test_insert_and_query_pmid():
     "Test that we can add a text_ref and get the text_ref back."
-    db = get_db()
+    db = get_test_db()
     pmid = '1234'
     text_ref_id = db.insert('text_ref', pmid=pmid)
     entries = db.select_all('text_ref', db.TextRef.pmid == pmid)
@@ -93,7 +80,7 @@ def test_insert_and_query_pmid():
 @attr('nonpublic')
 def test_uniqueness_text_ref_doi_pmid():
     "Test uniqueness enforcement behavior for text_ref insertion."
-    db = get_db()
+    db = get_test_db()
     pmid = '1234'
     doi = 'foo/1234'
     db.insert('text_ref', doi=doi, pmid=pmid)
@@ -109,7 +96,7 @@ def test_uniqueness_text_ref_doi_pmid():
 @attr('nonpublic')
 def test_uniqueness_text_ref_url():
     "Test whether the uniqueness imposed on the url of text_refs is enforced."
-    db = get_db()
+    db = get_test_db()
     url = 'http://foobar.com'
     db.insert('text_ref', url=url)
     try:
@@ -122,7 +109,7 @@ def test_uniqueness_text_ref_url():
 @attr('nonpublic')
 def test_get_abstracts():
     "Test the ability to get a list of abstracts."
-    db = get_db()
+    db = get_test_db()
 
     # Create a world of abstracts.
     ref_id_list = db.insert_many(
@@ -189,12 +176,6 @@ def test_get_abstracts():
 # includes uploading data from Medline, PMC, Springer, and Elsevier. These
 # tend to make greater use of the database, and are likely to be slower.
 #==============================================================================
-TEST_FTP = path.abspath(path.join(path.dirname(__file__), path.pardir,
-                                  'resources', 'test_ftp'))
-if not path.exists(TEST_FTP):
-    print("Creating test directory. This could take a while...")
-    from indra_db.resources.build_sample_set import build_set
-    build_set(2, TEST_FTP)
 
 
 @attr('nonpublic', 'slow')
@@ -206,14 +187,14 @@ def test_full_upload():
     # this test.
 
     # Test the medline/pubmed upload.
-    db = get_db_with_pubmed_content()
+    db = get_test_db_with_pubmed_content()
     tr_list = db.select_all('text_ref')
     assert len(tr_list), "No text refs were added..."
     assert all([hasattr(tr, 'pmid') for tr in tr_list]),\
         'All text_refs MUST have pmids by now.'
 
     # Test the pmc oa upload.
-    PmcOA(ftp_url=TEST_FTP, local=True).populate(db)
+    PmcOA(ftp_url=get_test_ftp_url(), local=True).populate(db)
     tcs_pmc = db.filter_query(
         db.TextContent,
         db.TextContent.source == PmcOA.my_source).count()
@@ -225,7 +206,7 @@ def test_full_upload():
         "Only %d of at least %d pmcids added." % (trs_w_pmcids, tcs_pmc)
 
     # Test the manuscripts upload.
-    Manuscripts(ftp_url=TEST_FTP, local=True).populate(db)
+    Manuscripts(ftp_url=get_test_ftp_url(), local=True).populate(db)
     tcs_manu = db.filter_query(
         db.TextContent,
         db.TextContent.source == Manuscripts.my_source
@@ -249,15 +230,15 @@ def test_full_upload():
 
     # Test careful upload of medline (very shallow test...checks only for
     # critical failures)
-    m = Pubmed(ftp_url=TEST_FTP, local=True)
+    m = Pubmed(ftp_url=get_test_ftp_url(), local=True)
     m.load_files(db, 'baseline', carefully=True)
 
 
 @attr('nonpublic')
 def test_multiple_pmids():
     "Test that pre-existing pmids are correctly handled."
-    db = get_db()
-    med = Pubmed(ftp_url=TEST_FTP, local=True)
+    db = get_test_db()
+    med = Pubmed(ftp_url=get_test_ftp_url(), local=True)
     med.populate(db)
     num_refs = len(db.select_all('text_ref'))
     med.populate(db)
@@ -269,8 +250,8 @@ def test_multiple_pmids():
 @attr('nonpublic')
 def test_multible_pmc_oa_content():
     "Test to make sure repeated content is handled correctly."
-    db = get_db()
-    pmc = PmcOA(ftp_url=TEST_FTP, local=True)
+    db = get_test_db()
+    pmc = PmcOA(ftp_url=get_test_ftp_url(), local=True)
     pmc.populate(db)
     num_conts = len(db.select_all('text_content'))
     pmc.populate(db)
@@ -282,8 +263,8 @@ def test_multible_pmc_oa_content():
 @attr('nonpublic')
 def test_multiple_text_ref_pmc_oa():
     "Test whether a duplicate text ref in pmc oa is handled correctly."
-    db = get_db()
-    pmc = PmcOA(ftp_url=TEST_FTP, local=True)
+    db = get_test_db()
+    pmc = PmcOA(ftp_url=get_test_ftp_url(), local=True)
     pmc.review_fname = 'test_review_multiple_text_ref_pmc_oa.txt'
     inp = dict.fromkeys(pmc.tr_cols)
     inp.update(pmcid='PMC5579538', doi='10.1021/acsomega.7b00205')
@@ -299,8 +280,8 @@ def test_multiple_text_ref_pmc_oa():
 @attr('nonpublic')
 def test_id_handling_pmc_oa():
     "Test every conceivable combination pmid/pmcid presence."
-    db = get_db()
-    pmc = PmcOA(ftp_url=TEST_FTP, local=True)
+    db = get_test_db()
+    pmc = PmcOA(ftp_url=get_test_ftp_url(), local=True)
 
     # Initialize with all possible states we could have gotten from medline.
     pm_inp_tpl_list = capitalize_list_of_tpls([
@@ -382,8 +363,8 @@ def test_id_handling_pmc_oa():
 @attr('nonpublic')
 def test_medline_ref_checks():
     "Test the text ref checks used by medline."
-    db = get_db()
-    med = Pubmed(ftp_url=TEST_FTP, local=True)
+    db = get_test_db()
+    med = Pubmed(ftp_url=get_test_ftp_url(), local=True)
 
     def check_input(input_pairs, expected_pairs, carefully, num):
         article_info = {pmid: dict(zip(['pmid', 'pmcid'], [pmid, pmcid]))
@@ -481,7 +462,7 @@ def test_medline_ref_checks():
 @attr('nonpublic')
 def test_elsevier_upload():
     "Test that we can upload elsevier content."
-    db = get_db_with_ftp_content()
+    db = get_test_db_with_ftp_content()
     Elsevier().populate(db)
     up_q = db.filter_query(
         db.Updates,
@@ -502,7 +483,7 @@ def test_elsevier_upload():
 @attr('nonpublic', 'slow')
 def test_sparser_initial_reading():
     "Test the initial reading of of sparser content"
-    db = get_db_with_ftp_content()
+    db = get_test_db_with_ftp_content()
     BulkLocalReadingManager('sparser', n_proc=1).read_all(db)
     sparser_updates_q = db.filter_query(db.ReadingUpdates,
                                         db.ReadingUpdates.reader == 'SPARSER')

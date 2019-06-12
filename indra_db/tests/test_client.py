@@ -9,6 +9,7 @@ from indra.statements import stmts_from_json
 
 from indra_db import util as dbu
 from indra_db import client as dbc
+from .util import get_prepped_db
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -151,7 +152,7 @@ def _get_prepped_db(num_stmts, with_pa=False):
 @attr('nonpublic', 'slow')
 def test_get_statements():
     num_stmts = 10000
-    db, _ = _get_prepped_db(num_stmts)
+    db, _ = get_prepped_db(num_stmts)
 
     # Test getting all statements
     stmts = dbc.get_statements([], preassembled=False, db=db)
@@ -187,7 +188,7 @@ def test_get_statements():
 def test_get_statements_by_grot():
     """Test get statements by gene-role-type."""
     num_stmts = 10000
-    db, _ = _get_prepped_db(num_stmts)
+    db, _ = get_prepped_db(num_stmts)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', preassembled=False,
                                                  db=db)
@@ -209,7 +210,7 @@ def test_get_statements_by_grot():
 @attr('nonpublic')
 def test_get_statments_grot_wo_evidence():
     num_stmts = 1000
-    db, _ = _get_prepped_db(num_stmts)
+    db, _ = get_prepped_db(num_stmts)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', with_evidence=False)
     assert stmts, stmts
@@ -217,7 +218,7 @@ def test_get_statments_grot_wo_evidence():
 
 @attr('nonpublic')
 def test_get_content_by_refs():
-    db, _ = _get_prepped_db(100)
+    db, _ = get_prepped_db(100)
     tcid = db.select_one(db.TextContent.id)[0]
     reading_dict = dbc.get_reader_output(db, tcid)
     assert reading_dict
@@ -407,7 +408,7 @@ def test_get_statement_jsons_by_mk_hash_sparser_bug():
 
 @attr('nonpublic')
 def test_pa_curation():
-    db, key = _get_prepped_db(100, with_pa=True)
+    db, key = get_prepped_db(100, with_pa=True)
     sample = db.select_sample_from_table(2, db.PAStatements)
     mk_hashes = {s.mk_hash for s in sample}
     i = 0
@@ -431,7 +432,7 @@ def test_pa_curation():
 
 @attr('nonpublic')
 def test_bad_hash_curation():
-    db, key = _get_prepped_db(100, with_pa=True)
+    db, key = get_prepped_db(100, with_pa=True)
     try:
         dbc.submit_curation(0, api_key=key, tag='test', text='text',
                             curator='tester', ip='192.0.2.1', db=db)
@@ -444,7 +445,7 @@ def test_bad_hash_curation():
 
 @attr('nonpublic')
 def test_source_hash():
-    db, _ = _get_prepped_db(100)
+    db, _ = get_prepped_db(100)
     res = db.select_all(db.RawStatements)
     pairs = [(dbu.get_statement_object(db_raw), db_raw.source_hash)
              for db_raw in res]

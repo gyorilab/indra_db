@@ -16,7 +16,7 @@ THIS_DIR = path.dirname(path.abspath(__file__))
 
 
 def assert_contents_equal(list1, list2, msg=None):
-    "Check that the contenst of two lists are the same, regardless of order."
+    "Check that the contents of two lists are the same, regardless of order."
     res = set(list1) == set(list2)
     err_msg = "Contents of lists do not match:\n%s\n%s\n" % (list1, list2)
     if msg is not None:
@@ -29,7 +29,7 @@ def capitalize_list_of_tpls(l):
             for e in l]
 
 
-def get_test_db():
+def get_temp_db(clear=False):
     """Get a DatabaseManager for the test database."""
     defaults = get_defaults()
     test_defaults = {k: v for k, v in defaults.items() if 'test' in k}
@@ -54,13 +54,6 @@ def get_test_db():
         break
     if db is None:
         logger.error("Could not find any test database names.")
-    return db
-
-
-def get_db(clear=True):
-    "Set up the database for testing."
-    db = get_test_db()
-    db.grab_session()
     if clear:
         db._clear(force=True)
     return db
@@ -81,7 +74,7 @@ def get_test_ftp_url():
 def get_db_with_pubmed_content():
     "Populate the database with sample content from pubmed."
     from indra_db.managers.content_manager import Pubmed
-    db = get_db()
+    db = get_temp_db()
     Pubmed(ftp_url=get_test_ftp_url(), local=True).populate(db)
     return db
 
@@ -98,8 +91,7 @@ def get_db_with_ftp_content():
 class _PrePaDatabaseEnv(object):
     """This object is used to setup the test database into various configs."""
     def __init__(self, max_total_stmts):
-        self.test_db = get_test_db()
-        self.test_db._clear(force=True)
+        self.test_db = get_temp_db(clear=True)
         with open(path.join(THIS_DIR, 'db_pa_test_input_1M.pkl'), 'rb') as f:
             self.test_data = pickle.load(f)
 

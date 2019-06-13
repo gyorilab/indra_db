@@ -7,7 +7,7 @@ from nose.tools import assert_equal
 from nose.plugins.attrib import attr
 from indra.util.nested_dict import NestedDict
 
-from .util import get_test_db, get_test_ftp_url
+from .util import get_temp_db, get_test_ftp_url
 from indra_db.client import get_content_by_refs
 from indra_db.managers.reading_manager import BulkLocalReadingManager
 
@@ -15,7 +15,7 @@ from indra_db.managers.content_manager import Pubmed, PmcOA, Manuscripts,\
     Elsevier
 
 try:
-    get_test_db()
+    get_temp_db()
 except Exception as e:
     raise SkipTest("Not able to start up any of the available test hosts:\n"
                    + str(e))
@@ -40,7 +40,7 @@ def capitalize_list_of_tpls(l):
 
 def get_test_db_with_pubmed_content():
     "Populate the database with sample content from pubmed."
-    db = get_test_db()
+    db = get_temp_db()
     Pubmed(ftp_url=get_test_ftp_url(), local=True).populate(db)
     return db
 
@@ -59,7 +59,7 @@ def get_test_db_with_ftp_content():
 @attr('nonpublic')
 def test_create_tables():
     "Test the create_tables feature"
-    db = get_test_db()
+    db = get_temp_db()
     db.drop_tables(force=True)
     db.create_tables()
     assert_contents_equal(db.get_active_tables(), db.get_tables())
@@ -68,7 +68,7 @@ def test_create_tables():
 @attr('nonpublic')
 def test_insert_and_query_pmid():
     "Test that we can add a text_ref and get the text_ref back."
-    db = get_test_db()
+    db = get_temp_db()
     pmid = '1234'
     text_ref_id = db.insert('text_ref', pmid=pmid)
     entries = db.select_all('text_ref', db.TextRef.pmid == pmid)
@@ -80,7 +80,7 @@ def test_insert_and_query_pmid():
 @attr('nonpublic')
 def test_uniqueness_text_ref_doi_pmid():
     "Test uniqueness enforcement behavior for text_ref insertion."
-    db = get_test_db()
+    db = get_temp_db()
     pmid = '1234'
     doi = 'foo/1234'
     db.insert('text_ref', doi=doi, pmid=pmid)
@@ -96,7 +96,7 @@ def test_uniqueness_text_ref_doi_pmid():
 @attr('nonpublic')
 def test_uniqueness_text_ref_url():
     "Test whether the uniqueness imposed on the url of text_refs is enforced."
-    db = get_test_db()
+    db = get_temp_db()
     url = 'http://foobar.com'
     db.insert('text_ref', url=url)
     try:
@@ -109,7 +109,7 @@ def test_uniqueness_text_ref_url():
 @attr('nonpublic')
 def test_get_abstracts():
     "Test the ability to get a list of abstracts."
-    db = get_test_db()
+    db = get_temp_db()
 
     # Create a world of abstracts.
     ref_id_list = db.insert_many(
@@ -237,7 +237,7 @@ def test_full_upload():
 @attr('nonpublic')
 def test_multiple_pmids():
     "Test that pre-existing pmids are correctly handled."
-    db = get_test_db()
+    db = get_temp_db()
     med = Pubmed(ftp_url=get_test_ftp_url(), local=True)
     med.populate(db)
     num_refs = len(db.select_all('text_ref'))
@@ -250,7 +250,7 @@ def test_multiple_pmids():
 @attr('nonpublic')
 def test_multible_pmc_oa_content():
     "Test to make sure repeated content is handled correctly."
-    db = get_test_db()
+    db = get_temp_db()
     pmc = PmcOA(ftp_url=get_test_ftp_url(), local=True)
     pmc.populate(db)
     num_conts = len(db.select_all('text_content'))
@@ -263,7 +263,7 @@ def test_multible_pmc_oa_content():
 @attr('nonpublic')
 def test_multiple_text_ref_pmc_oa():
     "Test whether a duplicate text ref in pmc oa is handled correctly."
-    db = get_test_db()
+    db = get_temp_db()
     pmc = PmcOA(ftp_url=get_test_ftp_url(), local=True)
     pmc.review_fname = 'test_review_multiple_text_ref_pmc_oa.txt'
     inp = dict.fromkeys(pmc.tr_cols)
@@ -280,7 +280,7 @@ def test_multiple_text_ref_pmc_oa():
 @attr('nonpublic')
 def test_id_handling_pmc_oa():
     "Test every conceivable combination pmid/pmcid presence."
-    db = get_test_db()
+    db = get_temp_db()
     pmc = PmcOA(ftp_url=get_test_ftp_url(), local=True)
 
     # Initialize with all possible states we could have gotten from medline.
@@ -363,7 +363,7 @@ def test_id_handling_pmc_oa():
 @attr('nonpublic')
 def test_medline_ref_checks():
     "Test the text ref checks used by medline."
-    db = get_test_db()
+    db = get_temp_db()
     med = Pubmed(ftp_url=get_test_ftp_url(), local=True)
 
     def check_input(input_pairs, expected_pairs, carefully, num):

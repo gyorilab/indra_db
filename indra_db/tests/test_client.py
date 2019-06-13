@@ -9,7 +9,8 @@ from indra.statements import stmts_from_json
 
 from indra_db import util as dbu
 from indra_db import client as dbc
-from indra_db.tests.util import get_prepped_db
+from indra_db.tests.util import get_prepped_db, get_db_with_views, get_temp_db
+from indra_db.managers import materialized_view_manager as mvm
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -224,16 +225,22 @@ def test_get_content_by_refs():
     assert reading_dict
 
 
+def test_materialize_view_creation():
+    db = get_db_with_views(10000)
+    res = db.select_all(db.PaStmtSrc)
+    assert len(res), res
+
+
 @attr('nonpublic')
 def test_get_statement_jsons_by_agent():
-    # Note that this deliberately uses the primary (production) database in
-    # testing. This is only allowed because only retrieval is tested, however
-    # PLEASE PROCEED WITH CARE WHEN MODIFYING THIS TEST.
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
 
-    # TODO: don't rely on the primary database, because that's scary in a test.
     agents = [(None, 'MEK', 'FPLX'), (None, 'ERK', 'FPLX')]
     stmt_jsons = dbc.get_statement_jsons_from_agents(agents=agents,
-                                                     stmt_type='Phosphorylation')
+                                                     stmt_type='Phosphorylation',
+                                                     db=db)
     assert stmt_jsons
     assert stmt_jsons['statements']
     assert stmt_jsons['total_evidence']
@@ -249,10 +256,12 @@ def test_get_statement_jsons_by_agent():
 
 @attr('nonpublic')
 def test_get_statement_jsons_options():
-    # Test all possible options regarding the number of statements returned.
-    # Note that this suffices to test the same options in other related
-    # functions as well (e.g. the paper version).
-    options = {'max_stmts': 10, 'ev_limit': 4, 'offset': 5, 'best_first': False}
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
+    options = {'max_stmts': 10, 'ev_limit': 4, 'offset': 5,
+               'best_first': False}
     agents = [('SUBJECT', 'MEK', 'FPLX'), ('OBJECT', 'ERK', 'FPLX')]
     option_dicts = [{}]
     for key, value in options.items():
@@ -269,7 +278,7 @@ def test_get_statement_jsons_options():
     for option_dict in option_dicts:
         res = dbc.get_statement_jsons_from_agents(agents=agents,
                                                   stmt_type='Phosphorylation',
-                                                  **option_dict)
+                                                  db=db, **option_dict)
         assert res
         assert len(res['statements'])
         stmts = res['statements']
@@ -307,36 +316,52 @@ def test_get_statement_jsons_options():
 
 @attr('nonpublic')
 def test_nfkb_anomaly():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
     agents = [(None, 'NFkappaB', 'FPLX')]
     res = dbc.get_statement_jsons_from_agents(agents=agents, max_stmts=1000,
-                                              ev_limit=10)
+                                              ev_limit=10, db=db)
     assert res
     assert len(res['statements']) == 1000, len(res['statements'])
 
 
 @attr('nonpublic')
 def test_triple_agent_bug():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
     agents = [(None, '1834', 'HGNC'), (None, '6769', 'HGNC'),
               (None, '12856', 'HGNC')]
     res = dbc.get_statement_jsons_from_agents(agents=agents, max_stmts=100,
                                               stmt_type='Complex',
-                                              ev_limit=5)
+                                              ev_limit=5, db=db)
     assert res
 
 
 @attr('nonpublic')
 def test_null_response():
-    res = dbc.get_statement_jsons_from_hashes([0])
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
+    res = dbc.get_statement_jsons_from_hashes([0], db=db)
     assert isinstance(res, dict), type(res)
     assert len(res['statements']) == 0, len(res['statements'])
 
 
 @attr('nonpublic')
 def test_get_statement_jsons_by_paper_id():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
     paper_refs = [('pmid', '27769048'),
                   ('doi', '10.3389/FIMMU.2017.00781'),
                   ('pmcid', 'PMC4789553')]
-    stmt_jsons = dbc.get_statement_jsons_from_papers(paper_refs)
+    stmt_jsons = dbc.get_statement_jsons_from_papers(paper_refs, db=db)
     assert stmt_jsons
     assert stmt_jsons['statements']
     assert stmt_jsons['total_evidence']
@@ -348,6 +373,10 @@ def test_get_statement_jsons_by_paper_id():
 
 @attr('nonpublic')
 def test_get_statement_jsons_by_mk_hash():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
     mk_hashes = {-35990550780621697, -34509352007749723, -33762223064440060,
                  -33265410753427801, -33264422871226821, -33006503639209361,
                  -32655830663272427, -32156860839881910, -31266440463655983,
@@ -382,7 +411,7 @@ def test_get_statement_jsons_by_mk_hash():
                  29491428193112311, 30289509021065753, 30992174235867673,
                  31766667918079590, 31904387104764159, 34782800852366343,
                  35686927318045812}
-    stmt_jsons = dbc.get_statement_jsons_from_hashes(mk_hashes)
+    stmt_jsons = dbc.get_statement_jsons_from_hashes(mk_hashes, db=db)
     assert stmt_jsons
     assert stmt_jsons['statements']
     assert stmt_jsons['total_evidence']
@@ -393,8 +422,12 @@ def test_get_statement_jsons_by_mk_hash():
 
 @attr('nonpublic')
 def test_get_statement_jsons_by_mk_hash_sparser_bug():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
     mk_hashes = {7066059628266471, -3738332857231047}
-    stmt_jsons = dbc.get_statement_jsons_from_hashes(mk_hashes)
+    stmt_jsons = dbc.get_statement_jsons_from_hashes(mk_hashes, db=db)
     assert stmt_jsons
     assert len(stmt_jsons['statements']) == 2, len(stmt_jsons['statements'])
     stmts = stmts_from_json(stmt_jsons['statements'].values())
@@ -458,12 +491,17 @@ def test_source_hash():
 
 @attr('nonpublic')
 def test_raw_stmt_jsons_from_papers():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
     with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
         id_samples = pickle.load(f)
 
     for id_type, id_list in id_samples.items():
         print(id_type)
-        res_dict = dbc.get_raw_stmt_jsons_from_papers(id_list, id_type=id_type)
+        res_dict = dbc.get_raw_stmt_jsons_from_papers(id_list, id_type=id_type,
+                                                      db=db)
         assert len(res_dict), 'Failure with %s' % id_type
 
     return
@@ -471,6 +509,10 @@ def test_raw_stmt_jsons_from_papers():
 
 @attr('nonpublic')
 def test_stmts_from_papers():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
     with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
         id_samples = pickle.load(f)
 
@@ -478,12 +520,12 @@ def test_stmts_from_papers():
         print(id_type)
 
         # Test pa retrieval
-        pa_dict = dbc.get_statements_by_paper(id_list, id_type=id_type)
+        pa_dict = dbc.get_statements_by_paper(id_list, id_type=id_type, db=db)
         assert len(pa_dict), 'Failure with %s %s' % ('pa', id_type)
 
         # Test raw retrieval
         raw_dict = dbc.get_statements_by_paper(id_list, id_type=id_type,
-                                               preassembled=False)
+                                               preassembled=False, db=db)
         assert len(raw_dict), 'Failure with %s %s' % ('raw', id_type)
 
     return

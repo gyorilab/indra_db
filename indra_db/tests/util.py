@@ -9,7 +9,7 @@ from indra_db.config import get_databases as get_defaults
 from indra_db.managers.database_manager import DatabaseManager
 
 
-logger = logging
+logger = logging.getLogger(__name__)
 
 
 THIS_DIR = path.dirname(path.abspath(__file__))

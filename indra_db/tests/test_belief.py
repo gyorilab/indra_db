@@ -3,7 +3,7 @@ from nose.plugins.attrib import attr
 from indra.belief import BeliefEngine
 from indra_db.belief import MockStatement, MockEvidence, populate_support, \
     load_mock_statements, calculate_belief
-from indra_db.tests.test_client import _PrePaDatabaseTestSetup
+from indra_db.tests.util import get_prepped_db
 
 
 def test_belief_calc_up_to_prior():
@@ -70,17 +70,9 @@ def test_belief_calc_up_to_hierarchy():
     assert all_deltas_correct, deltas_dict
 
 
-def _get_prepped_db(num_stmts):
-    dts = _PrePaDatabaseTestSetup(num_stmts)
-    dts.load_background()
-    dts.add_statements()
-    dts.insert_pa_statements()
-    return dts.test_db
-
-
 @attr('nonpublic')
 def test_mock_stmt_load_and_belief_calc():
-    db = _get_prepped_db(1000)
+    db, _ = get_prepped_db(1000, with_pa=True)
     stmts = load_mock_statements(db)
     assert 500 <= len(stmts) <= 1000, len(stmts)
     assert all([len(s.evidence) >= 1 for s in stmts])

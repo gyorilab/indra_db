@@ -8,7 +8,6 @@ import logging
 from datetime import datetime
 from time import sleep
 
-from indra_db.util import get_test_db
 
 gm_logger = logging.getLogger('grounding_mapper')
 gm_logger.setLevel(logging.WARNING)
@@ -31,7 +30,7 @@ from indra_db import util as db_util
 from indra_db import client as db_client
 from indra_db.managers import preassembly_manager as pm
 from indra_db.managers.preassembly_manager import shash
-from indra_db.tests.util import PrePaDatabaseEnv
+from indra_db.tests.util import get_pa_loaded_db, get_temp_db
 
 from nose.plugins.attrib import attr
 
@@ -154,52 +153,6 @@ def make_raw_statement_set_for_distillation():
         ]
     dts = DistillationTestSet.from_tuples(test_tuples)
     return dts.d, dts.stmts, dts.target_sets, dts.bettered_sids, dts.links
-
-
-class PaDatabaseEnv(PrePaDatabaseEnv):
-    """This object is used to setup the test database into various configs."""
-    def add_statements(self, fraction=1, pam=None):
-        """Add statements and agents to the database.
-
-        Parameters
-        ----------
-        fraction : float between 0 and 1
-            Default is 1. The fraction of remaining statements to be added.
-        with_pa : bool
-            Default False. Choose to run pre-assembly/incremental-preassembly
-            on the added statements.
-        """
-        available_tuples = self.get_available_stmt_tuples()
-        if fraction is not 1:
-            num_stmts = int(fraction*len(available_tuples))
-            input_tuples = random.sample(available_tuples, num_stmts)
-        else:
-            input_tuples = available_tuples
-
-        self.insert_the_statements(input_tuples)
-
-        if pam:
-            print("Preassembling new statements...")
-            if self.used_stmt_tuples:
-                pam.supplement_corpus(self.test_db)
-            else:
-                pam.create_corpus(self.test_db)
-
-        self.used_stmt_tuples |= set(input_tuples)
-        return
-
-
-def _get_loaded_db(num_stmts, split=None, pam=None):
-    print("Creating and filling a test database:")
-    dts = _DatabaseTestSetup(num_stmts)
-    dts.load_background()
-
-    if split is None:
-        dts.add_statements(pam=pam)
-    else:
-        dts.add_statements(split, pam=pam)
-        dts.add_statements()
-    return dts.test_db
 
 
 def _str_large_set(s, max_num):
@@ -386,7 +339,7 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
 
 @needs_py3
 def _check_statement_distillation(num_stmts):
-    db = _get_loaded_db(num_stmts)
+    db = get_pa_loaded_db(num_stmts)
     assert db is not None, "Test was broken. Got None instead of db insance."
     stmts = db_util.distill_stmts(db, get_full_stmts=True)
     assert len(stmts), "Got zero statements."
@@ -403,7 +356,7 @@ def _check_statement_distillation(num_stmts):
 
 @needs_py3
 def _check_preassembly_with_database(num_stmts, batch_size, n_proc=1):
-    db = _get_loaded_db(num_stmts)
+    db = get_pa_loaded_db(num_stmts)
 
     # Now test the set of preassembled (pa) statements from the database
     # against what we get from old-fashioned preassembly (opa).
@@ -463,7 +416,7 @@ def _check_preassembly_with_database(num_stmts, batch_size, n_proc=1):
 def _check_db_pa_supplement(num_stmts, batch_size, split=0.8, n_proc=1):
     pa_manager = pm.PreassemblyManager(batch_size=batch_size, n_proc=n_proc,
                                        print_logs=True)
-    db = _get_loaded_db(num_stmts, split=split, pam=pa_manager)
+    db = get_pa_loaded_db(num_stmts, split=split, pam=pa_manager)
     opa_inp_stmts = _get_opa_input_stmts(db)
     start = datetime.now()
     print('sleeping...')
@@ -524,8 +477,7 @@ def test_statement_distillation_large():
 
 @attr('nonpublic')
 def test_db_lazy_insert():
-    db = get_test_db()
-    db._clear(force=True)
+    db = get_temp_db(clear=True)
 
     N = int(10**5)
     S = int(10**8)
@@ -579,8 +531,7 @@ def test_db_lazy_insert():
 
 @attr('nonpublic')
 def test_lazy_copier_unique_constraints():
-    db = get_test_db()
-    db._clear(force=True)
+    db = get_temp_db(clear=True)
 
     N = int(10**5)
     S = int(10**8)
@@ -613,8 +564,7 @@ def test_lazy_copier_unique_constraints():
 
 @attr('nonpublic')
 def test_lazy_copier_update():
-    db = get_test_db()
-    db._clear(force=True)
+    db = get_temp_db(clear=True)
 
     N = int(10**5)
     S = int(10**8)

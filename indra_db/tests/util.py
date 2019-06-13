@@ -227,3 +227,50 @@ def get_prepped_db(num_stmts, with_pa=False):
     return dts.test_db, dts.tester_key
 
 
+class PaDatabaseEnv(PrePaDatabaseEnv):
+    """This object is used to setup the test database into various configs."""
+    def add_statements(self, fraction=1, pam=None):
+        """Add statements and agents to the database.
+
+        Parameters
+        ----------
+        fraction : float between 0 and 1
+            Default is 1. The fraction of remaining statements to be added.
+        with_pa : bool
+            Default False. Choose to run pre-assembly/incremental-preassembly
+            on the added statements.
+        """
+        available_tuples = self.get_available_stmt_tuples()
+        if fraction is not 1:
+            num_stmts = int(fraction*len(available_tuples))
+            input_tuples = random.sample(available_tuples, num_stmts)
+        else:
+            input_tuples = available_tuples
+
+        self.insert_the_statements(input_tuples)
+
+        if pam:
+            print("Preassembling new statements...")
+            if self.used_stmt_tuples:
+                pam.supplement_corpus(self.test_db)
+            else:
+                pam.create_corpus(self.test_db)
+
+        self.used_stmt_tuples |= set(input_tuples)
+        return
+
+
+def get_pa_loaded_db(num_stmts, split=None, pam=None):
+    print("Creating and filling a test database:")
+    dts = PaDatabaseEnv(num_stmts)
+    dts.load_background()
+
+    if split is None:
+        dts.add_statements(pam=pam)
+    else:
+        dts.add_statements(split, pam=pam)
+        dts.add_statements()
+    return dts.test_db
+
+
+

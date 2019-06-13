@@ -4,6 +4,10 @@ cache:
     - $HOME/.cache/pip
 python:
   - "3.6"
+services:
+  - postgresql
+addons:
+  postgresql: "10"
 before_install:
   - sudo apt-get update
   - sudo apt-get install openjdk-8-jdk
@@ -30,6 +34,8 @@ install:
   - pip install -U networkx>=2
   - pip list
 before_script:
+  # Create a test database.
+  - psql -c 'create database travis_db_test;' -U postgres
   # Enable plotting on fake display
   - export DISPLAY=:99.0
   - sh -e /etc/init.d/xvfb start

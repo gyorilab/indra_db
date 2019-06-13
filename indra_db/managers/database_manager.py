@@ -950,6 +950,20 @@ class DatabaseManager(object):
         return
 
     def manage_views(self, mode, view_list=None, with_data=True):
+        """Manage the materialized views.
+
+        Parameters
+        ----------
+        mode : 'create' or 'update'
+            Select which management task you wish to perform.
+        view_list : list or None
+            Default None. A list of materialized view names or None. If None,
+            all available views will be build.
+        with_data : bool
+            Default True. If True, the views are updated "with data", meaning
+            they are more like instantiated tables, otherwise they are only a
+            pre-computation.
+        """
         ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
                          'name_meta', 'text_meta', 'other_meta',
                          'raw_stmt_src', 'pa_stmt_src']

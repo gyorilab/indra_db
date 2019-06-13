@@ -31,7 +31,7 @@ from indra_db import util as db_util
 from indra_db import client as db_client
 from indra_db.managers import preassembly_manager as pm
 from indra_db.managers.preassembly_manager import shash
-from indra_db.tests.test_client import _PrePaDatabaseTestSetup
+from indra_db.tests.util import PrePaDatabaseEnv
 
 from nose.plugins.attrib import attr
 
@@ -156,7 +156,7 @@ def make_raw_statement_set_for_distillation():
     return dts.d, dts.stmts, dts.target_sets, dts.bettered_sids, dts.links
 
 
-class _DatabaseTestSetup(_PrePaDatabaseTestSetup):
+class PaDatabaseEnv(PrePaDatabaseEnv):
     """This object is used to setup the test database into various configs."""
     def add_statements(self, fraction=1, pam=None):
         """Add statements and agents to the database.

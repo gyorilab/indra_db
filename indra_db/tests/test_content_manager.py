@@ -7,12 +7,12 @@ from nose.tools import assert_equal
 from nose.plugins.attrib import attr
 from indra.util.nested_dict import NestedDict
 
-from .util import get_temp_db, get_test_ftp_url
 from indra_db.client import get_content_by_refs
 from indra_db.managers.reading_manager import BulkLocalReadingManager
 
 from indra_db.managers.content_manager import Pubmed, PmcOA, Manuscripts,\
     Elsevier
+from indra_db.tests.util import get_temp_db, get_test_ftp_url
 
 try:
     get_temp_db()

@@ -88,7 +88,7 @@ def get_db_with_ftp_content():
     return db
 
 
-class _PrePaDatabaseEnv(object):
+class PrePaDatabaseEnv(object):
     """This object is used to setup the test database into various configs."""
     def __init__(self, max_total_stmts):
         self.test_db = get_temp_db(clear=True)
@@ -219,7 +219,7 @@ class _PrePaDatabaseEnv(object):
 
 
 def get_prepped_db(num_stmts, with_pa=False):
-    dts = _PrePaDatabaseEnv(num_stmts)
+    dts = PrePaDatabaseEnv(num_stmts)
     dts.load_background()
     dts.add_statements()
     if with_pa:

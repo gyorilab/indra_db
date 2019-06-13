@@ -9,7 +9,7 @@ from indra.statements import stmts_from_json
 
 from indra_db import util as dbu
 from indra_db import client as dbc
-from .util import get_prepped_db
+from indra_db.tests.util import get_prepped_db
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 

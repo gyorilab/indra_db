@@ -6,7 +6,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from indra.tools.reading.readers import get_reader_class
 from indra_db.reading import read_db as rdb
-from indra_db.util import get_primary_db, get_test_db, get_db
+from indra_db.util import get_primary_db, get_db
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
 
 logger = logging.getLogger(__name__)
@@ -276,7 +276,8 @@ def main():
     args = parser.parse_args()
     if args.test:
         if 'test' not in args.database:
-            db = get_test_db()
+            from indra_db.tests.util import get_temp_db
+            db = get_temp_db()
         else:
             db = get_db(args.database)
     elif args.database == 'primary':

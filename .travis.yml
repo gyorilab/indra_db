@@ -26,6 +26,7 @@ install:
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
   - aws s3 cp s3://bigmech/indra-db/test_resources/db_pa_test_input_1M.pkl db_pa_test_input_1M.pkl
+  - du -sh db_pa_test_input_1M.pkl
   - cd $TRAVIS_BUILD_DIR/indra_db/resources
   - curl https://s3.amazonaws.com/bigmech/indra-db/test_resources/test_ftp.zip > test_ftp.zip
   - unzip test_ftp.zip

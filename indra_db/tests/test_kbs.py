@@ -44,7 +44,7 @@ def test_signor():
     _check_kbm(SignorManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_biogrid():
     _check_kbm(BiogridManager)
 
@@ -54,7 +54,7 @@ def test_bel_lc():
     _check_kbm(BelLcManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_pathway_commons():
     _check_kbm(PathwayCommonsManager)
 

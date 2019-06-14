@@ -10,7 +10,7 @@ before_install:
   - sudo apt-get update
   - sudo apt-get install openjdk-8-jdk
   - pip install numpy scipy sympy cython nose lxml matplotlib==1.5.0 pandas
-  - sudo pip2 install numpy
+        awscli
 install:
   # REACH
   - pip install git+https://github.com/kivy/pyjnius.git@1cbfef
@@ -25,7 +25,7 @@ install:
   - pip install .[test]
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
-  - curl https://s3.amazonaws.com/bigmech/indra-db/test_resources/db_pa_test_input_1M.pkl > db_pa_test_input_1M.pkl
+  - aws s3 cp s3://bigmech/indra-db/test_resources/db_pa_test_input_1M.pkl db_pa_test_input_1M.pkl
   - cd $TRAVIS_BUILD_DIR/indra_db/resources
   - curl https://s3.amazonaws.com/bigmech/indra-db/test_resources/test_ftp.zip > test_ftp.zip
   - unzip test_ftp.zip

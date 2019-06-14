@@ -121,10 +121,6 @@ class PrePaDatabaseEnv(object):
         td = self.test_data
         tables = ['text_ref', 'text_content', 'reading', 'db_info']
 
-        # Include the reading batch id.
-        reading_batch_id = self.test_db.make_copy_batch_id()
-        td['reading']['cols'] += ('batch_id',)
-
         # Handle the case where we aren't using all the statements.
         if len(self.stmt_tuples) < len(td['raw_statements']['tuples']):
             # Look up the indices for easy access.
@@ -145,7 +141,7 @@ class PrePaDatabaseEnv(object):
                     continue
                 # Select the reading.
                 rdg_tpl = td['reading']['dict'][stmt_tpl[rdg_idx]]
-                inputs['reading'].add(rdg_tpl + (reading_batch_id,))
+                inputs['reading'].add(rdg_tpl)
 
                 # Select the text content.
                 tc_tpl = td['text_content']['dict'][rdg_tpl[tc_idx]]
@@ -156,10 +152,6 @@ class PrePaDatabaseEnv(object):
         else:
             inputs = {tbl: set(td[tbl]['tuples']) for tbl in tables}
 
-            # Add the batch ids to the reading tuples.
-            inputs['reading'] = {t + (reading_batch_id,)
-                                 for t in inputs['reading']}
-
         # Insert the necessary content.
         for tbl in tables:
             print("Loading %s..." % tbl)
@@ -168,13 +160,13 @@ class PrePaDatabaseEnv(object):
 
     def insert_the_statements(self, input_tuples):
         print("Loading %d statements..." % len(input_tuples))
-        cols = self.test_data['raw_statements']['cols'] + ('batch_id',)
+        cols = self.test_data['raw_statements']['cols']
         new_input_dict = {}
 
-        batch_id = self.test_db.make_copy_batch_id()
+        batch_id_set = set()
 
         for t in input_tuples:
-            t += (batch_id,)
+            batch_id_set.add(t[cols.index('batch_id')])
 
             new_input_dict[(t[cols.index('mk_hash')],
                             t[cols.index('reading_id')],
@@ -183,8 +175,11 @@ class PrePaDatabaseEnv(object):
         self.test_db.copy('raw_statements', new_input_dict.values(), cols,
                           lazy=True, push_conflict=True,
                           constraint='reading_raw_statement_uniqueness')
+
         print("Inserting agents...")
-        dbu.insert_raw_agents(self.test_db, batch_id)
+        for batch_id in batch_id_set:
+            dbu.insert_raw_agents(self.test_db, batch_id)
+
         return
 
     def add_statements(self):

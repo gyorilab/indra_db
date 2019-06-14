@@ -34,7 +34,7 @@ def test_cbn():
     _check_kbm(CBNManager, archive_url=s3_url)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_hprd():
     _check_kbm(HPRDManager)
 
@@ -49,7 +49,7 @@ def test_biogrid():
     _check_kbm(BiogridManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_bel_lc():
     _check_kbm(BelLcManager)
 

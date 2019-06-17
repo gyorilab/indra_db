@@ -191,7 +191,7 @@ class PrePaDatabaseEnv(object):
             batch_id_set.add(t[cols.index('batch_id')])
 
             rid = t[cols.index('reading_id')]
-            dbid = t[cols.index('dbinfo_id')]
+            dbid = t[cols.index('db_info_id')]
             mk_hash = t[cols.index('mk_hash')]
             if rid is not None:
                 key = (mk_hash, rid, t[cols.index('text_hash')])

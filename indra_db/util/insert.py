@@ -5,7 +5,6 @@ import json
 import pickle
 import logging
 
-from indra.util import clockit
 from indra.util.get_version import get_version
 from indra.statements import Complex, SelfModification, ActiveForm, \
     Conversion, Translocation
@@ -18,7 +17,6 @@ from .helpers import get_statement_object
 logger = logging.getLogger('util-insert')
 
 
-@clockit
 def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
                       num_per_yield=100):
     """Insert agents for statements that don't have any agents.

@@ -212,7 +212,8 @@ def test_get_statments_grot_wo_evidence():
     num_stmts = 1000
     db, _ = get_prepped_db(num_stmts)
 
-    stmts = dbc.get_statements_by_gene_role_type('MAP2K1', with_evidence=False)
+    stmts = dbc.get_statements_by_gene_role_type('MAP2K1', with_evidence=False,
+                                                 db=db)
     assert stmts, stmts
 
 

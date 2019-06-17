@@ -2,6 +2,7 @@ import re
 import random
 import pickle
 import logging
+from functools import wraps
 from os import path
 
 import indra_db.util as dbu
@@ -88,6 +89,25 @@ def get_db_with_ftp_content():
     return db
 
 
+def _with_quiet_db_logs(func):
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # Make the database manager logger quieter.
+        from indra_db.managers.database_manager import logger as dbm_logger
+        original_level = dbm_logger.level
+        dbm_logger.setLevel(logging.WARNING)
+
+        try:
+            ret = func(*args, **kwargs)
+        finally:
+            # Make sure we go back to ordinary logging
+            dbm_logger.setLevel(original_level)
+        return ret
+
+    return wrapper
+
+
 class PrePaDatabaseEnv(object):
     """This object is used to setup the test database into various configs."""
     def __init__(self, max_total_stmts):
@@ -112,6 +132,7 @@ class PrePaDatabaseEnv(object):
     def get_available_stmt_tuples(self):
         return list(set(self.stmt_tuples) - self.used_stmt_tuples)
 
+    @_with_quiet_db_logs
     def load_background(self):
         """Load in all the background provenance metadata (e.g. text_ref).
 
@@ -158,6 +179,7 @@ class PrePaDatabaseEnv(object):
             self.test_db.copy(tbl, inputs[tbl], td[tbl]['cols'])
         return
 
+    @_with_quiet_db_logs
     def insert_the_statements(self, input_tuples):
         print("Loading %d statements..." % len(input_tuples))
         cols = self.test_data['raw_statements']['cols']
@@ -189,6 +211,7 @@ class PrePaDatabaseEnv(object):
         self.used_stmt_tuples |= set(input_tuples)
         return
 
+    @_with_quiet_db_logs
     def insert_pa_statements(self):
         """Insert pickled preassembled statements."""
         existing_sids = {t[0] for t in self.used_stmt_tuples}

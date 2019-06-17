@@ -6,6 +6,8 @@ python:
   - "3.6"
 services:
   - postgresql
+addons:
+  postgresql: "9.6"
 before_install:
   - sudo apt-get update
   - sudo apt-get install openjdk-8-jdk

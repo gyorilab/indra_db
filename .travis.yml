@@ -37,6 +37,7 @@ install:
 before_script:
   # Create a test database.
   - psql -c 'create database travis_db_test;' -U postgres
+  - psql -c 'CREATE extension tablefunc;' -U postgres
   - export INDRADBTEST="postgresql://postgres:@localhost/travis_db_test"
   # Enable plotting on fake display
   - export DISPLAY=:99.0

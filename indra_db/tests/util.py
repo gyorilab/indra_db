@@ -190,9 +190,19 @@ class PrePaDatabaseEnv(object):
         for t in input_tuples:
             batch_id_set.add(t[cols.index('batch_id')])
 
-            new_input_dict[(t[cols.index('mk_hash')],
-                            t[cols.index('reading_id')],
-                            t[cols.index('db_info_id')])] = t
+            rid = t[cols.index('reading_id')]
+            dbid = t[cols.index('dbinfo_id')]
+            mk_hash = t[cols.index('mk_hash')]
+            if rid is not None:
+                key = (mk_hash, rid, t[cols.index('text_hash')])
+            elif dbid is not None:
+                key = (mk_hash, dbid, t[cols.index('source_hash')])
+            else:
+                raise ValueError("Either rid or dbid must be non-none.")
+            new_input_dict[key] = t
+
+        logger.debug("Loading %d/%d statements."
+                     % (len(new_input_dict), len(input_tuples)))
 
         self.test_db.copy('raw_statements', new_input_dict.values(), cols,
                           lazy=True, push_conflict=True,
@@ -202,7 +212,7 @@ class PrePaDatabaseEnv(object):
         for batch_id in batch_id_set:
             dbu.insert_raw_agents(self.test_db, batch_id)
 
-        return
+        return set(new_input_dict.values())
 
     def add_statements(self):
         """Add statements and agents to the database."""

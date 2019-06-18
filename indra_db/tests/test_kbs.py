@@ -59,7 +59,7 @@ def test_pathway_commons():
     _check_kbm(PathwayCommonsManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_rlimsp():
     _check_kbm(RlimspManager)
 

@@ -805,6 +805,11 @@ class DatabaseManager(object):
 
             @classmethod
             def create(cls, db, with_data=True, commit=True):
+                # Make sure the necessary extension is installed.
+                with db.engine.connect() as conn:
+                    conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
+
+                # Create the materialized view.
                 cls.__definition__ = cls.definition(db)
                 sql = super(cls, cls).create(db, with_data, commit)
                 cls.loaded = True
@@ -812,6 +817,12 @@ class DatabaseManager(object):
 
             @classmethod
             def update(cls, db, with_data=True, commit=True):
+                # Make sure the necessary extension is installed.
+                with db.engine.connect() as conn:
+                    conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
+
+                # Drop the table entirely and replace it because the columns
+                # may have changed.
                 sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
                 create_sql = cls.create(db, with_data, commit=False)
                 sql = sql_fmt % (cls.__tablename__, create_sql)

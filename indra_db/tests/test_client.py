@@ -226,7 +226,7 @@ def test_get_content_by_refs():
 
 
 def test_materialize_view_creation():
-    db = get_db_with_views(100000)
+    db = get_db_with_views(10000)
     res = db.select_all(db.PaStmtSrc)
     assert len(res), res
 

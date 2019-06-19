@@ -62,7 +62,7 @@ script:
   - echo "NOSEATTR=" $NOSEATTR
   # Now run all INDRA_DB tests
   - nosetests indra_db -v -a $NOSEATTR
-        --with-coverage --cover-inclusive --cover-package=indra
+        --with-coverage --cover-inclusive --cover-package=indra_db
         --with-doctest --with-timer --timer-top-n 10
   - cd $TRAVIS_BUILD_DIR
   # Run code style report on diff

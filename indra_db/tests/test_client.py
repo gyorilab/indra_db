@@ -74,7 +74,7 @@ def test_get_statements_by_grot():
 
 @attr('nonpublic')
 def test_get_statments_grot_wo_evidence():
-    num_stmts = 1000
+    num_stmts = 10000
     db, _ = get_prepped_db(num_stmts, with_agents=True)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', with_evidence=False,
@@ -274,6 +274,48 @@ def test_get_statement_jsons_by_mk_hash_sparser_bug():
 
 
 @attr('nonpublic')
+def test_raw_stmt_jsons_from_papers():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
+    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
+        id_samples = pickle.load(f)
+
+    for id_type, id_list in id_samples.items():
+        print(id_type)
+        res_dict = dbc.get_raw_stmt_jsons_from_papers(id_list, id_type=id_type,
+                                                      db=db)
+        assert len(res_dict), 'Failure with %s' % id_type
+
+    return
+
+
+@attr('nonpublic')
+def test_stmts_from_papers():
+    # Note that these tests only work if `test_materialize_view_creation` has
+    # passed, and it is assumed the test database remains in a good state.
+    db = get_temp_db()
+
+    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
+        id_samples = pickle.load(f)
+
+    for id_type, id_list in id_samples.items():
+        print(id_type)
+
+        # Test pa retrieval
+        pa_dict = dbc.get_statements_by_paper(id_list, id_type=id_type, db=db)
+        assert len(pa_dict), 'Failure with %s %s' % ('pa', id_type)
+
+        # Test raw retrieval
+        raw_dict = dbc.get_statements_by_paper(id_list, id_type=id_type,
+                                               preassembled=False, db=db)
+        assert len(raw_dict), 'Failure with %s %s' % ('raw', id_type)
+
+    return
+
+
+@attr('nonpublic')
 def test_pa_curation():
     db, key = get_prepped_db(100, with_pa=True)
     sample = db.select_sample_from_table(2, db.PAStatements)
@@ -321,45 +363,3 @@ def test_source_hash():
         assert sh_rec == sh,\
             "Recreated source hash %s does not match database sourch hash %s."\
             % (sh_rec, sh)
-
-
-@attr('nonpublic')
-def test_raw_stmt_jsons_from_papers():
-    # Note that these tests only work if `test_materialize_view_creation` has
-    # passed, and it is assumed the test database remains in a good state.
-    db = get_temp_db()
-
-    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
-        id_samples = pickle.load(f)
-
-    for id_type, id_list in id_samples.items():
-        print(id_type)
-        res_dict = dbc.get_raw_stmt_jsons_from_papers(id_list, id_type=id_type,
-                                                      db=db)
-        assert len(res_dict), 'Failure with %s' % id_type
-
-    return
-
-
-@attr('nonpublic')
-def test_stmts_from_papers():
-    # Note that these tests only work if `test_materialize_view_creation` has
-    # passed, and it is assumed the test database remains in a good state.
-    db = get_temp_db()
-
-    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
-        id_samples = pickle.load(f)
-
-    for id_type, id_list in id_samples.items():
-        print(id_type)
-
-        # Test pa retrieval
-        pa_dict = dbc.get_statements_by_paper(id_list, id_type=id_type, db=db)
-        assert len(pa_dict), 'Failure with %s %s' % ('pa', id_type)
-
-        # Test raw retrieval
-        raw_dict = dbc.get_statements_by_paper(id_list, id_type=id_type,
-                                               preassembled=False, db=db)
-        assert len(raw_dict), 'Failure with %s %s' % ('raw', id_type)
-
-    return

@@ -222,7 +222,7 @@ class PrePaDatabaseEnv(object):
         return
 
     @_with_quiet_db_logs
-    def insert_pa_statements(self):
+    def insert_pa_statements(self, with_agents=False):
         """Insert pickled preassembled statements."""
         existing_sids = {t[0] for t in self.used_stmt_tuples}
         link_tuples = []
@@ -243,15 +243,20 @@ class PrePaDatabaseEnv(object):
                         if set(t).issubset(hash_set)}
         self.test_db.copy('pa_support_links', supps_tuples,
                           self.test_data['pa_support_links']['cols'])
+        if with_agents:
+            ag_dict = self.test_data['pa_agents']['dict']
+            self.test_db.copy('pa_agents',
+                              sum([ag_dict[h] for h in hash_set], []),
+                              self.test_data['pa_agents']['cols'])
         return
 
 
-def get_prepped_db(num_stmts, with_pa=False):
+def get_prepped_db(num_stmts, with_pa=False, with_agents=False):
     dts = PrePaDatabaseEnv(num_stmts)
     dts.load_background()
     dts.add_statements()
     if with_pa:
-        dts.insert_pa_statements()
+        dts.insert_pa_statements(with_agents)
     return dts.test_db, dts.tester_key
 
 
@@ -302,7 +307,7 @@ def get_pa_loaded_db(num_stmts, split=None, pam=None):
 
 
 def get_db_with_views(num_stmts):
-    db, _ = get_prepped_db(num_stmts, with_pa=True)
+    db, _ = get_prepped_db(num_stmts, with_pa=True, with_agents=True)
     db.manage_views('create')
     return db
 

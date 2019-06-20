@@ -186,10 +186,10 @@ def test_nfkb_anomaly():
     db = get_temp_db()
 
     agents = [(None, 'NFkappaB', 'FPLX')]
-    res = dbc.get_statement_jsons_from_agents(agents=agents, max_stmts=1000,
+    res = dbc.get_statement_jsons_from_agents(agents=agents, max_stmts=10,
                                               ev_limit=10, db=db)
     assert res
-    assert len(res['statements']) == 1000, len(res['statements'])
+    assert len(res['statements']) == 10, len(res['statements'])
 
 
 @attr('nonpublic')
@@ -200,7 +200,7 @@ def test_triple_agent_bug():
 
     agents = [(None, '1834', 'HGNC'), (None, '6769', 'HGNC'),
               (None, '12856', 'HGNC')]
-    res = dbc.get_statement_jsons_from_agents(agents=agents, max_stmts=100,
+    res = dbc.get_statement_jsons_from_agents(agents=agents, max_stmts=10,
                                               stmt_type='Complex',
                                               ev_limit=5, db=db)
     assert res
@@ -263,7 +263,7 @@ def test_get_statement_jsons_by_mk_hash_sparser_bug():
     mk_hashes = {-26808188314528604}
     stmt_jsons = dbc.get_statement_jsons_from_hashes(mk_hashes, db=db)
     assert stmt_jsons
-    assert len(stmt_jsons['statements']) == 2, len(stmt_jsons['statements'])
+    assert len(stmt_jsons['statements']) == 1, len(stmt_jsons['statements'])
     stmts = stmts_from_json(stmt_jsons['statements'].values())
     ev_list = [ev for s in stmts for ev in s.evidence]
     assert any([ev.source_api == 'sparser' for ev in ev_list]), \

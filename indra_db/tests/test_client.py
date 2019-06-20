@@ -53,7 +53,7 @@ def test_get_statements():
 def test_get_statements_by_grot():
     """Test get statements by gene-role-type."""
     num_stmts = 10000
-    db, _ = get_prepped_db(num_stmts)
+    db, _ = get_prepped_db(num_stmts, with_agents=True)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', preassembled=False,
                                                  db=db)
@@ -75,7 +75,7 @@ def test_get_statements_by_grot():
 @attr('nonpublic')
 def test_get_statments_grot_wo_evidence():
     num_stmts = 1000
-    db, _ = get_prepped_db(num_stmts)
+    db, _ = get_prepped_db(num_stmts, with_agents=True)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', with_evidence=False,
                                                  db=db)

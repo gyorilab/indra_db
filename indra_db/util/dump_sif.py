@@ -66,6 +66,27 @@ def load_db_content(pkl_filename, reload, ns_list):
     return results
 
 
+def make_ev_strata(pkl_filename):
+
+    """Returns a dict of dicts with evidence count per source, per statement
+
+    The dictionary is at the top level keyed by statement hash and each
+    entry contains a dictionary keyed by the source that support the
+    statement where the entries are the evidence count for that source."""
+    db = dbu.get_primary_db()
+    res = db.select_all(db.PaStmtSrc)
+    ev = {}
+    for r in res:
+        rd = r.__dict__
+        ev[rd['mk_hash']] = {k: v for k, v in rd.items() if
+                             k not in ['_sa_instance_state', 'mk_hash'] and
+                             rd[k] is not None}
+
+    with open(pkl_filename, 'wb') as f:
+        pickle.dump(ev, f)
+    return ev
+
+
 def make_dataframe(pkl_filename, reconvert, db_content):
     if reconvert:
         # Organize by statement

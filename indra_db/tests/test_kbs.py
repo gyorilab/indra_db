@@ -69,7 +69,7 @@ def test_trrust():
     _check_kbm(TrrustManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_phosphosite():
     _check_kbm(PhosphositeManager)
 

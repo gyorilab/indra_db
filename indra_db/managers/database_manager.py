@@ -641,8 +641,8 @@ class DatabaseManager(object):
             __tablename__ = 'pa_meta'
             __definition__ = ('SELECT pa_agents.db_name, pa_agents.db_id, '
                               'pa_agents.id AS ag_id, pa_agents.role, '
-                              'pa_statements.type, pa_statements.mk_hash, '
-                              'evidence_counts.ev_count '
+                              'pa_agents.ag_num, pa_statements.type, '
+                              'pa_statements.mk_hash, evidence_counts.ev_count '
                               'FROM pa_agents, pa_statements,evidence_counts '
                               'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
                               'AND pa_statements.mk_hash = evidence_counts.mk_hash')

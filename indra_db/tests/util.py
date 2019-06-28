@@ -1,4 +1,3 @@
-import re
 import random
 import pickle
 import logging
@@ -6,7 +5,6 @@ from functools import wraps
 from os import path
 
 import indra_db.util as dbu
-from indra_db.config import get_databases as get_defaults
 from indra_db.managers.database_manager import DatabaseManager
 
 
@@ -32,27 +30,7 @@ def capitalize_list_of_tpls(l):
 
 def get_temp_db(clear=False):
     """Get a DatabaseManager for the test database."""
-    defaults = get_defaults()
-    test_defaults = {k: v for k, v in defaults.items() if 'test' in k}
-    key_list = list(test_defaults.keys())
-    key_list.sort()
-    db = None
-    for k in key_list:
-        test_name = test_defaults[k]
-        m = re.match('(\w+)://.*?/([\w.]+)', test_name)
-        if m is None:
-            logger.warning("Poorly formed db name: %s" % test_name)
-            continue
-        sqltype = m.groups()[0]
-        try:
-            db = DatabaseManager(test_name, sqltype=sqltype, label=k)
-            db.grab_session()
-        except Exception as e:
-            logger.error("%s didn't work" % test_name)
-            logger.exception(e)
-            continue  # Clearly this test database won't work.
-        logger.info("Using test database %s." % k)
-        break
+    db = DatabaseManager('postgresql://postgres:@localhost/indradb_test')
     if db is None:
         logger.error("Could not find any test database names.")
     if clear:

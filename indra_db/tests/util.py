@@ -86,7 +86,7 @@ def _with_quiet_db_logs(func):
     return wrapper
 
 
-class PrePaDatabaseEnv(object):
+class DatabaseEnv(object):
     """This object is used to setup the test database into various configs."""
     def __init__(self, max_total_stmts):
         self.test_db = get_temp_db(clear=True)
@@ -230,7 +230,7 @@ class PrePaDatabaseEnv(object):
 
 
 def get_prepped_db(num_stmts, with_pa=False, with_agents=False):
-    dts = PrePaDatabaseEnv(num_stmts)
+    dts = DatabaseEnv(num_stmts)
     dts.load_background()
     dts.add_statements()
     if with_pa:
@@ -238,7 +238,7 @@ def get_prepped_db(num_stmts, with_pa=False, with_agents=False):
     return dts.test_db, dts.tester_key
 
 
-class PaDatabaseEnv(PrePaDatabaseEnv):
+class PaDatabaseEnv(DatabaseEnv):
     """This object is used to setup the test database into various configs."""
     def add_statements(self, fraction=1, pam=None):
         """Add statements and agents to the database.

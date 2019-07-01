@@ -164,8 +164,9 @@ class MaterializedView(Displayable):
 
     @classmethod
     def create(cls, db, with_data=True, commit=True):
+        print('here')
         sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-              % (cls.__tablename__, cls.__definition__,
+              % (cls.__tablename__, cls.get_definition(),
                  '' if with_data else "NO")
         if commit:
             cls.execute(db, sql)
@@ -179,6 +180,10 @@ class MaterializedView(Displayable):
             cls.execute(db, sql)
         return sql
 
+    @classmethod
+    def get_definition(cls):
+        return cls.__definition__
+
     @staticmethod
     def execute(db, sql):
         conn = db.engine.raw_connection()
@@ -191,13 +196,11 @@ class MaterializedView(Displayable):
 class NamespaceLookup(MaterializedView):
     __dbname__ = NotImplemented
 
-    def __getattribute__(self, item):
-        if item == '__definition__':
-            return ("SELECT db_id, ag_id, role, ag_num, type, "
-                    "mk_hash, ev_count FROM pa_meta "
-                    "WHERE db_name = '%s';" % self.__dbname__)
-        else:
-            return super().__getattribute__(self, item)
+    @classmethod
+    def get_definition(cls):
+        return ("SELECT db_id, ag_id, role, ag_num, type, "
+                "mk_hash, ev_count FROM pa_meta "
+                "WHERE db_name = '%s'" % cls.__dbname__)
 
 
 class DatabaseManager(object):

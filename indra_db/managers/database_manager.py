@@ -681,6 +681,14 @@ class DatabaseManager(object):
         self.NameMeta = NameMeta
         self.m_views[NameMeta.__tablename__] = NameMeta
 
+        class OtherMeta(self.Base, NamespaceLookup):
+            __tablename__ = 'other_meta'
+            __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
+                              "type, mk_hash, ev_count FROM pa_meta "
+                              "WHERE db_name NOT IN ('NAME', 'TEXT');")
+        self.OtherMeta = OtherMeta
+        self.m_views[OtherMeta.__tablename__] = OtherMeta
+
         class RawStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'raw_stmt_src'
             __definition__ = ('SELECT raw_statements.id AS sid, '
@@ -874,8 +882,8 @@ class DatabaseManager(object):
 
     def manage_views(self, mode, view_list=None, with_data=True):
         ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
-                         'name_meta', 'text_meta', 'raw_stmt_src',
-                         'pa_stmt_src']
+                         'name_meta', 'text_meta', 'other_meta',
+                         'raw_stmt_src', 'pa_stmt_src']
         other_views = {'reading_ref_link'}
         active_views = self.get_active_views()
 

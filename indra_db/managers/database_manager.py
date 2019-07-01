@@ -701,7 +701,7 @@ class DatabaseManager(object):
             __tablename__ = 'other_meta'
             __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
                               "type, mk_hash, ev_count FROM pa_meta "
-                              "WHERE db_name NOT IN ('NAME', 'TEXT');")
+                              "WHERE db_name NOT IN ('NAME', 'TEXT')")
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)
             db_id = Column(String)

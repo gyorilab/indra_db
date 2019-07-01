@@ -672,16 +672,38 @@ class DatabaseManager(object):
         class TextMeta(self.Base, NamespaceLookup):
             __tablename__ = 'text_meta'
             __dbname__ = 'TEXT'
+            ag_id = Column(Integer, primary_key=True)
+            db_id = Column(String)
+            role = Column(String(20))
+            type = Column(String(100))
+            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+            raw_pa_link = relationship(FastRawPaLink)
+            ev_count = Column(Integer)
         self.TextMeta = TextMeta
         self.m_views[TextMeta.__tablename__] = TextMeta
 
         class NameMeta(self.Base, NamespaceLookup):
             __tablename__ = 'name_meta'
             __dbname__ = 'NAME'
+            ag_id = Column(Integer, primary_key=True)
+            db_id = Column(String)
+            role = Column(String(20))
+            type = Column(String(100))
+            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+            raw_pa_link = relationship(FastRawPaLink)
+            ev_count = Column(Integer)
         self.NameMeta = NameMeta
         self.m_views[NameMeta.__tablename__] = NameMeta
 
         class OtherMeta(self.Base, NamespaceLookup):
+            ag_id = Column(Integer, primary_key=True)
+            db_name = Column(String)
+            db_id = Column(String)
+            role = Column(String(20))
+            type = Column(String(100))
+            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+            raw_pa_link = relationship(FastRawPaLink)
+            ev_count = Column(Integer)
             __tablename__ = 'other_meta'
             __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
                               "type, mk_hash, ev_count FROM pa_meta "

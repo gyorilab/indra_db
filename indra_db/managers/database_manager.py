@@ -161,6 +161,7 @@ class Displayable(object):
 
 class MaterializedView(Displayable):
     __definition__ = NotImplemented
+    indices = []
 
     @classmethod
     def create(cls, db, with_data=True, commit=True):
@@ -190,6 +191,38 @@ class MaterializedView(Displayable):
         cursor.execute(sql)
         conn.commit()
         return
+
+    @classmethod
+    def create_index(cls, db, index, commit=True):
+        inp_data = {'idx_name': index.name,
+                    'table_name': cls.__tablename__,
+                    'idx_def': index.definition}
+        sql = ("CREATE INDEX {idx_name} ON public.{table_name} "
+               "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
+        if commit:
+            cls.execute(db, sql)
+        return sql
+
+    @classmethod
+    def build_indices(cls, db):
+        for index in cls.indices:
+            print("Building index: %s" % index.name)
+            cls.create_index(db, index)
+
+
+class MetaIndex(object):
+    def __init__(self, name, colname):
+        self.name = name
+        self.colname = colname
+        self.definition = ('btree (%s)' % colname)
+
+
+class StringIndex(MetaIndex):
+    def __init__(self, name, colname):
+        self.name = name
+        self.colname = colname
+        self.definition = ('btree (%s COLLATE pg_catalog."en_US.utf8" '
+                           'varchar_ops ASC NULLS LAST)' % colname)
 
 
 class NamespaceLookup(MaterializedView):
@@ -674,6 +707,8 @@ class DatabaseManager(object):
         class TextMeta(self.Base, NamespaceLookup):
             __tablename__ = 'text_meta'
             __dbname__ = 'TEXT'
+            indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
+                       StringIndex('text_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
             db_id = Column(String)
             role = Column(String(20))
@@ -687,6 +722,8 @@ class DatabaseManager(object):
         class NameMeta(self.Base, NamespaceLookup):
             __tablename__ = 'name_meta'
             __dbname__ = 'NAME'
+            indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
+                       StringIndex('name_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
             db_id = Column(String)
             role = Column(String(20))
@@ -702,6 +739,9 @@ class DatabaseManager(object):
             __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
                               "type, mk_hash, ev_count FROM pa_meta "
                               "WHERE db_name NOT IN ('NAME', 'TEXT')")
+            indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
+                       StringIndex('other_meta_type_idx', 'type'),
+                       StringIndex('other_meta_db_name_idx', 'db_name')]
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)
             db_id = Column(String)

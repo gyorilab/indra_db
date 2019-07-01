@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-D', '--database',
         default='primary',
-        help=('Select a database from the names given in the config or '
+        help=('Choose a database from the names given in the config or '
               'environment, for example primary is INDRA_DB_PRIMAY in the '
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'.')

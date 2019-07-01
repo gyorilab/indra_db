@@ -874,7 +874,8 @@ class DatabaseManager(object):
 
     def manage_views(self, mode, view_list=None, with_data=True):
         ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
-                         'raw_stmt_src', 'pa_stmt_src']
+                         'name_meta', 'text_meta', 'raw_stmt_src',
+                         'pa_stmt_src']
         other_views = {'reading_ref_link'}
         active_views = self.get_active_views()
 

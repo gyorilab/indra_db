@@ -695,7 +695,11 @@ class DatabaseManager(object):
         self.NameMeta = NameMeta
         self.m_views[NameMeta.__tablename__] = NameMeta
 
-        class OtherMeta(self.Base, NamespaceLookup):
+        class OtherMeta(self.Base, MaterializedView):
+            __tablename__ = 'other_meta'
+            __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
+                              "type, mk_hash, ev_count FROM pa_meta "
+                              "WHERE db_name NOT IN ('NAME', 'TEXT');")
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)
             db_id = Column(String)
@@ -704,10 +708,6 @@ class DatabaseManager(object):
             mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
             raw_pa_link = relationship(FastRawPaLink)
             ev_count = Column(Integer)
-            __tablename__ = 'other_meta'
-            __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
-                              "type, mk_hash, ev_count FROM pa_meta "
-                              "WHERE db_name NOT IN ('NAME', 'TEXT');")
         self.OtherMeta = OtherMeta
         self.m_views[OtherMeta.__tablename__] = OtherMeta
 

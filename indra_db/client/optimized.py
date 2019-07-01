@@ -257,15 +257,29 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         ag_dbid = regularize_agent_id(ag_dbid, ns)
 
         # Create this query (for this agent)
-        q = (db.session
-             .query(mk_hash_c, ev_count_c)
-             .filter(db.PaMeta.db_id.like(ag_dbid),
-                     db.PaMeta.db_name.like(ns)))
+        # If we are looking for a name...
+        if ns == 'NAME':
+            q = (db.session
+                 .query(mk_hash_c, ev_count_c)
+                 .filter(db.NameMeta.db_id.like(ag_dbid)))
+            meta = db.NameMeta
+        elif ns == 'TEXT':
+            q = (db.session
+                 .query(mk_hash_c, ev_count_c)
+                 .filter(db.TextMeta.db_id.like(ag_dbid)))
+            meta = db.TextMeta
+        else:
+            q = (db.session
+                 .query(mk_hash_c, ev_count_c)
+                 .filter(db.OtherMeta.db_id.like(ag_dbid),
+                         db.OtherMeta.db_name.like(ns)))
+            meta = db.OtherMeta
+
         if stmt_type is not None:
-            q = q.filter(db.PaMeta.type.like(stmt_type))
+            q = q.filter(meta.type.like(stmt_type))
 
         if role is not None:
-            q = q.filter(db.PaMeta.role == role.upper())
+            q = q.filter(meta.role == role.upper())
 
         # Intersect with the previous query.
         queries.append(q)

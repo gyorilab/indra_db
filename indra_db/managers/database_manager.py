@@ -164,7 +164,6 @@ class MaterializedView(Displayable):
 
     @classmethod
     def create(cls, db, with_data=True, commit=True):
-        print('here')
         sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
               % (cls.__tablename__, cls.get_definition(),
                  '' if with_data else "NO")

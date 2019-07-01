@@ -643,7 +643,7 @@ class DatabaseManager(object):
                               'pa_agents.id AS ag_id, pa_agents.role, '
                               'pa_agents.ag_num, pa_statements.type, '
                               'pa_statements.mk_hash, evidence_counts.ev_count '
-                              'FROM pa_agents, pa_statements,evidence_counts '
+                              'FROM pa_agents, pa_statements, evidence_counts '
                               'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
                               'AND pa_statements.mk_hash = evidence_counts.mk_hash')
             ag_id = Column(Integer, primary_key=True)
@@ -656,6 +656,15 @@ class DatabaseManager(object):
             ev_count = Column(Integer)
         self.PaMeta = PaMeta
         self.m_views[PaMeta.__tablename__] = PaMeta
+
+        class TextMeta(self.Base, MaterializedView):
+            __tablename__ = 'text_meta'
+            __definition__ = ("SELECT db_id, ag_id, role, ag_num, type, "
+                              "mk_hash, ev_count "
+                              "FROM pa_meta "
+                              "WHERE db_name = 'TEXT';")
+        self.TextMeta = TextMeta
+        self.m_views[TextMeta.__tablename__] = TextMeta
 
         class RawStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'raw_stmt_src'

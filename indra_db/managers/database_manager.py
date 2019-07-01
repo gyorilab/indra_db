@@ -188,6 +188,18 @@ class MaterializedView(Displayable):
         return
 
 
+class NamespaceLookup(MaterializedView):
+    __dbname__ = NotImplemented
+
+    def __getattribute__(self, item):
+        if item == '__definition__':
+            return ("SELECT db_id, ag_id, role, ag_num, type, "
+                    "mk_hash, ev_count FROM pa_meta "
+                    "WHERE db_name = '%s';" % self.__dbname__)
+        else:
+            return super().__getattribute__(self, item)
+
+
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -657,14 +669,17 @@ class DatabaseManager(object):
         self.PaMeta = PaMeta
         self.m_views[PaMeta.__tablename__] = PaMeta
 
-        class TextMeta(self.Base, MaterializedView):
+        class TextMeta(self.Base, NamespaceLookup):
             __tablename__ = 'text_meta'
-            __definition__ = ("SELECT db_id, ag_id, role, ag_num, type, "
-                              "mk_hash, ev_count "
-                              "FROM pa_meta "
-                              "WHERE db_name = 'TEXT';")
+            __dbname__ = 'TEXT'
         self.TextMeta = TextMeta
         self.m_views[TextMeta.__tablename__] = TextMeta
+
+        class NameMeta(self.Base, NamespaceLookup):
+            __tablename__ = 'name_meta'
+            __dbname__ = 'NAME'
+        self.NameMeta = NameMeta
+        self.m_views[NameMeta.__tablename__] = NameMeta
 
         class RawStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'raw_stmt_src'

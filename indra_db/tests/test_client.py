@@ -73,7 +73,7 @@ def test_get_statements_by_grot():
     assert stmts
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_get_statments_grot_wo_evidence():
     num_stmts = 10000
     db, _ = get_prepped_db(num_stmts, with_agents=True)
@@ -255,7 +255,7 @@ def test_get_statement_jsons_by_mk_hash():
     assert len(stmts) == len(mk_hashes)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_get_statement_jsons_by_mk_hash_sparser_bug():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.

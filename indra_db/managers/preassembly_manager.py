@@ -118,24 +118,27 @@ class PreassemblyManager(object):
 
     def _raw_sid_stmt_iter(self, db, id_set, do_enumerate=False):
         """Return a generator over statements with the given database ids."""
-        def _fixed_raw_stmt_from_json(s_json, pmid):
+        def _fixed_raw_stmt_from_json(s_json, tr):
             stmt = _stmt_from_json(s_json)
-            if pmid is not None:
-                stmt.evidence[0].pmid = pmid
+            if tr is not None:
+                stmt.evidence[0].pmid = tr.pmid
+                stmt.evidence[0].text_refs = {k: v
+                                              for k, v in tr.__dict__.items()
+                                              if not k.startswith('_')}
             return stmt
 
         i = 0
         for stmt_id_batch in batch_iter(id_set, self.batch_size):
             subres = (db.filter_query([db.RawStatements.id,
                                       db.RawStatements.json,
-                                      db.TextRef.pmid],
+                                      db.TextRef],
                                      db.RawStatements.id.in_(stmt_id_batch))
                         .outerjoin(db.Reading)
                       .filter(*db.link(db.Reading, db.TextRef))
                       .yield_per(self.batch_size//10))
             if do_enumerate:
-                yield i, [(sid, _fixed_raw_stmt_from_json(s_json, pmid))
-                          for sid, s_json, pmid in subres]
+                yield i, [(sid, _fixed_raw_stmt_from_json(s_json, tr))
+                          for sid, s_json, tr in subres]
                 i += 1
             else:
                 yield [(sid, _stmt_from_json(s_json)) for sid, s_json in subres]

@@ -439,16 +439,17 @@ class DbReadingSubmitter(Submitter):
             spine.set_visible(False)
 
         # Format the plot.
-        max_n = int(counts['total']['data'].max())
-        ax1.set_ylim(0, max_n + 1)
-        ax1.set_xlim(0, total_time)
-        yticks = list(range(0, max_n-max_n//5, max(1, max_n//5)))
-        ax1.set_yticks(yticks + [max_n])
-        ax1.set_yticklabels([str(n) for n in yticks] + ['max=%d' % max_n])
-        ax1.set_ylabel('N_jobs')
-        ax1.set_xlabel('Time since beginning [seconds]')
-        ax1.tick_params(labelsize=label_size)
-        ax1.legend(loc='best', fontsize=label_size)
+        if counts['total']['data']:
+            max_n = int(counts['total']['data'].max())
+            ax1.set_ylim(0, max_n + 1)
+            ax1.set_xlim(0, total_time)
+            yticks = list(range(0, max_n-max_n//5, max(1, max_n//5)))
+            ax1.set_yticks(yticks + [max_n])
+            ax1.set_yticklabels([str(n) for n in yticks] + ['max=%d' % max_n])
+            ax1.set_ylabel('N_jobs')
+            ax1.set_xlabel('Time since beginning [seconds]')
+            ax1.tick_params(labelsize=label_size)
+            ax1.legend(loc='best', fontsize=label_size)
 
         # Make the figure borders more sensible -------------------------------
         fig.tight_layout()

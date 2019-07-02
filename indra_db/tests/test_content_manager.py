@@ -280,7 +280,7 @@ def test_multiple_text_ref_pmc_oa():
 @attr('nonpublic')
 def test_id_handling_pmc_oa():
     "Test every conceivable combination pmid/pmcid presence."
-    db = get_temp_db()
+    db = get_temp_db(clear=True)
     pmc = PmcOA(ftp_url=get_test_ftp_url(), local=True)
 
     # Initialize with all possible states we could have gotten from medline.
@@ -363,7 +363,7 @@ def test_id_handling_pmc_oa():
 @attr('nonpublic')
 def test_medline_ref_checks():
     "Test the text ref checks used by medline."
-    db = get_temp_db()
+    db = get_temp_db(clear=True)
     med = Pubmed(ftp_url=get_test_ftp_url(), local=True)
 
     def check_input(input_pairs, expected_pairs, carefully, num):
@@ -459,7 +459,7 @@ def test_medline_ref_checks():
     return
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_elsevier_upload():
     "Test that we can upload elsevier content."
     db = get_test_db_with_ftp_content()

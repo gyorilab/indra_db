@@ -55,7 +55,7 @@ def get_test_ftp_url():
 def get_db_with_pubmed_content():
     "Populate the database with sample content from pubmed."
     from indra_db.managers.content_manager import Pubmed
-    db = get_temp_db()
+    db = get_temp_db(clear=True)
     Pubmed(ftp_url=get_test_ftp_url(), local=True).populate(db)
     return db
 

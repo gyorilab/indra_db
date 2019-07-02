@@ -88,12 +88,18 @@ def _with_quiet_db_logs(func):
     return wrapper
 
 
+TEST_DATA = {}
+
+
 class DatabaseEnv(object):
     """This object is used to setup the test database into various configs."""
     def __init__(self, max_total_stmts):
         self.test_db = get_temp_db(clear=True)
-        with open(path.join(THIS_DIR, 'db_pa_test_input_1M.pkl'), 'rb') as f:
-            self.test_data = pickle.load(f)
+        if not TEST_DATA:
+            with open(path.join(THIS_DIR,
+                                'db_pa_test_input_1M.pkl'), 'rb') as f:
+                TEST_DATA.update(pickle.load(f))
+        self.test_data = TEST_DATA
 
         if max_total_stmts < len(self.test_data['raw_statements']['tuples']):
             self.stmt_tuples = random.sample(

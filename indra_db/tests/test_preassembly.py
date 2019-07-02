@@ -280,8 +280,10 @@ def str_imp(o, uuid=None, other_stmt_keys=None):
                 % (o.id, o.text_content_id, o.reader, o.reader_version))
     if cname == 'RawStatements':
         s = Statement._from_json(json.loads(o.json.decode()))
-        s_str = ('<RawStmt: %s sid: %s, uuid: %s, type: %s, iv: %s, hash: %s>'
-                 % (str(s), o.id, o.uuid[:8] + '...', o.type,
+        s_str = ('<RawStmt: %s sid: %s, db: %s, rdg: %s, uuid: %s, '
+                 'type: %s, iv: %s, hash: %s>'
+                 % (str(s), o.id, o.db_info_id, o.reading_id,
+                    o.uuid[:8] + '...', o.type,
                     o.indra_version[:14] + '...', o.mk_hash))
         if other_stmt_keys and shash(s) in other_stmt_keys:
             s_str = '+' + s_str

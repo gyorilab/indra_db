@@ -699,6 +699,7 @@ class DatabaseManager(object):
             _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                         StringIndex('pa_meta_db_id_idx', 'db_id')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_name = Column(String)
             db_id = Column(String)
             role = Column(String(20))
@@ -715,6 +716,7 @@ class DatabaseManager(object):
             _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
                         StringIndex('text_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_id = Column(String)
             role = Column(String(20))
             type = Column(String(100))
@@ -730,6 +732,7 @@ class DatabaseManager(object):
             _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
                         StringIndex('name_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_id = Column(String)
             role = Column(String(20))
             type = Column(String(100))
@@ -748,6 +751,7 @@ class DatabaseManager(object):
                         StringIndex('other_meta_type_idx', 'type'),
                         StringIndex('other_meta_db_name_idx', 'db_name')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_name = Column(String)
             db_id = Column(String)
             role = Column(String(20))

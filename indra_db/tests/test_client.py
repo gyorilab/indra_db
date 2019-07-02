@@ -1,6 +1,7 @@
 import os
 import pickle
 import random
+from collections import defaultdict
 
 from nose.plugins.attrib import attr
 
@@ -273,20 +274,41 @@ def test_get_statement_jsons_by_mk_hash_sparser_bug():
                 for ev in ev_list])
 
 
+def _get_ref_id_samples(db, num_each):
+    id_types = ['trid', 'pmid', 'pmcid']
+
+    ref_data = db.select_all([db.TextRef.id, db.TextRef.pmid,
+                              db.TextRef.pmcid])
+
+    ref_id_sets = defaultdict(set)
+    for row in ref_data:
+        for id_type, id_val in zip(id_types, row):
+            ref_id_sets[id_type].add(id_val)
+
+    id_sample_dict = {id_type: random.sample(ids, min(num_each, len(ids)))
+                      for id_type, ids in ref_id_sets.items()}
+
+    return id_sample_dict
+
+
 @attr('nonpublic')
 def test_raw_stmt_jsons_from_papers():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.
     db = get_temp_db()
+    id_samples = _get_ref_id_samples(db, 100)
 
-    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
-        id_samples = pickle.load(f)
-
+    res_nums = {}
     for id_type, id_list in id_samples.items():
         print(id_type)
         res_dict = dbc.get_raw_stmt_jsons_from_papers(id_list, id_type=id_type,
                                                       db=db)
-        assert len(res_dict), 'Failure with %s' % id_type
+        res_nums[id_type] = len(res_dict)
+
+    assert all(res_nums.values()),\
+        'Failure with %s' % str({id_type: num
+                                 for id_type, num in res_nums.items()
+                                 if not num})
 
     return
 
@@ -296,9 +318,7 @@ def test_stmts_from_papers():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.
     db = get_temp_db()
-
-    with open(os.path.join(THIS_DIR, 'id_sample_lists.pkl'), 'rb') as f:
-        id_samples = pickle.load(f)
+    id_samples = _get_ref_id_samples(db, 100)
 
     for id_type, id_list in id_samples.items():
         print(id_type)

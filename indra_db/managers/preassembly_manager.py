@@ -75,47 +75,6 @@ class PreassemblyManager(object):
             return None
         return max([u.run_datetime for u in update_list])
 
-    def _pa_batch_iter(self, db, in_mks=None, ex_mks=None):
-        """Return an iterator over batches of preassembled statements.
-
-        This avoids the need to load all such statements from the database into
-        RAM at the same time (as this can be quite large).
-
-        You may limit the set of pa_statements loaded by providing a set/list of
-        matches-keys of the statements you wish to include.
-        """
-        if in_mks is None and ex_mks is None:
-            db_stmt_iter = db.select_all(db.PAStatements.json,
-                                         yield_per=self.batch_size)
-        elif ex_mks is None and in_mks is not None:
-            if not in_mks:
-                return []
-            db_stmt_iter = db.select_all(
-                db.PAStatements.json,
-                db.PAStatements.mk_hash.in_(in_mks),
-                yield_per=self.batch_size
-                )
-        elif in_mks is None and ex_mks is not None:
-            if not ex_mks:
-                return []
-            db_stmt_iter = db.select_all(
-                db.PAStatements.json,
-                db.PAStatements.mk_hash.notin_(ex_mks),
-                yield_per=self.batch_size
-                )
-        elif in_mks and ex_mks:
-            db_stmt_iter = db.select_all(
-                db.PAStatements.json,
-                db.PAStatements.mk_hash.notin_(ex_mks),
-                db.PAStatements.mk_hash.in_(in_mks),
-                yield_per=self.batch_size
-                )
-        else:  # Neither is None, and both are empty.
-            return []
-
-        pa_stmts = (_stmt_from_json(s_json) for s_json, in db_stmt_iter)
-        return batch_iter(pa_stmts, self.batch_size, return_func=list)
-
     def _raw_sid_stmt_iter(self, db, id_set, do_enumerate=False):
         """Return a generator over statements with the given database ids."""
         def _fixed_raw_stmt_from_json(s_json, tr):
@@ -137,12 +96,13 @@ class PreassemblyManager(object):
                         .outerjoin(db.TextContent)
                         .outerjoin(db.TextRef)
                         .yield_per(self.batch_size//10))
+            data = [(sid, _fixed_raw_stmt_from_json(s_json, tr))
+                    for sid, s_json, tr in subres]
             if do_enumerate:
-                yield i, [(sid, _fixed_raw_stmt_from_json(s_json, tr))
-                          for sid, s_json, tr in subres]
+                yield i, data
                 i += 1
             else:
-                yield [(sid, _stmt_from_json(s_json)) for sid, s_json in subres]
+                yield data
 
     @clockit
     def _extract_and_push_unique_statements(self, db, raw_sids, num_stmts,

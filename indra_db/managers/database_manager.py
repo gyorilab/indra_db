@@ -161,11 +161,12 @@ class Displayable(object):
 
 class MaterializedView(Displayable):
     __definition__ = NotImplemented
+    _indices = []
 
     @classmethod
     def create(cls, db, with_data=True, commit=True):
         sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-              % (cls.__tablename__, cls.__definition__,
+              % (cls.__tablename__, cls.get_definition(),
                  '' if with_data else "NO")
         if commit:
             cls.execute(db, sql)
@@ -179,6 +180,10 @@ class MaterializedView(Displayable):
             cls.execute(db, sql)
         return sql
 
+    @classmethod
+    def get_definition(cls):
+        return cls.__definition__
+
     @staticmethod
     def execute(db, sql):
         conn = db.engine.raw_connection()
@@ -186,6 +191,49 @@ class MaterializedView(Displayable):
         cursor.execute(sql)
         conn.commit()
         return
+
+    @classmethod
+    def create_index(cls, db, index, commit=True):
+        inp_data = {'idx_name': index.name,
+                    'table_name': cls.__tablename__,
+                    'idx_def': index.definition}
+        sql = ("CREATE INDEX {idx_name} ON public.{table_name} "
+               "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
+        if commit:
+            cls.execute(db, sql)
+        return sql
+
+    @classmethod
+    def build_indices(cls, db):
+        for index in cls._indices:
+            print("Building index: %s" % index.name)
+            cls.create_index(db, index)
+
+
+class BtreeIndex(object):
+    def __init__(self, name, colname, opts=None):
+        self.name = name
+        self.colname = colname
+        contents = colname
+        if opts is not None:
+            contents += ' ' + opts
+        self.definition = ('btree (%s)' % contents)
+
+
+class StringIndex(BtreeIndex):
+    def __init__(self, name, colname):
+        opts = 'COLLATE pg_catalog."en_US.utf8" varchar_ops ASC NULLS LAST'
+        super().__init__(name, colname, opts)
+
+
+class NamespaceLookup(MaterializedView):
+    __dbname__ = NotImplemented
+
+    @classmethod
+    def get_definition(cls):
+        return ("SELECT db_id, ag_id, role, ag_num, type, "
+                "mk_hash, ev_count FROM pa_meta "
+                "WHERE db_name = '%s'" % cls.__dbname__)
 
 
 class DatabaseManager(object):
@@ -600,6 +648,7 @@ class DatabaseManager(object):
                               'FROM text_ref AS tr JOIN text_content AS tc '
                               'ON tr.id = tc.text_ref_id JOIN reading AS r '
                               'ON tc.id = r.text_content_id')
+            _indices = [BtreeIndex('rid_idx', 'rid')]
             trid = Column(Integer)
             pmid = Column(String(20))
             pmcid = Column(String(20))
@@ -625,6 +674,7 @@ class DatabaseManager(object):
                               'WHERE link.raw_stmt_id = raw.id '
                               'AND link.pa_stmt_mk_hash = pa.mk_hash')
             _skip_disp = ['raw_json', 'pa_json']
+            _indices = [BtreeIndex('hash_index', 'mk_hash')]
             id = Column(Integer, primary_key=True)
             raw_json = Column(BYTEA)
             reading_id = Column(BigInteger, ForeignKey('reading_ref_link.rid'))
@@ -641,9 +691,9 @@ class DatabaseManager(object):
             __tablename__ = 'pa_meta'
             __definition__ = ('SELECT pa_agents.db_name, pa_agents.db_id, '
                               'pa_agents.id AS ag_id, pa_agents.role, '
-                              'pa_statements.type, pa_statements.mk_hash, '
-                              'evidence_counts.ev_count '
-                              'FROM pa_agents, pa_statements,evidence_counts '
+                              'pa_agents.ag_num, pa_statements.type, '
+                              'pa_statements.mk_hash, evidence_counts.ev_count '
+                              'FROM pa_agents, pa_statements, evidence_counts '
                               'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
                               'AND pa_statements.mk_hash = evidence_counts.mk_hash')
             ag_id = Column(Integer, primary_key=True)
@@ -656,6 +706,55 @@ class DatabaseManager(object):
             ev_count = Column(Integer)
         self.PaMeta = PaMeta
         self.m_views[PaMeta.__tablename__] = PaMeta
+
+        class TextMeta(self.Base, NamespaceLookup):
+            __tablename__ = 'text_meta'
+            __dbname__ = 'TEXT'
+            _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
+                        StringIndex('text_meta_type_idx', 'type')]
+            ag_id = Column(Integer, primary_key=True)
+            db_id = Column(String)
+            role = Column(String(20))
+            type = Column(String(100))
+            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+            raw_pa_link = relationship(FastRawPaLink)
+            ev_count = Column(Integer)
+        self.TextMeta = TextMeta
+        self.m_views[TextMeta.__tablename__] = TextMeta
+
+        class NameMeta(self.Base, NamespaceLookup):
+            __tablename__ = 'name_meta'
+            __dbname__ = 'NAME'
+            _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
+                        StringIndex('name_meta_type_idx', 'type')]
+            ag_id = Column(Integer, primary_key=True)
+            db_id = Column(String)
+            role = Column(String(20))
+            type = Column(String(100))
+            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+            raw_pa_link = relationship(FastRawPaLink)
+            ev_count = Column(Integer)
+        self.NameMeta = NameMeta
+        self.m_views[NameMeta.__tablename__] = NameMeta
+
+        class OtherMeta(self.Base, MaterializedView):
+            __tablename__ = 'other_meta'
+            __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
+                              "type, mk_hash, ev_count FROM pa_meta "
+                              "WHERE db_name NOT IN ('NAME', 'TEXT')")
+            _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
+                        StringIndex('other_meta_type_idx', 'type'),
+                        StringIndex('other_meta_db_name_idx', 'db_name')]
+            ag_id = Column(Integer, primary_key=True)
+            db_name = Column(String)
+            db_id = Column(String)
+            role = Column(String(20))
+            type = Column(String(100))
+            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+            raw_pa_link = relationship(FastRawPaLink)
+            ev_count = Column(Integer)
+        self.OtherMeta = OtherMeta
+        self.m_views[OtherMeta.__tablename__] = OtherMeta
 
         class RawStmtSrc(self.Base, MaterializedView):
             __tablename__ = 'raw_stmt_src'
@@ -850,6 +949,7 @@ class DatabaseManager(object):
 
     def manage_views(self, mode, view_list=None, with_data=True):
         ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
+                         'name_meta', 'text_meta', 'other_meta',
                          'raw_stmt_src', 'pa_stmt_src']
         other_views = {'reading_ref_link'}
         active_views = self.get_active_views()

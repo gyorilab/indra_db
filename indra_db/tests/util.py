@@ -35,6 +35,8 @@ def get_temp_db(clear=False):
         logger.error("Could not find any test database names.")
     if clear:
         db._clear(force=True)
+    db.grab_session()
+    db.session.rollback()
     return db
 
 

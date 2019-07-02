@@ -497,7 +497,7 @@ def test_db_lazy_insert():
         db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
         assert False, "Vanilla copy succeeded when it should have failed."
     except Exception as e:
-        db.session.rollback()
+        db._conn.rollback()
         pass
 
     # Try adding more text refs lazily. Overlap is guaranteed.
@@ -548,7 +548,7 @@ def test_lazy_copier_unique_constraints():
         db.copy('text_ref', fake_mids_b, ('manuscript_id',))
         assert False, "Vanilla copy succeeded when it should have failed."
     except Exception as e:
-        db.session.rollback()
+        db._conn.rollback()
         pass
 
     start = datetime.now()
@@ -584,7 +584,7 @@ def test_lazy_copier_update():
         db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
         assert False, "Vanilla copy succeeded when it should have failed."
     except Exception as e:
-        db.session.rollback()
+        db._conn.rollback()
         pass
 
     # Try adding more text refs lazily. Overlap is guaranteed.

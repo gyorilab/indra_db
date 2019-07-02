@@ -1314,6 +1314,8 @@ class DatabaseManager(object):
             # Actually do the copy.
             if self._conn is None:
                 self._conn = self.engine.raw_connection()
+                self._conn.rollback()
+
             if lazy:
                 # We need a constraint for if we are going to update on-
                 # conflict, so if we didn't get a constraint, we can try to

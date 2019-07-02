@@ -161,7 +161,7 @@ class Displayable(object):
 
 class MaterializedView(Displayable):
     __definition__ = NotImplemented
-    indices = []
+    _indices = []
 
     @classmethod
     def create(cls, db, with_data=True, commit=True):
@@ -205,24 +205,25 @@ class MaterializedView(Displayable):
 
     @classmethod
     def build_indices(cls, db):
-        for index in cls.indices:
+        for index in cls._indices:
             print("Building index: %s" % index.name)
             cls.create_index(db, index)
 
 
-class MetaIndex(object):
-    def __init__(self, name, colname):
+class BtreeIndex(object):
+    def __init__(self, name, colname, opts=None):
         self.name = name
         self.colname = colname
-        self.definition = ('btree (%s)' % colname)
+        contents = colname
+        if opts is not None:
+            contents += ' ' + opts
+        self.definition = ('btree (%s)' % contents)
 
 
-class StringIndex(MetaIndex):
+class StringIndex(BtreeIndex):
     def __init__(self, name, colname):
-        self.name = name
-        self.colname = colname
-        self.definition = ('btree (%s COLLATE pg_catalog."en_US.utf8" '
-                           'varchar_ops ASC NULLS LAST)' % colname)
+        opts = 'COLLATE pg_catalog."en_US.utf8" varchar_ops ASC NULLS LAST'
+        super().__init__(name, colname, opts)
 
 
 class NamespaceLookup(MaterializedView):
@@ -647,6 +648,7 @@ class DatabaseManager(object):
                               'FROM text_ref AS tr JOIN text_content AS tc '
                               'ON tr.id = tc.text_ref_id JOIN reading AS r '
                               'ON tc.id = r.text_content_id')
+            _indices = [BtreeIndex('rid_idx', 'rid')]
             trid = Column(Integer)
             pmid = Column(String(20))
             pmcid = Column(String(20))
@@ -672,6 +674,7 @@ class DatabaseManager(object):
                               'WHERE link.raw_stmt_id = raw.id '
                               'AND link.pa_stmt_mk_hash = pa.mk_hash')
             _skip_disp = ['raw_json', 'pa_json']
+            _indices = [BtreeIndex('hash_index', 'mk_hash')]
             id = Column(Integer, primary_key=True)
             raw_json = Column(BYTEA)
             reading_id = Column(BigInteger, ForeignKey('reading_ref_link.rid'))
@@ -707,8 +710,8 @@ class DatabaseManager(object):
         class TextMeta(self.Base, NamespaceLookup):
             __tablename__ = 'text_meta'
             __dbname__ = 'TEXT'
-            indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
-                       StringIndex('text_meta_type_idx', 'type')]
+            _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
+                        StringIndex('text_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
             db_id = Column(String)
             role = Column(String(20))
@@ -722,8 +725,8 @@ class DatabaseManager(object):
         class NameMeta(self.Base, NamespaceLookup):
             __tablename__ = 'name_meta'
             __dbname__ = 'NAME'
-            indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
-                       StringIndex('name_meta_type_idx', 'type')]
+            _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
+                        StringIndex('name_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
             db_id = Column(String)
             role = Column(String(20))
@@ -739,9 +742,9 @@ class DatabaseManager(object):
             __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
                               "type, mk_hash, ev_count FROM pa_meta "
                               "WHERE db_name NOT IN ('NAME', 'TEXT')")
-            indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
-                       StringIndex('other_meta_type_idx', 'type'),
-                       StringIndex('other_meta_db_name_idx', 'db_name')]
+            _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
+                        StringIndex('other_meta_type_idx', 'type'),
+                        StringIndex('other_meta_db_name_idx', 'db_name')]
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)
             db_id = Column(String)

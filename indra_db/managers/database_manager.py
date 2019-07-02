@@ -696,6 +696,8 @@ class DatabaseManager(object):
                               'FROM pa_agents, pa_statements, evidence_counts '
                               'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
                               'AND pa_statements.mk_hash = evidence_counts.mk_hash')
+            _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
+                        StringIndex('pa_meta_db_id_idx', 'db_id')]
             ag_id = Column(Integer, primary_key=True)
             db_name = Column(String)
             db_id = Column(String)

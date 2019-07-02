@@ -134,8 +134,9 @@ class PreassemblyManager(object):
                                       db.TextRef],
                                      db.RawStatements.id.in_(stmt_id_batch))
                         .outerjoin(db.Reading)
-                      .filter(*db.link(db.Reading, db.TextRef))
-                      .yield_per(self.batch_size//10))
+                        .outerjoin(db.TextContent)
+                        .outerjoin(db.TextRef)
+                        .yield_per(self.batch_size//10))
             if do_enumerate:
                 yield i, [(sid, _fixed_raw_stmt_from_json(s_json, tr))
                           for sid, s_json, tr in subres]

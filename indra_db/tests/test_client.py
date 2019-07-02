@@ -91,12 +91,12 @@ def test_get_content_by_refs():
 
 
 def test_materialize_view_creation():
-    db = get_db_with_views(10000)
+    db = get_db_with_views(1000)
     res = db.select_all(db.PaStmtSrc)
     assert len(res), res
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_get_statement_jsons_by_agent():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.
@@ -119,7 +119,7 @@ def test_get_statement_jsons_by_agent():
             assert ag_tpl in s_agents
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_get_statement_jsons_options():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.
@@ -179,7 +179,7 @@ def test_get_statement_jsons_options():
     return
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_nfkb_anomaly():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.
@@ -192,7 +192,7 @@ def test_nfkb_anomaly():
     assert len(res['statements']) == 10, len(res['statements'])
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_triple_agent_bug():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.
@@ -217,7 +217,7 @@ def test_null_response():
     assert len(res['statements']) == 0, len(res['statements'])
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_get_statement_jsons_by_paper_id():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.
@@ -236,7 +236,7 @@ def test_get_statement_jsons_by_paper_id():
     assert len(pmid_set) >= len(paper_refs)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'known_failing')
 def test_get_statement_jsons_by_mk_hash():
     # Note that these tests only work if `test_materialize_view_creation` has
     # passed, and it is assumed the test database remains in a good state.

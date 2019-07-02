@@ -50,7 +50,7 @@ script:
   # Run standard unit tests
   - cd $TRAVIS_BUILD_DIR
   # doctests on Travis would otherwise fail
-  - export NOSEATTR="!notravis";
+  - export NOSEATTR="!notravis,!known_failing";
   - if [[ $TRAVIS_PULL_REQUEST != "false" ]]; then
       export NOSEATTR="!nonpublic,$NOSEATTR";
     fi

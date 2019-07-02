@@ -606,7 +606,7 @@ def test_lazy_copier_update():
 
 @attr('nonpublic')
 def test_db_preassembly_small():
-    _check_preassembly_with_database(200, 40)
+    _check_preassembly_with_database(400, 37)
 
 
 # @attr('nonpublic', 'slow')
@@ -626,7 +626,7 @@ def test_db_preassembly_small():
 
 @attr('nonpublic')
 def test_db_incremental_preassembly_small():
-    _check_db_pa_supplement(200, 40)
+    _check_db_pa_supplement(400, 43)
 
 
 # @attr('nonpublic', 'slow')

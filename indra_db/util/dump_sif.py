@@ -66,7 +66,7 @@ def load_db_content(pkl_filename, reload, ns_list):
     return results
 
 
-def make_ev_strata(pkl_filename):
+def make_ev_strata(pkl_filename=None):
 
     """Returns a dict of dicts with evidence count per source, per statement
 
@@ -82,8 +82,9 @@ def make_ev_strata(pkl_filename):
                              k not in ['_sa_instance_state', 'mk_hash'] and
                              rd[k] is not None}
 
-    with open(pkl_filename, 'wb') as f:
-        pickle.dump(ev, f)
+    if pkl_filename:
+        with open(pkl_filename, 'wb') as f:
+            pickle.dump(ev, f)
     return ev
 
 

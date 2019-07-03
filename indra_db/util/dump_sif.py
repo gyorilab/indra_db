@@ -2,6 +2,8 @@ __all__ = ['load_db_content', 'make_dataframe']
 
 import sys
 import pickle
+import logging
+import argparse
 from itertools import permutations
 from collections import OrderedDict
 
@@ -14,7 +16,9 @@ except ImportError:
 from indra_db import util as dbu
 from indra.databases import hgnc_client, go_client, mesh_client
 
-ns_priority_list = (
+logger = logging.getLogger(__name__)
+
+NS_PRIORITY_LIST = (
     'FPLX',
     'HGNC',
     'GO',
@@ -25,9 +29,9 @@ ns_priority_list = (
 )
 
 
-# All namespaces used here should be included in the ns_priority_list, above
-ns_list = ('HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
-
+# All namespaces here (except NAME) should also be included in the
+# NS_PRIORITY_LIST above
+NS_LIST = ('NAME', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
 
 def format_agent(db_nm, db_id):
     if db_nm == 'FPLX':
@@ -163,25 +167,45 @@ def make_dataframe(pkl_filename, reconvert, db_content):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='DB sif dumper',
+        usage='Usage: dump_sif.py <db_dump_pkl> <dataframe_pkl> <csv_file>')
+    parser.add_argument('--db-dump',
+                        help='Dump a pickle of the database dump')
+    parser.add_argument('--reload',
+                        help='Reload from the database',
+                        action='store_true',
+                        default=True)
+    parser.add_argument('--dataframe',
+                        help='Dump a pickle of the database dump processed '
+                             'into a pandas dataframe with pair interactions')
+    parser.add_argument('--reconvert',
+                        help='Re-run the dataframe processing on the db-dump',
+                        action='store_true',
+                        default=True)
+    parser.add_argument('--csv-file',
+                        help='Dump a csv file with statistics of the database '
+                             'dump')
+    args = parser.parse_args()
 
-    usage = 'Usage: dump_sif.py <db_dump_pkl> <dataframe_pkl> <csv_file>'
-    if len(sys.argv) < 4:
-        print(usage)
-        sys.exit(1)
-
-    dump_file = sys.argv[1]
-    df_file = sys.argv[2]
-    csv_file = sys.argv[3]
-
-    db_content = load_db_content(dump_file, True, ns_list)
-    df = make_dataframe(df_file, True, db_content)
+    dump_file = args.db_dump
+    df_file = args.dataframe
+    reload = args.reload
+    csv_file = args.csv_file
+    
+    # Get the db content from a new DB dump or from file
+    db_content = load_db_content(reload=reload, ns_list=NS_LIST,
+                                 pkl_filename=dump_file)
     # Convert the database query result into a set of pairwise relationships
-    # Aggregate rows by genes and stmt type
-    print("Saving to CSV...")
-    filt_df = df.filter(items=['agA_ns', 'agA_id', 'agA_name',
-                               'agB_ns', 'agB_id', 'agB_name',
-                               'stmt_type', 'evidence_count'])
-    type_counts = filt_df.groupby(by=['agA_ns', 'agA_id', 'agA_name',
-                                      'agB_ns', 'agB_id', 'agB_name',
-                                      'stmt_type']).sum()
-    type_counts.to_csv(csv_file)
+    df = make_dataframe(pkl_filename=df_file, reconvert=True,
+                        db_content=db_content)
+
+    if csv_file:
+        # Aggregate rows by genes and stmt type
+        logger.info("Saving to CSV...")
+        filt_df = df.filter(items=['agA_ns', 'agA_id', 'agA_name',
+                                   'agB_ns', 'agB_id', 'agB_name',
+                                   'stmt_type', 'evidence_count'])
+        type_counts = filt_df.groupby(by=['agA_ns', 'agA_id', 'agA_name',
+                                          'agB_ns', 'agB_id', 'agB_name',
+                                          'stmt_type']).sum()
+        type_counts.to_csv(csv_file)

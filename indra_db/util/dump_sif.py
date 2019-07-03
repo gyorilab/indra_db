@@ -45,28 +45,28 @@ def format_agent(db_nm, db_id):
         return mesh_client.get_mesh_name(db_id)
     return '{db_nm}:{db_id}'.format(db_nm=db_nm, db_id=db_id)
 
-
-def load_db_content(pkl_filename, reload, ns_list):
+def load_db_content(reload, ns_list, pkl_filename=None):
     # Get the raw data
     if reload:
         db = dbu.get_primary_db()
-        print("Querying the database for statement metadata...")
+        logger.info("Querying the database for statement metadata...")
         results = []
         for ns in ns_list:
-            print("Querying for {ns}".format(ns=ns))
+            logger.info("Querying for {ns}".format(ns=ns))
             res = db.select_all([db.PaMeta.mk_hash, db.PaMeta.db_name,
                                  db.PaMeta.db_id, db.PaMeta.role,
                                  db.PaMeta.ev_count, db.PaMeta.type],
                                  db.PaMeta.db_name.like(ns))
             results.extend(res)
         results = set(results)
-        with open(pkl_filename, 'wb') as f:
-            pickle.dump(results, f)
-    else:
-        print("Loading database content from %s" % pkl_filename)
+        if pkl_filename:
+            with open(pkl_filename, 'wb') as f:
+                pickle.dump(results, f)
+    elif pkl_filename:
+        logger.info("Loading database content from %s" % pkl_filename)
         with open(pkl_filename, 'rb') as f:
             results = pickle.load(f)
-    print("{len} stmts loaded".format(len=len(results)))
+    logger.info("{len} stmts loaded".format(len=len(results)))
     return results
 
 
@@ -95,7 +95,7 @@ def make_ev_strata(pkl_filename=None):
 def make_dataframe(pkl_filename, reconvert, db_content):
     if reconvert:
         # Organize by statement
-        print("Organizing by statement...")
+        logger.info("Organizing by statement...")
         stmt_info = {}
         roles = {'SUBJECT':0, 'OBJECT':1, 'OTHER':2}
         for h, db_nm, db_id, r, n, t in db_content:
@@ -108,7 +108,7 @@ def make_dataframe(pkl_filename, reconvert, db_content):
 
         # Organize by pairs of genes, counting evidence.
         rows = []
-        print("Converting to pairwise entries...")
+        logger.info("Converting to pairwise entries...")
         for hash, info_dict in stmt_info.items():
             # Find roles with more than one agent
             agents_by_role = {}

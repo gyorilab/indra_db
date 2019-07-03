@@ -110,6 +110,8 @@ def make_dataframe(pkl_filename, reconvert, db_content):
         # to multiple rows
 
         # Organize by pairs of genes, counting evidence.
+        nkey_errors = 0
+        error_keys = []
         rows = []
         logger.info("Converting to pairwise entries...")
         for hash, info_dict in stmt_info.items():
@@ -171,7 +173,14 @@ def make_dataframe(pkl_filename, reconvert, db_content):
                         ('evidence_count', info_dict['ev_count']),
                         ('hash', hash)])
                 rows.append(row)
-
+        if nkey_errors:
+            ef = 'key_errors.csv'
+            logger.warning('%d KeyErrors. Offending keys found in %s' %
+                           (nkey_errors, ef))
+            with open(ef, 'w') as f:
+                f.write('hash,PaMeta.ag_num\n')
+                for kn in error_keys:
+                    f.write('%s,%s\n' % kn)
         df = pd.DataFrame.from_dict(rows)
 
         with open(pkl_filename, 'wb') as f:

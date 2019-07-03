@@ -54,9 +54,9 @@ def load_db_content(reload, ns_list, pkl_filename=None):
         for ns in ns_list:
             logger.info("Querying for {ns}".format(ns=ns))
             res = db.select_all([db.PaMeta.mk_hash, db.PaMeta.db_name,
-                                 db.PaMeta.db_id, db.PaMeta.role,
+                                 db.PaMeta.db_id, db.PaMeta.ag_num,
                                  db.PaMeta.ev_count, db.PaMeta.type],
-                                 db.PaMeta.db_name.like(ns))
+                                db.PaMeta.db_name.like(ns))
             results.extend(res)
         results = set(results)
         if pkl_filename:
@@ -97,11 +97,14 @@ def make_dataframe(pkl_filename, reconvert, db_content):
         # Organize by statement
         logger.info("Organizing by statement...")
         stmt_info = {}
-        roles = {'SUBJECT':0, 'OBJECT':1, 'OTHER':2}
-        for h, db_nm, db_id, r, n, t in db_content:
+        ag_name_by_hash_num = {}
+        for h, db_nm, db_id, num, n, t in db_content:
+            # Populate the 'NAME' dictionary per agent
+            if db_nm == 'NAME':
+                ag_name_by_hash_num[(h, num)] = db_id
             if h not in stmt_info.keys():
                 stmt_info[h] = {'agents': [], 'ev_count': n, 'type': t}
-            stmt_info[h]['agents'].append((roles[r], db_nm, db_id))
+            stmt_info[h]['agents'].append((num, db_nm, db_id))
         # Turn into dataframe with geneA, geneB, type, indexed by hash;
         # expand out all complexes
         # to multiple rows
@@ -111,23 +114,36 @@ def make_dataframe(pkl_filename, reconvert, db_content):
         logger.info("Converting to pairwise entries...")
         for hash, info_dict in stmt_info.items():
             # Find roles with more than one agent
-            agents_by_role = {}
-            for role, db_nm, db_id in info_dict['agents']:
-                assert db_nm in ns_priority_list
-                db_rank = ns_priority_list.index(db_nm)
-                # If we don't already have an agent for this role, use the
-                # one we've found
-                if role not in agents_by_role:
-                    agents_by_role[role] = (role, db_nm, db_id, db_rank)
-                # Otherwise, take the current agent if the identifier type
-                # has a higher rank
+            agents_by_num = {}
+            for num, db_nm, db_id in info_dict['agents']:
+                if db_nm == 'NAME':
+                    continue
                 else:
-                    cur_rank = agents_by_role[role][3]
-                    if db_rank < cur_rank:
-                        agents_by_role[role] = (role, db_nm, db_id, db_rank)
+                    assert db_nm in NS_PRIORITY_LIST
+                    db_rank = NS_PRIORITY_LIST.index(db_nm)
+                    # If we don't already have an agent for this num, use the
+                    # one we've found
+                    if num not in agents_by_num:
+                        agents_by_num[num] = (num, db_nm, db_id, db_rank)
+                    # Otherwise, take the current agent if the identifier type
+                    # has a higher rank
+                    else:
+                        cur_rank = agents_by_num[num][3]
+                        if db_rank < cur_rank:
+                            agents_by_num[num] = (num, db_nm, db_id, db_rank)
 
-            agents = [(db_nm, db_id, format_agent(db_nm, db_id))
-                      for _, db_nm, db_id, _ in sorted(agents_by_role.values())]
+            agents = []
+            for num, db_nm, db_id, _ in sorted(agents_by_num.values()):
+                try:
+                    agents.append((db_nm, db_id,
+                                   ag_name_by_hash_num[(hash, num)]))
+                except KeyError:
+                    nkey_errors += 1
+                    error_keys.append((hash, num))
+                    if nkey_errors < 10:
+                        logger.warning('Missing key in agent name dict: '
+                                       '(%s, %s)' % (hash, num))
+                    continue
 
             # Need at least two agents.
             if len(agents) < 2:

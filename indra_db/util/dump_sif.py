@@ -33,17 +33,6 @@ NS_PRIORITY_LIST = (
 # NS_PRIORITY_LIST above
 NS_LIST = ('NAME', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
 
-def format_agent(db_nm, db_id):
-    if db_nm == 'FPLX':
-        return db_id
-    elif db_nm == 'HGNC':
-        return hgnc_client.get_hgnc_name(db_id)
-    elif db_nm == 'GO':
-        norm_go_id = db_id[3:] if db_id.startswith('GO:GO:') else db_id
-        return go_client.get_go_label(norm_go_id)
-    elif db_nm == 'MESH':
-        return mesh_client.get_mesh_name(db_id)
-    return '{db_nm}:{db_id}'.format(db_nm=db_nm, db_id=db_id)
 
 def load_db_content(reload, ns_list, pkl_filename=None):
     # Get the raw data
@@ -71,7 +60,6 @@ def load_db_content(reload, ns_list, pkl_filename=None):
 
 
 def make_ev_strata(pkl_filename=None):
-
     """Returns a dict of dicts with evidence count per source, per statement
 
     The dictionary is at the top level keyed by statement hash and each
@@ -106,8 +94,7 @@ def make_dataframe(pkl_filename, reconvert, db_content):
                 stmt_info[h] = {'agents': [], 'ev_count': n, 'type': t}
             stmt_info[h]['agents'].append((num, db_nm, db_id))
         # Turn into dataframe with geneA, geneB, type, indexed by hash;
-        # expand out all complexes
-        # to multiple rows
+        # expand out complexes to multiple rows
 
         # Organize by pairs of genes, counting evidence.
         nkey_errors = 0

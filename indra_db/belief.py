@@ -90,7 +90,7 @@ def load_mock_statements(db):
                              db.RawUniqueLinks.pa_stmt_mk_hash,
                              db.RawUniqueLinks.raw_stmt_id],
                             *db.link(db.Reading, db.RawUniqueLinks))
-    res_dbs = db.select_all([db.DBInfo.db_name,
+    res_dbs = db.select_all([db.DBInfo.source_api,
                              db.RawUniqueLinks.pa_stmt_mk_hash,
                              db.RawUniqueLinks.raw_stmt_id],
                             *db.link(db.DBInfo, db.RawUniqueLinks))

@@ -116,8 +116,8 @@ if __name__ == '__main__':
 
     # Get a handle for the database
     if args.test:
-        from indra_db import util as dbu
-        db = dbu.get_test_db()
+        from indra_db.tests.util import get_temp_db
+        db = get_temp_db(clear=True)
     else:
         db = None
 

@@ -4,12 +4,12 @@ from indra.statements.statements import Agent, Phosphorylation, Complex, \
     Evidence
 
 from indra_db.managers.knowledgebase_manager import *
-from indra_db.util import get_test_db, insert_db_stmts
+from indra_db.util import insert_db_stmts
+from indra_db.tests.util import get_temp_db
 
 
 def _check_kbm(Kb, *args, **kwargs):
-    db = get_test_db()
-    db._clear(force=True)
+    db = get_temp_db(clear=True)
     dbid = db.select_one(db.DBInfo.id, db.DBInfo.db_name == Kb.name)
     assert dbid is None
     kbm = Kb(*args, **kwargs)
@@ -34,7 +34,7 @@ def test_cbn():
     _check_kbm(CBNManager, archive_url=s3_url)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_hprd():
     _check_kbm(HPRDManager)
 
@@ -44,22 +44,22 @@ def test_signor():
     _check_kbm(SignorManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_biogrid():
     _check_kbm(BiogridManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_bel_lc():
     _check_kbm(BelLcManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_pathway_commons():
     _check_kbm(PathwayCommonsManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_rlimsp():
     _check_kbm(RlimspManager)
 
@@ -69,14 +69,14 @@ def test_trrust():
     _check_kbm(TrrustManager)
 
 
-@attr('nonpublic')
+@attr('nonpublic', 'slow')
 def test_phosphosite():
     _check_kbm(PhosphositeManager)
 
 
 @attr('nonpublic')
 def test_simple_db_insert():
-    db = get_test_db()
+    db = get_temp_db()
     db._clear(force=True)
     stmts = [Phosphorylation(Agent('MEK', db_refs={'FPLX': 'MEK'}),
                              Agent('ERK', db_refs={'FPLX': 'ERK'}),

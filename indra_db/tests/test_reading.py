@@ -15,7 +15,7 @@ from indra.tools.reading.readers import get_reader_classes
 
 from indra_db import util as dbu
 from indra_db.reading import read_db as rdb
-from indra_db.tests.test_content_manager import get_db_with_pubmed_content
+from indra_db.tests.util import get_db_with_pubmed_content, get_temp_db
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
 
 
@@ -339,8 +339,7 @@ def test_normal_db_reading_call():
     chdir(path.expanduser('~'))
     # Put some basic stuff in the test databsae
     N = 6
-    db = dbu.get_test_db()
-    db._clear(force=True)
+    db = get_temp_db(clear=True)
     db.copy('text_ref', [(i, 'PMID80945%d' % i) for i in range(N)],
             cols=('id', 'pmid'))
     text_content = [

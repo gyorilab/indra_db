@@ -2,7 +2,7 @@ from nose.plugins.attrib import attr
 
 from indra.util import zip_string
 
-import indra_db.util as dbu
+from indra_db.tests.util import get_temp_db
 from indra_db.util.content_scripts import (get_stmts_with_agent_text_like,
                                            get_stmts_with_agent_text_in,
                                            get_text_content_from_stmt_ids,
@@ -94,8 +94,7 @@ def _get_prepped_db():
 class _DatabaseTestSetup(object):
     """Sets up the test database"""
     def __init__(self):
-        self.test_db = dbu.get_test_db()
-        self.test_db._clear(force=True)
+        self.test_db = get_temp_db(clear=True)
         self.test_data = _make_test_db_input()
         self.test_db._init_auth()
         _, api_key = self.test_db._add_auth('tester')

@@ -23,6 +23,7 @@ _*
 *.eps
 *.gz
 *.swp
+*.pkl
 
 # For the cool cats using PyCharm
 .idea

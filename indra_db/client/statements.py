@@ -133,7 +133,7 @@ def get_statements_by_paper(id_list, id_type='pmid', db=None,
 
     Parameters
     ----------
-    id_list : list
+    id_list : list or set
         A list of ints or strs that are ids of papers of type `id_type`.
     id_type : str
         The type of id used (default is pmid). Options include pmid, pmcid,
@@ -165,7 +165,7 @@ def get_statements_by_paper(id_list, id_type='pmid', db=None,
         # Get the Statement object from the jsons. A statement shows up for
         # all papers that it references.
         result_dict = defaultdict(list)
-        for _, sjson in result['statements']:
+        for _, sjson in result['statements'].items():
             stmt = Statement._from_json(sjson)
             for ev in stmt.evidence:
                 result_dict[ev.text_refs.get(id_type)].append(stmt)

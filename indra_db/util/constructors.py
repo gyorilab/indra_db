@@ -1,4 +1,4 @@
-__all__ = ['get_primary_db', 'get_test_db', 'get_db']
+__all__ = ['get_primary_db', 'get_db']
 
 import re
 import logging
@@ -64,34 +64,6 @@ def get_primary_db(force_new=False):
         __PRIMARY_DB = DatabaseManager(primary_host, label='primary')
         __PRIMARY_DB.grab_session()
     return __PRIMARY_DB
-
-
-def get_test_db():
-    """Get a DatabaseManager for the test database."""
-    defaults = get_defaults()
-    test_defaults = {k: v for k, v in defaults.items() if 'test' in k}
-    key_list = list(test_defaults.keys())
-    key_list.sort()
-    db = None
-    for k in key_list:
-        test_name = test_defaults[k]
-        m = re.match('(\w+)://.*?/([\w.]+)', test_name)
-        if m is None:
-            logger.warning("Poorly formed db name: %s" % test_name)
-            continue
-        sqltype = m.groups()[0]
-        try:
-            db = DatabaseManager(test_name, sqltype=sqltype, label=k)
-            db.grab_session()
-        except Exception as e:
-            logger.error("%s didn't work" % test_name)
-            logger.exception(e)
-            continue  # Clearly this test database won't work.
-        logger.info("Using test database %s." % k)
-        break
-    if db is None:
-        logger.error("Could not find any test database names.")
-    return db
 
 
 def get_db(db_label):

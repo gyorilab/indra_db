@@ -699,6 +699,7 @@ class DatabaseManager(object):
             _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                         StringIndex('pa_meta_db_id_idx', 'db_id')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_name = Column(String)
             db_id = Column(String)
             role = Column(String(20))
@@ -715,6 +716,7 @@ class DatabaseManager(object):
             _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
                         StringIndex('text_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_id = Column(String)
             role = Column(String(20))
             type = Column(String(100))
@@ -730,6 +732,7 @@ class DatabaseManager(object):
             _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
                         StringIndex('name_meta_type_idx', 'type')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_id = Column(String)
             role = Column(String(20))
             type = Column(String(100))
@@ -748,6 +751,7 @@ class DatabaseManager(object):
                         StringIndex('other_meta_type_idx', 'type'),
                         StringIndex('other_meta_db_name_idx', 'db_name')]
             ag_id = Column(Integer, primary_key=True)
+            ag_num = Column(Integer)
             db_name = Column(String)
             db_id = Column(String)
             role = Column(String(20))
@@ -805,6 +809,11 @@ class DatabaseManager(object):
 
             @classmethod
             def create(cls, db, with_data=True, commit=True):
+                # Make sure the necessary extension is installed.
+                with db.engine.connect() as conn:
+                    conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
+
+                # Create the materialized view.
                 cls.__definition__ = cls.definition(db)
                 sql = super(cls, cls).create(db, with_data, commit)
                 cls.loaded = True
@@ -812,6 +821,12 @@ class DatabaseManager(object):
 
             @classmethod
             def update(cls, db, with_data=True, commit=True):
+                # Make sure the necessary extension is installed.
+                with db.engine.connect() as conn:
+                    conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
+
+                # Drop the table entirely and replace it because the columns
+                # may have changed.
                 sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
                 create_sql = cls.create(db, with_data, commit=False)
                 sql = sql_fmt % (cls.__tablename__, create_sql)
@@ -950,6 +965,20 @@ class DatabaseManager(object):
         return
 
     def manage_views(self, mode, view_list=None, with_data=True):
+        """Manage the materialized views.
+
+        Parameters
+        ----------
+        mode : 'create' or 'update'
+            Select which management task you wish to perform.
+        view_list : list or None
+            Default None. A list of materialized view names or None. If None,
+            all available views will be build.
+        with_data : bool
+            Default True. If True, the views are updated "with data", meaning
+            they are more like instantiated tables, otherwise they are only a
+            pre-computation.
+        """
         ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
                          'name_meta', 'text_meta', 'other_meta',
                          'raw_stmt_src', 'pa_stmt_src']
@@ -1012,13 +1041,21 @@ class DatabaseManager(object):
                 logger.info('Aborting clear.')
                 return False
         if tbl_list is None:
+            logger.info("Removing all materialized views...")
+            with self.engine.connect() as conn:
+                conn.execute('DROP MATERIALIZED VIEW IF EXISTS %s CASCADE;'
+                             % (', '.join(self.m_views.keys())))
             logger.info("Removing all tables...")
             self.Base.metadata.drop_all(self.engine)
             logger.debug("All tables removed.")
         else:
             for tbl in tbl_list:
                 logger.info("Removing %s..." % tbl.__tablename__)
-                if tbl.__table__.exists(self.engine):
+                if tbl in self.m_views.values():
+                    with self.engine.connect() as conn:
+                        conn.execute('DROP MATERIALIZED VIEW IF EXISTS %s '
+                                     'CASCADE;' % tbl.__tablename__)
+                elif tbl.__table__.exists(self.engine):
                     tbl.__table__.drop(self.engine)
                     logger.debug("Table removed.")
                 else:
@@ -1281,6 +1318,8 @@ class DatabaseManager(object):
             # Actually do the copy.
             if self._conn is None:
                 self._conn = self.engine.raw_connection()
+                self._conn.rollback()
+
             if lazy:
                 # We need a constraint for if we are going to update on-
                 # conflict, so if we didn't get a constraint, we can try to

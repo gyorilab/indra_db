@@ -229,7 +229,7 @@ class DbAwsStatReporter(Reporter):
                 continue
             if isinstance(data, dict):
                 text_report_str += '%s:\n' % label
-                text_report_str += '\n'.join(['\t%s: %d' % (k, v)
+                text_report_str += '\n'.join(['\t%s: %s' % (k, v)
                                               for k, v in data.items()])
                 text_report_str += '\n'
             else:

@@ -79,11 +79,14 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
 @clockit
 def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
                                          max_stmts=None, offset=None,
-                                         ev_limit=None, mk_hashes_alias=None):
+                                         ev_limit=None, mk_hashes_alias=None,
+                                         ev_count_obj=None):
     # Handle limiting.
     mk_hashes_q = mk_hashes_q.distinct()
     if best_first:
-        if mk_hashes_alias is not None:
+        if ev_count_obj is not None:
+            mk_hashes_q.order_by(desc(ev_count_obj))
+        elif mk_hashes_alias is not None:
             mk_hashes_q = mk_hashes_q.order_by(desc(mk_hashes_alias.c.ev_count))
         else:
             mk_hashes_q = mk_hashes_q.order_by(desc(db.PaMeta.ev_count))
@@ -174,15 +177,6 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
 
         if ref_dict['source']:
             ev_json['annotations']['content_source'] = ref_dict['source']
-
-        # TODO: Remove this eventually. This is a patch!
-        if 'source_hash' not in ev_json.keys():
-            s = str(ev_json.get('source_api')) + str(ev_json.get('source_id'))
-            if ev_json.get('text') and isinstance(ev_json['text'], str):
-                s += ev_json['text']
-            elif ev_json.get('pmid') and isinstance(ev_json['pmid'], str):
-                s += ev_json['pmid']
-            ev_json['source_hash'] = make_hash(s, 16)
 
         stmts_dict[mk_hash]['evidence'].append(ev_json)
 
@@ -338,6 +332,10 @@ def get_statement_jsons_from_papers(paper_refs, db=None, **kwargs):
     q = db.session.query(db.ReadingRefLink.rid.label('rid'))
     conditions = []
     for id_type, paper_id in paper_refs:
+        if paper_id is None:
+            logger.warning("Got paper with id None.")
+            continue
+
         tbl_attr = getattr(db.ReadingRefLink, id_type)
         if id_type in ['trid', 'tcid']:
             conditions.append(tbl_attr == int(paper_id))
@@ -347,13 +345,16 @@ def get_statement_jsons_from_papers(paper_refs, db=None, **kwargs):
     sub_al = q.subquery('reading_ids')
 
     # Map the reading metadata query to mk_hashes with statement counts.
+    mk_hashes_al = db.EvidenceCounts.mk_hash.label('mk_hash')
     mk_hashes_q = (db.session
-                   .query(db.PaMeta.mk_hash.label('mk_hash'),
-                          db.PaMeta.ev_count.label('ev_count'))
-                   .filter(db.PaMeta.mk_hash == db.FastRawPaLink.mk_hash,
+                   .query(mk_hashes_al,
+                          db.EvidenceCounts.ev_count.label('ev_count'))
+                   .filter(db.EvidenceCounts.mk_hash == db.FastRawPaLink.mk_hash,
                            db.FastRawPaLink.reading_id == sub_al.c.rid))
 
-    return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, **kwargs)
+    return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q,
+                                                ev_count_obj=db.EvidenceCounts.ev_count,
+                                                **kwargs)
 
 
 @clockit

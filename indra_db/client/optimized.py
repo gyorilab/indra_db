@@ -332,6 +332,10 @@ def get_statement_jsons_from_papers(paper_refs, db=None, **kwargs):
     q = db.session.query(db.ReadingRefLink.rid.label('rid'))
     conditions = []
     for id_type, paper_id in paper_refs:
+        if paper_id is None:
+            logger.warning("Got paper with id None.")
+            continue
+
         tbl_attr = getattr(db.ReadingRefLink, id_type)
         if id_type in ['trid', 'tcid']:
             conditions.append(tbl_attr == int(paper_id))

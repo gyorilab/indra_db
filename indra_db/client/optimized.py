@@ -270,7 +270,7 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         else:
             q = (db.session
                  .query(*labelled_hash_and_count(db.OtherMeta))
-                 .filter(db.OtherMeta.db_id.like(ag_dbid))
+                 .filter(db.OtherMeta.db_id.like(ag_dbid)))
             if ns is not None:
                 q = q.filter(db.OtherMeta.db_name.like(ns))
             meta = db.OtherMeta

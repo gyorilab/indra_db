@@ -31,9 +31,9 @@ install:
   # DB Preassembly pickles
   - cd $TRAVIS_BUILD_DIR/indra_db/tests
   - if [[ $TRAVIS_PULL_REQUEST != "false" ]]; then
-      aws s3 cp s3://bigmech/indra-db/test_resources/db_pa_test_input_1M_public.pkl db_pa_test_input_1M.pkl
+      aws s3 cp s3://bigmech/indra-db/test_resources/db_pa_test_input_1M_public.pkl db_pa_test_input_1M.pkl;
     else
-      aws s3 cp s3://bigmech/indra-db/test_resources/db_pa_test_input_1M.pkl db_pa_test_input_1M.pkl
+      aws s3 cp s3://bigmech/indra-db/test_resources/db_pa_test_input_1M.pkl db_pa_test_input_1M.pkl;
     fi
   - du -sh db_pa_test_input_1M.pkl
   - cd $TRAVIS_BUILD_DIR/indra_db/resources

@@ -6,6 +6,7 @@ python:
   - "3.6"
 services:
   - postgresql
+  - xvfb
 addons:
   postgresql: "9.6"
   apt:
@@ -46,7 +47,6 @@ before_script:
   - psql -c 'create database indradb_test;' -U postgres
   # Enable plotting on fake display
   - export DISPLAY=:99.0
-  - sh -e /etc/init.d/xvfb start
   - sleep 3
 script:
   - export PYTHONPATH=$PYTHONPATH:$TRAVIS_BUILD_DIR

@@ -62,11 +62,17 @@ should got to the bottom where you see several lines of the form:
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 local   all             postgres                                peer
 ```
-Changing `peer` or `md5` in the `METHOD` sections to `trust`. Save the file,
-and then you will need to reboot your computer for the changes to take effect.
+Changing `peer` or `md5` in the `METHOD` sections to `trust`. Save the file.
+For the changes to take effect, first attempt to run:
+```
+sudo service postgresql restart
+```
+and check to see if you can enter a postgres session by running
+`psql -U postgres`. If this fails to work, you will need to reboot your
+computer for the changes to take effect.
 
-Once that is done, you can create the test database that EMMAA uses:
-`emmaadb_test` by entering the following command:
+Once that is done, you can create the test database that INDRA DB uses:
+`indradb_test` by entering the following command:
 ```bash
 sudo -u postgres createdb indradb_test
 ```

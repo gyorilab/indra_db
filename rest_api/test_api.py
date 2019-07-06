@@ -125,7 +125,15 @@ class DbApiTestCase(unittest.TestCase):
             for ev in s.evidence:
                 if ev.source_api in {'reach', 'sparser', 'trips'} \
                         and ev.pmid is None:
-                    assert False, 'Statement from reading is missing a pmid.'
+
+                    # Check because occasionally there is genuinely no pmid.
+                    from indra_db.util import get_db
+                    db = get_db('primary')
+                    tr = db.select_one(db.TextRef,
+                                       db.TextRef.id == ev.text_refs['TRID'])
+                    assert tr.pmid is None, \
+                        ('Statement from reading missing pmid:\n%s\n%s.'
+                         % (s, json.dumps(ev.to_json(), indent=2)))
 
         # To allow for faster response-times, we currently do not include
         # support links in the response.

@@ -319,6 +319,9 @@ def _query_wrapper(f):
         stmts_json = result.pop('statements')
         has = {src: _has_auth(src, api_key) for src in ['elsevier', 'medscan']}
         logger.info('Auths: %s' % str(has))
+        medscan_redactions = 0
+        medscan_removals = 0
+        elsevier_redactions = 0
         if not all(has.values()):
             for h, stmt_json in stmts_json.copy().items():
                 for ev_json in stmt_json['evidence'][:]:
@@ -329,17 +332,21 @@ def _query_wrapper(f):
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
-                            logger.info("Redacting elsevier content.")
+                            elsevier_redactions += 1
 
                     # Check for medscan and redact if necessary
                     elif ev_json['source_api'] == 'medscan' \
                             and not has['medscan']:
-                        logger.info("Redacting medscan evidence.")
+                        medscan_redactions += 1
                         stmt_json['evidence'].remove(ev_json)
                         if len(stmt_json['evidence']) == 0:
-                            logger.info("Removing statement %s entirely; no "
-                                        "support except medscan." % h)
+                            medscan_removals += 1
                             stmts_json.pop(h)
+        logger.info(f"Redacted {medscan_redactions} medscan evidence, "
+                    f"resulting in the complete removal of {medscan_removals} "
+                    f"statements.")
+        logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
+                    f"evidence.")
 
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))

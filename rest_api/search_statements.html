@@ -88,7 +88,7 @@
         let object = document.getElementById('object').value.replace(/\s+/g, '')
 
         // Check if user entered both agents AND at least one of subject and object
-        if (Boolean(agentsArray.length) || Boolean(subject) || Boolean(object) ) {
+        if (!(Boolean(agentsArray.length) || Boolean(subject) || Boolean(object))) {
           alert('Only input subject/object OR agents')
           return;
         }

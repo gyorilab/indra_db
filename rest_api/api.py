@@ -409,7 +409,7 @@ with open(path.join(HERE, 'search_statements.html'), 'r') as f:
 @app.route('/welcome', methods=['GET'])
 def welcome():
     logger.info("Browser welcome page.")
-    if not SECURE:
+    if True:
         onclick = "window.location = window.location.href.replace('welcome', 'statements')"
     else:
         onclick = "getTokenFromAuthEndpoint(window.location.href, " \

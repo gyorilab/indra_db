@@ -88,24 +88,21 @@
         let object = document.getElementById('object').value.replace(/\s+/g, '')
 
         // Check if user entered both agents AND at least one of subject and object
-        if (Boolean(agentsArray.length) && (Boolean(subject) || Boolean(object) ) ) {
+        if (Boolean(agentsArray.length) || Boolean(subject) || Boolean(object) ) {
           alert('Only input subject/object OR agents')
-          return;
-        }
-
-        // Check if only one of subject/object is filled while agents array is empty
-        if ( !Boolean(agentsArray.length) && (Boolean(subject) ^ Boolean(object)) ) {
-          alert('Must input subject and object')
           return;
         }
 
         let queryString = ''
 
         // Get subject/object or agents
-        if ( Boolean(subject) && Boolean(object) ) {
+        if ( Boolean(subject) ) {
           queryString += 'subject=' + subject + '&';
+        }
+        if ( Boolean(object) ) {
           queryString += 'object=' + object + '&';
-        } else if (agentsArray.length > 0) {
+        }
+        if (agentsArray.length > 0) {
           let i = 0;
           for ( ag of agentsArray ) {
             queryString += 'agent' + i + '=' + ag + '&';

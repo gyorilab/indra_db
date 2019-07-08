@@ -189,6 +189,16 @@ class DbApiTestCase(unittest.TestCase):
                 (None, 'HGNC', hgnc_client.get_hgnc_id('MAP2K1'))])
         return
 
+    def test_specific_buggy_query(self):
+        resp = self.__check_good_statement_query(subject='PDGF@FPLX',
+                                                 object='FOS',
+                                                 type='IncreaseAmount')
+        _check_stmt_agents(resp, agents=[
+            (0, 'FPLX', 'PDGF'),
+            (1, 'HGNC', '3796')
+        ])
+        return
+
     def test_query_with_other(self):
         """Test that we can get an ActiveForm."""
         resp = self.__check_good_statement_query(agent='MAPK1',

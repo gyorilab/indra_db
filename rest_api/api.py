@@ -134,12 +134,7 @@ def __process_agent(agent_param):
             ag, ns = param_parts
         elif len(param_parts) == 1:
             ag = agent_param
-            name = text_lookups.get(ag)
-            if name is not None:
-                ag = name
-                ns = 'NAME'
-            else:
-                ns = None
+            ns = 'NAME'
         else:
             raise DbAPIError('Unrecognized agent spec: \"%s\"' % agent_param)
     else:

@@ -34,10 +34,11 @@ NS_PRIORITY_LIST = (
 NS_LIST = ('NAME', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
 
 
-def load_db_content(reload, ns_list, pkl_filename=None):
+def load_db_content(reload, ns_list, pkl_filename=None, db=None):
     # Get the raw data
     if reload:
-        db = dbu.get_primary_db()
+        if not db:
+            db = dbu.get_primary_db()
         logger.info("Querying the database for statement metadata...")
         results = []
         for ns in ns_list:
@@ -59,13 +60,14 @@ def load_db_content(reload, ns_list, pkl_filename=None):
     return results
 
 
-def make_ev_strata(pkl_filename=None):
+def make_ev_strata(pkl_filename=None, db=None):
     """Returns a dict of dicts with evidence count per source, per statement
 
     The dictionary is at the top level keyed by statement hash and each
     entry contains a dictionary keyed by the source that support the
     statement where the entries are the evidence count for that source."""
-    db = dbu.get_primary_db()
+    if not db:
+        db = dbu.get_primary_db()
     res = db.select_all(db.PaStmtSrc)
     ev = {}
     for r in res:

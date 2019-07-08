@@ -21,6 +21,7 @@ from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.dialects.postgresql import BYTEA, INET
+from psycopg2.errors import DuplicateTable
 
 from indra_db.exceptions import IndraDbException
 from indra.util import batch_iter
@@ -200,7 +201,11 @@ class MaterializedView(Displayable):
         sql = ("CREATE INDEX {idx_name} ON public.{table_name} "
                "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
         if commit:
-            cls.execute(db, sql)
+            try:
+                cls.execute(db, sql)
+            except DuplicateTable as err:
+                logger.warning("Got error (%s) when building %s. Skipping."
+                               % (err, index.name))
         return sql
 
     @classmethod
@@ -650,7 +655,13 @@ class DatabaseManager(object):
                               'FROM text_ref AS tr JOIN text_content AS tc '
                               'ON tr.id = tc.text_ref_id JOIN reading AS r '
                               'ON tc.id = r.text_content_id')
-            _indices = [BtreeIndex('rid_idx', 'rid')]
+            _indices = [BtreeIndex('rrl_rid_idx', 'rid'),
+                        StringIndex('rrl_pmid_idx', 'pmid'),
+                        StringIndex('rrl_pmcid_idx', 'pmcid'),
+                        StringIndex('rrl_doi_idx', 'doi'),
+                        StringIndex('rrl_manuscript_id_idx', 'manuscript_id'),
+                        BtreeIndex('rrl_tcid_idx', 'tcid'),
+                        BtreeIndex('rrl_trid_idx', 'trid')]
             trid = Column(Integer)
             pmid = Column(String(20))
             pmcid = Column(String(20))

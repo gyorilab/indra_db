@@ -439,7 +439,7 @@ class DbReadingSubmitter(Submitter):
             spine.set_visible(False)
 
         # Format the plot.
-        if counts['total']['data']:
+        if counts['total']['data'].any():
             max_n = int(counts['total']['data'].max())
             ax1.set_ylim(0, max_n + 1)
             ax1.set_xlim(0, total_time)

@@ -604,9 +604,11 @@ class DatabaseManager(object):
             __tablename__ = 'auth'
             id = Column(Integer, primary_key=True)
             name = Column(String, unique=True)
+            email = Column(String)
             api_key = Column(String, unique=True)
             elsevier_access = Column(Boolean, default=False)
-        self.__Auth = Auth
+            medscan_access = Column(Boolean, default=False)
+        self._Auth = Auth
 
         # Materialized Views
         # ---------------------------------------------------------------------
@@ -697,7 +699,8 @@ class DatabaseManager(object):
                               'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
                               'AND pa_statements.mk_hash = evidence_counts.mk_hash')
             _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
-                        StringIndex('pa_meta_db_id_idx', 'db_id')]
+                        StringIndex('pa_meta_db_id_idx', 'db_id'),
+                        BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
             ag_id = Column(Integer, primary_key=True)
             ag_num = Column(Integer)
             db_name = Column(String)
@@ -896,15 +899,15 @@ class DatabaseManager(object):
 
     def _init_auth(self):
         """Create the auth table."""
-        self.__Auth.__table__.create(bind=self.engine)
+        self._Auth.__table__.create(bind=self.engine)
 
     def _get_auth(self, api_key):
-        res = self.select_all(self.__Auth, self.__Auth.api_key == api_key)
-        if len(res) > 1:
-            raise IndraTableError("auth",
-                                  "Multiple matches for api_key: %s" % res)
+        res = (self.session
+               .query(self._Auth)
+               .filter(self._Auth.api_key == api_key).all())
         if not res:
             return None
+        assert len(res) == 1
         return res[0]
 
     def _get_auth_info(self, api_key):
@@ -917,20 +920,37 @@ class DatabaseManager(object):
         else:
             return auth.id, auth.name
 
-    def _has_elsevier_auth(self, api_key):
+    def _get_api_key(self, name):
+        """Get an API key from the username."""
+        if name is None:
+            return None
+        auth_record = self.select_one(self._Auth, self._Auth.name == name)
+        if not auth_record:
+            return None
+        return auth_record.api_key
+
+    def _add_auth(self, name, email=None, **access_params):
+        """Add a new api key to the database."""
+        new_uuid = str(uuid4())
+        dbid = self.insert(self._Auth, api_key=new_uuid, name=name,
+                           email=email, **access_params)
+        return dbid, new_uuid
+
+    def _has_auth(self, resource, api_key):
         if api_key is None:
+            logger.info("API key is None. Denied.")
             return False
         auth = self._get_auth(api_key)
         if auth is None:
+            logger.info("No auth record found. Denied.")
             return False
-        return auth.elsevier_access
-
-    def _add_auth(self, name, elsevier_access=False):
-        """Add a new api key to the database."""
-        new_uuid = str(uuid4())
-        dbid = self.insert(self.__Auth, api_key=new_uuid, name=name,
-                           elsevier_access=elsevier_access)
-        return dbid, new_uuid
+        if resource == 'elsevier':
+            return auth.elsevier_access
+        elif resource == 'medscan':
+            return auth.medscan_access
+        else:
+            logger.info("Invalid resource: %s. Denied." % resource)
+            return False
 
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."

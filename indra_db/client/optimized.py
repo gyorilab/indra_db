@@ -1,3 +1,4 @@
+import re
 import json
 import logging
 from collections import OrderedDict, defaultdict
@@ -148,10 +149,6 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
             stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
             stmts_dict[mk_hash]['evidence'] = []
 
-        # Fix the pmid
-        if ref_dict['pmid']:
-            ev_json['pmid'] = ref_dict['pmid']
-
         # Add agents' raw text to annotations.
         raw_text = []
         for ag_name in get_statement_by_name(raw_json['type'])._agent_order:
@@ -171,6 +168,14 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         ev_json['annotations']['prior_uuids'].append(raw_json['id'])
         if 'text_refs' not in ev_json.keys():
             ev_json['text_refs'] = {}
+
+        # Fix the pmid
+        if ref_dict['pmid']:
+            ev_json['pmid'] = ref_dict['pmid']
+        elif 'PMID' in ev_json['text_refs']:
+            del ev_json['text_refs']['PMID']
+
+        # Add text refs
         ev_json['text_refs'].update({k.upper(): v
                                      for k, v in ref_dict.items()
                                      if v is not None})
@@ -251,8 +256,11 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         # Make the id match paradigms for the database.
         ag_dbid = regularize_agent_id(ag_dbid, ns)
 
+        # Sanitize wildcards.
+        for char in ['%', '_']:
+            ag_dbid = ag_dbid.replace(char, '\%s' % char)
+
         # Create this query (for this agent)
-        # If we are looking for a name...
         if ns == 'NAME':
             q = (db.session
                  .query(*labelled_hash_and_count(db.NameMeta))
@@ -266,8 +274,9 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
         else:
             q = (db.session
                  .query(*labelled_hash_and_count(db.OtherMeta))
-                 .filter(db.OtherMeta.db_id.like(ag_dbid),
-                         db.OtherMeta.db_name.like(ns)))
+                 .filter(db.OtherMeta.db_id.like(ag_dbid)))
+            if ns is not None:
+                q = q.filter(db.OtherMeta.db_name.like(ns))
             meta = db.OtherMeta
 
         if stmt_type is not None:

@@ -43,94 +43,81 @@
       $(document).ready(function(){
         checkSignIn() // Check if user is signed in
       })
-        function addField(name, max) {
-            var container = document.getElementById(name + "-choices");
-            var input = document.createElement("input");
-            input.className = "input-form";
-            var suffix = '';
-            if (document.getElementById(name + '-input')) {
-                var n = 0;
-                while (document.getElementById(name + n.toString() + '-input')) {
-                    n += 1;
-                }
-                if (n <= max) {
-                    suffix = n.toString();
-                } else {
-                    return;  // abort
-                }
-            }
-            input.id = name + suffix + '-input';
-            input.type = "text";
-            input.name = name + suffix;
-            container.appendChild(input);
-            var button = document.createElement("button");
-            button.id = input.id + '-button'
-            button.appendChild(document.createTextNode('\u2718'));
-            button.onclick = function() { removeField(input.id, container.id, button.id); };
-            container.appendChild(button);
-        }
-        function removeField(input_id, container_id, button_id) {
-            var container = document.getElementById(container_id);
-            var input = document.getElementById(input_id);
-            var button = document.getElementById(button_id);
-            container.removeChild(input);
-            container.removeChild(button);
-        }
-
-        function appendToFormSubmit() {
-          // Loop form fields
-          let queryString = '';
-          for (el of document.getElementsByClassName('input-form')) {
-            queryString += el.name + '=' + el.value + '&';
-          }
-          queryString += 'format=' + document.getElementById('format-select').value;
-
-          // Get tokens
-          let accToken = _readCookie(ACCESSTOKEN_COOKIE_NAME);
-          let idToken = _readCookie(IDTOKEN_COOKIE_NAME);
-          // document.submitForm.access_token.value = accToken;
-          // document.submitForm.id_token.value = idToken;
-
-          // Build URL
-          let baseUrl = window.location.href.split('?')[0].split('#')[0] + '/from_agents?';
-          // let baseUrl = 'https://153pf2mdal.execute-api.us-east-1.amazonaws.com/dev/browser/statements/from_agents?'
-          var getUrl = baseUrl + queryString;
-
-          // Submit by sync ajax
-          console.log('getUrl: ' + getUrl)
-
-          // Redirect
-          window.location.replace(getUrl)
-
-          // let getPromise = $.ajax({
-          //   url: getUrl,
-          //   type: 'GET',
-          //   headers: {
-          //     'Authorization': 'Bearer ' + idToken
-          //   }
-          // })
-
-          // console.log('getPromise')
-          // console.log(getPromise)
-
-          // getPromise.then(function(data){
-          //   if (data) {
-          //     console.log('GET from db search')
-          //     console.log(data)
-          //     document.open();
-          //     document.write(data);
-          //     document.close();
-          //     // document.createElement('HTML').innerHtml = data;
-          //   }
-          // })
-        }
 
       var ENV = 'indra';
+
+      function appendToFormSubmit() {
+        // Initialize queryString
+        let queryString = '';
+
+        // Get agents OR subject/object
+        let actorsString = agentsOrNot()
+        if (!actorsString) return;
+
+        queryString += actorsString;
+
+        // Loop form fields
+        for (el of document.getElementsByClassName('form-control')) {
+          if (!(['subject', 'object', 'agents'].indexOf(el.name) > -1)) {
+            if (el.value) {
+              if (el.name == 'type') {
+                queryString += el.name + '=' + el.value.replace(/\s+/g, '') + '&';
+              } else {
+                queryString += el.name + '=' + el.value + '&';
+              }
+            }
+          }
+        }
+        queryString += 'format=html';
+
+        // Build URL
+        let baseUrl = '{{ endpoint }}statements/from_agents?';
+        var getUrl = baseUrl + queryString;
+
+        // Check output
+        // console.log('getUrl: ' + getUrl)
+
+        // Redirect
+        window.location.replace(getUrl)
+
+      }
+
+      function agentsOrNot() {
+        let agentsArray = document.getElementById('agents').value.match(/\S+/g) || []
+        let subject = document.getElementById('subject').value.replace(/\s+/g, '')
+        let object = document.getElementById('object').value.replace(/\s+/g, '')
+
+        // Check if user entered both agents AND at least one of subject and object
+        if (!(Boolean(agentsArray.length) || Boolean(subject) || Boolean(object))) {
+          alert('Only input subject/object OR agents')
+          return;
+        }
+
+        let queryString = ''
+
+        // Get subject/object or agents
+        if ( Boolean(subject) ) {
+          queryString += 'subject=' + subject + '&';
+        }
+        if ( Boolean(object) ) {
+          queryString += 'object=' + object + '&';
+        }
+        if (agentsArray.length > 0) {
+          let i = 0;
+          for ( ag of agentsArray ) {
+            queryString += 'agent' + i + '=' + ag + '&';
+            i++;
+          }
+        }
+
+        return queryString;
+      }
     </script>
   <style>
 
 a {
   color: #256DC5;
+  target-new: tab;
 }
 nav[data-toggle=toc] .nav>li>a {
   font-size: 0.72em;
@@ -191,52 +178,76 @@ nav {
 
 </style>
 </head>
-
-   <body data-spy="scroll" data-target="#toc">
+  <body data-spy="scroll" data-target="#toc">
     <!-- Here put scripts that need to be executed before page load -->
     <script type="text/javascript">
       setEnv('indra');
-      checkSignIn();
     </script>
 
-    <!-- Page Header -->
-    <div class="container">
+    <div class="container" id="mainContent">
+      <!-- Page Header -->
       <div class="page-header">
         <h1>The INDRA Database</h1>
-        <p> This project, <a href='https://github.com/indralab/indra_db'>indra_db</a>, is developed by the <a href='https://indralab.github.io'>indralab</a> team.<button class="btn btn-outline-primary" id="status-notify" onClick="getTokenFromAuthEndpoint(window.location.href)">Sign up/Sign in</button></p>
+        <p>
+            This project, <a href="https://github.com/indralab/indra_db" target="_blank">indra_db</a>,
+            is developed by the <a href="https://indralab.github.io" target="_blank">indralab</a> team.
+        </p>
       </div>
-    <hr>
+      <hr>
 
-    <!-- The main content -->
-    <div class="content">
-      <!-- <form name="submitForm" action="/browser/statements/from_agents" onsubmit="appendToFormSubmit()"> -->
-        <table>
-<!--             <tr>
-                <td id="type" class="field" onclick="addField('type', 1)">Select a type</td>
-                <td id="type-choices" value=""></td>
-            </tr> -->
-            <tr>
-                <td id="subject" class="field">Choose the subject</td>
-                <td id="subject-choices"><input class="input-form" type="text" name="subject"></td>
-            </tr>
-            <tr>
-                <td id="object" class="field">Choose the object</td>
-                <td id="object-choices"><input class="input-form" type="text" name="object"></td>
-            </tr>
-<!--             <tr>
-                <td id="agent" class="field" onclick="addField('agent', 50)">Choose an agent</td>
-                <td id="agent-choices"></td>
-            </tr> -->
-        </table>
-        <select name="format" id="format-select">
-          <option value="html">HTML</option>
-          <option value="json">JSON</option>
-        </select>
-        <input id="submitButton" type="button" value="Submit" onClick="appendToFormSubmit()">
-      <!-- </form> -->
+      <!-- The main content -->
+      <div class="container">
+        <form>
+          <b>Mandatory Parameters</b><br>Enter subject and object
+          <div class="row">
+            <div class="col">
+              <input type="text" id="subject" name="subject" class="form-control" placeholder="subject...">
+            </div>
+            <div class="col">
+              <input type="text" id="object" name="object" class="form-control" placeholder="object...">
+            </div>
+          </div>
+          <i>or</i> enter agents separated by space
+          <div class="row">
+            <div class="col">
+              <input type="text" id="agents" name="agents" class="form-control" placeholder="Agents separated by space...">
+            </div>
+          </div>
+          <br><b>Optional parameters</b><br>Statement type (<i>see the <a href="https://indra.readthedocs.io/en/latest/modules/statements.html" target="_blank">INDRA documentation</a> for more info on statement types.</i>)
+          <div class="row">
+            <div class="col">
+              <input type="text" name="type" id="stmt-type" class="form-control" placeholder="Enter statement type">
+            </div>
+          </div>
+          Number of statements returned (max 1000)
+          <div class="row">
+            <div class="col">
+              <div class="container" style="width: 90px; float: left; padding: 0px;">
+                <input class="form-control" type="number" name="max_stmts" id="max-stmts" min="1" max="1000">
+              </div>
+            </div>
+          </div>
+          Evidence count per statement (max 10000)
+          <div class="row">
+            <div class="col">
+              <div class="container" style="width: 110px; float: left; padding: 0px;">
+                <input class="form-control" type="number" name="ev_limit" id="ev-limit" min="1" max="10000">
+              </div>
+            </div>
+          </div>
+          <br><b>Submit</b>
+          <div class="row">
+            <div class="col">
+              <button type="button" class="btn btn-primary" onclick="appendToFormSubmit()">Submit query</button>  
+            </div>
+          </div>
+          
+        </form>
+      </div>
     </div>
+
+    <div class="container" id="messagePannel">
+      <p>{{ message }}</p>
     </div>
-
-
-</body>
+  </body>
 </html>

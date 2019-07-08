@@ -136,6 +136,9 @@ def regularize_agent_id(id_val, id_ns):
     """Change agent ids for better search-ability and index-ability."""
     ns_abbrevs = [('CHEBI', ':'), ('GO', ':'), ('HMDB', ''), ('PF', ''),
                   ('IP', '')]
+    if id_ns is None:
+        return id_val
+
     for ns, div in ns_abbrevs:
         if id_ns.upper() == ns and id_val.startswith(ns):
             new_id_val = id_val[len(ns) + len(div):].lstrip('0')

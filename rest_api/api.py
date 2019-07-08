@@ -1,11 +1,14 @@
+import re
 import sys
 import json
 import boto3
+import pickle
 import logging
 from os import path
 from io import StringIO
 from functools import wraps
 from datetime import datetime
+from botocore.client import Config
 from http.cookies import SimpleCookie
 from http.cookiejar import CookieJar
 
@@ -13,15 +16,15 @@ from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
 from flask_cors import CORS
 
+from jinja2 import Template
+
 from indra.util import batch_iter
-from indra.databases import hgnc_client
 from indra.assemblers.html import HtmlAssembler
 from indra.statements import make_statement_camel, stmts_from_json
 
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation, _has_elsevier_auth, BadHashError
-
+   submit_curation, _has_auth, BadHashError, _get_api_key
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -31,7 +34,6 @@ Compress(app)
 CORS(app)
 SC = SimpleCookie()
 CJ = CookieJar()
-cognito_idp_client = boto3.client('cognito-idp')
 
 print("Loading file")
 logger.info("INFO working.")
@@ -41,6 +43,10 @@ logger.error("ERROR working.")
 
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
+HERE = path.abspath(path.dirname(__file__))
+
+# SET SECURITY
+SECURE = True
 
 # COGNITO PARAMETERS
 STATE_COOKIE_NAME = 'indralabStateCookie'
@@ -54,11 +60,31 @@ class DbAPIError(Exception):
 
 def _verify_user(access_token):
     """Verifies a user given an Access Token"""
+    logger.info("Getting cognito client.")
+    config = Config(connect_timeout=5, retries={'max_attempts': 0})
+    cognito_idp_client = boto3.client('cognito-idp', config=config)
     try:
         resp = cognito_idp_client.get_user(AccessToken=access_token)
+        logger.info("Got resp %s from cognito." % str(resp))
     except cognito_idp_client.exceptions.NotAuthorizedException:
         resp = {}
     return resp
+
+
+def _extract_user_info(user_json):
+    """Extracts user info returned by cognito"""
+    try:
+        info = {'Username': user_json['Username'],
+                'date': user_json['ResponseMetadata']['HTTPHeaders']['date']}
+        for attr in user_json['UserAttributes']:
+            if attr['Name'] == 'email':
+                info['email'] = attr['Value']
+                break
+    except KeyError as e:
+        logger.warning('Could not get Key: ' + repr(e))
+        return {}
+
+    return info
 
 
 def _redirect_to_welcome(qp_object):
@@ -108,7 +134,12 @@ def __process_agent(agent_param):
             ag, ns = param_parts
         elif len(param_parts) == 1:
             ag = agent_param
-            ns = 'HGNC-SYMBOL'
+            name = text_lookups.get(ag)
+            if name is not None:
+                ag = name
+                ns = 'NAME'
+            else:
+                ns = None
         else:
             raise DbAPIError('Unrecognized agent spec: \"%s\"' % agent_param)
     else:
@@ -116,11 +147,7 @@ def __process_agent(agent_param):
         ns = 'TEXT'
 
     if ns == 'HGNC-SYMBOL':
-        original_ag = ag
-        ag = hgnc_client.get_hgnc_id(original_ag)
-        if ag is None and 'None' not in agent_param:
-            raise DbAPIError('Invalid agent name: \"%s\"' % original_ag)
-        ns = 'HGNC'
+        ns = 'NAME'
 
     return ag, ns
 
@@ -179,6 +206,10 @@ def _security_wrapper(fs):
     @wraps(fs)
     def demon(*args, **kwargs):
         logger.info("Got a demon request")
+        if not SECURE:
+            logger.info('SECURE is False, skipping checkin...')
+            return fs(*args, **kwargs)
+
         logger.info('Full url received: %s' % request.url)
 
         # Order of things to check:
@@ -192,8 +223,6 @@ def _security_wrapper(fs):
 
         # HANDLE ENDPOINT
         url_in = request.url
-        if url_in.find('/browser/') < 0:
-            return _redirect_to_welcome(QueryParam({}))
         endpoint = url_in[:url_in.find('?')] if url_in.find('?') > 0 else \
             url_in
 
@@ -221,12 +250,21 @@ def _security_wrapper(fs):
         user_verified = _verify_user(access_token)
         if user_verified:
             logger.info('User verified with access token')
-            # Check if this is a curation POST
             print('User info ----------')
             print(user_verified)
             print('--------------------')
+            user_info = _extract_user_info(user_verified)
+            username = user_info['Username']
+            logger.info('Identified %s as curator.' % username)
+            api_key = _get_api_key(username)
+
+            # Check if this is a curation request
             if request.json and not request.json.get('curator'):
-                request.json['curator'] = user_verified['name']
+                logger.info('Curation submission received without associated '
+                            'curator. Inferred user %s.' % username)
+                request.json['curator'] = username
+            kwargs['api_key'] = api_key
+
             logger.info('Loading requested endpoint: %s' % endpoint)
             return fs(*args, **kwargs)
         else:
@@ -235,6 +273,15 @@ def _security_wrapper(fs):
             return _redirect_to_welcome(QueryParam({}))
 
     return demon
+
+
+curation_element = """
+<td width="6em" id="row{loop_index}_click"
+  data-clicked="false" class="curation_toggle"
+  onclick="addCurationRow(this.closest('tr')); this.onclick=null;">&#9998;</td>
+"""
+
+curation_js_link = "code/curationFunctions.js"
 
 
 def _query_wrapper(f):
@@ -258,35 +305,67 @@ def _query_wrapper(f):
                         MAX_STATEMENTS)
         format = query.pop('format', 'json')
 
-        api_key = query.pop('api_key', None)
+        api_key = query.pop('api_key', kwargs.pop('api_key', None))
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
+        if isinstance(result, Response):
+            return result
+
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
 
-        # Redact elsevier content for those without permission.
-        if api_key is None or not _has_elsevier_auth(api_key):
-            for stmt_json in result['statements'].values():
-                for ev_json in stmt_json['evidence']:
-                    if get_source(ev_json) == 'elsevier':
+        # Handle any necessary redactions
+        stmts_json = result.pop('statements')
+        has = {src: _has_auth(src, api_key) for src in ['elsevier', 'medscan']}
+        logger.info('Auths: %s' % str(has))
+        medscan_redactions = 0
+        medscan_removals = 0
+        elsevier_redactions = 0
+        if not all(has.values()):
+            for h, stmt_json in stmts_json.copy().items():
+                for ev_json in stmt_json['evidence'][:]:
+
+                    # Check for elsevier and redact if necessary
+                    if get_source(ev_json) == 'elsevier' \
+                            and not has['elsevier']:
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
+                            elsevier_redactions += 1
+
+                    # Check for medscan and redact if necessary
+                    elif ev_json['source_api'] == 'medscan' \
+                            and not has['medscan']:
+                        medscan_redactions += 1
+                        stmt_json['evidence'].remove(ev_json)
+                        if len(stmt_json['evidence']) == 0:
+                            medscan_removals += 1
+                            stmts_json.pop(h)
+        logger.info(f"Redacted {medscan_redactions} medscan evidence, "
+                    f"resulting in the complete removal of {medscan_removals} "
+                    f"statements.")
+        logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
+                    f"evidence.")
+
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result['offset'] = offs
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
-        result['statements_returned'] = len(result['statements'])
+        result['statements_returned'] = len(stmts_json)
 
         if format == 'html':
-            stmts_json = result.pop('statements')
+            link_title = '<a href=%s >%s</a>' \
+                        % (request.url_root + 'statements', TITLE)
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
-                                           title=TITLE,
-                                           db_rest_url=request.url_root[:-1])
+                                           title=link_title,
+                                           db_rest_url=request.url_root[:-1],
+                                           ev_element=curation_element,
+                                           other_scripts=[request.url_root
+                                                          + curation_js_link])
             content = html_assembler.make_model()
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
@@ -296,6 +375,7 @@ def _query_wrapper(f):
             mimetype = 'text/html'
         else:  # Return JSON for all other values of the format argument
             result.update(tracker.get_level_stats())
+            result['statements'] = stmts_json
             content = json.dumps(result)
             mimetype = 'application/json'
 
@@ -317,72 +397,59 @@ def _query_wrapper(f):
 
 @app.route('/', methods=['GET'])
 def iamalive():
-    return redirect('browser/welcome', code=302)
+    return redirect('welcome', code=302)
 
 
-@app.route('/browser', methods=['GET'])
-def redirecet():
-    logger.info("Got request for welcome info.")
-    return redirect('browser/welcome', code=302)
+with open(path.join(HERE, 'welcome.html'), 'r') as f:
+    welcome_template = Template(f.read())
+with open(path.join(HERE, 'search_statements.html'), 'r') as f:
+    search_template = Template(f.read())
 
 
-@app.route('/browser/welcome', methods=['GET'])
+@app.route('/welcome', methods=['GET'])
 def welcome():
     logger.info("Browser welcome page.")
-    page_path = path.join(path.dirname(path.abspath(__file__)),
-                          'welcome.html')
-    with open(page_path, 'r') as f:
-        page_html = f.read()
+    if True:
+        onclick = "window.location = window.location.href.replace('welcome', 'statements')"
+    else:
+        onclick = "getTokenFromAuthEndpoint(window.location.href, " \
+                  "window.location.href.replace('welcome', 'statements')" \
+                  ".split('#')[0])"
+    page_html = welcome_template.render(onclick_action=onclick)
     return Response(page_html)
 
 
-@app.route('/browser/statements', methods=['GET'])
+with open(path.join(HERE, 'curationFunctions.js'), 'r') as f:
+    CURATION_JS = f.read()
+
+
+@app.route('/code/curationFunctions.js')
+def serve_js():
+    return Response(CURATION_JS, mimetype='text/javascript')
+
+
+with open(path.join(HERE, 'favicon.ico'), 'rb') as f:
+    ICON = f.read()
+
+
+@app.route('/favicon.ico')
+def serve_icon():
+    return Response(ICON, mimetype='image/x-icon')
+
+
+@app.route('/statements', methods=['GET'])
 def get_statements_query_format():
     # Create a template object from the template file, load once
-    page_path = path.join(path.dirname(path.abspath(__file__)),
-                          'search_statements.html')
-    with open(page_path, 'r') as f:
-        page_html = f.read()
+    page_html = search_template.render(
+        message="Welcome! Try asking a question.",
+        endpoint=request.url_root)
     return Response(page_html)
 
 
-@app.route('/browser/statements/from_agents', methods=['GET'])
-@app.route('/api/statements/from_agents', methods=['GET'])
-@_security_wrapper
-@_query_wrapper
-def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
-    """Get some statements constrained by query."""
-    logger.info("Getting query details.")
-    if ev_limit is None:
-        ev_limit = 10
-    try:
-        # Get the agents without specified locations (subject or object).
-        free_agents = [__process_agent(ag)
-                       for ag in query_dict.poplist('agent')]
-        ofaks = {k for k in query_dict.keys() if k.startswith('agent')}
-        free_agents += [__process_agent(query_dict.pop(k)) for k in ofaks]
-
-        # Get the agents with specified roles.
-        roled_agents = {role: __process_agent(query_dict.pop(role))
-                        for role in ['subject', 'object']
-                        if query_dict.get(role) is not None}
-    except DbAPIError as e:
-        logger.exception(e)
-        abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
-        return
-
-    # Get the raw name of the statement type (we allow for variation in case).
-    act_raw = query_dict.pop('type', None)
-
+def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
+                         ev_limit, best_first):
     # Fix the case, if we got a statement type.
     act = None if act_raw is None else make_statement_camel(act_raw)
-
-    # If there was something else in the query, there shouldn't be, so
-    # someone's probably confused.
-    if query_dict:
-        abort(Response("Unrecognized query options; %s."
-                       % list(query_dict.keys()), 400))
-        return
 
     # Make sure we got SOME agents. We will not simply return all
     # phosphorylations, or all activations.
@@ -408,7 +475,117 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/api/statements/from_hashes', methods=['POST'])
+@app.route('/statements/from_agents', methods=['GET'])
+@_query_wrapper
+def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
+    """Get some statements constrained by query."""
+    logger.info("Getting query details.")
+    if ev_limit is None:
+        ev_limit = 10
+    try:
+        # Get the agents without specified locations (subject or object).
+        free_agents = [__process_agent(ag)
+                       for ag in query_dict.poplist('agent')]
+        ofaks = {k for k in query_dict.keys() if k.startswith('agent')}
+        free_agents += [__process_agent(query_dict.pop(k)) for k in ofaks]
+
+        # Get the agents with specified roles.
+        roled_agents = {role: __process_agent(query_dict.pop(role))
+                        for role in ['subject', 'object']
+                        if query_dict.get(role) is not None}
+    except DbAPIError as e:
+        logger.exception(e)
+        abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
+        return
+
+    # Get the raw name of the statement type (we allow for variation in case).
+    act_raw = query_dict.pop('type', None)
+
+    # If there was something else in the query, there shouldn't be, so
+    # someone's probably confused.
+    if query_dict:
+        abort(Response("Unrecognized query options; %s."
+                       % list(query_dict.keys()), 400))
+        return
+
+    return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
+                                max_stmts, ev_limit, best_first)
+
+
+trash = re.compile('[.,?!\-;`’\']')
+with open(path.join(HERE, 'bioquery_regex.bin'), 'rb') as f:
+    regs = pickle.load(f)
+
+
+with open(path.join(HERE, 'name_lookup.bin'), 'rb') as f:
+    text_lookups = pickle.load(f)
+
+
+def match(msg):
+    text = trash.sub(' ', msg)
+    text = ' '.join(text.strip().split())
+    for i, (verb, names, reg) in enumerate(regs):
+        m = reg.match(text)
+        if m is not None:
+            ret = {'verb': verb} if verb is not None else {}
+            ret.update({name: value for name, value in zip(names, m.groups())})
+            logger.info("Matched pattern %s." % i)
+            return ret
+    return None
+
+
+mod_map = {'demethylate': 'Demethylation',
+           'methylate': 'Methylation',
+           'phosphorylate': 'Phosphorylation',
+           'dephosphorylate': 'Dephosphorylation',
+           'ubiquitinate': 'Ubiquitination',
+           'deubiquitinate': 'Deubiquitination',
+           'inhibit': 'Inhibition',
+           'activate': 'Activation'}
+
+
+@app.route('/statements/ask', methods=['GET'])
+@_query_wrapper
+def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
+    if ev_limit is None:
+        ev_limit = 10
+    question = query_dict.pop('question')
+    print(question)
+    m = match(question)
+    print(m)
+
+    roled_agents = {}
+    free_agents = []
+    for k, v in m.items():
+        name = text_lookups.get(v)
+        if name is not None:
+            v = name
+            ns = 'NAME'
+        else:
+            ns = None
+
+        if k.startswith('entity'):
+            if 'target' in k:
+                roled_agents['object'] = (v, ns)
+            if 'source' in k:
+                roled_agents['subject'] = (v, ns)
+            else:
+                free_agents.append((v, ns))
+
+    if 'verb' in m.keys():
+        if m['verb'] not in mod_map.keys():
+            act_raw = m['verb']
+        else:
+            act_raw = mod_map[m['verb']]
+    else:
+        act_raw = None
+
+    print(act_raw, roled_agents, free_agents)
+    return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
+                                max_stmts, ev_limit, best_first)
+
+
+@app.route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
 def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
     if ev_lim is None:
@@ -428,9 +605,7 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
     return result
 
 
-@app.route('/api/statements/from_hash/<hash_val>', methods=['GET'])
-@app.route('/browser/statements/from_hash/<hash_val>', methods=['GET'])
-@_security_wrapper
+@app.route('/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                           hash_val):
@@ -441,7 +616,7 @@ def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                                            best_first=best_first)
 
 
-@app.route('/api/statements/from_papers', methods=['POST'])
+@app.route('/statements/from_papers', methods=['POST'])
 @_query_wrapper
 def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     """Get Statements from a papers with the given ids."""
@@ -473,23 +648,23 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     return result
 
 
-@app.route('/api/curation', methods=['GET'])
+@app.route('/curation', methods=['GET'])
 def describe_curation():
     return redirect('/statements', code=302)
 
 
-@app.route('/api/curation/submit/<hash_val>', methods=['POST'])
-@app.route('/browser/curation/submit/<hash_val>', methods=['POST'])
-@_security_wrapper
-def submit_curation_endpoint(hash_val):
-    logger.info("Adding curation for statement %s." % (hash_val))
+@app.route('/curation/submit/<hash_val>', methods=['POST'])
+def submit_curation_endpoint(hash_val, **kwargs):
+    logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')
     source_api = request.json.pop('source', 'DB REST API')
     tag = request.json.get('tag')
     ip = request.remote_addr
     text = request.json.get('text')
     curator = request.json.get('curator')
-    api_key = request.args.get('api_key', None)
+    api_key = request.args.get('api_key', kwargs.pop('api_key'))
+    logger.info("Curator %s %s key"
+                % (curator, 'with' if api_key else 'without'))
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'

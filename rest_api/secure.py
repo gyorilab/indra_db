@@ -20,7 +20,10 @@ class SecurityManager(object):
         with open(join(HERE, pardir, 'zappa_settings.json'), 'r') as f:
             zappa_info = json.load(f)
         self.info = zappa_info[stage]
-        self.function_name = self.info['project_name'] + '-' + stage
+        self.zappa_role_name = self.info['project_name'] + '-' + stage \
+                               + '-ZappaLambdaExecutionRole'
+        self.function_name = self.info['project_name'] \
+                             + '-create-account-indralab-auth-' + stage
         self._zip_files = []
         self._creds = None
         return
@@ -41,24 +44,11 @@ class SecurityManager(object):
             self._creds['aws_' + key] = aro['Credentials'][cred_key]
         return
 
-    def get_gateway_client(self):
-        """Get a boto3 client to the gateway with SUDO role permissions.
-
-        It is assumed the base user is able to access this role. If not, some
-        boto error will be raised.
-        """
-        self._sudoify()
-        agc = boto3.client('apigateway', **self._creds)
-        return agc
-
-    def connect_lambdas(self):
-        """Connect the lambdas to the API Gateway."""
-
     def get_zappa_role(self):
         self._sudoify()
         iam = boto3.client('iam', **self._creds)
         resp = iam.list_roles()
-        expected_name = self.function_name + '-ZappaLambdaExecutionRole'
+        expected_name = self.zappa_role_name
         arn = None
         for role_info in resp['Roles']:
             if role_info['RoleName'] == expected_name:
@@ -91,8 +81,8 @@ class SecurityManager(object):
                      'indra_db/config.py')
             zf.write(join(idbr_dir, 'exceptions.py'),
                      'indra_db/exceptions.py')
-            zf.write(join(HERE, 'security_lambdas', 'verify_key_script.py'),
-                     'verify_key_script.py')
+            zf.write(join(HERE, 'security_lambdas', 'create_account_script.py'),
+                     'create_account_script.py')
             size = sum([f.file_size for f in zf.filelist])/1e6  # MB
         print(size, 'MB')
         return zip_path
@@ -114,13 +104,16 @@ class SecurityManager(object):
             self._sudoify()
             lamb = boto3.client('lambda', **self._creds)
             with open(zip_path, 'rb') as zf:
-                fname = self.function_name + '-auth'
-                env = {'Variables': self.info['environment_variables']}
+                vars = {k: v
+                        for k, v in self.info['environment_variables'].items()
+                        if not k.startswith('AWS')}
+                env = {'Variables': vars}
                 lamb.create_function(
-                    FunctionName=fname, Runtime=self.info['runtime'],
+                    FunctionName=self.function_name,
+                    Runtime=self.info['runtime'],
                     Role=self.get_zappa_role(), Code={'ZipFile': zf.read()},
                     VpcConfig=self.info['vpc_config'], Environment=env,
-                    Handler='verify_key_script.lambda_handler',
+                    Handler='create_account_script.lambda_handler',
                     Tags={'project': 'cwc'}
                     )
         finally:
@@ -141,9 +134,8 @@ class SecurityManager(object):
             print("Updating the lambda function...")
             lamb = boto3.client('lambda')
             with open(zip_path, 'rb') as zf:
-                fname = self.function_name + '-auth'
                 ret = lamb.update_function_code(ZipFile=zf.read(),
-                                                FunctionName=fname)
+                                               FunctionName=self.function_name)
                 print(ret)
         finally:
             self._clear_packages()

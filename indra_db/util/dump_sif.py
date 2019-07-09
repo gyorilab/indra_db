@@ -1,4 +1,4 @@
-__all__ = ['load_db_content', 'make_dataframe']
+__all__ = ['load_db_content', 'make_dataframe', 'make_ev_strata', 'NS_LIST']
 
 import sys
 import pickle
@@ -82,7 +82,7 @@ def make_ev_strata(pkl_filename=None, db=None):
     return ev
 
 
-def make_dataframe(pkl_filename, reconvert, db_content):
+def make_dataframe(reconvert, db_content, pkl_filename=None):
     if reconvert:
         # Organize by statement
         logger.info("Organizing by statement...")
@@ -172,11 +172,16 @@ def make_dataframe(pkl_filename, reconvert, db_content):
                     f.write('%s,%s\n' % kn)
         df = pd.DataFrame.from_dict(rows)
 
-        with open(pkl_filename, 'wb') as f:
-            pickle.dump(df, f)
+        if pkl_filename:
+            with open(pkl_filename, 'wb') as f:
+                pickle.dump(df, f)
     else:
-        with open(pkl_filename, 'rb') as f:
-            df = pickle.load(f)
+        if not pkl_filename:
+            logger.error('Have to provide pickle file if not reconverting')
+            raise FileExistsError
+        else:
+            with open(pkl_filename, 'rb') as f:
+                df = pickle.load(f)
     return df
 
 

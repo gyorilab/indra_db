@@ -1,27 +1,25 @@
+import json
+import logging
+import pickle
 import re
 import sys
-import json
-import pickle
-import logging
-from os import path
-from io import StringIO
-from functools import wraps
 from datetime import datetime
+from functools import wraps
 from http.cookies import SimpleCookie
+from io import StringIO
+from os import path
 
-from flask import Flask, request, abort, Response, redirect, url_for
+from flask import Flask, request, abort, Response, redirect
 from flask_compress import Compress
 from flask_cors import CORS
+from jinja2 import Environment
 
-from jinja2 import Template
-
-from indra.util import batch_iter
-from indra.assemblers.html import HtmlAssembler
+from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
 from indra.statements import make_statement_camel, stmts_from_json
-
+from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-   submit_curation, _has_auth, BadHashError
+    submit_curation, _has_auth, BadHashError
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -36,10 +34,18 @@ logger.info("INFO working.")
 logger.warning("WARNING working.")
 logger.error("ERROR working.")
 
-
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
+
+env = Environment(
+    loader=IndraHTMLLoader({None: HERE,
+                            'indra': IndraHTMLLoader.native_path})
+)
+
+
+def render_my_template(template, **kwargs):
+    return env.get_template(template).render(**kwargs)
 
 
 class DbAPIError(Exception):
@@ -197,7 +203,7 @@ def _query_wrapper(f):
 
         if format == 'html':
             link_title = '<a href=%s >%s</a>' \
-                        % (request.url_root + 'statements', TITLE)
+                         % (request.url_root + 'statements', TITLE)
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
@@ -230,8 +236,9 @@ def _query_wrapper(f):
                     "%f MB after %s seconds."
                     % (result['statements_returned'],
                        result['evidence_returned'], result['total_evidence'],
-                       sys.getsizeof(resp.data)/1e6, sec_since(start_time)))
+                       sys.getsizeof(resp.data) / 1e6, sec_since(start_time)))
         return resp
+
     return decorator
 
 
@@ -240,22 +247,15 @@ def iamalive():
     return redirect('welcome', code=302)
 
 
-with open(path.join(HERE, 'welcome.html'), 'r') as f:
-    welcome_template = Template(f.read())
-with open(path.join(HERE, 'search_statements.html'), 'r') as f:
-    search_template = Template(f.read())
-
-
 @app.route('/welcome', methods=['GET'])
 def welcome():
     logger.info("Browser welcome page.")
-    onclick = ("window.location = window.location.href.replace('welcome', " 
+    onclick = ("window.location = window.location.href.replace('welcome', "
                "'statements')")
-    page_html = welcome_template.render(onclick_action=onclick)
-    return Response(page_html)
+    return render_my_template('welcome.html', onclick_action=onclick)
 
 
-with open(path.join(HERE, 'curationFunctions.js'), 'r') as f:
+with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
     CURATION_JS = f.read()
 
 
@@ -264,7 +264,7 @@ def serve_js():
     return Response(CURATION_JS, mimetype='text/javascript')
 
 
-with open(path.join(HERE, 'favicon.ico'), 'rb') as f:
+with open(path.join(HERE, 'static', 'favicon.ico'), 'rb') as f:
     ICON = f.read()
 
 
@@ -276,10 +276,9 @@ def serve_icon():
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
     # Create a template object from the template file, load once
-    page_html = search_template.render(
-        message="Welcome! Try asking a question.",
-        endpoint=request.url_root)
-    return Response(page_html)
+    return render_my_template('search_statements.html',
+                              message="Welcome! Try asking a question.",
+                              endpoint=request.url_root)
 
 
 def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
@@ -351,7 +350,6 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
 trash = re.compile('[.,?!\-;`’\']')
 with open(path.join(HERE, 'bioquery_regex.bin'), 'rb') as f:
     regs = pickle.load(f)
-
 
 with open(path.join(HERE, 'name_lookup.bin'), 'rb') as f:
     text_lookups = pickle.load(f)

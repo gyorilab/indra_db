@@ -758,6 +758,9 @@ class Pubmed(_NihManager):
                 n_tot -= 1
         else:
             for xml_file in sorted(xml_files):
+                if continuing and xml_file in existing_files:
+                    logger.info("Skipping %s. Already uploaded." % xml_file)
+                    continue
                 article_info = self.get_article_info(xml_file)
                 logger.info("Beginning to upload %s." % xml_file)
                 self.upload_article(db, article_info, carefully)

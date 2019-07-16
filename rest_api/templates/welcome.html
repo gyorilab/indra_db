@@ -1,31 +1,10 @@
 {% extends 'idbr_template.html' %}
 
 {% block body %}
-    <body>
-    <script type="text/javascript">
-        setEnv('indra');
-    </script>
-    <!-- Page Header -->
-    <div class="page-header">
-        <div class="container">
-            <h1>The INDRA Database</h1>
-            <p> This project, <a href='https://github.com/indralab/indra_db'>indra_db</a>,
-                is developed by the <a href='https://indralab.github.io'>indralab</a>
-                team</p>
-        </div>
-    </div>
-    <hr>
-
-    <!-- Main -->
-    <div class="content">
-        <div class="container" id="sign-in">
-            Click the button to the right to sign in and get access to the DB
-            search page
-            <button style="margin: 10px" class="btn btn-outline-primary"
-                    id="status-notify" onClick="{{ onclick_action }}">Search
-                the database
-            </button>
-        </div>
-    </div>
-    </body>
+    Click the button to the right to sign in and get access to the DB
+    search page
+    <button style="margin: 10px" class="btn btn-outline-primary"
+            id="status-notify" onClick="{{ onclick_action }}">Search
+        the database
+    </button>
 {% endblock %}

@@ -44,7 +44,8 @@ env = Environment(
 )
 
 
-def render_my_template(template, **kwargs):
+def render_my_template(template, title, **kwargs):
+    kwargs['title'] = TITLE + ': ' + title
     return env.get_template(template).render(**kwargs)
 
 
@@ -202,8 +203,9 @@ def _query_wrapper(f):
         result['statements_returned'] = len(stmts_json)
 
         if format == 'html':
+            title = TITLE + ': ' + 'Results'
             link_title = '<a href=%s >%s</a>' \
-                         % (request.url_root + 'statements', TITLE)
+                         % (request.url_root + 'statements', title)
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
@@ -252,7 +254,8 @@ def welcome():
     logger.info("Browser welcome page.")
     onclick = ("window.location = window.location.href.replace('welcome', "
                "'statements')")
-    return render_my_template('welcome.html', onclick_action=onclick)
+    return render_my_template('welcome.html', 'Welcome',
+                              onclick_action=onclick)
 
 
 with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
@@ -276,7 +279,7 @@ def serve_icon():
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
     # Create a template object from the template file, load once
-    return render_my_template('search_statements.html',
+    return render_my_template('search_statements.html', 'Search',
                               message="Welcome! Try asking a question.",
                               endpoint=request.url_root)
 

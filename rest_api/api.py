@@ -1,16 +1,13 @@
 import re
 import sys
 import json
-import boto3
 import pickle
 import logging
 from os import path
 from io import StringIO
 from functools import wraps
 from datetime import datetime
-from botocore.client import Config
 from http.cookies import SimpleCookie
-from http.cookiejar import CookieJar
 
 from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
@@ -24,7 +21,7 @@ from indra.statements import make_statement_camel, stmts_from_json
 
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-   submit_curation, _has_auth, BadHashError, _get_api_key
+   submit_curation, _has_auth, BadHashError
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -33,7 +30,6 @@ app = Flask(__name__)
 Compress(app)
 CORS(app)
 SC = SimpleCookie()
-CJ = CookieJar()
 
 print("Loading file")
 logger.info("INFO working.")
@@ -45,85 +41,9 @@ MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
 
-# SET SECURITY
-SECURE = True
-
-# COGNITO PARAMETERS
-STATE_COOKIE_NAME = 'indralabStateCookie'
-ACCESSTOKEN_COOKIE_NAME = 'indralabAccessCookie'
-IDTOKEN_COOKIE_NAME = 'indradb-authorization'
-
 
 class DbAPIError(Exception):
     pass
-
-
-def _verify_user(access_token):
-    """Verifies a user given an Access Token"""
-    logger.info("Getting cognito client.")
-    config = Config(connect_timeout=5, retries={'max_attempts': 0})
-    cognito_idp_client = boto3.client('cognito-idp', config=config)
-    try:
-        resp = cognito_idp_client.get_user(AccessToken=access_token)
-        logger.info("Got resp %s from cognito." % str(resp))
-    except cognito_idp_client.exceptions.NotAuthorizedException:
-        resp = {}
-    return resp
-
-
-def _extract_user_info(user_json):
-    """Extracts user info returned by cognito"""
-    try:
-        info = {'Username': user_json['Username'],
-                'date': user_json['ResponseMetadata']['HTTPHeaders']['date']}
-        for attr in user_json['UserAttributes']:
-            if attr['Name'] == 'email':
-                info['email'] = attr['Value']
-                break
-    except KeyError as e:
-        logger.warning('Could not get Key: ' + repr(e))
-        return {}
-
-    return info
-
-
-def _redirect_to_welcome(qp_object):
-    base_url = url_for('welcome')
-    if not qp_object.is_empty():
-        url = base_url + '?' + qp_object.to_url_str()
-    else:
-        url = base_url
-    return redirect(url, code=302)
-
-
-class QueryParam(object):
-    """class holding query parameters"""
-    def __init__(self, query_dict):
-        # edit content via self.query_params
-        self.query_params = query_dict
-
-    def is_empty(self):
-        return not bool(self.query_params)
-
-    def to_dict(self):
-        """Returns the query parameters as a dictionary"""
-        return self.query_params
-
-    def to_url_str(self):
-        """Returns the query parameters formatted for a url string"""
-        if self.query_params:
-            return '&'.join(
-                '%s=%s' % (k, v) for k, v in self.query_params.items())
-        else:
-            return ''
-
-    def to_cookie_str(self):
-        """Returns the query parameters formatted for a cookie string"""
-        if self.query_params:
-            return '_and_'.join(
-                '%s_eq_%s' % (k, v) for k, v in self.query_params.items())
-        else:
-            return ''
 
 
 def __process_agent(agent_param):
@@ -195,82 +115,7 @@ class LogTracker(object):
         return ret
 
 
-def _security_wrapper(fs):
-    logger.info('security wrapper')
-
-    @wraps(fs)
-    def demon(*args, **kwargs):
-        logger.info("Got a demon request")
-        if not SECURE:
-            logger.info('SECURE is False, skipping checkin...')
-            return fs(*args, **kwargs)
-
-        logger.info('Full url received: %s' % request.url)
-
-        # Order of things to check:
-        # If no endpoint:
-        #   redirect to welcome without queries
-        # If token:
-        #   if token valid:
-        #       load endpoint
-        # When above fails:
-        #   redirect to welcome with whatever query string it came with
-
-        # HANDLE ENDPOINT
-        url_in = request.url
-        endpoint = url_in[:url_in.find('?')] if url_in.find('?') > 0 else \
-            url_in
-
-        qp = QueryParam(query_dict=dict(request.args.copy()))
-
-        print("Args -----------")
-        print(qp.query_params)
-        print("Cookies ------------")
-        print(request.cookies)
-        print("------------------")
-
-        # TOKEN HANDLING
-        # Try to load tokens from cookie:
-        access_token = request.cookies.get(ACCESSTOKEN_COOKIE_NAME)
-
-        # No tokens, no access - redirect
-        if not access_token:
-            logger.info('No token found, redirecting to welcome for login...')
-            if not qp.query_params.get('endpoint'):
-                qp.query_params['endpoint'] = endpoint
-            return _redirect_to_welcome(qp)
-
-        # VERIFY ACCESS TOKEN
-        logger.info('Token found in cookie...')
-        user_verified = _verify_user(access_token)
-        if user_verified:
-            logger.info('User verified with access token')
-            print('User info ----------')
-            print(user_verified)
-            print('--------------------')
-            user_info = _extract_user_info(user_verified)
-            username = user_info['Username']
-            logger.info('Identified %s as curator.' % username)
-            api_key = _get_api_key(username)
-
-            # Check if this is a curation request
-            if request.json and not request.json.get('curator'):
-                logger.info('Curation submission received without associated '
-                            'curator. Inferred user %s.' % username)
-                request.json['curator'] = username
-            kwargs['api_key'] = api_key
-
-            logger.info('Loading requested endpoint: %s' % endpoint)
-            return fs(*args, **kwargs)
-        else:
-            # Final fallback
-            logger.info('Could not verify user, redirecting to welcome...')
-            return _redirect_to_welcome(QueryParam({}))
-
-    return demon
-
-
-curation_element = """
+CURATION_ELEMENT = """
 <td width="6em" id="row{loop_index}_click"
   data-clicked="false" class="curation_toggle"
   onclick="addCurationRow(this.closest('tr')); this.onclick=null;">&#9998;</td>
@@ -358,7 +203,7 @@ def _query_wrapper(f):
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
                                            title=link_title,
                                            db_rest_url=request.url_root[:-1],
-                                           ev_element=curation_element,
+                                           ev_element=CURATION_ELEMENT,
                                            other_scripts=[request.url_root
                                                           + curation_js_link])
             content = html_assembler.make_model()
@@ -404,12 +249,8 @@ with open(path.join(HERE, 'search_statements.html'), 'r') as f:
 @app.route('/welcome', methods=['GET'])
 def welcome():
     logger.info("Browser welcome page.")
-    if True:
-        onclick = "window.location = window.location.href.replace('welcome', 'statements')"
-    else:
-        onclick = "getTokenFromAuthEndpoint(window.location.href, " \
-                  "window.location.href.replace('welcome', 'statements')" \
-                  ".split('#')[0])"
+    onclick = ("window.location = window.location.href.replace('welcome', " 
+               "'statements')")
     page_html = welcome_template.render(onclick_action=onclick)
     return Response(page_html)
 

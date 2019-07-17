@@ -1,0 +1,12 @@
+{%  extends "indra/statements_view.html" %}
+
+{% block scripts %}
+    {{ super() }}
+
+    <script src="{{ url_for('serve_js') }}"></script>
+
+{%  endblock %}
+
+
+{% block evidence_row_prefix %}
+{% endblock %}

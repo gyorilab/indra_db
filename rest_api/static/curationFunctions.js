@@ -17,6 +17,19 @@ let latestSubmission = {
     'submit_status': 0
 };
 
+
+// Turn on all the toggle buttons and connect them to a funciton.
+document.addEventListener('DOMContentLoaded', () => {
+   document.querySelectorAll('.curation_toggle')
+       .forEach(function(toggle) {
+           toggle.onclick = function() {
+               addCurationRow(this.closest('tr'));
+               this.onclick=null;
+           };
+           toggle.style.display = 'inline-block';
+       })
+});
+
 // Check the API key input
 function keySubmit(key_value) {
     let ensure_user = document.getElementById("ensure_user_on_api_key");
@@ -417,109 +430,6 @@ function addCurationRow(clickedRow) {
 
     // Append new row to provided row
     clickedRow.parentNode.insertBefore(curationRow, clickedRow.nextSibling);
-}
-function getPubMedMETAxmlByPMID(pmid) {
-    let params_dict = {
-        'db': 'pubmed',
-        'retmode': 'xml',
-        'rettype': 'docsum',
-        'id': pmid
-    };
-    return $.ajax({
-        url: pubmed_fetch,
-        type: "POST",
-        dataType: "xml",
-        data: params_dict,
-    });
-}
-function pmidXML2dict(XML) {
-    let xml_dict = {};
-    for (let child of XML.children) {
-        let name = child.getAttribute("Name");
-        let type = child.getAttribute("Type");
-        if (child.hasChildNodes() && type === "List") {
-            let innerItems;
-            // Javascript can't really do nice recursive functions...
-            // special cases for "History" and "ArticleIds" which has unique inner Names
-            if (name === "ArticleIds" || name === "History") {
-                let innerDict = {};
-                for (c of child.children) {
-                    innerDict[c.getAttribute("Name")] = c.textContent;
-                }
-                innerItems = innerDict;
-            } else {
-                let innerList = [];
-                for (c of child.children) {
-                    innerList.push(c.textContent);
-                }
-                innerItems = innerList;
-            }
-            xml_dict[name] = innerItems
-        } else if (child.tagName === "Item") {
-            // Here just get the inner strings
-            xml_dict[name] = child.textContent;
-        } else if (child.tagName === "Id") {
-            // Special case
-            xml_dict["Id"] = child.textContent;
-        } else {
-            if (!xml_dict["no_key"]) {
-                xml_dict["no_key"] = [child.textContent]
-            } else {
-                xml_dict["no_key"].push(child.textContent)
-            }
-        }
-    }
-    return xml_dict;
-}
-
-// Modify link hover text
-function setPMIDlinkTitle(pmid, link_tag) {
-    let pubmed_xml_promise = getPubMedMETAxmlByPMID(pmid);
-    pubmed_xml_promise.then(responseXML => {
-        const docsum_xml = responseXML.getElementsByTagName('DocSum')[0];
-        const pmd = pmidXML2dict(docsum_xml);
-        const nAuthors = pmd.AuthorList.length;
-        let authorsStr;
-        if (nAuthors > 3)
-            authorsStr = `${pmd.AuthorList[0]}, ... ${pmc.AuthorList[nAuthors-1]}`;
-        else
-            authorsStr = pmd.AuthorList.join(", ");
-
-        // Shortened journal name is in .Source, while full name is in .FullJournalName
-        link_tag.title = `${authorsStr}, "${pmd.Title}", ${pmd.Source}, ${pmd.SO}`;
-    })
-}
-
-// Loop all pmid link nodes and set title
-function populatePMIDlinkTitles() {
-    let pmid_link_array = document.getElementsByClassName("pmid_link");
-    for (link_obj of pmid_link_array) {
-        pmid = link_obj.textContent;
-        setPMIDlinkTitle(pmid, link_obj)
-    }
-}
-
-// Expand/collapse all
-function expandCollapseAll() {
-    let expColBtn = document.getElementById('expand-collapse-all');
-    let setCss = '';
-
-    // Expand all; set ALL_COLLAPSED = false;
-    if (ALL_COLLAPSED) {
-        setCss = 'display: block;';
-        ALL_COLLAPSED = false;
-        expColBtn.textContent = 'Collapse All';
-        // Collapse all; set ALL_COLLAPSED = true;
-    } else {
-        setCss = 'display: none;';
-        ALL_COLLAPSED = true;
-        expColBtn.textContent = 'Expand All';
-    }
-
-    // Loop all tags
-    for (tag of document.getElementsByClassName('group')) {
-        tag.style.cssText = setCss
-    }
 }
 
 // Expand/collapse row

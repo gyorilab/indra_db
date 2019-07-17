@@ -9,7 +9,7 @@ from http.cookies import SimpleCookie
 from io import StringIO
 from os import path
 
-from flask import Flask, request, abort, Response, redirect
+from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
 from flask_cors import CORS
 from jinja2 import Environment
@@ -38,10 +38,14 @@ MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
 
+# Instantiate a jinja2 env.
 env = Environment(
     loader=IndraHTMLLoader({None: HERE,
                             'indra': IndraHTMLLoader.native_path})
 )
+
+# Here we can add functions to the jinja2 env.
+env.globals.update(url_for=url_for)
 
 
 def render_my_template(template, title, **kwargs):
@@ -122,15 +126,6 @@ class LogTracker(object):
         return ret
 
 
-CURATION_ELEMENT = """
-<td width="6em" id="row{loop_index}_click"
-  data-clicked="false" class="curation_toggle"
-  onclick="addCurationRow(this.closest('tr')); this.onclick=null;">&#9998;</td>
-"""
-
-curation_js_link = "code/curationFunctions.js"
-
-
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
 
@@ -208,11 +203,9 @@ def _query_wrapper(f):
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
                                            title=title,
-                                           db_rest_url=request.url_root[:-1],
-                                           ev_element=CURATION_ELEMENT,
-                                           other_scripts=[request.url_root
-                                                          + curation_js_link])
-            content = html_assembler.make_model()
+                                           db_rest_url=request.url_root[:-1])
+            idbr_template = env.get_template('idbr_statements_view.html')
+            content = html_assembler.make_model(idbr_template)
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
                                for lvl, n in tracker.get_level_stats().items()]

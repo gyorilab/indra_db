@@ -143,12 +143,8 @@ function submitButtonClick(clickEvent) {
 }
 // Submit curation
 function submitCuration(curation_dict, hash, statusBox, icon, test) {
-    // API KEY FOR ACCESSING DATABASE
-    //let api_key = document.getElementById("api_key_input").value;
-    //curation_addr = "https://db.indra.bio/curation/submit/";
-    curation_addr = "http://localhost:5000/curation/submit/";
 
-    _url = curation_addr + hash; //+ "?api_key=" + api_key;
+    let _url = CURATION_ADDR + hash; //+ "?api_key=" + api_key;
 
     if (test) {
         console.log("Submitting test curation...");
@@ -157,7 +153,7 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
     // console.log("api key: " + api_key)
     console.log("url: " + _url);
 
-    response = $.ajax({
+    return $.ajax({
         url: _url,
         type: "POST",
         dataType: "json",
@@ -196,7 +192,6 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
             }
         }
     });
-    return response;
 }
 // Creates the dropdown div with the following structure
 // <div class="dropdown" 

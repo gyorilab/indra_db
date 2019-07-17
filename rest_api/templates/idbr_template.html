@@ -20,66 +20,9 @@
 {% endblock %}
 
 {% block header_desc %}
-    <p> This project, <a href='https://github.com/indralab/indra_db'>indra_db</a>,
-        is developed by the <a href='https://indralab.github.io'>indralab</a>
-        team</p>
+    {% include "idbr_description.html" %}
 {% endblock %}
 
-{% block additonal_footer %}
-    <small>
-        <p class="float-right">
-            <a href="#">Back to top</a>
-        </p>
-        The INDRA Database currently integrates the following natural
-        language processing systems at scale:
-        <ul>
-            <li><a href="https://github.com/clulab/reach">REACH</a> - for
-                biology
-            </li>
-            <li>Sparser - for biology</li>
-        </ul>
-        Readers coming soon:
-        <ul>
-            <li><a href="https://research.bioinformatics.udel.edu/rlimsp/">RLIMS-P</a>
-            </li>
-            <li>
-                <a href="http://trips.ihmc.us/trac/drum/wiki/TripsDrumSystemInstallation">TRIPS</a>
-            </li>
-            <li><a href="https://amr.isi.edu/index.html">ISI Reader</a>(see
-                on
-                <a href="https://github.com/sgarg87/big_mech_isi_gg">github</a>)
-            </li>
-        </ul>
-
-        With content drawn from:
-
-        <ul>
-            <li><b>PubMed</b> - ~28 million abstracts <i>Fall 2018</i></li>
-            <li><b>PubMed Central</b> - ~5 million fulltext <i>Fall
-                2018</i></li>
-            <li><b>Elsevier</b> - ~0.7 million fulltext (requires special
-                access) <i>Fall 2018</i></li>
-        </ul>
-
-        We also collect information from these databases:
-
-        <ul>
-            <li><a href="https://www.pathwaycommons.org/">Pathway Commons
-                database</a></li>
-            <li><a href="https://nlp.stanford.edu/pubs/snli_paper.pdf">BEL
-                Large Corpus</a></li>
-            <li><a href="https://thebiogrid.org/">biogrid</a></li>
-            <li><a href="http://www.biopax.org/">biopax</a></li>
-            <li><a href="https://signor.uniroma2.it/">SIGNOR</a></li>
-            <li>
-                <a href="https://www.biorxiv.org/content/10.1101/358978v1">Tas</a>
-            </li>
-        </ul>
-        These databases are retrieved using the tools in <a
-            href="https://indra.readthedocs.io/en/latest/modules/sources/index.html">indra.sources</a>.
-        The statements extracted from all of these sources are stored and
-        updated in the database.<br><br>This work was funded by ARO grant
-        W911NF‐15‐1‐0544 under the DARPA Communicating with Computers
-        program.
-    </small>
+{% block additional_footer %}
+    {% include "idbr_footer.html" %}
 {% endblock %}

@@ -6,3 +6,16 @@
     <script src="{{ url_for('serve_js') }}"></script>
 
 {%  endblock %}
+
+{% block header_desc %}
+    {% include "idbr_description.html" %}
+
+    {{ super() }}
+{% endblock %}
+
+
+{% block additional_footer %}
+    {{ super() }}
+
+    {% include "idbr_footer.html" %}
+{% endblock %}

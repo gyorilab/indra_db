@@ -490,7 +490,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
     ip = request.remote_addr
     text = request.json.get('text')
     curator = request.json.get('curator')
-    api_key = request.args.get('api_key', kwargs.pop('api_key'))
+    api_key = request.args.get('api_key', kwargs.pop('api_key', None))
     logger.info("Curator %s %s key"
                 % (curator, 'with' if api_key else 'without'))
     is_test = 'test' in request.args

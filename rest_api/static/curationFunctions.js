@@ -44,24 +44,47 @@ function keySubmit(key_value) {
 }
 
 function submitButtonClick(clickEvent) {
-    // // CURATOR
-    // let curator = document.getElementById("curator_input").value;
-    // if (!curator) {
-    //     alert("Please enter a curator ID");
-    //     return;
-    // }
+    // Get the user's email and optionally api key.
+    let user_email = localStorage.getItem('user_email');
 
-    // // API KEY
-    // let api_key = document.getElementById("api_key_input").value;
-    // if (!api_key) {
-    //     alert("Please enter an API key!");
-    //     return;
-    // }
+    // If not in storage, reveal a popup
+    if (!user_email) {
+        const overlay = document.querySelector('#overlay');
+        document.querySelector('#x-out').onclick = () => {
+            // Abort the submit
+            overlay.style.display = "none";
+            return false;
+        };
+        document.querySelector('#overlay-form').onsubmit = function() {
+            // Log the result
+            console.log(`Got user email: ${this.email} and api key: ${this.api_key}`)
+
+            // Check for an email, if none, reject the form (do nothing)
+            if (!this.email)
+                // Ideally a warning or explanation should be given.
+                return false;
+
+            // Store the results
+            localStorage.setItem('user_email', this.email.value);
+            localStorage.setItem('api_key', this.api_key.value);
+
+            // Hide the overlay again.
+            overlay.style.display = "none";
+
+            // Call the function again (this time it will go past here).
+            submitButtonClick(clickEvent);
+
+            /// Make sure nothing else unwanted happens.
+            return false;
+        };
+        overlay.style.display = "block";
+        return false;
+    }
 
     // Get mouseclick target, then parent's parent
-    pn = clickEvent.target.parentNode.parentNode;
-    btn_row_tag = pn.closest('tr');
-    s = pn.getElementsByClassName("dropdown")[0]
+    let pn = clickEvent.target.parentNode.parentNode;
+    let btn_row_tag = pn.closest('tr');
+    let s = pn.getElementsByClassName("dropdown")[0]
         .getElementsByTagName("select")[0];
 
     // DROPDOWN SELECTION
@@ -79,7 +102,7 @@ function submitButtonClick(clickEvent) {
         .value;
 
     // Refuse submission if 'other' is selected without providing a description
-    if (!user_text & err_select == "other") {
+    if (!user_text && err_select === "other") {
         alert('Must describe error when using option "other..."!');
         return;
     }
@@ -101,16 +124,16 @@ function submitButtonClick(clickEvent) {
 
     // HASHES: source_hash & stmt_hash
     // source_hash == ev['source_hash'] == pmid_row.id; "evidence level"
-    source_hash = pmid_row.id;
+    const source_hash = pmid_row.id;
     // stmt_hash == hash == stmt_info['hash'] == table ID; "(pa-) statement level"
-    stmt_hash = pmid_row.parentElement.parentElement.id;
+    const stmt_hash = pmid_row.parentElement.parentElement.id;
 
     // CURATION DICT
     // example: curation_dict = {'tag': 'Reading', 'text': '"3200 A" is picked up as an agent.', 'curator': 'Klas', 'ev_hash': ev_hash};
-    cur_dict = {
+    let cur_dict = {
         'tag': err_select,
         'text': user_text,
-        // 'curator': curator,
+        'curator': user_email,
         'ev_hash': source_hash
     };
 
@@ -125,10 +148,10 @@ function submitButtonClick(clickEvent) {
     // SPAM CONTROL: preventing multiple clicks of the same curation in a row
     // If the new submission matches latest submission AND the latest submission was
     // successfully submitted, ignore the new submission
-    if (latestSubmission['ddSelect'] == err_select &
-        latestSubmission['source_hash'] == source_hash &
-        latestSubmission['stmt_hash'] == stmt_hash &
-        latestSubmission['submit_status'] == 200) {
+    if (latestSubmission['ddSelect'] === err_select &
+        latestSubmission['source_hash'] === source_hash &
+        latestSubmission['stmt_hash'] === stmt_hash &
+        latestSubmission['submit_status'] === 200) {
         alert('Already submitted curation successfully!');
         return;
     } else {
@@ -136,15 +159,15 @@ function submitButtonClick(clickEvent) {
         latestSubmission['source_hash'] = source_hash;
         latestSubmission['stmt_hash'] = stmt_hash;
     }
-    testing = false; // Set to true to test the curation endpoint of the API
-    ajx_response = submitCuration(cur_dict, stmt_hash, statusBox, icon, testing);
+    let testing = false; // Set to true to test the curation endpoint of the API
+    let ajx_response = submitCuration(cur_dict, stmt_hash, statusBox, icon, testing);
     console.log("ajax response from submission: ");
     console.log(ajx_response);
 }
 // Submit curation
 function submitCuration(curation_dict, hash, statusBox, icon, test) {
 
-    let _url = CURATION_ADDR + hash; //+ "?api_key=" + api_key;
+    let _url = CURATION_ADDR + hash + `?api_key=${localStorage.getItem('api_key')}`;
 
     if (test) {
         console.log("Submitting test curation...");

@@ -164,6 +164,7 @@ def _query_wrapper(f):
         medscan_redactions = 0
         medscan_removals = 0
         elsevier_redactions = 0
+        source_counts = result['source_counts']
         if not all(has.values()):
             for h, stmt_json in stmts_json.copy().items():
                 for ev_json in stmt_json['evidence'][:]:
@@ -184,6 +185,15 @@ def _query_wrapper(f):
                         if len(stmt_json['evidence']) == 0:
                             medscan_removals += 1
                             stmts_json.pop(h)
+                            result['source_counts'].pop(h)
+
+            # Take medscan counts out of the source counts.
+            if not has['medscan']:
+                source_counts = {h: {src: count
+                                     for src, count in src_count.items()
+                                     if src is not 'medscan'}
+                                 for h, src_count in source_counts.items()}
+
         logger.info(f"Redacted {medscan_redactions} medscan evidence, "
                     f"resulting in the complete removal of {medscan_removals} "
                     f"statements.")
@@ -192,6 +202,8 @@ def _query_wrapper(f):
 
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
+
+        # Add derived values to the result.
         result['offset'] = offs
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
@@ -202,7 +214,7 @@ def _query_wrapper(f):
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
-                                           title=title,
+                                           source_counts, title=title,
                                            db_rest_url=request.url_root[:-1])
             idbr_template = env.get_template('idbr_statements_view.html')
             content = html_assembler.make_model(idbr_template)
@@ -215,6 +227,7 @@ def _query_wrapper(f):
         else:  # Return JSON for all other values of the format argument
             result.update(tracker.get_level_stats())
             result['statements'] = stmts_json
+            result['source_counts'] = source_counts
             content = json.dumps(result)
             mimetype = 'application/json'
 

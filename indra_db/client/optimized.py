@@ -1,4 +1,3 @@
-import re
 import json
 import logging
 from collections import OrderedDict, defaultdict
@@ -7,7 +6,7 @@ from sqlalchemy import or_, desc, true, select, intersect_all
 logger = logging.getLogger(__file__)
 
 from indra.util import clockit
-from indra.statements import get_statement_by_name, make_hash
+from indra.statements import get_statement_by_name
 from indra_db.util import get_primary_db, regularize_agent_id
 
 
@@ -145,8 +144,8 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         row_gen = iter(row)
 
         mk_hash = next(row_gen)
-        src_dict = {src: count for src, count in zip(src_list, row_gen)
-                    if count is not None}
+        src_dict = {src: 0 if count is None else count
+                    for src, count in zip(src_list, row_gen)}
         ev_count = next(row_gen)
         raw_json_bts = next(row_gen)
         pa_json_bts = next(row_gen)

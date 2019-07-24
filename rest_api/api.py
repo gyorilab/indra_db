@@ -9,10 +9,15 @@ from http.cookies import SimpleCookie
 from io import StringIO
 from os import path
 
-from flask import Flask, request, abort, Response, redirect, url_for
+from flask import Flask, request, abort, Response, redirect, url_for, \
+    render_template_string
 from flask_compress import Compress
 from flask_cors import CORS
+from flask_security import Security, current_user, login_required, \
+    SQLAlchemySessionUserDatastore
 from jinja2 import Environment
+from database import db_session, init_db
+from models import User, Role
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
 from indra.statements import make_statement_camel, stmts_from_json
@@ -25,6 +30,26 @@ logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
+
+app.config['DEBUG'] = False
+app.config['SECRET_KEY'] = 'super-secret'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+# Bcrypt is set as default SECURITY_PASSWORD_HASH, which requires a salt
+app.config['SECURITY_PASSWORD_SALT'] = 'super-secret-random-salt'
+app.config['WTF_CSRF_ENABLED'] = False
+
+# Setup Flask-Security
+user_datastore = SQLAlchemySessionUserDatastore(db_session, User, Role)
+security = Security(app, user_datastore)
+
+# Create a user to test with
+@app.before_first_request
+def create_user():
+    init_db()
+    user_datastore.create_user(email='klas@example.org', password='password')
+    db_session.commit()
+
+
 Compress(app)
 CORS(app)
 SC = SimpleCookie()
@@ -246,6 +271,13 @@ def _query_wrapper(f):
         return resp
 
     return decorator
+
+
+@app.route('/test_security')
+@login_required
+def home():
+    return render_template_string('Hello {{email}} !',
+                                  email=current_user.email)
 
 
 @app.route('/', methods=['GET'])

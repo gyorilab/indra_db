@@ -66,15 +66,9 @@
     {{ super() }}
 {% endblock %}
 
-{% block header_desc %}
-    {% include "idbr_description.html" %}
-
-    {{ super() }}
-{% endblock %}
+{% block header_desc %}{% include "idbr_description.html" %}{{ super() }}{% endblock %}
 
 
 {% block additional_footer %}
-    {{ super() }}
-
-    {% include "idbr_footer.html" %}
+    {{ super() }}{% include "idbr_footer.html" %}
 {% endblock %}

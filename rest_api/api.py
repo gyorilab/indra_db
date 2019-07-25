@@ -16,8 +16,8 @@ from flask_cors import CORS
 from flask_security import Security, current_user, login_required, \
     SQLAlchemySessionUserDatastore
 from jinja2 import Environment
-from database import db_session, init_db
-from models import User, Role
+from .database import db_session, init_db
+from .models import User, Role
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
 from indra.statements import make_statement_camel, stmts_from_json

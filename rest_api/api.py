@@ -31,22 +31,18 @@ app = Flask(__name__)
 
 app.config['DEBUG'] = True
 app.config['SECRET_KEY'] = 'super-secret'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
 # Bcrypt is set as default SECURITY_PASSWORD_HASH, which requires a salt
 app.config['SECURITY_PASSWORD_SALT'] = 'super-secret-random-salt'
 app.config['WTF_CSRF_ENABLED'] = False
+app.config['SECURITY_REGISTERABLE'] = True
+app.config['SECURITY_SEND_REGISTER_EMAIL'] = False
+app.config['SECURITY_LOGIN_URL'] = '/login'
+app.config['SECURITY_REGISTER_URL'] = '/register'
+app.config['SECURITY_LOGOUT_URL'] = '/logout'
 
 # Setup Flask-Security
 user_datastore = SQLAlchemySessionUserDatastore(db_session, User, Role)
 security = Security(app, user_datastore)
-
-# Create a user to test with
-#@app.before_first_request
-#def create_user():
-#    init_db()
-#    user_datastore.create_user(email='kkaris@example.org', password='password')
-#    db_session.commit()
-
 
 Compress(app)
 CORS(app)

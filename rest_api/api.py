@@ -14,8 +14,8 @@ from flask_cors import CORS
 from flask_security import Security, current_user, login_required, \
     SQLAlchemySessionUserDatastore
 from jinja2 import Environment
-from .database import db_session, init_db
-from .models import User, Role
+from rest_api.database import db_session, init_db
+from rest_api.models import User, Role
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
 from indra.statements import make_statement_camel, stmts_from_json
@@ -41,11 +41,11 @@ user_datastore = SQLAlchemySessionUserDatastore(db_session, User, Role)
 security = Security(app, user_datastore)
 
 # Create a user to test with
-@app.before_first_request
-def create_user():
-    init_db()
-    user_datastore.create_user(email='kkaris@example.org', password='password')
-    db_session.commit()
+#@app.before_first_request
+#def create_user():
+#    init_db()
+#    user_datastore.create_user(email='kkaris@example.org', password='password')
+#    db_session.commit()
 
 
 Compress(app)

@@ -266,6 +266,9 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
     def labelled_hash_and_count(meta):
         return meta.mk_hash.label('mk_hash'), meta.ev_count.label('ev_count')
 
+    logger.debug("Constructing query to search for agents of type %s "
+                 "with agents: %s." % (stmt_type, agents))
+
     queries = []
     for role, ag_dbid, ns in agents:
         # Make the id match paradigms for the database.

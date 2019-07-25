@@ -1,7 +1,5 @@
 import json
 import logging
-import pickle
-import re
 import sys
 from datetime import datetime
 from functools import wraps

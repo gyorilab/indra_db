@@ -31,7 +31,7 @@ logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
 
-app.config['DEBUG'] = False
+app.config['DEBUG'] = True
 app.config['SECRET_KEY'] = 'super-secret'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
 # Bcrypt is set as default SECURITY_PASSWORD_HASH, which requires a salt
@@ -46,7 +46,7 @@ security = Security(app, user_datastore)
 @app.before_first_request
 def create_user():
     init_db()
-    user_datastore.create_user(email='klas@example.org', password='password')
+    user_datastore.create_user(email='kkaris@example.org', password='password')
     db_session.commit()
 
 

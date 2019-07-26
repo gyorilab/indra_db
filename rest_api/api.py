@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import wraps
 from http.cookies import SimpleCookie
 from io import StringIO
-from os import path
+from os import path, environ
 
 from flask import Flask, request, abort, Response, redirect, url_for, \
     render_template_string
@@ -14,8 +14,11 @@ from flask_cors import CORS
 from flask_security import Security, current_user, login_required, \
     SQLAlchemySessionUserDatastore
 from jinja2 import Environment
-from rest_api.database import db_session, init_db
-from rest_api.models import User, Role
+
+from flask_restful import Resource, Api, reqparse
+from flask_jwt_extended import create_access_token, create_refresh_token, \
+    jwt_required, jwt_refresh_token_required, get_jwt_identity, get_raw_jwt, \
+    JWTManager
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
 from indra.statements import make_statement_camel, stmts_from_json
@@ -23,6 +26,9 @@ from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_auth, BadHashError
+
+from rest_api.database import db_session, init_db
+from rest_api.models import User, Role
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -39,6 +45,7 @@ app.config['SECURITY_SEND_REGISTER_EMAIL'] = False
 app.config['SECURITY_LOGIN_URL'] = '/login'
 app.config['SECURITY_REGISTER_URL'] = '/register'
 app.config['SECURITY_LOGOUT_URL'] = '/logout'
+app.config['JWT_SECRET_KEY'] = environ['INDRADB_JWT_SECRET']
 
 # Setup Flask-Security
 user_datastore = SQLAlchemySessionUserDatastore(db_session, User, Role)
@@ -47,6 +54,8 @@ security = Security(app, user_datastore)
 Compress(app)
 CORS(app)
 SC = SimpleCookie()
+api = Api(app)
+jwt = JWTManager(app)
 
 print("Loading file")
 logger.info("INFO working.")
@@ -74,6 +83,54 @@ def render_my_template(template, title, **kwargs):
 
 class DbAPIError(Exception):
     pass
+
+
+parser = reqparse.RequestParser()
+parser.add_argument('email', help='Enter your email.', required=True)
+parser.add_argument('password', help='Enter your password.', required=True)
+
+
+class UserRegistration(Resource):
+    def post(self):
+        data = parser.parse_args()
+
+        new_user = User.new_user(
+            email=data['email'],
+            password=data['password']
+        )
+
+        try:
+            new_user.save()
+            access_token = create_access_token(identity=data['email'])
+            refresh_token = create_refresh_token(identity=data['email'])
+            return {
+                'message': 'User {} was created'.format(data['email']),
+                'access_token': access_token,
+                'refresh_token': refresh_token
+                }
+        except Exception as e:
+            return {'message': 'Something went wrong: %s' % str(e)}, 500
+
+
+class UserLogin(Resource):
+    def post(self):
+        data = parser.parse_args()
+        current_user = User.get_user_by_email(data['email'], data['password'])
+
+        if not current_user:
+            return {'message': 'Username or password was incorrect.'}
+
+        access_token = create_access_token(identity=data['email'])
+        refresh_token = create_refresh_token(identity=data['email'])
+        return {
+            'message': 'Logged in as {}'.format(current_user.email),
+            'access_token': access_token,
+            'refresh_token': refresh_token
+            }
+
+
+api.add_resource(UserRegistration, '/registration')
+api.add_resource(UserLogin, '/login')
 
 
 def __process_agent(agent_param):
@@ -268,7 +325,7 @@ def _query_wrapper(f):
 
 
 @app.route('/test_security')
-@login_required
+@jwt_required
 def home():
     return render_template_string('Hello {{email}} !',
                                   email=current_user.email)
@@ -449,6 +506,7 @@ def describe_curation():
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
+@jwt_required
 def submit_curation_endpoint(hash_val, **kwargs):
     logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')

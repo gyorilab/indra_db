@@ -1,9 +1,18 @@
-from .database import Base
+import os
+
+from rest_api.database import Base
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy import create_engine
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import relationship, backref, sessionmaker
 from sqlalchemy import Boolean, DateTime, Column, Integer, \
                        String, ForeignKey
+
+import scrypt
+
+
+engine = create_engine()
+DBSession = sessionmaker(bind=engine)
+session = DBSession()
 
 
 class RolesUsers(Base):
@@ -20,7 +29,7 @@ class Role(Base, RoleMixin):
     description = Column(String(255))
 
 
-class User(Base, UserMixin):
+class User(Base):
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
     email = Column(String(255), unique=True)
@@ -36,3 +45,32 @@ class User(Base, UserMixin):
     roles = relationship('Role',
                          secondary='roles_users',
                          backref=backref('users', lazy='dynamic'))
+
+    @classmethod
+    def new_user(cls, email, password, **kwargs):
+        return cls(email, hash_password(password), **kwargs)
+
+    def save(self):
+        session.add(self)
+        session.commit()
+
+    @classmethod
+    def get_user_by_email(cls, email, password):
+        user = cls.query.filter(email=email).first()
+        if verify_password(user.password, password):
+            return user
+        else:
+            return None
+
+
+def hash_password(password, maxtime=0.5, datalength=64):
+    return scrypt.encrypt(os.urandom(datalength), password, maxtime=maxtime)
+
+
+def verify_password(hashed_password, guessed_password, maxtime=0.5):
+    try:
+        scrypt.decrypt(hashed_password, guessed_password, maxtime)
+        return True
+    except scrypt.error:
+        return False
+

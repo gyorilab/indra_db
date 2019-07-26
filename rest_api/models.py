@@ -10,7 +10,7 @@ from sqlalchemy import Boolean, DateTime, Column, Integer, \
 import scrypt
 
 
-engine = create_engine()
+engine = create_engine(os.environ['INDRALAB_USERS_DB'])
 DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
@@ -33,7 +33,7 @@ class User(Base):
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
     email = Column(String(255), unique=True)
-    username = Column(String(255))
+    username = Column(String(255), unique=True)
     password = Column(String(255))
     last_login_at = Column(DateTime())
     current_login_at = Column(DateTime())
@@ -56,10 +56,15 @@ class User(Base):
 
     @classmethod
     def get_user_by_email(cls, email, password):
-        user = cls.query.filter(email=email).first()
+        user = session.query(cls).filter(cls.email == email).first()
+        if user is None:
+            print("User %s not found." % email)
+            return None
+
         if verify_password(user.password, password):
             return user
         else:
+            print("User password failed.")
             return None
 
 

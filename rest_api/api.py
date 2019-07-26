@@ -11,8 +11,6 @@ from flask import Flask, request, abort, Response, redirect, url_for, \
     render_template_string
 from flask_compress import Compress
 from flask_cors import CORS
-from flask_security import Security, current_user, login_required, \
-    SQLAlchemySessionUserDatastore
 from jinja2 import Environment
 
 from flask_restful import Resource, Api, reqparse
@@ -27,7 +25,6 @@ from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_auth, BadHashError
 
-from rest_api.database import db_session, init_db
 from rest_api.models import User, Role
 
 logger = logging.getLogger("db-api")
@@ -36,20 +33,7 @@ logger.setLevel(logging.INFO)
 app = Flask(__name__)
 
 app.config['DEBUG'] = True
-app.config['SECRET_KEY'] = 'super-secret'
-# Bcrypt is set as default SECURITY_PASSWORD_HASH, which requires a salt
-app.config['SECURITY_PASSWORD_SALT'] = 'super-secret-random-salt'
-app.config['WTF_CSRF_ENABLED'] = False
-app.config['SECURITY_REGISTERABLE'] = True
-app.config['SECURITY_SEND_REGISTER_EMAIL'] = False
-app.config['SECURITY_LOGIN_URL'] = '/login'
-app.config['SECURITY_REGISTER_URL'] = '/register'
-app.config['SECURITY_LOGOUT_URL'] = '/logout'
 app.config['JWT_SECRET_KEY'] = environ['INDRADB_JWT_SECRET']
-
-# Setup Flask-Security
-user_datastore = SQLAlchemySessionUserDatastore(db_session, User, Role)
-security = Security(app, user_datastore)
 
 Compress(app)
 CORS(app)
@@ -129,7 +113,7 @@ class UserLogin(Resource):
             }
 
 
-api.add_resource(UserRegistration, '/registration')
+api.add_resource(UserRegistration, '/register')
 api.add_resource(UserLogin, '/login')
 
 
@@ -327,8 +311,7 @@ def _query_wrapper(f):
 @app.route('/test_security')
 @jwt_required
 def home():
-    return render_template_string('Hello {{email}} !',
-                                  email=current_user.email)
+    return render_template_string('Hello authorized person!')
 
 
 @app.route('/', methods=['GET'])

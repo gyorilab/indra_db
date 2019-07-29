@@ -68,6 +68,12 @@ class User(Base):
             print("User password failed.")
             return None
 
+    def __str__(self):
+        return "%s - %s" % (self.id, self.email)
+
+    def __repr__(self):
+        return '< User: %s >' % str(self)
+
 
 def hash_password(password, maxtime=0.5, datalength=64):
     hp = scrypt.encrypt(b64encode(os.urandom(datalength)), password,

@@ -1,11 +1,12 @@
 import os
+from base64 import b64encode
 
 from rest_api.database import Base
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy import create_engine
 from sqlalchemy.orm import relationship, backref, sessionmaker
 from sqlalchemy import Boolean, DateTime, Column, Integer, \
-                       String, ForeignKey
+                       String, ForeignKey, LargeBinary
 
 import scrypt
 
@@ -34,7 +35,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     email = Column(String(255), unique=True)
     username = Column(String(255), unique=True)
-    password = Column(String(255))
+    password = Column(LargeBinary)
     last_login_at = Column(DateTime())
     current_login_at = Column(DateTime())
     last_login_ip = Column(String(100))
@@ -48,7 +49,7 @@ class User(Base):
 
     @classmethod
     def new_user(cls, email, password, **kwargs):
-        return cls(email, hash_password(password), **kwargs)
+        return cls(email=email, password=hash_password(password), **kwargs)
 
     def save(self):
         session.add(self)
@@ -69,7 +70,9 @@ class User(Base):
 
 
 def hash_password(password, maxtime=0.5, datalength=64):
-    return scrypt.encrypt(os.urandom(datalength), password, maxtime=maxtime)
+    hp = scrypt.encrypt(b64encode(os.urandom(datalength)), password,
+                        maxtime=maxtime)
+    return hp
 
 
 def verify_password(hashed_password, guessed_password, maxtime=0.5):

@@ -57,12 +57,14 @@ function submitButtonClick(clickEvent) {
         };
         document.querySelector('#overlay-form').onsubmit = function() {
             // Log the result
-            console.log(`Got user email, ${this.email}, and password`);
+            console.log(`Got user email, ${this.email.value}, and password`);
 
             // Check for an email, if none, reject the form (do nothing)
-            if (!this.email || !this.password)
+            if (!this.email || !this.password) {
                 // Ideally a warning or explanation should be given.
+                console.log("Missing password or email.");
                 return false;
+            }
 
             let req = $.ajax({
                 url: LOGIN_URL,
@@ -75,9 +77,11 @@ function submitButtonClick(clickEvent) {
                 })
             });
 
-            if (req.status != 200)
+            if (req.status != 200) {
                 // Ideally explain what went wrong.
+                console.log(`Error authenticating: ${req.responseJSON}`)
                 return false;
+            }
 
             // Store the results
             localStorage.setItem('jwt_access', req.responseJSON.access_token);

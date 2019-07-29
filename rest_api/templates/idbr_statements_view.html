@@ -6,6 +6,7 @@
     <script src="{{ url_for('serve_js') }}"></script>
     <script>
         let CURATION_ADDR = "{{ url_for('submit_curation_endpoint', hash_val='') }}"
+        let LOGIN_URL = "{{ url_for('userlogin') }}"
     </script>
 
     <style>
@@ -54,9 +55,9 @@
                 email <input name="email"
                              type='text' class="form-control"
                              placeholder="your@email.com"> <br>
-                api key (optional) <input name="api_key"
-                                          type='text' class="form-control"
-                                          placeholder="optional api key"> <br>
+                password <input name="password"
+                                type='password' class="form-control"
+                                placeholder="password"> <br>
                 <button class="btn" type='submit' id="overlay-button">Submit
                 </button>
             </form>

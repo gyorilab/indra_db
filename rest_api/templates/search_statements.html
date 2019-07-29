@@ -1,0 +1,145 @@
+{% extends "idbr_template.html" %}
+
+{% block scripts %}
+{{ super()}}
+
+<script>
+    var ENV = 'indra';
+
+    function appendToFormSubmit() {
+        // Initialize queryString
+        let queryString = '';
+
+        // Get agents OR subject/object
+        let actorsString = agentsOrNot();
+        if (!actorsString) return;
+
+        queryString += actorsString;
+
+        // Loop form fields
+        for (el of document.getElementsByClassName('form-control')) {
+            if (!(['subject', 'object', 'agents'].indexOf(el.name) > -1)) {
+                if (el.value) {
+                    if (el.name == 'type') {
+                        queryString += el.name + '=' + el.value.replace(/\s+/g, '') + '&';
+                    } else {
+                        queryString += el.name + '=' + el.value + '&';
+                    }
+                }
+            }
+        }
+        queryString += 'format=html';
+
+        // Build URL
+        let baseUrl = '{{ endpoint }}statements/from_agents?';
+
+        if (localStorage.getItem('api_key')) {
+            baseUrl += `api_key=${localStorage.getItem('api_key')}&`;
+        }
+
+        let getUrl = baseUrl + queryString;
+
+        // Check output
+        // console.log('getUrl: ' + getUrl)
+
+        // Redirect
+        window.location.replace(getUrl)
+
+    }
+
+    function agentsOrNot() {
+        let agentsArray = document.getElementById('agents').value.match(/\S+/g) || [];
+        let subject = document.getElementById('subject').value.replace(/\s+/g, '');
+        let object = document.getElementById('object').value.replace(/\s+/g, '');
+
+        // Check if user entered both agents AND at least one of subject and object
+        if (!(Boolean(agentsArray.length) || Boolean(subject) || Boolean(object))) {
+            alert('Only input subject/object OR agents');
+            return;
+        }
+
+        let queryString = '';
+
+        // Get subject/object or agents
+        if (Boolean(subject)) {
+            queryString += 'subject=' + subject + '&';
+        }
+        if (Boolean(object)) {
+            queryString += 'object=' + object + '&';
+        }
+        if (agentsArray.length > 0) {
+            let i = 0;
+            for (ag of agentsArray) {
+                queryString += 'agent' + i + '=' + ag + '&';
+                i++;
+            }
+        }
+
+        return queryString;
+    }
+</script>
+{% endblock %}
+
+{% block body %}
+    <p>{{ message }}</p>
+    <form>
+        <b>Mandatory Parameters</b><br>Enter subject and object
+        <div class="row">
+            <div class="col">
+                <input type="text" id="subject" name="subject"
+                       class="form-control" placeholder="subject...">
+            </div>
+            <div class="col">
+                <input type="text" id="object" name="object"
+                       class="form-control" placeholder="object...">
+            </div>
+        </div>
+        <i>or</i> enter agents separated by space
+        <div class="row">
+            <div class="col">
+                <input type="text" id="agents" name="agents"
+                       class="form-control"
+                       placeholder="Agents separated by space...">
+            </div>
+        </div>
+        <br><b>Optional parameters</b><br>Statement type (<i>see the <a
+            href="https://indra.readthedocs.io/en/latest/modules/statements.html"
+            target="_blank">INDRA documentation</a> for more info on statement
+        types.</i>)
+        <div class="row">
+            <div class="col">
+                <input type="text" name="type" id="stmt-type"
+                       class="form-control" placeholder="Enter statement type">
+            </div>
+        </div>
+        Number of statements returned (max 1000)
+        <div class="row">
+            <div class="col">
+                <div class="container"
+                     style="width: 90px; float: left; padding: 0px;">
+                    <input class="form-control" type="number" name="max_stmts"
+                           id="max-stmts" min="1" max="1000">
+                </div>
+            </div>
+        </div>
+        Evidence count per statement (max 10000)
+        <div class="row">
+            <div class="col">
+                <div class="container"
+                     style="width: 110px; float: left; padding: 0px;">
+                    <input class="form-control" type="number" name="ev_limit"
+                           id="ev-limit" min="1" max="10000">
+                </div>
+            </div>
+        </div>
+        <br><b>Submit</b>
+        <div class="row">
+            <div class="col">
+                <button type="button" class="btn btn-primary"
+                        onclick="appendToFormSubmit()">Submit query
+                </button>
+            </div>
+        </div>
+
+    </form>
+{% endblock %}

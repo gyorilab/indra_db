@@ -801,6 +801,7 @@ class DatabaseManager(object):
                                   "  GROUP BY (mk_hash, src)', "
                                   "$$SELECT unnest('{%s}'::text[])$$"
                                   " ) final_result(mk_hash bigint, %s)")
+            _indices = [BtreeIndex('pa_stmt_src_mk_hash_idx', 'mk_hash')]
             loaded = False
 
             @classmethod

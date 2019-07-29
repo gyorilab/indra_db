@@ -1,0 +1,10 @@
+{% extends 'idbr_template.html' %}
+
+{% block body %}
+    Click the button to the right to sign in and get access to the DB
+    search page
+    <button style="margin: 10px" class="btn btn-outline-primary"
+            id="status-notify" onClick="{{ onclick_action }}">Search
+        the database
+    </button>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "indra/indra_template.html" %}
+
+{% block scripts %}
+
+    <!-- Javascript for using AWS objects -->
+    <!-- <script src="http://127.0.0.2:5000/awsServices.js"></script> -->
+    <!-- <script src="temp/awsServices.js"></script> -->
+    <script src="https://s3.amazonaws.com/emmaa-test/awsServices.js"></script>
+    <!-- <script src="https://indralab.github.io/aws/js/awsServices.js"></script> -->
+
+    <!-- js for page -->
+    <!-- <script src="../db_js.js"></script> -->
+    <script src="https://s3.amazonaws.com/emmaa-test/db_js.js"></script>
+    <!-- <script src="http://127.0.0.2:5000/db_js.js"></script> -->
+    <script type="text/javascript">
+        $(document).ready(() => {
+            checkState()
+        })
+    </script>
+{% endblock %}
+
+{% block header_desc %}
+    {% include "idbr_description.html" %}
+{% endblock %}
+
+{% block additional_footer %}
+    {% include "idbr_footer.html" %}
+{% endblock %}

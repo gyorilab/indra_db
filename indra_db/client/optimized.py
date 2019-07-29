@@ -1,4 +1,3 @@
-import re
 import json
 import logging
 from collections import OrderedDict, defaultdict
@@ -7,7 +6,7 @@ from sqlalchemy import or_, desc, true, select, intersect_all
 logger = logging.getLogger(__file__)
 
 from indra.util import clockit
-from indra.statements import get_statement_by_name, make_hash
+from indra.statements import get_statement_by_name
 from indra_db.util import get_primary_db, regularize_agent_id
 
 
@@ -113,14 +112,18 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     stmts_q = (mk_hashes_al
                .outerjoin(json_content_al, true())
                .outerjoin(db.ReadingRefLink,
-                          db.ReadingRefLink.rid == json_content_al.c.rid))
+                          db.ReadingRefLink.rid == json_content_al.c.rid)
+               .outerjoin(db.PaStmtSrc,
+                          db.PaStmtSrc.mk_hash == mk_hashes_al.c.mk_hash))
 
     ref_link_keys = [k for k in db.ReadingRefLink.__dict__.keys()
                      if not k.startswith('_')]
-    selection = (select([mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count,
-                         json_content_al.c.raw_json, json_content_al.c.pa_json]
-                        + [getattr(db.ReadingRefLink, k) for k in ref_link_keys])
-                 .select_from(stmts_q))
+
+    cols = [db.PaStmtSrc, mk_hashes_al.c.ev_count,
+            json_content_al.c.raw_json, json_content_al.c.pa_json]
+    cols += [getattr(db.ReadingRefLink, k) for k in ref_link_keys]
+
+    selection = select(cols).select_from(stmts_q)
     logger.debug("Executing sql to get statements:\n%s" % str(selection))
 
     proxy = db.session.connection().execute(selection)
@@ -128,6 +131,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
 
     stmts_dict = OrderedDict()
     ev_totals = OrderedDict()
+    source_counts = OrderedDict()
     total_evidence = 0
     returned_evidence = 0
     if res:
@@ -135,9 +139,18 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     else:
         logger.debug("res is empty.")
 
+    src_list = db.get_column_names(db.PaStmtSrc)[1:]
     for row in res:
-        mk_hash, ev_count, raw_json_bts, pa_json_bts = row[:4]
-        ref_dict = {ref_link_keys[i]: row[4+i] for i in range(len(ref_link_keys))}
+        row_gen = iter(row)
+
+        mk_hash = next(row_gen)
+        src_dict = {src: 0 if count is None else count
+                    for src, count in zip(src_list, row_gen)}
+        ev_count = next(row_gen)
+        raw_json_bts = next(row_gen)
+        pa_json_bts = next(row_gen)
+        ref_dict = dict(zip(ref_link_keys, row_gen))
+
         returned_evidence += 1
         raw_json = json.loads(raw_json_bts.decode('utf-8'))
         ev_json = raw_json['evidence'][0]
@@ -145,6 +158,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         # Add a new statements if the hash is new
         if mk_hash not in stmts_dict.keys():
             total_evidence += ev_count
+            source_counts[mk_hash] = src_dict
             ev_totals[mk_hash] = ev_count
             stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
             stmts_dict[mk_hash]['evidence'] = []
@@ -188,7 +202,8 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     ret = {'statements': stmts_dict,
            'evidence_totals': ev_totals,
            'total_evidence': total_evidence,
-           'evidence_returned': returned_evidence}
+           'evidence_returned': returned_evidence,
+           'source_counts': source_counts}
     return ret
 
 
@@ -250,6 +265,9 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
     # TODO: Extend this to allow retrieval of raw statements.
     def labelled_hash_and_count(meta):
         return meta.mk_hash.label('mk_hash'), meta.ev_count.label('ev_count')
+
+    logger.debug("Constructing query to search for agents of type %s "
+                 "with agents: %s." % (stmt_type, agents))
 
     queries = []
     for role, ag_dbid, ns in agents:

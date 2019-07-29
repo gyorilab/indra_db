@@ -1,30 +1,25 @@
+import json
+import logging
+import pickle
 import re
 import sys
-import json
-import boto3
-import pickle
-import logging
-from os import path
-from io import StringIO
-from functools import wraps
 from datetime import datetime
-from botocore.client import Config
+from functools import wraps
 from http.cookies import SimpleCookie
-from http.cookiejar import CookieJar
+from io import StringIO
+from os import path
 
 from flask import Flask, request, abort, Response, redirect, url_for
 from flask_compress import Compress
 from flask_cors import CORS
+from jinja2 import Environment
 
-from jinja2 import Template
-
-from indra.util import batch_iter
-from indra.assemblers.html import HtmlAssembler
+from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
 from indra.statements import make_statement_camel, stmts_from_json
-
+from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-   submit_curation, _has_auth, BadHashError, _get_api_key
+    submit_curation, _has_auth, BadHashError
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -33,97 +28,33 @@ app = Flask(__name__)
 Compress(app)
 CORS(app)
 SC = SimpleCookie()
-CJ = CookieJar()
 
 print("Loading file")
 logger.info("INFO working.")
 logger.warning("WARNING working.")
 logger.error("ERROR working.")
 
-
 MAX_STATEMENTS = int(1e3)
 TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
 
-# SET SECURITY
-SECURE = True
+# Instantiate a jinja2 env.
+env = Environment(
+    loader=IndraHTMLLoader({None: HERE,
+                            'indra': IndraHTMLLoader.native_path})
+)
 
-# COGNITO PARAMETERS
-STATE_COOKIE_NAME = 'indralabStateCookie'
-ACCESSTOKEN_COOKIE_NAME = 'indralabAccessCookie'
-IDTOKEN_COOKIE_NAME = 'indradb-authorization'
+# Here we can add functions to the jinja2 env.
+env.globals.update(url_for=url_for)
+
+
+def render_my_template(template, title, **kwargs):
+    kwargs['title'] = TITLE + ': ' + title
+    return env.get_template(template).render(**kwargs)
 
 
 class DbAPIError(Exception):
     pass
-
-
-def _verify_user(access_token):
-    """Verifies a user given an Access Token"""
-    logger.info("Getting cognito client.")
-    config = Config(connect_timeout=5, retries={'max_attempts': 0})
-    cognito_idp_client = boto3.client('cognito-idp', config=config)
-    try:
-        resp = cognito_idp_client.get_user(AccessToken=access_token)
-        logger.info("Got resp %s from cognito." % str(resp))
-    except cognito_idp_client.exceptions.NotAuthorizedException:
-        resp = {}
-    return resp
-
-
-def _extract_user_info(user_json):
-    """Extracts user info returned by cognito"""
-    try:
-        info = {'Username': user_json['Username'],
-                'date': user_json['ResponseMetadata']['HTTPHeaders']['date']}
-        for attr in user_json['UserAttributes']:
-            if attr['Name'] == 'email':
-                info['email'] = attr['Value']
-                break
-    except KeyError as e:
-        logger.warning('Could not get Key: ' + repr(e))
-        return {}
-
-    return info
-
-
-def _redirect_to_welcome(qp_object):
-    base_url = url_for('welcome')
-    if not qp_object.is_empty():
-        url = base_url + '?' + qp_object.to_url_str()
-    else:
-        url = base_url
-    return redirect(url, code=302)
-
-
-class QueryParam(object):
-    """class holding query parameters"""
-    def __init__(self, query_dict):
-        # edit content via self.query_params
-        self.query_params = query_dict
-
-    def is_empty(self):
-        return not bool(self.query_params)
-
-    def to_dict(self):
-        """Returns the query parameters as a dictionary"""
-        return self.query_params
-
-    def to_url_str(self):
-        """Returns the query parameters formatted for a url string"""
-        if self.query_params:
-            return '&'.join(
-                '%s=%s' % (k, v) for k, v in self.query_params.items())
-        else:
-            return ''
-
-    def to_cookie_str(self):
-        """Returns the query parameters formatted for a cookie string"""
-        if self.query_params:
-            return '_and_'.join(
-                '%s_eq_%s' % (k, v) for k, v in self.query_params.items())
-        else:
-            return ''
 
 
 def __process_agent(agent_param):
@@ -195,90 +126,6 @@ class LogTracker(object):
         return ret
 
 
-def _security_wrapper(fs):
-    logger.info('security wrapper')
-
-    @wraps(fs)
-    def demon(*args, **kwargs):
-        logger.info("Got a demon request")
-        if not SECURE:
-            logger.info('SECURE is False, skipping checkin...')
-            return fs(*args, **kwargs)
-
-        logger.info('Full url received: %s' % request.url)
-
-        # Order of things to check:
-        # If no endpoint:
-        #   redirect to welcome without queries
-        # If token:
-        #   if token valid:
-        #       load endpoint
-        # When above fails:
-        #   redirect to welcome with whatever query string it came with
-
-        # HANDLE ENDPOINT
-        url_in = request.url
-        endpoint = url_in[:url_in.find('?')] if url_in.find('?') > 0 else \
-            url_in
-
-        qp = QueryParam(query_dict=dict(request.args.copy()))
-
-        print("Args -----------")
-        print(qp.query_params)
-        print("Cookies ------------")
-        print(request.cookies)
-        print("------------------")
-
-        # TOKEN HANDLING
-        # Try to load tokens from cookie:
-        access_token = request.cookies.get(ACCESSTOKEN_COOKIE_NAME)
-
-        # No tokens, no access - redirect
-        if not access_token:
-            logger.info('No token found, redirecting to welcome for login...')
-            if not qp.query_params.get('endpoint'):
-                qp.query_params['endpoint'] = endpoint
-            return _redirect_to_welcome(qp)
-
-        # VERIFY ACCESS TOKEN
-        logger.info('Token found in cookie...')
-        user_verified = _verify_user(access_token)
-        if user_verified:
-            logger.info('User verified with access token')
-            print('User info ----------')
-            print(user_verified)
-            print('--------------------')
-            user_info = _extract_user_info(user_verified)
-            username = user_info['Username']
-            logger.info('Identified %s as curator.' % username)
-            api_key = _get_api_key(username)
-
-            # Check if this is a curation request
-            if request.json and not request.json.get('curator'):
-                logger.info('Curation submission received without associated '
-                            'curator. Inferred user %s.' % username)
-                request.json['curator'] = username
-            kwargs['api_key'] = api_key
-
-            logger.info('Loading requested endpoint: %s' % endpoint)
-            return fs(*args, **kwargs)
-        else:
-            # Final fallback
-            logger.info('Could not verify user, redirecting to welcome...')
-            return _redirect_to_welcome(QueryParam({}))
-
-    return demon
-
-
-curation_element = """
-<td width="6em" id="row{loop_index}_click"
-  data-clicked="false" class="curation_toggle"
-  onclick="addCurationRow(this.closest('tr')); this.onclick=null;">&#9998;</td>
-"""
-
-curation_js_link = "code/curationFunctions.js"
-
-
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
 
@@ -317,6 +164,7 @@ def _query_wrapper(f):
         medscan_redactions = 0
         medscan_removals = 0
         elsevier_redactions = 0
+        source_counts = result['source_counts']
         if not all(has.values()):
             for h, stmt_json in stmts_json.copy().items():
                 for ev_json in stmt_json['evidence'][:]:
@@ -337,6 +185,15 @@ def _query_wrapper(f):
                         if len(stmt_json['evidence']) == 0:
                             medscan_removals += 1
                             stmts_json.pop(h)
+                            result['source_counts'].pop(h)
+
+            # Take medscan counts out of the source counts.
+            if not has['medscan']:
+                source_counts = {h: {src: count
+                                     for src, count in src_count.items()
+                                     if src is not 'medscan'}
+                                 for h, src_count in source_counts.items()}
+
         logger.info(f"Redacted {medscan_redactions} medscan evidence, "
                     f"resulting in the complete removal of {medscan_removals} "
                     f"statements.")
@@ -345,23 +202,22 @@ def _query_wrapper(f):
 
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
+
+        # Add derived values to the result.
         result['offset'] = offs
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
         result['statements_returned'] = len(stmts_json)
 
         if format == 'html':
-            link_title = '<a href=%s >%s</a>' \
-                        % (request.url_root + 'statements', TITLE)
+            title = TITLE + ': ' + 'Results'
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
             html_assembler = HtmlAssembler(stmts, result, ev_totals,
-                                           title=link_title,
-                                           db_rest_url=request.url_root[:-1],
-                                           ev_element=curation_element,
-                                           other_scripts=[request.url_root
-                                                          + curation_js_link])
-            content = html_assembler.make_model()
+                                           source_counts, title=title,
+                                           db_rest_url=request.url_root[:-1])
+            idbr_template = env.get_template('idbr_statements_view.html')
+            content = html_assembler.make_model(idbr_template)
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
                                for lvl, n in tracker.get_level_stats().items()]
@@ -371,6 +227,7 @@ def _query_wrapper(f):
         else:  # Return JSON for all other values of the format argument
             result.update(tracker.get_level_stats())
             result['statements'] = stmts_json
+            result['source_counts'] = source_counts
             content = json.dumps(result)
             mimetype = 'application/json'
 
@@ -385,8 +242,9 @@ def _query_wrapper(f):
                     "%f MB after %s seconds."
                     % (result['statements_returned'],
                        result['evidence_returned'], result['total_evidence'],
-                       sys.getsizeof(resp.data)/1e6, sec_since(start_time)))
+                       sys.getsizeof(resp.data) / 1e6, sec_since(start_time)))
         return resp
+
     return decorator
 
 
@@ -395,26 +253,16 @@ def iamalive():
     return redirect('welcome', code=302)
 
 
-with open(path.join(HERE, 'welcome.html'), 'r') as f:
-    welcome_template = Template(f.read())
-with open(path.join(HERE, 'search_statements.html'), 'r') as f:
-    search_template = Template(f.read())
-
-
 @app.route('/welcome', methods=['GET'])
 def welcome():
     logger.info("Browser welcome page.")
-    if True:
-        onclick = "window.location = window.location.href.replace('welcome', 'statements')"
-    else:
-        onclick = "getTokenFromAuthEndpoint(window.location.href, " \
-                  "window.location.href.replace('welcome', 'statements')" \
-                  ".split('#')[0])"
-    page_html = welcome_template.render(onclick_action=onclick)
-    return Response(page_html)
+    onclick = ("window.location = window.location.href.replace('welcome', "
+               "'statements')")
+    return render_my_template('welcome.html', 'Welcome',
+                              onclick_action=onclick)
 
 
-with open(path.join(HERE, 'curationFunctions.js'), 'r') as f:
+with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
     CURATION_JS = f.read()
 
 
@@ -423,7 +271,7 @@ def serve_js():
     return Response(CURATION_JS, mimetype='text/javascript')
 
 
-with open(path.join(HERE, 'favicon.ico'), 'rb') as f:
+with open(path.join(HERE, 'static', 'favicon.ico'), 'rb') as f:
     ICON = f.read()
 
 
@@ -435,10 +283,9 @@ def serve_icon():
 @app.route('/statements', methods=['GET'])
 def get_statements_query_format():
     # Create a template object from the template file, load once
-    page_html = search_template.render(
-        message="Welcome! Try asking a question.",
-        endpoint=request.url_root)
-    return Response(page_html)
+    return render_my_template('search_statements.html', 'Search',
+                              message="Welcome! Try asking a question.",
+                              endpoint=request.url_root)
 
 
 def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
@@ -503,79 +350,6 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
                        % list(query_dict.keys()), 400))
         return
 
-    return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
-                                max_stmts, ev_limit, best_first)
-
-
-trash = re.compile('[.,?!\-;`’\']')
-with open(path.join(HERE, 'bioquery_regex.bin'), 'rb') as f:
-    regs = pickle.load(f)
-
-
-with open(path.join(HERE, 'name_lookup.bin'), 'rb') as f:
-    text_lookups = pickle.load(f)
-
-
-def match(msg):
-    text = trash.sub(' ', msg)
-    text = ' '.join(text.strip().split())
-    for i, (verb, names, reg) in enumerate(regs):
-        m = reg.match(text)
-        if m is not None:
-            ret = {'verb': verb} if verb is not None else {}
-            ret.update({name: value for name, value in zip(names, m.groups())})
-            logger.info("Matched pattern %s." % i)
-            return ret
-    return None
-
-
-mod_map = {'demethylate': 'Demethylation',
-           'methylate': 'Methylation',
-           'phosphorylate': 'Phosphorylation',
-           'dephosphorylate': 'Dephosphorylation',
-           'ubiquitinate': 'Ubiquitination',
-           'deubiquitinate': 'Deubiquitination',
-           'inhibit': 'Inhibition',
-           'activate': 'Activation'}
-
-
-@app.route('/statements/ask', methods=['GET'])
-@_query_wrapper
-def get_statements_from_nlp(query_dict, offs, max_stmts, ev_limit, best_first):
-    if ev_limit is None:
-        ev_limit = 10
-    question = query_dict.pop('question')
-    print(question)
-    m = match(question)
-    print(m)
-
-    roled_agents = {}
-    free_agents = []
-    for k, v in m.items():
-        name = text_lookups.get(v)
-        if name is not None:
-            v = name
-            ns = 'NAME'
-        else:
-            ns = None
-
-        if k.startswith('entity'):
-            if 'target' in k:
-                roled_agents['object'] = (v, ns)
-            if 'source' in k:
-                roled_agents['subject'] = (v, ns)
-            else:
-                free_agents.append((v, ns))
-
-    if 'verb' in m.keys():
-        if m['verb'] not in mod_map.keys():
-            act_raw = m['verb']
-        else:
-            act_raw = mod_map[m['verb']]
-    else:
-        act_raw = None
-
-    print(act_raw, roled_agents, free_agents)
     return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
                                 max_stmts, ev_limit, best_first)
 
@@ -657,7 +431,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
     ip = request.remote_addr
     text = request.json.get('text')
     curator = request.json.get('curator')
-    api_key = request.args.get('api_key', kwargs.pop('api_key'))
+    api_key = request.args.get('api_key', kwargs.pop('api_key', None))
     logger.info("Curator %s %s key"
                 % (curator, 'with' if api_key else 'without'))
     is_test = 'test' in request.args

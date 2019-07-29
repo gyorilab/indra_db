@@ -45,10 +45,10 @@ function keySubmit(key_value) {
 
 function submitButtonClick(clickEvent) {
     // Get the user's email and optionally api key.
-    let user_email = localStorage.getItem('user_email');
+    let jwt = localStorage.getItem('jwt_access');
 
     // If not in storage, reveal a popup
-    if (!user_email) {
+    if (!jwt) {
         const overlay = document.querySelector('#overlay');
         document.querySelector('#x-out').onclick = () => {
             // Abort the submit
@@ -57,16 +57,31 @@ function submitButtonClick(clickEvent) {
         };
         document.querySelector('#overlay-form').onsubmit = function() {
             // Log the result
-            console.log(`Got user email: ${this.email} and api key: ${this.api_key}`)
+            console.log(`Got user email, ${this.email}, and password`);
 
             // Check for an email, if none, reject the form (do nothing)
-            if (!this.email)
+            if (!this.email || !this.password)
                 // Ideally a warning or explanation should be given.
                 return false;
 
+            let req = $.ajax({
+                url: LOGIN_URL,
+                type: 'POST',
+                dataType: 'json',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    'email': this.email.value,
+                    'password': this.password.value
+                })
+            });
+
+            if (req.status != 200)
+                // Ideally explain what went wrong.
+                return false;
+
             // Store the results
-            localStorage.setItem('user_email', this.email.value);
-            localStorage.setItem('api_key', this.api_key.value);
+            localStorage.setItem('jwt_access', req.responseJSON.access_token);
+            localStorage.setItem('jwt_refres', req.responseJSON.refresh_token);
 
             // Hide the overlay again.
             overlay.style.display = "none";
@@ -167,7 +182,7 @@ function submitButtonClick(clickEvent) {
 // Submit curation
 function submitCuration(curation_dict, hash, statusBox, icon, test) {
 
-    let _url = CURATION_ADDR + hash + `?api_key=${localStorage.getItem('api_key')}`;
+    let _url = CURATION_ADDR + hash;
 
     if (test) {
         console.log("Submitting test curation...");
@@ -180,6 +195,7 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
         url: _url,
         type: "POST",
         dataType: "json",
+        header: {'Authorization': `Bearer ${localStorage.getItem('jwt_access')}`},
         contentType: "application/json",
         data: JSON.stringify(curation_dict),
         complete: function (xhr, statusText) {

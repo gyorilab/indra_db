@@ -492,20 +492,20 @@ def describe_curation():
 @jwt_required
 def submit_curation_endpoint(hash_val, **kwargs):
     logger.info("Adding curation for statement %s." % hash_val)
+    current_user = get_jwt_identity()
+    logger.info(current_user)
+    if not isinstance(current_user, str):
+        assert False, "Current user not str."
     ev_hash = request.json.get('ev_hash')
     source_api = request.json.pop('source', 'DB REST API')
     tag = request.json.get('tag')
     ip = request.remote_addr
     text = request.json.get('text')
-    curator = request.json.get('curator')
-    api_key = request.args.get('api_key', kwargs.pop('api_key', None))
-    logger.info("Curator %s %s key"
-                % (curator, 'with' if api_key else 'without'))
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'
         try:
-            dbid = submit_curation(hash_val, tag, curator, ip, api_key, text,
+            dbid = submit_curation(hash_val, tag, current_user, ip, '', text,
                                    ev_hash, source_api)
         except BadHashError as e:
             abort(Response("Invalid hash: %s." % e.mk_hash, 400))

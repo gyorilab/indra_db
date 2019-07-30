@@ -9,42 +9,6 @@
         let CURATION_ADDR = "{{ url_for('submit_curation_endpoint', hash_val='') }}";
     </script>
 
-    <style>
-        #overlay {
-            position: fixed;
-            display: none;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 20;
-            cursor: pointer;
-        }
-
-        #overlay-form-div {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            font-size: 50px;
-            color: white;
-            transform: translate(-50%, -50%);
-            -ms-transform: translate(-50%, -50%);
-            padding: 1em;
-        }
-
-        #x-out {
-            border-radius: 25px;
-            height: 50px;
-            width: 50px;
-            position: absolute;
-            top: 30px;
-            right: 30px;
-        }
-    </style>
-
 {% endblock %}
 
 {% block body %}

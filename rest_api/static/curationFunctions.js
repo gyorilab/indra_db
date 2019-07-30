@@ -9,7 +9,6 @@ $(document).ready(function () {
 });
 
 // Variables
-let pubmed_fetch = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
 let latestSubmission = {
     'ddSelect': '',
     'ev_hash': '',

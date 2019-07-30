@@ -66,7 +66,7 @@ function submitButtonClick(clickEvent) {
                 return false;
             }
 
-            let req = $.ajax({
+            $.ajax({
                 url: LOGIN_URL,
                 type: 'POST',
                 dataType: 'json',
@@ -74,27 +74,28 @@ function submitButtonClick(clickEvent) {
                 data: JSON.stringify({
                     'email': this.email.value,
                     'password': this.password.value
-                })
+                }),
+                complete: (xhr, statusText) => {
+                    if (xhr.status != 200) {
+                        // Ideally explain what went wrong.
+                        console.log(`Error authenticating: ${xhr.responseJSON}`)
+                        return false;
+                    }
+
+                    // Store the results
+                    localStorage.setItem('jwt_access', xhr.responseJSON.access_token);
+                    localStorage.setItem('jwt_refres', xhr.responseJSON.refresh_token);
+
+                    // Hide the overlay again.
+                    overlay.style.display = "none";
+
+                    // Call the function again (this time it will go past here).
+                    submitButtonClick(clickEvent);
+
+                }
             });
-
-            if (req.status != 200) {
-                // Ideally explain what went wrong.
-                console.log(`Error authenticating: ${req.responseJSON}`)
-                return false;
-            }
-
-            // Store the results
-            localStorage.setItem('jwt_access', req.responseJSON.access_token);
-            localStorage.setItem('jwt_refres', req.responseJSON.refresh_token);
-
-            // Hide the overlay again.
-            overlay.style.display = "none";
-
-            // Call the function again (this time it will go past here).
-            submitButtonClick(clickEvent);
-
-            /// Make sure nothing else unwanted happens.
             return false;
+
         };
         overlay.style.display = "block";
         return false;
@@ -152,7 +153,6 @@ function submitButtonClick(clickEvent) {
     let cur_dict = {
         'tag': err_select,
         'text': user_text,
-        'curator': user_email,
         'ev_hash': source_hash
     };
 
@@ -199,7 +199,7 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
         url: _url,
         type: "POST",
         dataType: "json",
-        header: {'Authorization': `Bearer ${localStorage.getItem('jwt_access')}`},
+        headers: {'Authorization': `Bearer ${localStorage.getItem('jwt_access')}`},
         contentType: "application/json",
         data: JSON.stringify(curation_dict),
         complete: function (xhr, statusText) {

@@ -19,8 +19,83 @@
     </script>
 {% endblock %}
 
+{% macro login_overlay() -%}
+    <script>
+        function login(callback=null) {
+            const overlay = document.querySelector('#overlay');
+            document.querySelector('#x-out').onclick = () => {
+                // Abort the submit
+                overlay.style.display = "none";
+                return false;
+            };
+            document.querySelector('#overlay-form').onsubmit = function() {
+                // Log the result
+                console.log(`Got user email, ${this.email.value}, and password`);
+
+                // Check for an email, if none, reject the form (do nothing)
+                if (!this.email || !this.password) {
+                    // Ideally a warning or explanation should be given.
+                    console.log("Missing password or email.");
+                    return false;
+                }
+
+                $.ajax({
+                    url: LOGIN_URL,
+                    type: 'POST',
+                    dataType: 'json',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        'email': this.email.value,
+                        'password': this.password.value
+                    }),
+                    complete: (xhr, statusText) => {
+                        if (xhr.status != 200) {
+                            // Ideally explain what went wrong.
+                            console.log(`Error authenticating: ${xhr.responseJSON}`)
+                            return false;
+                        }
+
+                        // Credentials should now be stored in a cookie
+
+                        // Hide the overlay again.
+                        overlay.style.display = "none";
+
+                        // Call the function again (this time it will go past here).
+                        if (callback)
+                            callback();
+
+                    }
+                });
+                return false;
+            };
+            overlay.style.display = "block";
+            return false;
+        }
+    </script>
+    <div id="overlay">
+        <button class="btn btn-danger" id="x-out">x</button>
+        <div id="overlay-form-div">
+            <form id="overlay-form" onsubmit="return false;">
+                email <input name="email"
+                             type='text' class="form-control"
+                             placeholder="your@email.com"> <br>
+                password <input name="password"
+                                type='password' class="form-control"
+                                placeholder="password"> <br>
+                <button class="btn" type='submit' id="overlay-button">Submit
+                </button>
+            </form>
+        </div>
+    </div>
+{%- endmacro %}
+
 {% block header_desc %}
     {% include "idbr_description.html" %}
+{% endblock %}
+
+{% block body %}
+    {{ login_overlay() }}
+    {{ super() }}
 {% endblock %}
 
 {% block additional_footer %}

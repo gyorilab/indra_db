@@ -35,6 +35,8 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 2592000  # 30 days
 app.config['JWT_TOKEN_LOCATION'] = ['cookies']
 app.config['JWT_COOKIE_SECURE'] = True
 app.config['JWT_SESSION_COOKIE'] = False
+app.config['PROPAGATE_EXCEPTIONS'] = True
+app.config['JWT_COOKIE_CSRF_PROTECT'] = False
 
 Compress(app)
 CORS(app)
@@ -492,7 +494,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
     if not is_test:
         assert tag is not 'test'
         try:
-            dbid = submit_curation(hash_val, tag, current_user, ip, '', text,
+            dbid = submit_curation(hash_val, tag, current_user, ip, text,
                                    ev_hash, source_api)
         except BadHashError as e:
             abort(Response("Invalid hash: %s." % e.mk_hash, 400))

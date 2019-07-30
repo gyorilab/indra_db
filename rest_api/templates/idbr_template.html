@@ -32,8 +32,8 @@
                 overlay.style.display = "none";
                 return false;
             };
-            document.querySelector('.overlay-form').forEach(function() {
-                this.onsubmit = function () {
+            document.querySelectorAll('.overlay-form').forEach( (item, index) => {
+                item.onsubmit = function () {
                     // Log the result
                     console.log(`Got user email, ${this.email.value}, and password to ${this.type.value}`);
 

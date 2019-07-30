@@ -42,60 +42,67 @@ function keySubmit(key_value) {
     }
 }
 
+
+function login(callback=null) {
+    const overlay = document.querySelector('#overlay');
+    document.querySelector('#x-out').onclick = () => {
+        // Abort the submit
+        overlay.style.display = "none";
+        return false;
+    };
+    document.querySelector('#overlay-form').onsubmit = function() {
+        // Log the result
+        console.log(`Got user email, ${this.email.value}, and password`);
+
+        // Check for an email, if none, reject the form (do nothing)
+        if (!this.email || !this.password) {
+            // Ideally a warning or explanation should be given.
+            console.log("Missing password or email.");
+            return false;
+        }
+
+        $.ajax({
+            url: LOGIN_URL,
+            type: 'POST',
+            dataType: 'json',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                'email': this.email.value,
+                'password': this.password.value
+            }),
+            complete: (xhr, statusText) => {
+                if (xhr.status != 200) {
+                    // Ideally explain what went wrong.
+                    console.log(`Error authenticating: ${xhr.responseJSON}`)
+                    return false;
+                }
+
+                // Store the results
+                localStorage.setItem('jwt_access', xhr.responseJSON.access_token);
+
+                // Hide the overlay again.
+                overlay.style.display = "none";
+
+                // Call the function again (this time it will go past here).
+                if (callback)
+                    callback();
+
+            }
+        });
+    };
+    overlay.style.display = "block";
+    return false;
+}
+
 function submitButtonClick(clickEvent) {
     // Get the user's email and optionally api key.
     let jwt = localStorage.getItem('jwt_access');
 
     // If not in storage, reveal a popup
     if (!jwt) {
-        const overlay = document.querySelector('#overlay');
-        document.querySelector('#x-out').onclick = () => {
-            // Abort the submit
-            overlay.style.display = "none";
-            return false;
-        };
-        document.querySelector('#overlay-form').onsubmit = function() {
-            // Log the result
-            console.log(`Got user email, ${this.email.value}, and password`);
-
-            // Check for an email, if none, reject the form (do nothing)
-            if (!this.email || !this.password) {
-                // Ideally a warning or explanation should be given.
-                console.log("Missing password or email.");
-                return false;
-            }
-
-            $.ajax({
-                url: LOGIN_URL,
-                type: 'POST',
-                dataType: 'json',
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    'email': this.email.value,
-                    'password': this.password.value
-                }),
-                complete: (xhr, statusText) => {
-                    if (xhr.status != 200) {
-                        // Ideally explain what went wrong.
-                        console.log(`Error authenticating: ${xhr.responseJSON}`)
-                        return false;
-                    }
-
-                    // Store the results
-                    localStorage.setItem('jwt_access', xhr.responseJSON.access_token);
-
-                    // Hide the overlay again.
-                    overlay.style.display = "none";
-
-                    // Call the function again (this time it will go past here).
-                    submitButtonClick(clickEvent);
-
-                }
-            });
-            return false;
-
-        };
-        overlay.style.display = "block";
+        login(() => {
+            return submitButtonClick(clickEvent);
+        });
         return false;
     }
 

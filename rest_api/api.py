@@ -32,7 +32,7 @@ app = Flask(__name__)
 app.config['DEBUG'] = True
 app.config['JWT_SECRET_KEY'] = environ['INDRADB_JWT_SECRET']
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 2592000  # 30 days
-app.config['JWT_TOKEN_LOCATION'] = ['cookie']
+app.config['JWT_TOKEN_LOCATION'] = ['cookies']
 app.config['JWT_COOKIE_SECURE'] = True
 app.config['JWT_SESSION_COOKIE'] = False
 

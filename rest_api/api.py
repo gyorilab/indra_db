@@ -13,7 +13,7 @@ from flask_compress import Compress
 from flask_cors import CORS
 from flask_jwt_extended import create_access_token, jwt_required, \
     get_jwt_identity, JWTManager, set_access_cookies
-from flask_restful import Resource, Api, reqparse
+from flask_restful import reqparse
 from jinja2 import Environment
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
@@ -39,7 +39,6 @@ app.config['JWT_SESSION_COOKIE'] = False
 Compress(app)
 CORS(app)
 SC = SimpleCookie()
-api = Api(app)
 jwt = JWTManager(app)
 
 print("Loading file")
@@ -75,38 +74,34 @@ parser.add_argument('email', help='Enter your email.', required=True)
 parser.add_argument('password', help='Enter your password.', required=True)
 
 
-class UserRegistration(Resource):
-    def post(self):
-        data = parser.parse_args()
+@app.route('/register')
+def register():
+    data = parser.parse_args()
 
-        new_user = User.new_user(
-            email=data['email'],
-            password=data['password']
-        )
+    new_user = User.new_user(
+        email=data['email'],
+        password=data['password']
+    )
 
-        try:
-            new_user.save()
-            return {'message': 'User {} was created'.format(data['email'])}
-        except Exception as e:
-            return {'message': 'Something went wrong: %s' % str(e)}, 500
-
-
-class UserLogin(Resource):
-    def post(self):
-        data = parser.parse_args()
-        current_user = User.get_user_by_email(data['email'], data['password'])
-
-        if not current_user:
-            return {'message': 'Username or password was incorrect.'}
-
-        access_token = create_access_token(identity=data['email'])
-        resp = {'login': True}
-        set_access_cookies(resp, access_token)
-        return resp
+    try:
+        new_user.save()
+        return jsonify({'message': 'User {} created'.format(data['email'])})
+    except Exception as e:
+        return jsonify({'message': 'Something went wrong: %s' % str(e)}), 500
 
 
-api.add_resource(UserRegistration, '/register')
-api.add_resource(UserLogin, '/login')
+@app.route('/login', methods=['POST'])
+def login():
+    data = parser.parse_args()
+    current_user = User.get_user_by_email(data['email'], data['password'])
+
+    if not current_user:
+        return {'message': 'Username or password was incorrect.'}
+
+    access_token = create_access_token(identity=data['email'])
+    resp = jsonify({'login': True})
+    set_access_cookies(resp, access_token)
+    return resp
 
 
 def __process_agent(agent_param):

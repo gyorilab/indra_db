@@ -100,9 +100,9 @@ class UserLogin(Resource):
             return {'message': 'Username or password was incorrect.'}
 
         access_token = create_access_token(identity=data['email'])
-        resp = jsonify({'login': True})
+        resp = {'login': True}
         set_access_cookies(resp, access_token)
-        return resp, 200
+        return resp
 
 
 api.add_resource(UserRegistration, '/register')

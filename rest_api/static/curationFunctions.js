@@ -88,6 +88,7 @@ function login(callback=null) {
 
             }
         });
+        return false;
     };
     overlay.style.display = "block";
     return false;
@@ -175,6 +176,7 @@ function submitButtonClick(clickEvent) {
     let ajx_response = submitCuration(cur_dict, stmt_hash, statusBox, icon, testing);
     console.log("ajax response from submission: ");
     console.log(ajx_response);
+    return false;
 }
 
 

@@ -34,6 +34,7 @@ app = Flask(__name__)
 
 app.config['DEBUG'] = True
 app.config['JWT_SECRET_KEY'] = environ['INDRADB_JWT_SECRET']
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 2592000  # 30 days
 
 Compress(app)
 CORS(app)

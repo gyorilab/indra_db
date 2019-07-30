@@ -86,9 +86,7 @@ class UserRegistration(Resource):
 
         try:
             new_user.save()
-            return {
-                'message': 'User {} was created'.format(data['email']),
-                }
+            return {'message': 'User {} was created'.format(data['email'])}
         except Exception as e:
             return {'message': 'Something went wrong: %s' % str(e)}, 500
 
@@ -102,11 +100,9 @@ class UserLogin(Resource):
             return {'message': 'Username or password was incorrect.'}
 
         access_token = create_access_token(identity=data['email'])
-        refresh_token = create_refresh_token(identity=data['email'])
         return {
             'message': 'Logged in as {}'.format(current_user.email),
             'access_token': access_token,
-            'refresh_token': refresh_token
             }
 
 

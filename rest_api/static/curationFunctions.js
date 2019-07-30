@@ -83,7 +83,6 @@ function submitButtonClick(clickEvent) {
 
                     // Store the results
                     localStorage.setItem('jwt_access', xhr.responseJSON.access_token);
-                    localStorage.setItem('jwt_refres', xhr.responseJSON.refresh_token);
 
                     // Hide the overlay again.
                     overlay.style.display = "none";

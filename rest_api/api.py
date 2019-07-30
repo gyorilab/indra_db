@@ -8,15 +8,13 @@ from io import StringIO
 from os import path, environ
 
 from flask import Flask, request, abort, Response, redirect, url_for, \
-    render_template_string
+    render_template_string, jsonify
 from flask_compress import Compress
 from flask_cors import CORS
-from jinja2 import Environment
-
+from flask_jwt_extended import create_access_token, jwt_required, \
+    get_jwt_identity, JWTManager, set_access_cookies
 from flask_restful import Resource, Api, reqparse
-from flask_jwt_extended import create_access_token, create_refresh_token, \
-    jwt_required, jwt_refresh_token_required, get_jwt_identity, get_raw_jwt, \
-    JWTManager
+from jinja2 import Environment
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
 from indra.statements import make_statement_camel, stmts_from_json
@@ -24,8 +22,7 @@ from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_auth, BadHashError
-
-from rest_api.models import User, Role
+from rest_api.models import User
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -35,6 +32,9 @@ app = Flask(__name__)
 app.config['DEBUG'] = True
 app.config['JWT_SECRET_KEY'] = environ['INDRADB_JWT_SECRET']
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 2592000  # 30 days
+app.config['JWT_TOKEN_LOCATION'] = ['cookie']
+app.config['JWT_COOKIE_SECURE'] = True
+app.config['JWT_SESSION_COOKIE'] = False
 
 Compress(app)
 CORS(app)
@@ -100,10 +100,9 @@ class UserLogin(Resource):
             return {'message': 'Username or password was incorrect.'}
 
         access_token = create_access_token(identity=data['email'])
-        return {
-            'message': 'Logged in as {}'.format(current_user.email),
-            'access_token': access_token,
-            }
+        resp = jsonify({'login': True})
+        set_access_cookies(resp, access_token)
+        return resp, 200
 
 
 api.add_resource(UserRegistration, '/register')

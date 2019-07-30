@@ -77,8 +77,7 @@ function login(callback=null) {
                     return false;
                 }
 
-                // Store the results
-                localStorage.setItem('jwt_access', xhr.responseJSON.access_token);
+                // Credentials should now be stored in a cookie
 
                 // Hide the overlay again.
                 overlay.style.display = "none";
@@ -95,17 +94,6 @@ function login(callback=null) {
 }
 
 function submitButtonClick(clickEvent) {
-    // Get the user's email and optionally api key.
-    let jwt = localStorage.getItem('jwt_access');
-
-    // If not in storage, reveal a popup
-    if (!jwt) {
-        login(() => {
-            return submitButtonClick(clickEvent);
-        });
-        return false;
-    }
-
     // Get mouseclick target, then parent's parent
     let pn = clickEvent.target.parentNode.parentNode;
     let btn_row_tag = pn.closest('tr');
@@ -188,6 +176,8 @@ function submitButtonClick(clickEvent) {
     console.log("ajax response from submission: ");
     console.log(ajx_response);
 }
+
+
 // Submit curation
 function submitCuration(curation_dict, hash, statusBox, icon, test) {
 
@@ -204,7 +194,6 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
         url: _url,
         type: "POST",
         dataType: "json",
-        headers: {'Authorization': `Bearer ${localStorage.getItem('jwt_access')}`},
         contentType: "application/json",
         data: JSON.stringify(curation_dict),
         complete: function (xhr, statusText) {
@@ -217,6 +206,12 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
                 case 400:
                     statusBox.textContent = xhr.status + ": Bad Curation Data";
                     icon.style = "color: #FF0000"; // Super red
+                    break;
+                case 401:
+                    console.log("Authentication failure, trying again.");
+                    login(() => {
+                        submitCuration(curation_dict, hash, statusBox, icon, test)
+                    });
                     break;
                 case 404:
                     statusBox.textContent = xhr.status + ": Bad Link";

@@ -134,63 +134,66 @@
     </script>
     <div id="overlay">
         <button class="btn btn-danger" id="x-out">x</button>
-        <div class="container nav-container" id="overlay-form-div">
-            <nav>
-                <div class="nav nav-tabs" id="nav-tab" role="tablist">
-                    <a class="nav-item nav-link active show" id="nav-login-tab"
-                       data-toggle="tab" href="#nav-login" role="tab"
-                       aria-controls="nav-login" aria-selected="true">Login</a>
-                    <a class="nav-item nav-link" id="nav-register-tab"
-                       data-toggle="tab" href="#nav-register" role="tab"
-                       aria-controls="nav-register"
-                       aria-selected="false">Register</a>
+        <div id="overlay-form-div">
+            <div class="container nav-container">
+                <nav>
+                    <div class="nav nav-tabs" id="nav-tab" role="tablist">
+                        <a class="nav-item nav-link active show"
+                           id="nav-login-tab"
+                           data-toggle="tab" href="#nav-login" role="tab"
+                           aria-controls="nav-login"
+                           aria-selected="true">Login</a>
+                        <a class="nav-item nav-link" id="nav-register-tab"
+                           data-toggle="tab" href="#nav-register" role="tab"
+                           aria-controls="nav-register"
+                           aria-selected="false">Register</a>
+                    </div>
+                </nav>
+            </div>
+            <div class="tab-content" id="overlay-all-forms">
+                <div class="tab-pane fade active show" id="nav-login"
+                     role="tabpanel" aria-labelledby="nav-login-tab">
+                    <input type="hidden" name="type" value="login">
+                    <form class="overlay-form" id="overlay-form-login"
+                          onsubmit="return false;">
+                        email <input name="email"
+                                     type='email' class="form-control"
+                                     placeholder="your@email.com"> <br>
+                        password <input name="password"
+                                        type='password' class="form-control"
+                                        placeholder="password"> <br>
+                        <button class="btn" type='submit'
+                                id="overlay-button-login">
+                            Login
+                        </button>
+                    </form>
+
                 </div>
-            </nav>
-        </div>
-        <div class="tab-content" id="overlay-all-forms">
-            <div class="tab-pane fade active show" id="nav-login"
-                 role="tabpanel" aria-labelledby="nav-login-tab">
-                <input type="hidden" name="type" value="login">
-                <form class="overlay-form" id="overlay-form-login"
-                      onsubmit="return false;">
-                    email <input name="email"
-                                 type='email' class="form-control"
-                                 placeholder="your@email.com"> <br>
-                    password <input name="password"
-                                    type='password' class="form-control"
-                                    placeholder="password"> <br>
-                    <button class="btn" type='submit'
-                            id="overlay-button-login">
-                        Login
-                    </button>
-                </form>
+                <div class="tab-pane fade" id="nav-register" role="tabpanel"
+                     aria-labelledby="nav-register-tab">
+                    <form class="overlay-form" id="overlay-form-register"
+                          onsubmit="return false;">
+                        <input type="hidden" name="type" value="register">
+                        email <input name="email"
+                                     type='email' class="form-control"
+                                     placeholder="your@email.com"> <br>
+                        password <input name="password0"
+                                        type='password' class="form-control"
+                                        placeholder="password"> <br>
+                        password (repeat) <input name="password1"
+                                                 type='password'
+                                                 class="form-control"
+                                                 placeholder="repeat password">
+                        <br>
+                        <button class="btn" type='submit'
+                                id="overlay-button-register">
+                            Register
+                        </button>
+                    </form>
 
-            </div>
-            <div class="tab-pane fade" id="nav-register" role="tabpanel"
-                 aria-labelledby="nav-register-tab">
-                <form class="overlay-form" id="overlay-form-register"
-                      onsubmit="return false;">
-                    <input type="hidden" name="type" value="register">
-                    email <input name="email"
-                                 type='email' class="form-control"
-                                 placeholder="your@email.com"> <br>
-                    password <input name="password0"
-                                    type='password' class="form-control"
-                                    placeholder="password"> <br>
-                    password (repeat) <input name="password1"
-                                             type='password'
-                                             class="form-control"
-                                             placeholder="repeat password">
-                    <br>
-                    <button class="btn" type='submit'
-                            id="overlay-button-register">
-                        Register
-                    </button>
-                </form>
-
+                </div>
             </div>
         </div>
-
     </div>
 {%- endmacro %}
 

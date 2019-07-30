@@ -21,70 +21,134 @@
 
 {% macro login_overlay() -%}
     <script>
-        function login(callback=null) {
+        let AUTH_URLS = {
+            'login': "{{ url_for('login') }}",
+            'register': "{{ url_for('register') }}"};
+
+        function login(callback = null) {
             const overlay = document.querySelector('#overlay');
             document.querySelector('#x-out').onclick = () => {
                 // Abort the submit
                 overlay.style.display = "none";
                 return false;
             };
-            document.querySelector('#overlay-form').onsubmit = function() {
-                // Log the result
-                console.log(`Got user email, ${this.email.value}, and password`);
+            document.querySelector('.overlay-form').forEach(function() {
+                this.onsubmit = function () {
+                    // Log the result
+                    console.log(`Got user email, ${this.email.value}, and password to ${this.type.value}`);
 
-                // Check for an email, if none, reject the form (do nothing)
-                if (!this.email || !this.password) {
-                    // Ideally a warning or explanation should be given.
-                    console.log("Missing password or email.");
-                    return false;
-                }
+                    if (this.type.value === 'register') {
 
-                $.ajax({
-                    url: LOGIN_URL,
-                    type: 'POST',
-                    dataType: 'json',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        'email': this.email.value,
-                        'password': this.password.value
-                    }),
-                    complete: (xhr, statusText) => {
-                        if (xhr.status != 200) {
-                            // Ideally explain what went wrong.
-                            console.log(`Error authenticating: ${xhr.responseJSON}`)
+                        // Check the password
+                        if (!this.email.value || !this.password0.value || !this.password1.value) {
+                            console.log("Missing email or one of the passwords.");
+                            return false;
+                        } else if (this.password0.value !== this.password1.value) {
+                            console.log("Passwords don't match.");
+                            return false;
+                        } else if (this.password0.value.length < 8) {
+                            console.log("Password too short.");
                             return false;
                         }
 
-                        // Credentials should now be stored in a cookie
-
-                        // Hide the overlay again.
-                        overlay.style.display = "none";
-
-                        // Call the function again (this time it will go past here).
-                        if (callback)
-                            callback();
-
+                        this.password = this.password0;
+                    } else {
+                        // Check for an email, if none, reject the form (do nothing)
+                        if (!this.email.value || !this.password.value) {
+                            // Ideally a warning or explanation should be given.
+                            console.log("Missing password or email.");
+                            return false;
+                        }
                     }
-                });
+
+                    $.ajax({
+                        url: AUTH_URLS[this.type.value],
+                        type: 'POST',
+                        dataType: 'json',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            'email': this.email.value,
+                            'password': this.password.value
+                        }),
+                        complete: (xhr, statusText) => {
+                            if (xhr.status != 200) {
+                                // Ideally explain what went wrong.
+                                console.log(`Error authenticating: ${xhr.responseJSON}`);
+                                return false;
+                            }
+
+                            // Credentials should now be stored in a cookie
+
+                            // Hide the overlay again.
+                            overlay.style.display = "none";
+
+                            // Call the function again (this time it will go past here).
+                            if (callback)
+                                callback();
+
+                        }
+                    });
+                    return false;
+                };
+                overlay.style.display = "block";
                 return false;
-            };
-            overlay.style.display = "block";
-            return false;
+            });
         }
     </script>
     <div id="overlay">
         <button class="btn btn-danger" id="x-out">x</button>
-        <div id="overlay-form-div">
-            <form id="overlay-form" onsubmit="return false;">
-                email <input name="email"
-                             type='text' class="form-control"
-                             placeholder="your@email.com"> <br>
-                password <input name="password"
-                                type='password' class="form-control"
-                                placeholder="password"> <br>
-                <button class="btn" type='submit' id="overlay-button">Submit
-                </button>
-            </form>
+        <div class="container nav-container" id="overlay-form-div">
+            <nav>
+                <div class="nav nav-tabs" id="nav-tab" role="tablist">
+                    <a class="nav-item nav-link active show" id="nav-login-tab"
+                       data-toggle="tab" href="#nav-login" role="tab"
+                       aria-controls="nav-login" aria-selected="true">Model</a>
+                    <a class="nav-item nav-link" id="nav-register-tab"
+                       data-toggle="tab" href="#nav-register" role="tab"
+                       aria-controls="nav-register"
+                       aria-selected="false">Tests</a>
+                </div>
+            </nav>
+            <div class="tab-content" id="overlay-all-forms">
+                <div class="tab-pane fade active show" id="nav-login"
+                     role="tabpanel" aria-labelledby="nav-login-tab">
+                    <input type="hidden" name="type" value="login">
+                    <form class="overlay-form" id="overlay-form-login"
+                          onsubmit="return false;">
+                        email <input name="email"
+                                     type='email' class="form-control"
+                                     placeholder="your@email.com"> <br>
+                        password <input name="password"
+                                        type='password' class="form-control"
+                                        placeholder="password"> <br>
+                        <button class="btn" type='submit' id="overlay-button">
+                            Login
+                        </button>
+                    </form>
+
+                </div>
+                <div class="tab-pane fade" id="nav-register" role="tabpanel"
+                     aria-labelledby="nav-register-tab">
+                    <form class="overlay-form" id="overlay-form-register"
+                          onsubmit="return false;">
+                        <input type="hidden" name="type" value="register">
+                        email <input name="email"
+                                     type='email' class="form-control"
+                                     placeholder="your@email.com"> <br>
+                        password <input name="password0"
+                                        type='password' class="form-control"
+                                        placeholder="password"> <br>
+                        password (repeat) <input name="password1"
+                                        type='password' class="form-control"
+                                        placeholder="repeat password"> <br>
+                        <button class="btn" type='submit' id="overlay-button">
+                            Register
+                        </button>
+                    </form>
+
+                </div>
+            </div>
+
         </div>
     </div>
 {%- endmacro %}

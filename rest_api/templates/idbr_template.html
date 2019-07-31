@@ -114,7 +114,7 @@
                             'password': this.password.value
                         }),
                         complete: (xhr, statusText) => {
-                            if (xhr.status != 200) {
+                            if (xhr.status !== 200) {
                                 // Ideally explain what went wrong.
                                 console.log(`Error authenticating: ${xhr.responseJSON}`);
                                 return false;
@@ -128,6 +128,7 @@
                             // Call the function again (this time it will go past here).
                             if (callback)
                                 callback();
+                            return false;
 
                         }
                     });
@@ -136,6 +137,7 @@
                 overlay.style.display = "block";
                 return false;
             });
+            return false;
         }
     </script>
     <div id="overlay">

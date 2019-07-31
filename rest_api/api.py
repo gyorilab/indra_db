@@ -98,7 +98,7 @@ def login():
     current_user = User.get_user_by_email(data['email'], data['password'])
 
     if not current_user:
-        return {'message': 'Username or password was incorrect.'}
+        return jsonify({'message': 'Username or password was incorrect.'}), 401
 
     access_token = create_access_token(identity=data['email'])
     resp = jsonify({'login': True})

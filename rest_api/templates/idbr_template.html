@@ -197,6 +197,21 @@
     </div>
 {%- endmacro %}
 
+{% macro login_button() -%}
+    <button class="btn btn-primary" onclick="return login();">Login</button>
+{%- endmacro %}
+
+{% block header %}
+    <div class="row">
+        <div class="col">
+            {{ super() }}
+        </div>
+        <div class="col text-right">
+            {{ login_button() }}
+        </div>
+    </div>
+{% endblock %}
+
 {% block header_desc %}
     {% include "idbr_description.html" %}
 {% endblock %}

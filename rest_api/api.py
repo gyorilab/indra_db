@@ -76,7 +76,7 @@ parser.add_argument('email', help='Enter your email.', required=True)
 parser.add_argument('password', help='Enter your password.', required=True)
 
 
-@app.route('/register')
+@app.route('/register', methods=['POST'])
 def register():
     data = parser.parse_args()
 

@@ -40,10 +40,16 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            font-size: 50px;
-            color: white;
+            font-size: 40px;
+            color: black;
+            background-color: lightgray;
+            border-radius: 3px;
             transform: translate(-50%, -50%);
             -ms-transform: translate(-50%, -50%);
+            padding: 1em;
+        }
+
+        .overlay-form {
             padding: 1em;
         }
 
@@ -154,15 +160,15 @@
                 <div class="tab-pane fade active show" id="nav-login"
                      role="tabpanel" aria-labelledby="nav-login-tab">
                     <input type="hidden" name="type" value="login">
-                    <form class="overlay-form" id="overlay-form-login"
+                    <form class="form overlay-form" id="overlay-form-login"
                           onsubmit="return false;">
                         email <input name="email"
                                      type='email' class="form-control"
-                                     placeholder="your@email.com"> <br>
+                                     placeholder="your@email.com">
                         password <input name="password"
                                         type='password' class="form-control"
-                                        placeholder="password"> <br>
-                        <button class="btn" type='submit'
+                                        placeholder="password">
+                        <button class="btn btn-primary" type='submit'
                                 id="overlay-button-login">
                             Login
                         </button>
@@ -171,21 +177,18 @@
                 </div>
                 <div class="tab-pane fade" id="nav-register" role="tabpanel"
                      aria-labelledby="nav-register-tab">
-                    <form class="overlay-form" id="overlay-form-register"
+                    <form class="form overlay-form" id="overlay-form-register"
                           onsubmit="return false;">
                         <input type="hidden" name="type" value="register">
                         email <input name="email"
                                      type='email' class="form-control"
-                                     placeholder="your@email.com"> <br>
+                                     placeholder="your@email.com">
                         password <input name="password0"
                                         type='password' class="form-control"
-                                        placeholder="password"> <br>
-                        password (repeat) <input name="password1"
-                                                 type='password'
-                                                 class="form-control"
-                                                 placeholder="repeat password">
-                        <br>
-                        <button class="btn" type='submit'
+                                        placeholder="password">
+                        <input name="password1" type='password'
+                               class="form-control" placeholder="repeat password">
+                        <button class="btn btn-primary" type='submit'
                                 id="overlay-button-register">
                             Register
                         </button>

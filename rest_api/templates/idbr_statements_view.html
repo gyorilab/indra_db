@@ -1,5 +1,5 @@
 {% extends "indra/statements_view.html" %}
-{% from "idbr_template.html" import login_overlay, login_button %}
+{% from "idbr_template.html" import login_overlay, login_header %}
 
 {% block scripts %}
     {{ super() }}
@@ -12,14 +12,7 @@
 {% endblock %}
 
 {% block header %}
-    <div class="row">
-        <div class="col">
-            {{ super() }}
-        </div>
-        <div class="col text-right">
-            {{ login_button() }}
-        </div>
-    </div>
+    {{ login_header(super()) }}
 {% endblock %}
 
 {% block header_desc %}{% include "idbr_description.html" %}{{ super() }}{% endblock %}

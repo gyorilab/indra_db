@@ -121,7 +121,8 @@
                                     return false;
                                 }
 
-                                // Credentials should now be stored in a cookie
+                                // Credentials should now be stored in a cookie if this was a login.
+                                console.log(`Successful ${this.type.value}`);
 
                                 // Hide the overlay again.
                                 overlay.style.display = "none";

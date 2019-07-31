@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 NS_PRIORITY_LIST = (
     'FPLX',
+    'MIRBASE',
     'HGNC',
     'GO',
     'MESH',
@@ -31,7 +32,8 @@ NS_PRIORITY_LIST = (
 
 # All namespaces here (except NAME) should also be included in the
 # NS_PRIORITY_LIST above
-NS_LIST = ('NAME', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
+NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
+           'PUBCHEM')
 
 
 def load_db_content(reload, ns_list, pkl_filename=None, db=None):

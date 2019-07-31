@@ -77,61 +77,65 @@
             };
             document.querySelectorAll('.overlay-form').forEach((item, index) => {
                 item.onsubmit = function () {
-                    // Log the result
-                    console.log(`Got user email, ${this.email.value}, and password to ${this.type.value}`);
+                    try {
+                        // Log the result
+                        console.log(`Got user email, ${this.email.value}, and password to ${this.type.value}`);
 
-                    if (this.type.value === 'register') {
+                        if (this.type.value === 'register') {
 
-                        // Check the password
-                        if (!this.email.value || !this.password0.value || !this.password1.value) {
-                            console.log("Missing email or one of the passwords.");
-                            return false;
-                        } else if (this.password0.value !== this.password1.value) {
-                            console.log("Passwords don't match.");
-                            return false;
-                        } else if (this.password0.value.length < 8) {
-                            console.log("Password too short.");
-                            return false;
-                        }
-
-                        this.password = this.password0;
-                    } else {
-                        // Check for an email, if none, reject the form (do nothing)
-                        if (!this.email.value || !this.password.value) {
-                            // Ideally a warning or explanation should be given.
-                            console.log("Missing password or email.");
-                            return false;
-                        }
-                    }
-
-                    $.ajax({
-                        url: AUTH_URLS[this.type.value],
-                        type: 'POST',
-                        dataType: 'json',
-                        contentType: 'application/json',
-                        data: JSON.stringify({
-                            'email': this.email.value,
-                            'password': this.password.value
-                        }),
-                        complete: (xhr, statusText) => {
-                            if (xhr.status !== 200) {
-                                // Ideally explain what went wrong.
-                                console.log(`Error authenticating: ${xhr.responseJSON}`);
+                            // Check the password
+                            if (!this.email.value || !this.password0.value || !this.password1.value) {
+                                console.log("Missing email or one of the passwords.");
+                                return false;
+                            } else if (this.password0.value !== this.password1.value) {
+                                console.log("Passwords don't match.");
+                                return false;
+                            } else if (this.password0.value.length < 8) {
+                                console.log("Password too short.");
                                 return false;
                             }
 
-                            // Credentials should now be stored in a cookie
-
-                            // Hide the overlay again.
-                            overlay.style.display = "none";
-
-                            // Call the function again (this time it will go past here).
-                            if (callback)
-                                callback();
-                            return false;
-
+                            this.password = this.password0;
+                        } else {
+                            // Check for an email, if none, reject the form (do nothing)
+                            if (!this.email.value || !this.password.value) {
+                                // Ideally a warning or explanation should be given.
+                                console.log("Missing password or email.");
+                                return false;
+                            }
                         }
-                    });
+
+                        $.ajax({
+                            url: AUTH_URLS[this.type.value],
+                            type: 'POST',
+                            dataType: 'json',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                'email': this.email.value,
+                                'password': this.password.value
+                            }),
+                            complete: (xhr, statusText) => {
+                                if (xhr.status !== 200) {
+                                    // Ideally explain what went wrong.
+                                    console.log(`Error authenticating: ${xhr.responseJSON}`);
+                                    return false;
+                                }
+
+                                // Credentials should now be stored in a cookie
+
+                                // Hide the overlay again.
+                                overlay.style.display = "none";
+
+                                // Call the function again (this time it will go past here).
+                                if (callback)
+                                    callback();
+                                return false;
+
+                            }
+                        });
+                    } catch (e) {
+                        console.log(`Error while trying to authenticate: ${e}`)
+                    }
                     return false;
                 };
                 overlay.style.display = "block";

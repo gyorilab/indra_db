@@ -208,7 +208,7 @@ def _query_wrapper(f):
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
 
-        api_key = query.pop('api_key', kwargs.pop('api_key', None))
+        # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
@@ -217,6 +217,24 @@ def _query_wrapper(f):
 
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
+
+        # Figure out authorization.
+        api_key = query.pop('api_key', kwargs.pop('api_key', None))
+        if api_key:
+            roles = [Role.get_by_api_key(api_key)]
+        else:
+            user_identity = get_jwt_identity()
+            current_user = User.get_by_identity(user_identity)
+            if current_user:
+                roles = list(current_user.roles)
+            else:
+                roles = []
+
+        has = dict.fromkeys(['elsevier', 'medscan'], False)
+        for role in roles:
+            for resource in has.keys():
+                has[resource] |= role.permissions.get(resource, False)
+        logger.info('Auths: %s' % str(has))
 
         # Handle any necessary redactions
         stmts_json = result.pop('statements')

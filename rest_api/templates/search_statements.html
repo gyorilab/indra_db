@@ -33,10 +33,6 @@
         // Build URL
         let baseUrl = '{{ endpoint }}statements/from_agents?';
 
-        if (localStorage.getItem('api_key')) {
-            baseUrl += `api_key=${localStorage.getItem('api_key')}&`;
-        }
-
         let getUrl = baseUrl + queryString;
 
         // Check output

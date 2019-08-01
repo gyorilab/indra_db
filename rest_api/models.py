@@ -1,12 +1,13 @@
 import os
 from base64 import b64encode
+from datetime import datetime
 
 from rest_api.database import Base
-from flask_security import UserMixin, RoleMixin
 from sqlalchemy import create_engine
 from sqlalchemy.orm import relationship, backref, sessionmaker
 from sqlalchemy import Boolean, DateTime, Column, Integer, \
                        String, ForeignKey, LargeBinary
+from sqlalchemy.dialects.postgresql import JSON
 
 import scrypt
 
@@ -16,18 +17,67 @@ DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 
+class UserDatabaseError(Exception):
+    pass
+
+
 class RolesUsers(Base):
     __tablename__ = 'roles_users'
-    id = Column(Integer(), primary_key=True)
-    user_id = Column('user_id', Integer(), ForeignKey('user.id'))
-    role_id = Column('role_id', Integer(), ForeignKey('role.id'))
+    user_id = Column(Integer, ForeignKey('user.id'), primary_key=True)
+    role_id = Column(Integer, ForeignKey('role.id'), primary_key=True)
 
 
-class Role(Base, RoleMixin):
+class Role(Base):
     __tablename__ = 'role'
     id = Column(Integer(), primary_key=True)
     name = Column(String(80), unique=True)
+    api_key = Column(String(40), unique=True)
+    api_access_count = Column(Integer, default=0)
     description = Column(String(255))
+    permissions = Column(JSON)
+
+    def save(self):
+        if not self.id:
+            session.add(self)
+        session.commit()
+
+    @classmethod
+    def get_by_name(cls, name, *args):
+        """Look for a role by a given name."""
+
+        if len(args) > 1:
+            raise ValueError("Expected at most 1 extra argument.")
+
+        role = cls.query.filter_by(name=name).first()
+        if not role:
+            if not args:
+                raise UserDatabaseError("Role {name} does not exist."
+                                        .format(name=name))
+            return args[0]
+        return role
+
+    @classmethod
+    def get_by_api_key(cls, api_key):
+        """Get a role from its API Key."""
+
+        # Look for the role.
+        role = cls.query.filter_by(api_key=api_key).first()
+        if not role:
+            raise UserDatabaseError("Api Key {api_key} is not valid."
+                                    .format(api_key=api_key))
+
+        # Count the number of times this role has been accessed by API key.
+        role.api_access_count += 1
+        session.commit()
+
+        return role
+
+    def __str__(self):
+        return "{id} - {name}".format(id=self.id,
+                                      name=self.name)
+
+    def __repr__(self):
+        return "< Role: {} >".format(str(self))
 
 
 class User(Base):

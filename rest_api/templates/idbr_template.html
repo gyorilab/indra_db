@@ -119,7 +119,10 @@
                             }),
                             complete: (xhr, statusText) => {
                                 if (xhr.status !== 200) {
-                                    report_login_result(`Error authenticating: ${xhr.responseJSON}`);
+                                    let msg = xhr.responseJSON.message;
+                                    if (!msg)
+                                        msg = "Unknown Reason";
+                                    report_login_result(`Error authenticating: ${msg}`);
                                     if (failure_callback)
                                         failure_callback(this.type.value);
                                     return false;

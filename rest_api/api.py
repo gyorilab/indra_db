@@ -518,10 +518,10 @@ def describe_curation():
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_optional
 def submit_curation_endpoint(hash_val, **kwargs):
-    roles = _get_roles(request.args)
+    roles = _get_roles(dict(request.args))
     if not roles:
-        abort(jsonify({"result": "failure", "reason": "Invalid Credentials"}),
-              401)
+        res_dict = {"result": "failure", "reason": "Invalid Credentials"}
+        return jsonify(res_dict), 401
 
     user_identity = get_jwt_identity()
     if user_identity:
@@ -531,7 +531,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
         if not email:
             res_dict = {"result": "failure",
                         "reason": "POST with API key requires a user email."}
-            abort(jsonify(res_dict), 400)
+            return jsonify(res_dict), 400
 
     logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')

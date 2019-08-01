@@ -22,7 +22,7 @@ from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, BadHashError
-from rest_api.models import User, Role, BadIdentity, errors
+from rest_api.models import User, Role, BadIdentity, IntegrityError
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -96,7 +96,7 @@ def register():
     try:
         new_user.save()
         return jsonify({'message': 'User {} created'.format(data['email'])})
-    except errors.UniqueViolation:
+    except IntegrityError:
         return jsonify({'message': 'User {} exists.'.format(data['email'])}), \
                400
     except Exception as e:

@@ -22,7 +22,7 @@ from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, BadHashError
-from rest_api.models import User, Role, BadIdentity, IntegrityError
+from rest_api.models import User, Role, BadIdentity, IntegrityError, start_fresh
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -79,6 +79,8 @@ parser.add_argument('password', help='Enter your password.', required=True)
 @app.route('/register', methods=['POST'])
 @jwt_optional
 def register():
+    start_fresh()
+
     user_identity = get_jwt_identity()
     try:
         User.get_by_identity(user_identity)
@@ -109,6 +111,8 @@ def register():
 @app.route('/login', methods=['POST'])
 @jwt_optional
 def login():
+    start_fresh()
+
     user_identity = get_jwt_identity()
     try:
         User.get_by_identity(user_identity)
@@ -228,6 +232,8 @@ def _query_wrapper(f):
     @wraps(f)
     @jwt_optional
     def decorator(*args, **kwargs):
+        start_fresh()
+
         tracker = LogTracker()
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))

@@ -28,6 +28,10 @@ class BadIdentity(UserDatabaseError):
     pass
 
 
+def start_fresh():
+    session.rollback()
+
+
 class RolesUsers(Base):
     __tablename__ = 'roles_users'
     user_id = Column(Integer, ForeignKey('user.id'), primary_key=True)
@@ -112,7 +116,11 @@ class User(Base):
     def save(self):
         if not self.id:
             session.add(self)
-        session.commit()
+        try:
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
 
     @classmethod
     def get_by_email(cls, email, verify=None):

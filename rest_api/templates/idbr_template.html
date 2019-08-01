@@ -68,6 +68,11 @@
             'register': "{{ url_for('register') }}"
         };
 
+        function report_login_result(msg) {
+            console.log(msg);
+            document.querySelector('#overlay-message').textContent = msg;
+        }
+
         function login(callback = null) {
             const overlay = document.querySelector('#overlay');
             document.querySelector('#x-out').onclick = () => {
@@ -85,13 +90,13 @@
 
                             // Check the password
                             if (!this.email.value || !this.password0.value || !this.password1.value) {
-                                console.log("Missing email or one of the passwords.");
+                                report_login_result("Missing email or one of the passwords.");
                                 return false;
                             } else if (this.password0.value !== this.password1.value) {
-                                console.log("Passwords don't match.");
+                                report_login_result("Passwords don't match.");
                                 return false;
                             } else if (this.password0.value.length < 8) {
-                                console.log("Password too short.");
+                                report_login_result("Password too short.");
                                 return false;
                             }
 
@@ -99,8 +104,7 @@
                         } else {
                             // Check for an email, if none, reject the form (do nothing)
                             if (!this.email.value || !this.password.value) {
-                                // Ideally a warning or explanation should be given.
-                                console.log("Missing password or email.");
+                                report_login_result("Missing password or email.");
                                 return false;
                             }
                         }
@@ -116,13 +120,12 @@
                             }),
                             complete: (xhr, statusText) => {
                                 if (xhr.status !== 200) {
-                                    // Ideally explain what went wrong.
-                                    console.log(`Error authenticating: ${xhr.responseJSON}`);
+                                    report_login_result(`Error authenticating: ${xhr.responseJSON}`);
                                     return false;
                                 }
 
                                 // Credentials should now be stored in a cookie if this was a login.
-                                console.log(`Successful ${this.type.value}`);
+                                report_login_result(`Successful ${this.type.value}`);
 
                                 // Hide the overlay again.
                                 overlay.style.display = "none";
@@ -148,6 +151,7 @@
     <div id="overlay">
         <button class="btn btn-danger" id="x-out">x</button>
         <div id="overlay-form-div">
+            <span id="overlay-message" style="color: red;"></span>
             <div class="container nav-container">
                 <nav>
                     <div class="nav nav-tabs" id="nav-tab" role="tablist">
@@ -180,7 +184,6 @@
                             Login
                         </button>
                     </form>
-
                 </div>
                 <div class="tab-pane fade" id="nav-register" role="tabpanel"
                      aria-labelledby="nav-register-tab">

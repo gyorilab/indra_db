@@ -21,8 +21,8 @@ from indra.statements import make_statement_camel, stmts_from_json
 from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation, _has_auth, BadHashError
-from rest_api.models import User, Role, BadIdentity
+    submit_curation, BadHashError
+from rest_api.models import User, Role, BadIdentity, errors
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -96,8 +96,14 @@ def register():
     try:
         new_user.save()
         return jsonify({'message': 'User {} created'.format(data['email'])})
+    except errors.UniqueViolation:
+        return jsonify({'message': 'User {} exists.'.format(data['email'])}), \
+               400
     except Exception as e:
-        return jsonify({'message': 'Something went wrong: %s' % str(e)}), 500
+        logger.exception(e)
+        logger.error("Unexpected error creating user.")
+        return jsonify({'message': 'Could not create account. '
+                                   'Something unexpected went wrong.'}), 500
 
 
 @app.route('/login', methods=['POST'])

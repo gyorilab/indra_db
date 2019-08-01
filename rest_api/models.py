@@ -10,6 +10,8 @@ from sqlalchemy import Boolean, DateTime, Column, Integer, \
                        String, ForeignKey, LargeBinary
 from sqlalchemy.dialects.postgresql import JSON
 
+from psycopg2 import errors
+
 import scrypt
 
 

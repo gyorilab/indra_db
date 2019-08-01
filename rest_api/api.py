@@ -22,7 +22,7 @@ from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_auth, BadHashError
-from rest_api.models import User, Role
+from rest_api.models import User, Role, BadIdentity
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -79,9 +79,12 @@ parser.add_argument('password', help='Enter your password.', required=True)
 @app.route('/register', methods=['POST'])
 @jwt_optional
 def register():
-    current_user = get_jwt_identity()
-    if current_user:
+    user_identity = get_jwt_identity()
+    try:
+        User.get_by_identity(user_identity)
         return jsonify({"message": "User is already logged in."}), 400
+    except BadIdentity:
+        pass
 
     data = parser.parse_args()
 
@@ -101,9 +104,11 @@ def register():
 @jwt_optional
 def login():
     user_identity = get_jwt_identity()
-    if user_identity and isinstance(user_identity, dict) \
-            and 'id' in user_identity.keys():
+    try:
+        User.get_by_identity(user_identity)
         return jsonify({"message": "User is already logged in."})
+    except BadIdentity:
+        pass
 
     data = parser.parse_args()
     current_user = User.get_by_email(data['email'], verify=data['password'])
@@ -200,7 +205,11 @@ def _get_roles(query):
     if not user_identity:
         return []
 
-    current_user = User.get_by_identity(user_identity)
+    try:
+        current_user = User.get_by_identity(user_identity)
+    except BadIdentity:
+        return []
+
     if not current_user:
         return []
 

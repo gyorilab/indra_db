@@ -22,6 +22,10 @@ class UserDatabaseError(Exception):
     pass
 
 
+class BadIdentity(UserDatabaseError):
+    pass
+
+
 class RolesUsers(Base):
     __tablename__ = 'roles_users'
     user_id = Column(Integer, ForeignKey('user.id'), primary_key=True)
@@ -97,6 +101,8 @@ class User(Base):
                          secondary='roles_users',
                          backref=backref('users', lazy='dynamic'))
 
+    _identity_cols = {'id', 'email'}
+
     @classmethod
     def new_user(cls, email, password, **kwargs):
         return cls(email=email, password=hash_password(password), **kwargs)
@@ -128,6 +134,10 @@ class User(Base):
     @classmethod
     def get_by_identity(cls, identity):
         """Get a user from the identity JSON."""
+        if not isinstance(identity, dict) or set(identity.keys()) != cls._identity_cols:
+            raise BadIdentity("'{identity}' is not an identity."
+                              .format(identity=identity))
+
         user = cls.query.get(identity['id'])
         if not user:
             raise UserDatabaseError("User {} does not exist."
@@ -147,7 +157,7 @@ class User(Base):
 
     def identity(self):
         """Get the user's identity"""
-        return {'id': self.id, 'email': self.email}
+        return {col: getattr(self, col) for col in self._identity_cols}
 
     def __str__(self):
         return "%s - %s" % (self.id, self.email)

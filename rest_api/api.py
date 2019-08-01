@@ -111,7 +111,7 @@ def login():
     if not current_user:
         return jsonify({'message': 'Username or password was incorrect.'}), 401
 
-    access_token = create_access_token(identity=data['email'])
+    access_token = create_access_token(identity=current_user.identity())
     resp = jsonify({'login': True})
     set_access_cookies(resp, access_token)
     return resp

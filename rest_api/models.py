@@ -124,6 +124,18 @@ class User(Base):
 
         return user
 
+    @classmethod
+    def get_by_identity(cls, identity):
+        """Get a user from the identity JSON."""
+        user = cls.query.get(identity['id'])
+        if not user:
+            raise UserDatabaseError("User {} does not exist."
+                                    .format(identity['id']))
+        if user.email != identity['email']:
+            raise UserDatabaseError("Invalid identity, email on database does "
+                                    "not match email given.")
+        return user
+
     def bestow_role(self, role_name):
         """Give this user a role."""
         role = Role.get_by_name(role_name)

@@ -186,6 +186,26 @@ class LogTracker(object):
         return ret
 
 
+def _get_roles(query):
+    """Get the roles for the current request, either by JWT or API key.
+
+    If by API key, the key must be in the query. If by JWT, @jwt_optional or
+    similar must wrap the calling function.
+    """
+    api_key = query.pop('api_key', None)
+    if api_key:
+        roles = [Role.get_by_api_key(api_key)]
+    else:
+        user_identity = get_jwt_identity()
+
+        current_user = User.get_by_identity(user_identity)
+        if current_user:
+            roles = list(current_user.roles)
+        else:
+            roles = []
+    return roles
+
+
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
 
@@ -219,19 +239,8 @@ def _query_wrapper(f):
                     % (f.__name__, sec_since(start_time)))
 
         # Figure out authorization.
-        api_key = query.pop('api_key', kwargs.pop('api_key', None))
-        if api_key:
-            roles = [Role.get_by_api_key(api_key)]
-        else:
-            user_identity = get_jwt_identity()
-            current_user = User.get_by_identity(user_identity)
-            if current_user:
-                roles = list(current_user.roles)
-            else:
-                roles = []
-
         has = dict.fromkeys(['elsevier', 'medscan'], False)
-        for role in roles:
+        for role in _get_roles(query):
             for resource in has.keys():
                 has[resource] |= role.permissions.get(resource, False)
         logger.info('Auths: %s' % str(has))
@@ -506,13 +515,24 @@ def describe_curation():
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
-@jwt_required
+@jwt_optional
 def submit_curation_endpoint(hash_val, **kwargs):
+    roles = _get_roles(request.args)
+    if not roles:
+        abort(jsonify({"result": "failure", "reason": "Invalid Credentials"}),
+              401)
+
+    user_identity = get_jwt_identity()
+    if user_identity:
+        email = user_identity['email']
+    else:
+        email = request.json.get('email')
+        if not email:
+            res_dict = {"result": "failure",
+                        "reason": "POST with API key requires a user email."}
+            abort(jsonify(res_dict), 400)
+
     logger.info("Adding curation for statement %s." % hash_val)
-    current_user = get_jwt_identity()
-    logger.info(current_user)
-    if not isinstance(current_user, str):
-        assert False, "Current user not str."
     ev_hash = request.json.get('ev_hash')
     source_api = request.json.pop('source', 'DB REST API')
     tag = request.json.get('tag')
@@ -522,15 +542,15 @@ def submit_curation_endpoint(hash_val, **kwargs):
     if not is_test:
         assert tag is not 'test'
         try:
-            dbid = submit_curation(hash_val, tag, current_user, ip, text,
-                                   ev_hash, source_api)
+            dbid = submit_curation(hash_val, tag, email, ip, text, ev_hash,
+                                   source_api)
         except BadHashError as e:
             abort(Response("Invalid hash: %s." % e.mk_hash, 400))
         res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}
     logger.info("Got result: %s" % str(res))
-    return Response(json.dumps(res), mimetype='application/json')
+    return jsonify(res)
 
 
 if __name__ == '__main__':

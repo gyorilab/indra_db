@@ -12,7 +12,7 @@ from flask import Flask, request, abort, Response, redirect, url_for, \
 from flask_compress import Compress
 from flask_cors import CORS
 from flask_jwt_extended import create_access_token, jwt_required, \
-    get_jwt_identity, JWTManager, set_access_cookies
+    get_jwt_identity, JWTManager, set_access_cookies, jwt_optional
 from flask_restful import reqparse
 from jinja2 import Environment
 
@@ -22,7 +22,7 @@ from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, _has_auth, BadHashError
-from rest_api.models import User
+from rest_api.models import User, Role
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -77,7 +77,12 @@ parser.add_argument('password', help='Enter your password.', required=True)
 
 
 @app.route('/register', methods=['POST'])
+@jwt_optional
 def register():
+    current_user = get_jwt_identity()
+    if current_user:
+        return jsonify({"message": "User is already logged in."}), 400
+
     data = parser.parse_args()
 
     new_user = User.new_user(
@@ -93,7 +98,13 @@ def register():
 
 
 @app.route('/login', methods=['POST'])
+@jwt_optional
 def login():
+    user_identity = get_jwt_identity()
+    if user_identity and isinstance(user_identity, dict) \
+            and 'id' in user_identity.keys():
+        return jsonify({"message": "User is already logged in."})
+
     data = parser.parse_args()
     current_user = User.get_user_by_email(data['email'], data['password'])
 
@@ -179,6 +190,7 @@ def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
 
     @wraps(f)
+    @jwt_optional
     def decorator(*args, **kwargs):
         tracker = LogTracker()
         start_time = datetime.now()
@@ -194,7 +206,7 @@ def _query_wrapper(f):
         do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
-        format = query.pop('format', 'json')
+        fmt = query.pop('format', 'json')
 
         api_key = query.pop('api_key', kwargs.pop('api_key', None))
         logger.info("Running function %s after %s seconds."
@@ -208,8 +220,6 @@ def _query_wrapper(f):
 
         # Handle any necessary redactions
         stmts_json = result.pop('statements')
-        has = {src: _has_auth(src, api_key) for src in ['elsevier', 'medscan']}
-        logger.info('Auths: %s' % str(has))
         medscan_redactions = 0
         medscan_removals = 0
         elsevier_redactions = 0
@@ -258,7 +268,7 @@ def _query_wrapper(f):
         result['statement_limit'] = MAX_STATEMENTS
         result['statements_returned'] = len(stmts_json)
 
-        if format == 'html':
+        if fmt == 'html':
             title = TITLE + ': ' + 'Results'
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())

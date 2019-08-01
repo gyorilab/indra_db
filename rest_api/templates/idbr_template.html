@@ -20,7 +20,6 @@
 {% endblock %}
 
 {% macro login_overlay() -%}
-
     <style>
         #overlay {
             position: fixed;
@@ -73,7 +72,7 @@
             document.querySelector('#overlay-message').textContent = msg;
         }
 
-        function login(callback = null) {
+        function login(success_callback = null, failure_callback=null) {
             const overlay = document.querySelector('#overlay');
             document.querySelector('#x-out').onclick = () => {
                 // Abort the submit
@@ -121,6 +120,8 @@
                             complete: (xhr, statusText) => {
                                 if (xhr.status !== 200) {
                                     report_login_result(`Error authenticating: ${xhr.responseJSON}`);
+                                    if (failure_callback)
+                                        failure_callback();
                                     return false;
                                 }
 
@@ -131,8 +132,8 @@
                                 overlay.style.display = "none";
 
                                 // Call the function again (this time it will go past here).
-                                if (callback)
-                                    callback();
+                                if (success_callback)
+                                    success_callback();
                                 return false;
 
                             }
@@ -211,13 +212,27 @@
 {%- endmacro %}
 
 {% macro login_header(header) -%}
+    <script>
+        function remove_login_button() {
+            document.querySelector("#login-button").style.display = 'none';
+        }
+
+        function trigger_login() {
+            return login(remove_login_button, trigger_login)
+        }
+    </script>
+    <style>
+        #login-button {
+            margin: 5px;
+        }
+    </style>
     <div class="row">
         <div class="col-10">
             {{ header }}
         </div>
         <div class="col-2 text-right align-middle">
-            <button class="btn btn-primary" onclick="return login();"
-                    style="margin: 5px;">
+            <button class="btn btn-primary" onclick="return trigger_login();"
+                    id="login-button">
                 Login
             </button>
         </div>

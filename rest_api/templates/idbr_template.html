@@ -213,11 +213,14 @@
 
 {% macro login_header(header) -%}
     <script>
-        function remove_login_button() {
-            document.querySelector("#login-button").style.display = 'none';
+        function remove_login_button(type) {
+            if (type === "login")
+                document.querySelector("#login-button").style.display = 'none';
+            else  // type is register
+                trigger_login()
         }
 
-        function trigger_login() {
+        function trigger_login(type=null) {
             return login(remove_login_button, trigger_login)
         }
     </script>

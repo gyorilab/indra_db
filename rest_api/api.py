@@ -194,16 +194,17 @@ def _get_roles(query):
     """
     api_key = query.pop('api_key', None)
     if api_key:
-        roles = [Role.get_by_api_key(api_key)]
-    else:
-        user_identity = get_jwt_identity()
+        return [Role.get_by_api_key(api_key)]
 
-        current_user = User.get_by_identity(user_identity)
-        if current_user:
-            roles = list(current_user.roles)
-        else:
-            roles = []
-    return roles
+    user_identity = get_jwt_identity()
+    if not user_identity:
+        return []
+
+    current_user = User.get_by_identity(user_identity)
+    if not current_user:
+        return []
+
+    return list(current_user.roles)
 
 
 def _query_wrapper(f):

@@ -229,6 +229,13 @@ def _query_wrapper(f):
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
 
+        # Figure out authorization.
+        has = dict.fromkeys(['elsevier', 'medscan'], False)
+        for role in _get_roles(query):
+            for resource in has.keys():
+                has[resource] |= role.permissions.get(resource, False)
+        logger.info('Auths: %s' % str(has))
+
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
@@ -238,13 +245,6 @@ def _query_wrapper(f):
 
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
-
-        # Figure out authorization.
-        has = dict.fromkeys(['elsevier', 'medscan'], False)
-        for role in _get_roles(query):
-            for resource in has.keys():
-                has[resource] |= role.permissions.get(resource, False)
-        logger.info('Auths: %s' % str(has))
 
         # Handle any necessary redactions
         stmts_json = result.pop('statements')

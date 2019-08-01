@@ -106,7 +106,7 @@ def login():
         return jsonify({"message": "User is already logged in."})
 
     data = parser.parse_args()
-    current_user = User.get_user_by_email(data['email'], data['password'])
+    current_user = User.get_by_email(data['email'], verify=data['password'])
 
     if not current_user:
         return jsonify({'message': 'Username or password was incorrect.'}), 401

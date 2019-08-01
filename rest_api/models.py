@@ -84,7 +84,6 @@ class User(Base):
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
     email = Column(String(255), unique=True)
-    username = Column(String(255), unique=True)
     password = Column(LargeBinary)
     last_login_at = Column(DateTime())
     current_login_at = Column(DateTime())
@@ -102,21 +101,40 @@ class User(Base):
         return cls(email=email, password=hash_password(password), **kwargs)
 
     def save(self):
-        session.add(self)
+        if not self.id:
+            session.add(self)
         session.commit()
 
     @classmethod
-    def get_user_by_email(cls, email, password):
+    def get_by_email(cls, email, verify=None):
         user = session.query(cls).filter(cls.email == email).first()
         if user is None:
             print("User %s not found." % email)
             return None
 
-        if verify_password(user.password, password):
-            return user
-        else:
-            print("User password failed.")
-            return None
+        if verify:
+            if verify_password(user.password, verify):
+                user.last_login_at = datetime.now()
+                user.login_count += 1
+                user.save()
+                return user
+            else:
+                print("User password failed.")
+                return None
+
+        return user
+
+    def bestow_role(self, role_name):
+        """Give this user a role."""
+        role = Role.get_by_name(role_name)
+        new_link = RolesUsers(user_id=self.id, role_id=role.id)
+        session.add(new_link)
+        session.commit()
+        return
+
+    def identity(self):
+        """Get the user's identity"""
+        return {'id': self.id, 'email': self.email}
 
     def __str__(self):
         return "%s - %s" % (self.id, self.email)

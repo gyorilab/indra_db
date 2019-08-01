@@ -147,7 +147,7 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
                     break;
                 case 401:
                     console.log("Authentication failure, trying again.");
-                    login(() => {
+                    login(type => {
                         submitCuration(curation_dict, hash, statusBox, icon, test)
                     });
                     break;

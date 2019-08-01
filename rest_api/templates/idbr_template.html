@@ -72,7 +72,7 @@
             document.querySelector('#overlay-message').textContent = msg;
         }
 
-        function login(success_callback = null, failure_callback=null) {
+        function login(success_callback=null, failure_callback=null) {
             const overlay = document.querySelector('#overlay');
             document.querySelector('#x-out').onclick = () => {
                 // Abort the submit
@@ -121,7 +121,7 @@
                                 if (xhr.status !== 200) {
                                     report_login_result(`Error authenticating: ${xhr.responseJSON}`);
                                     if (failure_callback)
-                                        failure_callback();
+                                        failure_callback(this.type.value);
                                     return false;
                                 }
 
@@ -133,7 +133,7 @@
 
                                 // Call the function again (this time it will go past here).
                                 if (success_callback)
-                                    success_callback();
+                                    success_callback(this.type.value);
                                 return false;
 
                             }

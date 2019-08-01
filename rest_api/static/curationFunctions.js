@@ -29,19 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
        })
 });
 
-// Check the API key input
-function keySubmit(key_value) {
-    let ensure_user = document.getElementById("ensure_user_on_api_key");
-    // Default value still there or nothing entered
-    if (key_value == "No key given." | !key_value) {
-        ensure_user.textContent = "No key given.";
-        // nothing entered
-    } else {
-        console.log("document.getElementById(\"api_key_input\").value: " + document.getElementById("api_key_input").value);
-        ensure_user.textContent = "Key stored!";
-    }
-}
-
 
 function submitButtonClick(clickEvent) {
     // Get mouseclick target, then parent's parent

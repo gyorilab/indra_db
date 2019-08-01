@@ -123,7 +123,7 @@
                                     let msg = xhr.responseJSON.message;
                                     if (!msg)
                                         msg = "Unknown Reason";
-                                    report_login_result(`Error authenticating: ${msg}`);
+                                    report_login_result(`Could not ${this.type.value}: ${msg}`);
                                     if (failure_callback)
                                         failure_callback(this.type.value);
                                     return false;

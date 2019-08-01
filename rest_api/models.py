@@ -1,6 +1,7 @@
 import os
 from base64 import b64encode
 from datetime import datetime
+from time import sleep
 
 from rest_api.database import Base
 from sqlalchemy import create_engine
@@ -166,5 +167,6 @@ def verify_password(hashed_password, guessed_password, maxtime=0.5):
         scrypt.decrypt(hashed_password, guessed_password, maxtime)
         return True
     except scrypt.error:
+        sleep(1)
         return False
 

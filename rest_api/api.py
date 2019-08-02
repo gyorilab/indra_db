@@ -108,19 +108,25 @@ def login():
     start_fresh()
 
     user_identity = get_jwt_identity()
+    logger.debug("Got user identity: %s" % user_identity)
     try:
         User.get_by_identity(user_identity)
+        logger.info("User was already logged in.")
         return jsonify({"message": "User is already logged in."})
     except BadIdentity:
-        pass
+        logger.warning("User had malformed identity.")
 
     data = request.json
+    logger.debug("Looking for user: %s." % data['email'])
     current_user = User.get_by_email(data['email'], verify=data['password'])
 
+    logger.debug("Got user: %s" % current_user)
     if not current_user:
+        logger.info("Got no user, username or password was incorrect.")
         return jsonify({'message': 'Username or password was incorrect.'}), 401
 
     access_token = create_access_token(identity=current_user.identity())
+    logger.info("Produced new access token.")
     resp = jsonify({'login': True})
     set_access_cookies(resp, access_token)
     return resp

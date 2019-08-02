@@ -13,7 +13,6 @@ from flask_compress import Compress
 from flask_cors import CORS
 from flask_jwt_extended import create_access_token, jwt_required, \
     get_jwt_identity, JWTManager, set_access_cookies, jwt_optional
-from flask_restful import reqparse
 from jinja2 import Environment
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
@@ -71,11 +70,6 @@ class DbAPIError(Exception):
     pass
 
 
-parser = reqparse.RequestParser()
-parser.add_argument('email', help='Enter your email.', required=True)
-parser.add_argument('password', help='Enter your password.', required=True)
-
-
 @app.route('/register', methods=['POST'])
 @jwt_optional
 def register():
@@ -88,7 +82,7 @@ def register():
     except BadIdentity:
         pass
 
-    data = parser.parse_args()
+    data = request.json
 
     new_user = User.new_user(
         email=data['email'],
@@ -120,7 +114,7 @@ def login():
     except BadIdentity:
         pass
 
-    data = parser.parse_args()
+    data = request.json
     current_user = User.get_by_email(data['email'], verify=data['password'])
 
     if not current_user:

@@ -66,6 +66,12 @@
             background-color: white;
             border-radius: 4px;
         }
+
+        #overlay-message {
+            font-size: 9pt;
+            color: #803030;
+            max-width: 10em;
+        }
     </style>
     <script>
         let AUTH_URLS = {
@@ -161,7 +167,6 @@
     <div id="overlay">
         <button class="btn btn-danger" id="x-out">x</button>
         <div id="overlay-form-div">
-            <small id="overlay-message" style="color: red;"></small>
             <div class="container nav-container">
                 <nav>
                     <div class="nav nav-tabs" id="nav-tab" role="tablist">
@@ -216,6 +221,7 @@
 
                 </div>
             </div>
+            <small id="overlay-message"></small>
         </div>
     </div>
 {%- endmacro %}

@@ -71,6 +71,11 @@ class DbAPIError(Exception):
     pass
 
 
+# ==============================
+# Authentication tools/endpoints
+# ==============================
+
+
 @app.route('/register', methods=['POST'])
 @jwt_optional
 def register():
@@ -131,6 +136,47 @@ def login():
     resp = jsonify({'login': True})
     set_access_cookies(resp, access_token)
     return resp
+
+
+def _resolve_auth(query):
+    """Get the roles for the current request, either by JWT or API key.
+
+    If by API key, the key must be in the query. If by JWT, @jwt_optional or
+    similar must wrap the calling function.
+
+    Returns a tuple with the current user, if applicable, and a list of
+    associated roles.
+    """
+    api_key = query.pop('api_key', None)
+    logger.info("Got api key %s" % api_key)
+    if api_key:
+        logger.info("Using API key role.")
+        return None, [Role.get_by_api_key(api_key)]
+
+    user_identity = get_jwt_identity()
+    logger.debug("Got user_identity: %s" % user_identity)
+    if not user_identity:
+        logger.info("No user identity, no role.")
+        return None, []
+
+    try:
+        current_user = User.get_by_identity(user_identity)
+        logger.debug("Got user: %s" % current_user)
+    except BadIdentity:
+        logger.info("Identity malformed, no role.")
+        return None, []
+
+    if not current_user:
+        logger.info("Identity not mapped to user, no role.")
+        return None, []
+
+    logger.info("Identity mapped to the user, returning roles.")
+    return current_user, list(current_user.roles)
+
+
+# ==============================================
+# Define some utilities used to resolve queries.
+# ==============================================
 
 
 def __process_agent(agent_param):
@@ -202,40 +248,9 @@ class LogTracker(object):
         return ret
 
 
-def _resolve_auth(query):
-    """Get the roles for the current request, either by JWT or API key.
-
-    If by API key, the key must be in the query. If by JWT, @jwt_optional or
-    similar must wrap the calling function.
-
-    Returns a tuple with the current user, if applicable, and a list of
-    associated roles.
-    """
-    api_key = query.pop('api_key', None)
-    logger.info("Got api key %s" % api_key)
-    if api_key:
-        logger.info("Using API key role.")
-        return None, [Role.get_by_api_key(api_key)]
-
-    user_identity = get_jwt_identity()
-    logger.debug("Got user_identity: %s" % user_identity)
-    if not user_identity:
-        logger.info("No user identity, no role.")
-        return None, []
-
-    try:
-        current_user = User.get_by_identity(user_identity)
-        logger.debug("Got user: %s" % current_user)
-    except BadIdentity:
-        logger.info("Identity malformed, no role.")
-        return None, []
-
-    if not current_user:
-        logger.info("Identity not mapped to user, no role.")
-        return None, []
-
-    logger.info("Identity mapped to the user, returning roles.")
-    return current_user, list(current_user.roles)
+# ==========================================
+# Define wrappers for common API call types.
+# ==========================================
 
 
 def _query_wrapper(f):
@@ -370,52 +385,6 @@ def _query_wrapper(f):
     return decorator
 
 
-@app.route('/test_security')
-@jwt_required
-def home():
-    return render_template_string('Hello authorized person!')
-
-
-@app.route('/', methods=['GET'])
-def iamalive():
-    return redirect('welcome', code=302)
-
-
-@app.route('/welcome', methods=['GET'])
-def welcome():
-    logger.info("Browser welcome page.")
-    onclick = ("window.location = window.location.href.replace('welcome', "
-               "'statements')")
-    return render_my_template('welcome.html', 'Welcome',
-                              onclick_action=onclick)
-
-
-with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
-    CURATION_JS = f.read()
-
-
-@app.route('/code/curationFunctions.js')
-def serve_js():
-    return Response(CURATION_JS, mimetype='text/javascript')
-
-
-with open(path.join(HERE, 'static', 'favicon.ico'), 'rb') as f:
-    ICON = f.read()
-
-
-@app.route('/favicon.ico')
-def serve_icon():
-    return Response(ICON, mimetype='image/x-icon')
-
-
-@app.route('/statements', methods=['GET'])
-def get_statements_query_format():
-    # Create a template object from the template file, load once
-    return render_my_template('search_statements.html', 'Search',
-                              message="Welcome! Try asking a question.",
-                              endpoint=request.url_root)
-
-
 def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
                          ev_limit, best_first):
     # Fix the case, if we got a statement type.
@@ -443,6 +412,47 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
                                         max_stmts=max_stmts, ev_limit=ev_limit,
                                         best_first=best_first)
     return result
+
+
+# ====================================================
+# Define some endpoints for accessing minor resources.
+# ====================================================
+
+
+with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
+    CURATION_JS = f.read()
+
+
+@app.route('/code/curationFunctions.js')
+def serve_js():
+    return Response(CURATION_JS, mimetype='text/javascript')
+
+
+with open(path.join(HERE, 'static', 'favicon.ico'), 'rb') as f:
+    ICON = f.read()
+
+
+@app.route('/favicon.ico')
+def serve_icon():
+    return Response(ICON, mimetype='image/x-icon')
+
+
+# ==========================
+# Here begins the API proper
+# ==========================
+
+
+@app.route('/', methods=['GET'])
+def iamalive():
+    return redirect('statements', code=302)
+
+
+@app.route('/statements', methods=['GET'])
+def get_statements_query_format():
+    # Create a template object from the template file, load once
+    return render_my_template('search_statements.html', 'Search',
+                              message="Welcome! Try asking a question.",
+                              endpoint=request.url_root)
 
 
 @app.route('/statements/from_agents', methods=['GET'])

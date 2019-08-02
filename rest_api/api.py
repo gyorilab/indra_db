@@ -208,21 +208,29 @@ def _get_roles(query):
     similar must wrap the calling function.
     """
     api_key = query.pop('api_key', None)
+    logger.info("Got api key %s" % api_key)
     if api_key:
+        logger.info("Using API key role.")
         return [Role.get_by_api_key(api_key)]
 
     user_identity = get_jwt_identity()
+    logger.debug("Got user_identity: %s" % user_identity)
     if not user_identity:
+        logger.info("Invalid user identity, no role.")
         return []
 
     try:
         current_user = User.get_by_identity(user_identity)
+        logger.debug("Got user: %s" % current_user)
     except BadIdentity:
+        logger.info("Identity malformed, no role.")
         return []
 
     if not current_user:
+        logger.info("Identity not mapped to user, no role.")
         return []
 
+    logger.info("Identity mapped to the user, returning roles.")
     return list(current_user.roles)
 
 

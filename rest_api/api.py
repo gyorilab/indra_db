@@ -63,6 +63,7 @@ env.globals.update(url_for=url_for)
 
 def render_my_template(template, title, **kwargs):
     kwargs['title'] = TITLE + ': ' + title
+    kwargs['logged_in'] = get_jwt_identity() is not None
     return env.get_template(template).render(**kwargs)
 
 

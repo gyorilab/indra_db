@@ -258,7 +258,11 @@
 {%- endmacro %}
 
 {% block header %}
-    {{ login_header(super()) }}
+    {% if logged_in %}
+        {{ super() }}
+    {% else %}
+        {{ login_header(super()) }}
+    {% endif %}
 {% endblock %}
 
 {% block header_desc %}

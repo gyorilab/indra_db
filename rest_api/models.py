@@ -100,7 +100,7 @@ class User(Base):
     current_login_at = Column(DateTime())
     last_login_ip = Column(String(100))
     current_login_ip = Column(String(100))
-    login_count = Column(Integer)
+    login_count = Column(Integer, default=0)
     active = Column(Boolean())
     confirmed_at = Column(DateTime())
     roles = relationship('Role',

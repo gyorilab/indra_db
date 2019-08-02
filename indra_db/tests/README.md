@@ -62,7 +62,7 @@ should got to the bottom where you see several lines of the form:
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 local   all             postgres                                peer
 ```
-Changing `peer` or `md5` in the `METHOD` sections to `trust`. Save the file.
+**Changing `peer` or `md5` in the `METHOD` sections to `trust`**. Save the file.
 For the changes to take effect, first attempt to run:
 ```
 sudo service postgresql restart

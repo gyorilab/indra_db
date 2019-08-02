@@ -338,7 +338,8 @@ def _query_wrapper(f):
                                            source_counts, title=title,
                                            db_rest_url=request.url_root[:-1])
             idbr_template = env.get_template('idbr_statements_view.html')
-            content = html_assembler.make_model(idbr_template)
+            content = html_assembler.make_model(idbr_template,
+                                                logged_in=(user is not None))
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
                                for lvl, n in tracker.get_level_stats().items()]

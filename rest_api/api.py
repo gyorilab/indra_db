@@ -201,37 +201,40 @@ class LogTracker(object):
         return ret
 
 
-def _get_roles(query):
+def _resolve_auth(query):
     """Get the roles for the current request, either by JWT or API key.
 
     If by API key, the key must be in the query. If by JWT, @jwt_optional or
     similar must wrap the calling function.
+
+    Returns a tuple with the current user, if applicable, and a list of
+    associated roles.
     """
     api_key = query.pop('api_key', None)
     logger.info("Got api key %s" % api_key)
     if api_key:
         logger.info("Using API key role.")
-        return [Role.get_by_api_key(api_key)]
+        return None, [Role.get_by_api_key(api_key)]
 
     user_identity = get_jwt_identity()
     logger.debug("Got user_identity: %s" % user_identity)
     if not user_identity:
-        logger.info("Invalid user identity, no role.")
-        return []
+        logger.info("No user identity, no role.")
+        return None, []
 
     try:
         current_user = User.get_by_identity(user_identity)
         logger.debug("Got user: %s" % current_user)
     except BadIdentity:
         logger.info("Identity malformed, no role.")
-        return []
+        return None, []
 
     if not current_user:
         logger.info("Identity not mapped to user, no role.")
-        return []
+        return None, []
 
     logger.info("Identity mapped to the user, returning roles.")
-    return list(current_user.roles)
+    return current_user, list(current_user.roles)
 
 
 def _query_wrapper(f):
@@ -260,7 +263,8 @@ def _query_wrapper(f):
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
-        for role in _get_roles(query):
+        user, roles = _resolve_auth(query)
+        for role in roles:
             for resource in has.keys():
                 has[resource] |= role.permissions.get(resource, False)
         logger.info('Auths: %s' % str(has))
@@ -547,14 +551,13 @@ def describe_curation():
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_optional
 def submit_curation_endpoint(hash_val, **kwargs):
-    roles = _get_roles(dict(request.args))
-    if not roles:
+    user, roles = _resolve_auth(dict(request.args))
+    if not roles and not user:
         res_dict = {"result": "failure", "reason": "Invalid Credentials"}
         return jsonify(res_dict), 401
 
-    user_identity = get_jwt_identity()
-    if user_identity:
-        email = user_identity['email']
+    if user:
+        email = user.email
     else:
         email = request.json.get('email')
         if not email:

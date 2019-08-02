@@ -42,7 +42,7 @@
             font-size: 40px;
             color: black;
             background-color: lightgray;
-            border-radius: 3px;
+            border-radius: 4px;
             transform: translate(-50%, -50%);
             -ms-transform: translate(-50%, -50%);
             padding: 1em;
@@ -60,6 +60,11 @@
             position: absolute;
             top: 30px;
             right: 30px;
+        }
+
+        .auth-tab {
+            background-color: white;
+            border-radius: 4px;
         }
     </style>
     <script>
@@ -173,7 +178,7 @@
                 </nav>
             </div>
             <div class="tab-content" id="overlay-all-forms">
-                <div class="tab-pane fade active show" id="nav-login"
+                <div class="tab-pane auth-tab fade active show" id="nav-login"
                      role="tabpanel" aria-labelledby="nav-login-tab">
                     <form class="form overlay-form" id="overlay-form-login"
                           onsubmit="return false;">
@@ -190,7 +195,7 @@
                         </button>
                     </form>
                 </div>
-                <div class="tab-pane fade" id="nav-register" role="tabpanel"
+                <div class="tab-pane auth-tab fade" id="nav-register" role="tabpanel"
                      aria-labelledby="nav-register-tab">
                     <form class="form overlay-form" id="overlay-form-register"
                           onsubmit="return false;">

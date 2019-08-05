@@ -16,14 +16,32 @@ let latestSubmission = {
     'submit_status': 0
 };
 
+function slideToggle(id) {
+    const el = document.querySelector(`#${id}`);
+    if(!el.dataset.open_height) {
+        el.dataset.open_height = el.offsetHeight;
+    }
+    if (el.dataset.open === "true") {
+        el.dataset.open = "false";
+        el.style.height = '0px';
+    }
+    else {
+        el.dataset.open = "true";
+        el.style.height = el.dataset.open_height + 'px';
+    }
+}
+
 
 // Turn on all the toggle buttons and connect them to a funciton.
 document.addEventListener('DOMContentLoaded', () => {
    document.querySelectorAll('.curation_toggle')
        .forEach(function(toggle) {
            toggle.onclick = function() {
-               addCurationRow(this.closest('tr'));
-               this.onclick=null;
+               const clickedRow = document.querySelector(`#${this.dataset.parent_id}`);
+               const cur_id = addCurationRow(clickedRow);
+               this.onclick = function () {
+                   slideToggle(cur_id);
+               };
            };
            toggle.style.display = 'inline-block';
        })
@@ -33,9 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function submitButtonClick(clickEvent) {
     // Get mouseclick target, then parent's parent
     let pn = clickEvent.target.parentNode.parentNode;
-    let btn_row_tag = pn.closest('tr');
+    let pmid_row = pn.parentNode.previousSibling;
     let s = pn.getElementsByClassName("dropdown")[0]
-        .getElementsByTagName("select")[0];
+              .getElementsByTagName("select")[0];
 
     // DROPDOWN SELECTION
     let err_select = s.options[s.selectedIndex].value;
@@ -60,9 +78,6 @@ function submitButtonClick(clickEvent) {
     // GET REFERENCE TO STATUS BOX (EMPTY UNTIL STATUS RECEIVED)
     let statusBox = pn.getElementsByClassName("submission_status")[0].children[0];
 
-    // Step back to the preceding tr tag
-    let pmid_row = btn_row_tag.previousElementSibling;
-
     // PMID
     // Get pmid_linktext content
     let pmid_text = pmid_row
@@ -74,9 +89,9 @@ function submitButtonClick(clickEvent) {
 
     // HASHES: source_hash & stmt_hash
     // source_hash == ev['source_hash'] == pmid_row.id; "evidence level"
-    const source_hash = pmid_row.id;
+    const source_hash = pmid_row.dataset.source_hash;
     // stmt_hash == hash == stmt_info['hash'] == table ID; "(pa-) statement level"
-    const stmt_hash = pmid_row.parentElement.parentElement.id;
+    const stmt_hash = pmid_row.parentElement.dataset.stmt_hash;
 
     // CURATION DICT
     // example: curation_dict = {'tag': 'Reading', 'text': '"3200 A" is picked up as an agent.', 'curator': 'Klas', 'ev_hash': ev_hash};
@@ -367,19 +382,24 @@ function createStatusDiv() {
 }
 
 // Append row to the row that executed the click
-// <tr class="cchild" style="border-top: 1px solid #FFFFFF;">
-// <td colspan="4" style="padding: 0px; border-top: 1px solid #FFFFFF;">
+// <div class="row cchild" style="border-top: 1px solid #FFFFFF;">
+//   <div class="col" style="padding: 0px; border-top: 1px solid #FFFFFF;">
+//      <!-- form stuff -->
+//   </div>
+// </div>
 function curationRowGenerator() {
     // Create new row element
-    let newRow = document.createElement('tr');
+    let newRow = document.createElement('div');
+    newRow.className = 'row curation-row';
     newRow.innerHTML = null;
-    newRow.className = "cchild";
     newRow.style = "border-top: 1px solid #FFFFFF;";
+    newRow.dataset.open = "true";
 
     // Create new td element
-    let newTD = document.createElement('td');
+    let newTD = document.createElement('div');
+    newTD.className = 'col';
     newTD.style = "padding: 0px; border-top: 1px solid #FFFFFF; white-space: nowrap; text-align: left;";
-    newTD.setAttribute("colspan", "4");
+    // newTD.setAttribute("colspan", "4");
 
     // Add dropdown div
     let dropdownDiv = createDDDiv();
@@ -403,29 +423,10 @@ function curationRowGenerator() {
 function addCurationRow(clickedRow) {
     // Generate new row
     let curationRow = curationRowGenerator();
+    curationRow.id = clickedRow.id + '-curation';
 
     // Append new row to provided row
     clickedRow.parentNode.insertBefore(curationRow, clickedRow.nextSibling);
+
+    return curationRow.id;
 }
-
-// Expand/collapse row
-$(function () {
-    $("td[class='curation_toggle']").click(function (event) {
-        event.stopPropagation();
-        let $target = $(event.target);
-        if (event.target.dataset.clicked == "true") {
-            // Toggle (animation duration in msec)
-            $target.closest("tr").next().find("div").slideToggle(200);
-            // First click event
-        } else {
-            // Stay down (animation duration in msec)
-            $target.closest("tr").next().find("div").slideDown(400);
-
-            // Change color of icon to light gray
-            event.target.style = "color:#A4A4A4;";
-
-            // Set clicked to true
-            event.target.dataset.clicked = "true"
-        }
-    });
-});

@@ -115,11 +115,12 @@ def login():
     start_fresh()
 
     user_identity = get_jwt_identity()
-    logger.debug("Got user identity: %s" % user_identity)
+    logger.info("Got user identity: %s" % user_identity)
     try:
-        User.get_by_identity(user_identity)
-        logger.info("User was already logged in.")
-        return jsonify({"message": "User is already logged in."})
+        if user_identity:
+            User.get_by_identity(user_identity)
+            logger.info("User was already logged in.")
+            return jsonify({"message": "User is already logged in."})
     except BadIdentity:
         logger.warning("User had malformed identity.")
 

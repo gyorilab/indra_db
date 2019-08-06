@@ -237,7 +237,7 @@
                 btn.innerHTML = 'Logout';
                 btn.onclick = () => {return trigger_logout()};
                 document.querySelector('#user-logoin');
-                user_msg.innerHTML = `Welcome, ${resp_data.email}`
+                user_msg.innerHTML = `Welcome, ${resp_data.user_email}`
             }
             else if (type === "register") {
                 trigger_login()
@@ -268,11 +268,21 @@
             {{ header }}
         </div>
         <div class="col-2 text-right align-middle">
-            <span id="user-loginout-msg">Welcome {{ identity }}!</span>
+            <span id="user-loginout-msg">
+                {% if identity %}
+                    Welcome {{ identity['email'] }}!
+                {% else %}
+                    Welcome!
+                {% endif %}
+            </span>
             <button class="btn btn-primary"
                     onclick="return {% if identity %}trigger_logout(){% else %}trigger_login(){% endif %};"
                     id="loginout-button">
-                Login
+                {% if identity %}
+                    Logout
+                {%  else %}
+                    Login
+                {% endif %}
                 </button>
         </div>
     </div>

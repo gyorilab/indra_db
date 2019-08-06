@@ -207,7 +207,7 @@
     </div>
 {%- endmacro %}
 
-{% macro login_header(header) -%}
+{% macro login_header(header, identity) -%}
     <script>
         function remove_login_button(type) {
             if (type === "login")
@@ -230,20 +230,20 @@
             {{ header }}
         </div>
         <div class="col-2 text-right align-middle">
-            <button class="btn btn-primary" onclick="return trigger_login();"
-                    id="login-button">
-                Login
-            </button>
+            {% if identity %}
+                Welcome {{ identity['email'] }}!
+            {% else %}
+                <button class="btn btn-primary" onclick="return trigger_login();"
+                        id="login-button">
+                    Login
+                </button>
+            {% endif %}
         </div>
     </div>
 {%- endmacro %}
 
 {% block header %}
-    {% if logged_in %}
-        {{ super() }}
-    {% else %}
-        {{ login_header(super()) }}
-    {% endif %}
+    {{ login_header(super(), identity) }}
 {% endblock %}
 
 {% block header_desc %}

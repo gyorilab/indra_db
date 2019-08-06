@@ -12,11 +12,7 @@
 {% endblock %}
 
 {% block header %}
-    {% if logged_in %}
-        {{ super() }}
-    {% else %}
-        {{ login_header(super()) }}
-    {% endif %}
+    {{ login_header(super(), identity) }}
 {% endblock %}
 
 {% block header_desc %}{% include "idbr_description.html" %}{{ super() }}{% endblock %}

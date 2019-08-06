@@ -57,7 +57,8 @@
     <script>
         let AUTH_URLS = {
             'login': "{{ url_for('login') }}",
-            'register': "{{ url_for('register') }}"
+            'register': "{{ url_for('register') }}",
+            'logout': "{{ url_for('logout') }}"
         };
 
         function report_login_result(msg) {
@@ -65,7 +66,22 @@
             document.querySelector('#overlay-message').textContent = msg;
         }
 
+        function post_auth(action, json, on_complete) {
+            $.ajax({
+                url: AUTH_URLS[action],
+                type: 'POST',
+                dataType: 'json',
+                contentType: 'application/json',
+                data: JSON.stringify(json),
+                complete: on_complete
+            });
+        }
+
         function login(success_callback=null, failure_callback=null) {
+            // Double check to see if we're already logged in.
+            post_auth('login', {}, () => {return success_callback('login')});
+
+            // Prep the overlay.
             const overlay = document.querySelector('#overlay');
             document.querySelector('#x-out').onclick = () => {
                 // Abort the submit
@@ -101,16 +117,10 @@
                             }
                         }
 
-                        $.ajax({
-                            url: AUTH_URLS[this.type.value],
-                            type: 'POST',
-                            dataType: 'json',
-                            contentType: 'application/json',
-                            data: JSON.stringify({
-                                'email': this.email.value,
-                                'password': this.password.value
-                            }),
-                            complete: (xhr, statusText) => {
+                        post_auth(
+                            this.type.value,
+                            {'email': this.email.value, 'password': this.password.value},
+                            (xhr, statusText) => {
                                 if (xhr.status !== 200) {
                                     let msg = xhr.responseJSON.message;
                                     if (!msg)
@@ -127,22 +137,29 @@
                                 // Hide the overlay again.
                                 overlay.style.display = "none";
 
-                                // Call the function again (this time it will go past here).
+                                // Call the success callback function.
                                 if (success_callback)
                                     success_callback(this.type.value);
                                 return false;
 
                             }
-                        });
+                        );
                     } catch (e) {
                         console.log(`Error while trying to authenticate: ${e}`)
                     }
                     return false;
                 };
+
+                // Popup the overlay
                 overlay.style.display = "block";
                 return false;
             });
             return false;
+        }
+
+        function logout(callback) {
+            console.log(`Sending request to logout`);
+            post_auth('logout', {}, () => {return callback()});
         }
     </script>
     <div id="overlay">

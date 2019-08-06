@@ -470,6 +470,7 @@ def iamalive():
 
 
 @app.route('/statements', methods=['GET'])
+@jwt_optional
 def get_statements_query_format():
     # Create a template object from the template file, load once
     return render_my_template('search_statements.html', 'Search',

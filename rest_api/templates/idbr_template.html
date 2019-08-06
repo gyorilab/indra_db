@@ -127,7 +127,7 @@
                                         msg = "Unknown Reason";
                                     report_login_result(`Could not ${this.type.value}: ${msg}`);
                                     if (failure_callback)
-                                        failure_callback(this.type.value);
+                                        failure_callback(this.type.value, xhr.responseJSON);
                                     return false;
                                 }
 
@@ -139,7 +139,7 @@
 
                                 // Call the success callback function.
                                 if (success_callback)
-                                    success_callback(this.type.value);
+                                    success_callback(this.type.value, xhr.responseJSON);
                                 return false;
 
                             }
@@ -230,19 +230,36 @@
 
 {% macro login_header(header, identity) -%}
     <script>
-        function remove_login_button(type) {
-            if (type === "login")
-                document.querySelector("#login-button").style.display = 'none';
-            else  // type is register
+        function handle_success(type, resp_data) {
+            const user_msg = document.querySelector('#user-loginout-msg');
+            if (type === "login") {
+                const btn = document.querySelector("#loginout-button");
+                btn.innerHTML = 'Logout';
+                btn.onclick = () => {return trigger_logout()};
+                document.querySelector('#user-logoin');
+                user_msg.innerHTML = `Welcome, ${resp_data.email}`
+            }
+            else if (type === "register") {
                 trigger_login()
+            }
+            else { // logout
+                const btn = document.querySelector("#loginout-button");
+                btn.innerHTML = 'Login';
+                btn.onclick = () => {return trigger_login()};
+                user_msg.innerHTML = "Welcome"
+            }
         }
 
-        function trigger_login(type=null) {
-            return login(remove_login_button, trigger_login)
+        function trigger_login(type=null, data=null) {
+            return login(handle_success, trigger_login)
+        }
+
+        function trigger_logout() {
+            return logout(handle_success)
         }
     </script>
     <style>
-        #login-button {
+        #loginout-button {
             margin: 5px;
         }
     </style>
@@ -251,14 +268,12 @@
             {{ header }}
         </div>
         <div class="col-2 text-right align-middle">
-            {% if identity %}
-                Welcome {{ identity['email'] }}!
-            {% else %}
-                <button class="btn btn-primary" onclick="return trigger_login();"
-                        id="login-button">
-                    Login
+            <span id="user-loginout-msg">Welcome {{ identity }}!</span>
+            <button class="btn btn-primary"
+                    onclick="return {% if identity %}trigger_logout(){% else %}trigger_login(){% endif %};"
+                    id="loginout-button">
+                Login
                 </button>
-            {% endif %}
         </div>
     </div>
 {%- endmacro %}

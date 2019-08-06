@@ -3,11 +3,6 @@
 // Global constants
 let ALL_COLLAPSED = true;
 
-// Force activate the sub items of the table of contents after page load
-$(document).ready(function () {
-    $('a[href="#statements"]').addClass('active')
-});
-
 // Variables
 let latestSubmission = {
     'ddSelect': '',
@@ -34,6 +29,8 @@ function slideToggle(id) {
 
 // Turn on all the toggle buttons and connect them to a funciton.
 document.addEventListener('DOMContentLoaded', () => {
+
+    // Turn on all the toggle buttons.
    document.querySelectorAll('.curation_toggle')
        .forEach(function(toggle) {
            toggle.onclick = function() {
@@ -162,9 +159,14 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
                     break;
                 case 401:
                     console.log("Authentication failure, trying again.");
-                    login(type => {
-                        submitCuration(curation_dict, hash, statusBox, icon, test)
-                    });
+                    login(
+                        (type, data) => {
+                            submitCuration(curation_dict, hash, statusBox, icon, test)
+                        },
+                        (type, data) => {
+                            submitCuration(curation_dict, hash, statusBox, icon, test)
+                        }
+                        );
                     break;
                 case 404:
                     statusBox.textContent = xhr.status + ": Bad Link";

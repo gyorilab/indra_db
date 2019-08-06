@@ -12,7 +12,8 @@ from flask import Flask, request, abort, Response, redirect, url_for, \
 from flask_compress import Compress
 from flask_cors import CORS
 from flask_jwt_extended import create_access_token, jwt_required, \
-    get_jwt_identity, JWTManager, set_access_cookies, jwt_optional
+    get_jwt_identity, JWTManager, set_access_cookies, jwt_optional, \
+    unset_jwt_cookies
 from jinja2 import Environment
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
@@ -130,11 +131,41 @@ def login():
     if not current_user:
         logger.info("Got no user, username or password was incorrect.")
         return jsonify({'message': 'Username or password was incorrect.'}), 401
+    else:
+        # Save some metadata for this login.
+        current_user.current_login_at = datetime.utcnow()
+        current_user.current_login_ip = request.remote_addr
+        current_user.active = True
+        current_user.save()
 
     access_token = create_access_token(identity=current_user.identity())
     logger.info("Produced new access token.")
     resp = jsonify({'login': True})
     set_access_cookies(resp, access_token)
+    return resp
+
+
+@app.route('/logout', methods=['POST'])
+@jwt_optional
+def logout():
+    start_fresh()
+
+    user_identity = get_jwt_identity()
+    logger.info("Got logout request for %s" % user_identity)
+
+    # Stash user details
+    if user_identity:
+        user = User.get_by_identity(user_identity)
+        if user:
+            user.last_login_at = user.current_login_at
+            user.current_login_at = None
+            user.last_login_ip = user.current_login_ip
+            user.current_login_ip = None
+            user.active = False
+            user.save()
+
+    resp = jsonify({'logout': True})
+    unset_jwt_cookies(resp)
     return resp
 
 

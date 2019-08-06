@@ -126,6 +126,9 @@ def login():
         logger.warning("User had malformed identity.")
 
     data = request.json
+    if 'email' not in data or 'password' not in data:
+        return jsonify({"message": "No username of email provided"}), 401
+
     logger.debug("Looking for user: %s." % data['email'])
     current_user = User.get_by_email(data['email'], verify=data['password'])
 

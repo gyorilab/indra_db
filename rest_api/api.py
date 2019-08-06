@@ -118,9 +118,10 @@ def login():
     logger.info("Got user identity: %s" % user_identity)
     try:
         if user_identity:
-            User.get_by_identity(user_identity)
+            user = User.get_by_identity(user_identity)
             logger.info("User was already logged in.")
-            return jsonify({"message": "User is already logged in."})
+            return jsonify({"message": "User is already logged in.",
+                            'login': False, 'user_email': user.email})
     except BadIdentity:
         logger.warning("User had malformed identity.")
 

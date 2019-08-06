@@ -428,15 +428,6 @@ def serve_js():
     return Response(CURATION_JS, mimetype='text/javascript')
 
 
-with open(path.join(HERE, 'static', 'favicon.ico'), 'rb') as f:
-    ICON = f.read()
-
-
-@app.route('/favicon.ico')
-def serve_icon():
-    return Response(ICON, mimetype='image/x-icon')
-
-
 # ==========================
 # Here begins the API proper
 # ==========================

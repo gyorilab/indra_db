@@ -79,7 +79,13 @@
 
         function login(success_callback=null, failure_callback=null) {
             // Double check to see if we're already logged in.
-            post_auth('login', {}, () => {return success_callback('login')});
+            post_auth('login', {}, (xhr) => {
+                if (xhr.status === 200)
+                    success_callback('login', xhr.responseJSON);
+                else
+                    return login(success_callback, failure_callback)
+                return false;
+            });
 
             // Prep the overlay.
             const overlay = document.querySelector('#overlay');

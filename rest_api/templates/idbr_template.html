@@ -270,20 +270,26 @@
         }
     </script>
     <style>
-        #loginout-button {
-            margin: 5px;
+        #loginout-button, #user-loginout-msg {
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+
+        .no-horiz-pad {
+            padding-left: 0;
+            padding-right: 0;
         }
     </style>
-    <div class="row">
-        <div class="col-10">
+    <div class="row align-center">
+        <div class="col-auto no-horiz-pad">
             {{ header }}
         </div>
-        <div class="col-2 text-right align-middle">
+        <div class="col text-right no-horiz-pad">
             <span id="user-loginout-msg">
                 {% if identity %}
                     Welcome {{ identity['email'] }}!
                 {% else %}
-                    Welcome!
+                    Welcome
                 {% endif %}
             </span>
             <button class="btn btn-primary"
@@ -294,7 +300,7 @@
                 {%  else %}
                     Login
                 {% endif %}
-                </button>
+            </button>
         </div>
     </div>
 {%- endmacro %}

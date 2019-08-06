@@ -77,15 +77,18 @@
             });
         }
 
-        function login(success_callback=null, failure_callback=null) {
-            // Double check to see if we're already logged in.
-            post_auth('login', {}, (xhr) => {
-                if (xhr.status === 200)
-                    success_callback('login', xhr.responseJSON);
-                else
-                    return login(success_callback, failure_callback)
-                return false;
-            });
+        function login(success_callback=null, failure_callback=null,
+                       checked=false) {
+            if (!checked) {
+                // Double check to see if we're already logged in.
+                post_auth('login', {}, (xhr) => {
+                    if (xhr.status === 200)
+                        success_callback('login', xhr.responseJSON);
+                    else
+                        return login(success_callback, failure_callback, true);
+                    return false;
+                });
+            }
 
             // Prep the overlay.
             const overlay = document.querySelector('#overlay');
@@ -243,7 +246,8 @@
                 btn.innerHTML = 'Logout';
                 btn.onclick = () => {return trigger_logout()};
                 document.querySelector('#user-logoin');
-                user_msg.innerHTML = `Welcome, ${resp_data.user_email}`
+                user_msg.innerHTML = `Welcome, ${resp_data.user_email}`;
+                report_login_result(''); // clear the login result message
             }
             else if (type === "register") {
                 trigger_login()

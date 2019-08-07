@@ -88,7 +88,7 @@ def auth_wrapper(func):
 
         auth_log = AuthLog(date=datetime.utcnow(), action=func.__name__,
                            attempt_ip=request.remote_addr,
-                           identity_token=user_identity)
+                           input_identity_token=user_identity)
         auth_details = {}
 
         ret = func(auth_details, user_identity)
@@ -175,14 +175,16 @@ def login(auth_details, user_identity):
 
     logger.debug("Looking for user: %s." % data['email'])
     current_user = User.get_by_email(data['email'], verify=data['password'])
-    auth_details['user_id'] = current_user.id
-    auth_details['new_identity'] = current_user.identity()
 
     logger.debug("Got user: %s" % current_user)
     if not current_user:
         logger.info("Got no user, username or password was incorrect.")
         return jsonify({'message': 'Username or password was incorrect.'}), 401
     else:
+        # note the user id and the new identity.
+        auth_details['user_id'] = current_user.id
+        auth_details['new_identity'] = current_user.identity()
+
         # Save some metadata for this login.
         current_user.current_login_at = datetime.utcnow()
         current_user.current_login_ip = request.remote_addr

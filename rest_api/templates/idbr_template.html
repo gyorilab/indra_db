@@ -176,6 +176,8 @@
                             this.type.value,
                             {'email': this.email.value, 'password': this.password.value},
                             (xhr, statusText) => {
+                                console.log(xhr.responseJSON);
+
                                 if (xhr.status !== 200) {
                                     let msg = xhr.responseJSON.message;
                                     if (!msg)
@@ -318,7 +320,11 @@
         }
 
         function trigger_login(type=null, data=null) {
-            return login(handle_success, trigger_login)
+            return login(handle_success, trigger_unchecked_login)
+        }
+
+        function trigger_unchecked_login(type=null, data=null) {
+            return login(handle_success, trigger_unchecked_login, true)
         }
 
         function trigger_logout() {

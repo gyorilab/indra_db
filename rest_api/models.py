@@ -184,7 +184,7 @@ class AuthLog(Base, _AuthMixin):
     action = Column(String(20), nullable=False)
     response = Column(JSON)
     code = Column(Integer)
-    identity_token = Column(JSON)
+    input_identity_token = Column(JSON)
     details = Column(JSON)
 
     _label = ['action', 'date']

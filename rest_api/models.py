@@ -176,8 +176,19 @@ class User(Base, _AuthMixin):
         return {col: getattr(self, col) for col in self._identity_cols}
 
 
-    def __repr__(self):
-        return '< User: %s >' % str(self)
+class AuthLog(Base, _AuthMixin):
+    __tablename__ = 'auth_log'
+    id = Column(Integer, primary_key=True)
+    date = Column(DateTime, nullable=False)
+    success = Column(Boolean, nullable=False)
+    attempt_ip = Column(String(64), nullable=False)
+    action = Column(String(20), nullable=False)
+    response = Column(JSON)
+    code = Column(Integer)
+    identity_token = Column(JSON)
+    details = Column(JSON)
+
+    _label = ['action', 'date']
 
 
 def hash_password(password, maxtime=0.5, datalength=64):

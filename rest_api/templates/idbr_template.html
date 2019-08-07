@@ -97,13 +97,25 @@
         }
 
         function reset_tabs() {
-            const login_classes = document.querySelector('#nav-login').classList;
+            const login_classes =
+                document.querySelector('#nav-login').classList;
             login_classes.add('active');
             login_classes.add('show');
 
-            const register_classes = document.querySelector('#nav-register').classList;
+            const login_tab_classes =
+                document.querySelector('#nav-login-tab').classList;
+            login_tab_classes.add('active');
+            login_tab_classes.add('show');
+
+            const register_classes =
+                document.querySelector('#nav-register').classList;
             register_classes.remove('active');
             register_classes.remove('show');
+
+            const register_tab_classes =
+                document.querySelector('#nav-register-tab').classList;
+            register_tab_classes.remove('active');
+            register_tab_classes.remove('show');
         }
 
         function login(success_callback=null, failure_callback=null,

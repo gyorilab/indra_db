@@ -244,6 +244,10 @@ def _resolve_auth(query):
     except BadIdentity:
         logger.info("Identity malformed, no role.")
         return None, []
+    except Exception as e:
+        logger.exception(e)
+        logger.error("Unexpected error looking up user.")
+        return None, []
 
     if not current_user:
         logger.info("Identity not mapped to user, no role.")

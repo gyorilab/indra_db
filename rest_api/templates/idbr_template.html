@@ -315,7 +315,7 @@
                 const btn = document.querySelector("#loginout-button");
                 btn.innerHTML = 'Login';
                 btn.onclick = () => {return trigger_login()};
-                user_msg.innerHTML = "Welcome"
+                user_msg.innerHTML = ""
             }
         }
 
@@ -350,8 +350,6 @@
             <span id="user-loginout-msg">
                 {% if identity %}
                     Welcome {{ identity['email'] }}!
-                {% else %}
-                    Welcome
                 {% endif %}
             </span>
             <button class="btn btn-primary"

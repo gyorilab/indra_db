@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
                    slideToggle(cur_id);
                };
            };
+           toggle.innerHTML = "&#9998;";
            toggle.style.display = 'inline-block';
        })
 });

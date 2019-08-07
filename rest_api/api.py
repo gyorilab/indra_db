@@ -93,7 +93,7 @@ def auth_wrapper(func):
 
         ret = func(auth_details, user_identity)
 
-        if len(ret) == 2:
+        if isinstance(ret, tuple) and len(ret) == 2:
             resp, code = ret
         else:
             resp = ret

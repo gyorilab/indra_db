@@ -45,7 +45,8 @@ class _AuthMixin(object):
             raise e
 
     def __str__(self):
-        if isinstance(self._label, list) or isinstance(self._label, set):
+        if isinstance(self._label, list) or isinstance(self._label, set) \
+                or isinstance(self._label, tuple):
             label = ' '.join(getattr(self, label) for label in self._label)
         else:
             label = getattr(self, self._label)
@@ -161,6 +162,10 @@ class User(Base, _AuthMixin):
             raise BadIdentity("Invalid identity, email on database does "
                               "not match email given.")
         return user
+
+    def reset_password(self, new_password):
+        self.password = hash_password(new_password)
+        self.save()
 
     def bestow_role(self, role_name):
         """Give this user a role."""

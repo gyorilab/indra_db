@@ -7,13 +7,11 @@ from http.cookies import SimpleCookie
 from io import StringIO
 from os import path, environ
 
-from flask import Flask, request, abort, Response, redirect, url_for, \
-    render_template_string, jsonify
+from flask import Flask, request, abort, Response, redirect, url_for, jsonify
 from flask_compress import Compress
 from flask_cors import CORS
-from flask_jwt_extended import create_access_token, jwt_required, \
-    get_jwt_identity, JWTManager, set_access_cookies, jwt_optional, \
-    unset_jwt_cookies
+from flask_jwt_extended import create_access_token, get_jwt_identity, \
+    JWTManager, set_access_cookies, jwt_optional, unset_jwt_cookies
 from jinja2 import Environment
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
@@ -22,7 +20,8 @@ from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, BadHashError
-from rest_api.models import User, Role, BadIdentity, IntegrityError, start_fresh
+from rest_api.models import User, Role, BadIdentity, IntegrityError, \
+    start_fresh, AuthLog
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -77,19 +76,55 @@ class DbAPIError(Exception):
 # ==============================
 
 
-@app.route('/register', methods=['POST'])
-@jwt_optional
-def register():
-    start_fresh()
+def auth_wrapper(func):
+    @jwt_optional
+    @wraps(func)
+    def with_auth_log():
+        start_fresh()
+        logger.info("Handling %s request." % func.__name__)
 
-    user_identity = get_jwt_identity()
+        user_identity = get_jwt_identity()
+        logger.info("Got user identity: %s" % user_identity)
+
+        auth_log = AuthLog(date=datetime.utcnow(), action=func.__name__,
+                           attempt_ip=request.remote_addr,
+                           identity_token=user_identity)
+        auth_details = {}
+
+        ret = func(auth_details, user_identity)
+
+        if len(ret) == 2:
+            resp, code = ret
+        else:
+            resp = ret
+            code = 200
+        auth_log.response = resp.json
+        auth_log.code = code
+        auth_log.details = auth_details
+
+        auth_log.save()
+        return ret
+
+    return with_auth_log
+
+
+@app.route('/register', methods=['POST'])
+def register(auth_details, user_identity):
     try:
-        User.get_by_identity(user_identity)
+        user = User.get_by_identity(user_identity)
+        auth_details['user_id'] = user.id
         return jsonify({"message": "User is already logged in."}), 400
     except BadIdentity:
         pass
 
     data = request.json
+    missing = [field for field in ['email', 'password']
+               if field not in data]
+    if missing:
+        auth_details['missing'] = missing
+        return jsonify({"message": "No email or password provided"}), 400
+
+    auth_details['new_email'] = data['email']
 
     new_user = User.new_user(
         email=data['email'],
@@ -98,6 +133,7 @@ def register():
 
     try:
         new_user.save()
+        auth_details['new_user_id'] = new_user.id
         return jsonify({'message': 'User {} created'.format(data['email'])})
     except IntegrityError:
         return jsonify({'message': 'User {} exists.'.format(data['email'])}), \
@@ -110,15 +146,11 @@ def register():
 
 
 @app.route('/login', methods=['POST'])
-@jwt_optional
-def login():
-    start_fresh()
-
-    user_identity = get_jwt_identity()
-    logger.info("Got user identity: %s" % user_identity)
+def login(auth_details, user_identity):
     try:
         if user_identity:
             user = User.get_by_identity(user_identity)
+            auth_details['user_id'] = user.id
             logger.info("User was already logged in.")
             return jsonify({"message": "User is already logged in.",
                             'login': False, 'user_email': user.email})
@@ -126,11 +158,16 @@ def login():
         logger.warning("User had malformed identity.")
 
     data = request.json
-    if 'email' not in data or 'password' not in data:
-        return jsonify({"message": "No username of email provided"}), 401
+    missing = [field for field in ['email', 'password']
+               if field not in data]
+    if missing:
+        auth_details['missing'] = missing
+        return jsonify({"message": "No email or password provided"}), 400
 
     logger.debug("Looking for user: %s." % data['email'])
     current_user = User.get_by_email(data['email'], verify=data['password'])
+    auth_details['user_id'] = current_user.id
+    auth_details['new_identity'] = current_user.identity()
 
     logger.debug("Got user: %s" % current_user)
     if not current_user:
@@ -151,23 +188,21 @@ def login():
 
 
 @app.route('/logout', methods=['POST'])
-@jwt_optional
-def logout():
-    start_fresh()
-
-    user_identity = get_jwt_identity()
-    logger.info("Got logout request for %s" % user_identity)
-
+def logout(auth_details, user_identity):
     # Stash user details
+    auth_details['user_id'] = None
     if user_identity:
         user = User.get_by_identity(user_identity)
         if user:
+            auth_details['user_id'] = user.id
             user.last_login_at = user.current_login_at
             user.current_login_at = None
             user.last_login_ip = user.current_login_ip
             user.current_login_ip = None
             user.active = False
             user.save()
+        else:
+            logger.warning("Logging out user without entry in the database.")
 
     resp = jsonify({'logout': True})
     unset_jwt_cookies(resp)

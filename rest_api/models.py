@@ -156,11 +156,10 @@ class User(Base, _AuthMixin):
 
         user = cls.query.get(identity['id'])
         if not user:
-            raise UserDatabaseError("User {} does not exist."
-                                    .format(identity['id']))
+            raise BadIdentity("User {} does not exist.".format(identity['id']))
         if user.email.lower() != identity['email'].lower():
-            raise UserDatabaseError("Invalid identity, email on database does "
-                                    "not match email given.")
+            raise BadIdentity("Invalid identity, email on database does "
+                              "not match email given.")
         return user
 
     def bestow_role(self, role_name):

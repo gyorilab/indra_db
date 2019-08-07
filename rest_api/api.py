@@ -156,6 +156,9 @@ def login(auth_details, user_identity):
                             'login': False, 'user_email': user.email})
     except BadIdentity:
         logger.warning("User had malformed identity.")
+    except Exception as e:
+        logger.exception(e)
+        logger.error("Got an unexpected exception while looking up user.")
 
     data = request.json
     missing = [field for field in ['email', 'password']
@@ -192,7 +195,12 @@ def logout(auth_details, user_identity):
     # Stash user details
     auth_details['user_id'] = None
     if user_identity:
-        user = User.get_by_identity(user_identity)
+        try:
+            user = User.get_by_identity(user_identity)
+        except Exception as e:
+            logger.exception(e)
+            logger.error("Got error while checking identity on logout.")
+            user = None
         if user:
             auth_details['user_id'] = user.id
             user.last_login_at = user.current_login_at

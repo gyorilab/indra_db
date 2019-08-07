@@ -32,13 +32,36 @@ def start_fresh():
     session.rollback()
 
 
+class _AuthMixin(object):
+    _label = NotImplemented
+
+    def save(self):
+        if not self.id:
+            session.add(self)
+        try:
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+
+    def __str__(self):
+        if isinstance(self._label, list) or isinstance(self._label, set):
+            label = ' '.join(getattr(self, label) for label in self._label)
+        else:
+            label = getattr(self, self._label)
+        return "< %s: %s - %s >" % (self.__class__.__name__, self.id, label)
+
+    def __repr__(self):
+        return str(self)
+
+
 class RolesUsers(Base):
     __tablename__ = 'roles_users'
     user_id = Column(Integer, ForeignKey('user.id'), primary_key=True)
     role_id = Column(Integer, ForeignKey('role.id'), primary_key=True)
 
 
-class Role(Base):
+class Role(Base, _AuthMixin):
     __tablename__ = 'role'
     id = Column(Integer(), primary_key=True)
     name = Column(String(80), unique=True)
@@ -47,10 +70,7 @@ class Role(Base):
     description = Column(String(255))
     permissions = Column(JSON)
 
-    def save(self):
-        if not self.id:
-            session.add(self)
-        session.commit()
+    _label = 'name'
 
     @classmethod
     def get_by_name(cls, name, *args):
@@ -83,15 +103,8 @@ class Role(Base):
 
         return role
 
-    def __str__(self):
-        return "{id} - {name}".format(id=self.id,
-                                      name=self.name)
 
-    def __repr__(self):
-        return "< Role: {} >".format(str(self))
-
-
-class User(Base):
+class User(Base, _AuthMixin):
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
     email = Column(String(255), unique=True)
@@ -107,21 +120,13 @@ class User(Base):
                          secondary='roles_users',
                          backref=backref('users', lazy='dynamic'))
 
+    _label = 'email'
     _identity_cols = {'id', 'email'}
 
     @classmethod
     def new_user(cls, email, password, **kwargs):
         return cls(email=email.lower(), password=hash_password(password),
                    **kwargs)
-
-    def save(self):
-        if not self.id:
-            session.add(self)
-        try:
-            session.commit()
-        except Exception as e:
-            session.rollback()
-            raise e
 
     @classmethod
     def get_by_email(cls, email, verify=None):
@@ -170,8 +175,6 @@ class User(Base):
         """Get the user's identity"""
         return {col: getattr(self, col) for col in self._identity_cols}
 
-    def __str__(self):
-        return "%s - %s" % (self.id, self.email)
 
     def __repr__(self):
         return '< User: %s >' % str(self)

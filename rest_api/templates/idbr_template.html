@@ -77,10 +77,30 @@
             });
         }
 
+        function clear(item, email=true, password=true) {
+
+            // Clear the password
+            if (password) {
+                if (item.type.value === 'register') {
+                    item.password0.value = null;
+                    item.password1.value = null;
+                }
+                else {
+                    item.password.value = null;
+                }
+            }
+
+            // Clear the email
+            if (email) {
+                item.email.value = null;
+            }
+        }
+
         function login(success_callback=null, failure_callback=null,
                        checked=false) {
+            /// If we haven't already...
             if (!checked) {
-                // Double check to see if we're already logged in.
+                // double check to see if we're already logged in.
                 post_auth('login', {}, (xhr) => {
                     if (xhr.status === 200)
                         success_callback('login', xhr.responseJSON);
@@ -111,9 +131,12 @@
                                 report_login_result("Missing email or one of the passwords.");
                                 return false;
                             } else if (this.password0.value !== this.password1.value) {
+                                clear(this, false);
+                                this.password.value = null;
                                 report_login_result("Passwords don't match.");
                                 return false;
                             } else if (this.password0.value.length < 8) {
+                                clear(this, false);
                                 report_login_result("Password too short.");
                                 return false;
                             }
@@ -136,10 +159,17 @@
                                     if (!msg)
                                         msg = "Unknown Reason";
                                     report_login_result(`Could not ${this.type.value}: ${msg}`);
+
+                                    // Clear the password field
+                                    clear(this, false);
+
                                     if (failure_callback)
                                         failure_callback(this.type.value, xhr.responseJSON);
                                     return false;
                                 }
+
+                                // Clear the form
+                                clear(this);
 
                                 // Credentials should now be stored in a cookie if this was a login.
                                 report_login_result(`Successful ${this.type.value}`);

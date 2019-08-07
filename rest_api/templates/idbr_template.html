@@ -96,6 +96,16 @@
             }
         }
 
+        function reset_tabs() {
+            const login_classes = document.querySelector('#nav-login').classList;
+            login_classes.add('active');
+            login_classes.add('show');
+
+            const register_classes = document.querySelector('#nav-register').classList;
+            register_classes.remove('active');
+            register_classes.remove('show');
+        }
+
         function login(success_callback=null, failure_callback=null,
                        checked=false) {
             /// If we haven't already...
@@ -170,6 +180,10 @@
 
                                 // Clear the form
                                 clear(this);
+
+                                // If this was a successful register, reset the form.
+                                if (this.type.value === 'register')
+                                    reset_tabs();
 
                                 // Credentials should now be stored in a cookie if this was a login.
                                 report_login_result(`Successful ${this.type.value}`);

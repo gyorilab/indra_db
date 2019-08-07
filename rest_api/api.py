@@ -101,6 +101,9 @@ def auth_wrapper(func):
         auth_log.response = resp.json
         auth_log.code = code
         auth_log.details = auth_details
+        auth_log.success = (func.__name__ in resp.json
+                            and resp.json[func.__name__]
+                            and code == 200)
 
         auth_log.save()
         return ret
@@ -109,6 +112,7 @@ def auth_wrapper(func):
 
 
 @app.route('/register', methods=['POST'])
+@auth_wrapper
 def register(auth_details, user_identity):
     try:
         user = User.get_by_identity(user_identity)
@@ -134,7 +138,8 @@ def register(auth_details, user_identity):
     try:
         new_user.save()
         auth_details['new_user_id'] = new_user.id
-        return jsonify({'message': 'User {} created'.format(data['email'])})
+        return jsonify({'register': True,
+                        'message': 'User {} created'.format(data['email'])})
     except IntegrityError:
         return jsonify({'message': 'User {} exists.'.format(data['email'])}), \
                400
@@ -146,6 +151,7 @@ def register(auth_details, user_identity):
 
 
 @app.route('/login', methods=['POST'])
+@auth_wrapper
 def login(auth_details, user_identity):
     try:
         if user_identity:
@@ -155,7 +161,7 @@ def login(auth_details, user_identity):
             return jsonify({"message": "User is already logged in.",
                             'login': False, 'user_email': user.email})
     except BadIdentity:
-        logger.warning("User had malformed identity.")
+        logger.warning("User had malformed identity or invalid.")
     except Exception as e:
         logger.exception(e)
         logger.error("Got an unexpected exception while looking up user.")
@@ -191,6 +197,7 @@ def login(auth_details, user_identity):
 
 
 @app.route('/logout', methods=['POST'])
+@auth_wrapper
 def logout(auth_details, user_identity):
     # Stash user details
     auth_details['user_id'] = None

@@ -111,7 +111,8 @@ class User(Base):
 
     @classmethod
     def new_user(cls, email, password, **kwargs):
-        return cls(email=email, password=hash_password(password), **kwargs)
+        return cls(email=email.lower(), password=hash_password(password),
+                   **kwargs)
 
     def save(self):
         if not self.id:
@@ -124,9 +125,9 @@ class User(Base):
 
     @classmethod
     def get_by_email(cls, email, verify=None):
-        user = session.query(cls).filter(cls.email == email).first()
+        user = session.query(cls).filter(cls.email == email.lower()).first()
         if user is None:
-            print("User %s not found." % email)
+            print("User %s not found." % email.lower())
             return None
 
         if verify:
@@ -152,7 +153,7 @@ class User(Base):
         if not user:
             raise UserDatabaseError("User {} does not exist."
                                     .format(identity['id']))
-        if user.email != identity['email']:
+        if user.email.lower() != identity['email'].lower():
             raise UserDatabaseError("Invalid identity, email on database does "
                                     "not match email given.")
         return user

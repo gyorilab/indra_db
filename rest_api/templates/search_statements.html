@@ -1,7 +1,7 @@
 {% extends "idbr_template.html" %}
 
 {% block scripts %}
-{{ super()}}
+{{ super() }}
 
 <script>
     var ENV = 'indra';
@@ -17,7 +17,7 @@
         queryString += actorsString;
 
         // Loop form fields
-        for (el of document.getElementsByClassName('form-control')) {
+        for (el of document.querySelectorAll('.stmt-form')) {
             if (!(['subject', 'object', 'agents'].indexOf(el.name) > -1)) {
                 if (el.value) {
                     if (el.name == 'type') {
@@ -32,10 +32,6 @@
 
         // Build URL
         let baseUrl = '{{ endpoint }}statements/from_agents?';
-
-        if (localStorage.getItem('api_key')) {
-            baseUrl += `api_key=${localStorage.getItem('api_key')}&`;
-        }
 
         let getUrl = baseUrl + queryString;
 
@@ -81,24 +77,25 @@
 {% endblock %}
 
 {% block body %}
+    {{ super() }}
     <p>{{ message }}</p>
     <form>
         <b>Mandatory Parameters</b><br>Enter subject and object
         <div class="row">
             <div class="col">
                 <input type="text" id="subject" name="subject"
-                       class="form-control" placeholder="subject...">
+                       class="form-control stmt-form" placeholder="subject...">
             </div>
             <div class="col">
                 <input type="text" id="object" name="object"
-                       class="form-control" placeholder="object...">
+                       class="form-control stmt-form" placeholder="object...">
             </div>
         </div>
         <i>or</i> enter agents separated by space
         <div class="row">
             <div class="col">
                 <input type="text" id="agents" name="agents"
-                       class="form-control"
+                       class="form-control stmt-form"
                        placeholder="Agents separated by space...">
             </div>
         </div>
@@ -109,7 +106,7 @@
         <div class="row">
             <div class="col">
                 <input type="text" name="type" id="stmt-type"
-                       class="form-control" placeholder="Enter statement type">
+                       class="form-control stmt-form" placeholder="Enter statement type">
             </div>
         </div>
         Number of statements returned (max 1000)
@@ -117,7 +114,7 @@
             <div class="col">
                 <div class="container"
                      style="width: 90px; float: left; padding: 0px;">
-                    <input class="form-control" type="number" name="max_stmts"
+                    <input class="form-control stmt-form" type="number" name="max_stmts"
                            id="max-stmts" min="1" max="1000">
                 </div>
             </div>
@@ -127,7 +124,7 @@
             <div class="col">
                 <div class="container"
                      style="width: 110px; float: left; padding: 0px;">
-                    <input class="form-control" type="number" name="ev_limit"
+                    <input class="form-control stmt-form" type="number" name="ev_limit"
                            id="ev-limit" min="1" max="10000">
                 </div>
             </div>

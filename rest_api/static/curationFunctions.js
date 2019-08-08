@@ -3,13 +3,7 @@
 // Global constants
 let ALL_COLLAPSED = true;
 
-// Force activate the sub items of the table of contents after page load
-$(document).ready(function () {
-    $('a[href="#statements"]').addClass('active')
-});
-
 // Variables
-let pubmed_fetch = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
 let latestSubmission = {
     'ddSelect': '',
     'ev_hash': '',
@@ -17,75 +11,47 @@ let latestSubmission = {
     'submit_status': 0
 };
 
+function slideToggle(id) {
+    const el = document.querySelector(`#${id}`);
+    if(!el.dataset.open_height) {
+        el.dataset.open_height = el.offsetHeight;
+    }
+    if (el.dataset.open === "true") {
+        el.dataset.open = "false";
+        el.style.height = '0px';
+    }
+    else {
+        el.dataset.open = "true";
+        el.style.height = el.dataset.open_height + 'px';
+    }
+}
+
 
 // Turn on all the toggle buttons and connect them to a funciton.
 document.addEventListener('DOMContentLoaded', () => {
+
+    // Turn on all the toggle buttons.
    document.querySelectorAll('.curation_toggle')
        .forEach(function(toggle) {
            toggle.onclick = function() {
-               addCurationRow(this.closest('tr'));
-               this.onclick=null;
+               const clickedRow = document.querySelector(`#${this.dataset.parent_id}`);
+               const cur_id = addCurationRow(clickedRow);
+               this.onclick = function () {
+                   slideToggle(cur_id);
+               };
            };
+           toggle.innerHTML = "&#9998;";
            toggle.style.display = 'inline-block';
        })
 });
 
-// Check the API key input
-function keySubmit(key_value) {
-    let ensure_user = document.getElementById("ensure_user_on_api_key");
-    // Default value still there or nothing entered
-    if (key_value == "No key given." | !key_value) {
-        ensure_user.textContent = "No key given.";
-        // nothing entered
-    } else {
-        console.log("document.getElementById(\"api_key_input\").value: " + document.getElementById("api_key_input").value);
-        ensure_user.textContent = "Key stored!";
-    }
-}
 
 function submitButtonClick(clickEvent) {
-    // Get the user's email and optionally api key.
-    let user_email = localStorage.getItem('user_email');
-
-    // If not in storage, reveal a popup
-    if (!user_email) {
-        const overlay = document.querySelector('#overlay');
-        document.querySelector('#x-out').onclick = () => {
-            // Abort the submit
-            overlay.style.display = "none";
-            return false;
-        };
-        document.querySelector('#overlay-form').onsubmit = function() {
-            // Log the result
-            console.log(`Got user email: ${this.email} and api key: ${this.api_key}`)
-
-            // Check for an email, if none, reject the form (do nothing)
-            if (!this.email)
-                // Ideally a warning or explanation should be given.
-                return false;
-
-            // Store the results
-            localStorage.setItem('user_email', this.email.value);
-            localStorage.setItem('api_key', this.api_key.value);
-
-            // Hide the overlay again.
-            overlay.style.display = "none";
-
-            // Call the function again (this time it will go past here).
-            submitButtonClick(clickEvent);
-
-            /// Make sure nothing else unwanted happens.
-            return false;
-        };
-        overlay.style.display = "block";
-        return false;
-    }
-
     // Get mouseclick target, then parent's parent
     let pn = clickEvent.target.parentNode.parentNode;
-    let btn_row_tag = pn.closest('tr');
+    let pmid_row = pn.parentNode.previousSibling;
     let s = pn.getElementsByClassName("dropdown")[0]
-        .getElementsByTagName("select")[0];
+              .getElementsByTagName("select")[0];
 
     // DROPDOWN SELECTION
     let err_select = s.options[s.selectedIndex].value;
@@ -110,9 +76,6 @@ function submitButtonClick(clickEvent) {
     // GET REFERENCE TO STATUS BOX (EMPTY UNTIL STATUS RECEIVED)
     let statusBox = pn.getElementsByClassName("submission_status")[0].children[0];
 
-    // Step back to the preceding tr tag
-    let pmid_row = btn_row_tag.previousElementSibling;
-
     // PMID
     // Get pmid_linktext content
     let pmid_text = pmid_row
@@ -124,16 +87,15 @@ function submitButtonClick(clickEvent) {
 
     // HASHES: source_hash & stmt_hash
     // source_hash == ev['source_hash'] == pmid_row.id; "evidence level"
-    const source_hash = pmid_row.id;
+    const source_hash = pmid_row.dataset.source_hash;
     // stmt_hash == hash == stmt_info['hash'] == table ID; "(pa-) statement level"
-    const stmt_hash = pmid_row.parentElement.parentElement.id;
+    const stmt_hash = pmid_row.parentElement.dataset.stmt_hash;
 
     // CURATION DICT
     // example: curation_dict = {'tag': 'Reading', 'text': '"3200 A" is picked up as an agent.', 'curator': 'Klas', 'ev_hash': ev_hash};
     let cur_dict = {
         'tag': err_select,
         'text': user_text,
-        'curator': user_email,
         'ev_hash': source_hash
     };
 
@@ -163,11 +125,14 @@ function submitButtonClick(clickEvent) {
     let ajx_response = submitCuration(cur_dict, stmt_hash, statusBox, icon, testing);
     console.log("ajax response from submission: ");
     console.log(ajx_response);
+    return false;
 }
+
+
 // Submit curation
 function submitCuration(curation_dict, hash, statusBox, icon, test) {
 
-    let _url = CURATION_ADDR + hash + `?api_key=${localStorage.getItem('api_key')}`;
+    let _url = CURATION_ADDR + hash;
 
     if (test) {
         console.log("Submitting test curation...");
@@ -192,6 +157,17 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
                 case 400:
                     statusBox.textContent = xhr.status + ": Bad Curation Data";
                     icon.style = "color: #FF0000"; // Super red
+                    break;
+                case 401:
+                    console.log("Authentication failure, trying again.");
+                    login(
+                        (type, data) => {
+                            submitCuration(curation_dict, hash, statusBox, icon, test)
+                        },
+                        (type, data) => {
+                            submitCuration(curation_dict, hash, statusBox, icon, test)
+                        }
+                        );
                     break;
                 case 404:
                     statusBox.textContent = xhr.status + ": Bad Link";
@@ -409,19 +385,24 @@ function createStatusDiv() {
 }
 
 // Append row to the row that executed the click
-// <tr class="cchild" style="border-top: 1px solid #FFFFFF;">
-// <td colspan="4" style="padding: 0px; border-top: 1px solid #FFFFFF;">
+// <div class="row cchild" style="border-top: 1px solid #FFFFFF;">
+//   <div class="col" style="padding: 0px; border-top: 1px solid #FFFFFF;">
+//      <!-- form stuff -->
+//   </div>
+// </div>
 function curationRowGenerator() {
     // Create new row element
-    let newRow = document.createElement('tr');
+    let newRow = document.createElement('div');
+    newRow.className = 'row curation-row';
     newRow.innerHTML = null;
-    newRow.className = "cchild";
     newRow.style = "border-top: 1px solid #FFFFFF;";
+    newRow.dataset.open = "true";
 
     // Create new td element
-    let newTD = document.createElement('td');
+    let newTD = document.createElement('div');
+    newTD.className = 'col';
     newTD.style = "padding: 0px; border-top: 1px solid #FFFFFF; white-space: nowrap; text-align: left;";
-    newTD.setAttribute("colspan", "4");
+    // newTD.setAttribute("colspan", "4");
 
     // Add dropdown div
     let dropdownDiv = createDDDiv();
@@ -445,29 +426,10 @@ function curationRowGenerator() {
 function addCurationRow(clickedRow) {
     // Generate new row
     let curationRow = curationRowGenerator();
+    curationRow.id = clickedRow.id + '-curation';
 
     // Append new row to provided row
     clickedRow.parentNode.insertBefore(curationRow, clickedRow.nextSibling);
+
+    return curationRow.id;
 }
-
-// Expand/collapse row
-$(function () {
-    $("td[class='curation_toggle']").click(function (event) {
-        event.stopPropagation();
-        let $target = $(event.target);
-        if (event.target.dataset.clicked == "true") {
-            // Toggle (animation duration in msec)
-            $target.closest("tr").next().find("div").slideToggle(200);
-            // First click event
-        } else {
-            // Stay down (animation duration in msec)
-            $target.closest("tr").next().find("div").slideDown(400);
-
-            // Change color of icon to light gray
-            event.target.style = "color:#A4A4A4;";
-
-            // Set clicked to true
-            event.target.dataset.clicked = "true"
-        }
-    });
-});

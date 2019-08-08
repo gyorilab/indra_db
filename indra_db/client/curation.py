@@ -16,7 +16,7 @@ class BadHashError(IndraDbException):
         super(BadHashError, self).__init__(msg)
 
 
-def submit_curation(hash_val, tag, curator, ip, api_key, text=None,
+def submit_curation(hash_val, tag, curator, ip, text=None,
                     ev_hash=None, source='direct_client', db=None):
     """Submit a curation for a given preassembled or raw extraction.
 
@@ -30,9 +30,6 @@ def submit_curation(hash_val, tag, curator, ip, api_key, text=None,
         The name or identifier for the curator.
     ip : str
         The ip address of user's computer.
-    api_key : str
-        If you have one, this can help identify you as a curator, and may lend
-        extra weight to your curation(s).
     text : str
         A brief description of the problem.
     ev_hash : int
@@ -50,11 +47,6 @@ def submit_curation(hash_val, tag, curator, ip, api_key, text=None,
 
     inp = {'tag': tag, 'text': text, 'curator': curator, 'ip': ip,
            'source': source, 'pa_hash': hash_val, 'source_hash': ev_hash}
-
-    auth = db._get_auth_info(api_key)
-    if auth is None:
-        raise NoAuthError(api_key, 'curation')
-    inp['auth_id'] = auth[0]
 
     logger.info("Adding curation: %s" % str(inp))
 

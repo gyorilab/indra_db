@@ -1,17 +1,17 @@
 import json
 import logging
-import pickle
-import re
 import sys
 from datetime import datetime
 from functools import wraps
 from http.cookies import SimpleCookie
 from io import StringIO
-from os import path
+from os import path, environ
 
-from flask import Flask, request, abort, Response, redirect, url_for
+from flask import Flask, request, abort, Response, redirect, url_for, jsonify
 from flask_compress import Compress
 from flask_cors import CORS
+from flask_jwt_extended import create_access_token, get_jwt_identity, \
+    JWTManager, set_access_cookies, jwt_optional, unset_jwt_cookies
 from jinja2 import Environment
 
 from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
@@ -19,15 +19,28 @@ from indra.statements import make_statement_camel, stmts_from_json
 from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation, _has_auth, BadHashError
+    submit_curation, BadHashError
+from rest_api.models import User, Role, BadIdentity, IntegrityError, \
+    start_fresh, AuthLog
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
+
+app.config['DEBUG'] = True
+app.config['JWT_SECRET_KEY'] = environ['INDRADB_JWT_SECRET']
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 2592000  # 30 days
+app.config['JWT_TOKEN_LOCATION'] = ['cookies']
+app.config['JWT_COOKIE_SECURE'] = True
+app.config['JWT_SESSION_COOKIE'] = False
+app.config['PROPAGATE_EXCEPTIONS'] = True
+app.config['JWT_COOKIE_CSRF_PROTECT'] = False
+
 Compress(app)
 CORS(app)
 SC = SimpleCookie()
+jwt = JWTManager(app)
 
 print("Loading file")
 logger.info("INFO working.")
@@ -50,11 +63,212 @@ env.globals.update(url_for=url_for)
 
 def render_my_template(template, title, **kwargs):
     kwargs['title'] = TITLE + ': ' + title
+    kwargs['identity'] = get_jwt_identity()
     return env.get_template(template).render(**kwargs)
 
 
 class DbAPIError(Exception):
     pass
+
+
+# ==============================
+# Authentication tools/endpoints
+# ==============================
+
+
+def auth_wrapper(func):
+    @jwt_optional
+    @wraps(func)
+    def with_auth_log():
+        start_fresh()
+        logger.info("Handling %s request." % func.__name__)
+
+        user_identity = get_jwt_identity()
+        logger.info("Got user identity: %s" % user_identity)
+
+        auth_log = AuthLog(date=datetime.utcnow(), action=func.__name__,
+                           attempt_ip=request.remote_addr,
+                           input_identity_token=user_identity)
+        auth_details = {}
+
+        ret = func(auth_details, user_identity)
+
+        if isinstance(ret, tuple) and len(ret) == 2:
+            resp, code = ret
+        else:
+            resp = ret
+            code = 200
+        auth_log.response = resp.json
+        auth_log.code = code
+        auth_log.details = auth_details
+        auth_log.success = (func.__name__ in resp.json
+                            and resp.json[func.__name__]
+                            and code == 200)
+
+        auth_log.save()
+        return ret
+
+    return with_auth_log
+
+
+@app.route('/register', methods=['POST'])
+@auth_wrapper
+def register(auth_details, user_identity):
+    try:
+        user = User.get_by_identity(user_identity)
+        auth_details['user_id'] = user.id
+        return jsonify({"message": "User is already logged in."}), 400
+    except BadIdentity:
+        pass
+
+    data = request.json
+    missing = [field for field in ['email', 'password']
+               if field not in data]
+    if missing:
+        auth_details['missing'] = missing
+        return jsonify({"message": "No email or password provided"}), 400
+
+    auth_details['new_email'] = data['email']
+
+    new_user = User.new_user(
+        email=data['email'],
+        password=data['password']
+    )
+
+    try:
+        new_user.save()
+        auth_details['new_user_id'] = new_user.id
+        return jsonify({'register': True,
+                        'message': 'User {} created'.format(data['email'])})
+    except IntegrityError:
+        return jsonify({'message': 'User {} exists.'.format(data['email'])}), \
+               400
+    except Exception as e:
+        logger.exception(e)
+        logger.error("Unexpected error creating user.")
+        return jsonify({'message': 'Could not create account. '
+                                   'Something unexpected went wrong.'}), 500
+
+
+@app.route('/login', methods=['POST'])
+@auth_wrapper
+def login(auth_details, user_identity):
+    try:
+        if user_identity:
+            user = User.get_by_identity(user_identity)
+            auth_details['user_id'] = user.id
+            logger.info("User was already logged in.")
+            return jsonify({"message": "User is already logged in.",
+                            'login': False, 'user_email': user.email})
+    except BadIdentity:
+        logger.warning("User had malformed identity or invalid.")
+    except Exception as e:
+        logger.exception(e)
+        logger.error("Got an unexpected exception while looking up user.")
+
+    data = request.json
+    missing = [field for field in ['email', 'password']
+               if field not in data]
+    if missing:
+        auth_details['missing'] = missing
+        return jsonify({"message": "No email or password provided"}), 400
+
+    logger.debug("Looking for user: %s." % data['email'])
+    current_user = User.get_by_email(data['email'], verify=data['password'])
+
+    logger.debug("Got user: %s" % current_user)
+    if not current_user:
+        logger.info("Got no user, username or password was incorrect.")
+        return jsonify({'message': 'Username or password was incorrect.'}), 401
+    else:
+        # note the user id and the new identity.
+        auth_details['user_id'] = current_user.id
+        auth_details['new_identity'] = current_user.identity()
+
+        # Save some metadata for this login.
+        current_user.current_login_at = datetime.utcnow()
+        current_user.current_login_ip = request.remote_addr
+        current_user.active = True
+        current_user.save()
+
+    access_token = create_access_token(identity=current_user.identity())
+    logger.info("Produced new access token.")
+    resp = jsonify({'login': True, 'user_email': current_user.email})
+    set_access_cookies(resp, access_token)
+    return resp
+
+
+@app.route('/logout', methods=['POST'])
+@auth_wrapper
+def logout(auth_details, user_identity):
+    # Stash user details
+    auth_details['user_id'] = None
+    if user_identity:
+        try:
+            user = User.get_by_identity(user_identity)
+        except Exception as e:
+            logger.exception(e)
+            logger.error("Got error while checking identity on logout.")
+            user = None
+        if user:
+            auth_details['user_id'] = user.id
+            user.last_login_at = user.current_login_at
+            user.current_login_at = None
+            user.last_login_ip = user.current_login_ip
+            user.current_login_ip = None
+            user.active = False
+            user.save()
+        else:
+            logger.warning("Logging out user without entry in the database.")
+
+    resp = jsonify({'logout': True})
+    unset_jwt_cookies(resp)
+    return resp
+
+
+def _resolve_auth(query):
+    """Get the roles for the current request, either by JWT or API key.
+
+    If by API key, the key must be in the query. If by JWT, @jwt_optional or
+    similar must wrap the calling function.
+
+    Returns a tuple with the current user, if applicable, and a list of
+    associated roles.
+    """
+    api_key = query.pop('api_key', None)
+    logger.info("Got api key %s" % api_key)
+    if api_key:
+        logger.info("Using API key role.")
+        return None, [Role.get_by_api_key(api_key)]
+
+    user_identity = get_jwt_identity()
+    logger.debug("Got user_identity: %s" % user_identity)
+    if not user_identity:
+        logger.info("No user identity, no role.")
+        return None, []
+
+    try:
+        current_user = User.get_by_identity(user_identity)
+        logger.debug("Got user: %s" % current_user)
+    except BadIdentity:
+        logger.info("Identity malformed, no role.")
+        return None, []
+    except Exception as e:
+        logger.exception(e)
+        logger.error("Unexpected error looking up user.")
+        return None, []
+
+    if not current_user:
+        logger.info("Identity not mapped to user, no role.")
+        return None, []
+
+    logger.info("Identity mapped to the user, returning roles.")
+    return current_user, list(current_user.roles)
+
+
+# ==============================================
+# Define some utilities used to resolve queries.
+# ==============================================
 
 
 def __process_agent(agent_param):
@@ -126,11 +340,19 @@ class LogTracker(object):
         return ret
 
 
+# ==========================================
+# Define wrappers for common API call types.
+# ==========================================
+
+
 def _query_wrapper(f):
     logger.info("Calling outer wrapper.")
 
     @wraps(f)
+    @jwt_optional
     def decorator(*args, **kwargs):
+        start_fresh()
+
         tracker = LogTracker()
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))
@@ -145,9 +367,17 @@ def _query_wrapper(f):
         do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
-        format = query.pop('format', 'json')
+        fmt = query.pop('format', 'json')
 
-        api_key = query.pop('api_key', kwargs.pop('api_key', None))
+        # Figure out authorization.
+        has = dict.fromkeys(['elsevier', 'medscan'], False)
+        user, roles = _resolve_auth(query)
+        for role in roles:
+            for resource in has.keys():
+                has[resource] |= role.permissions.get(resource, False)
+        logger.info('Auths: %s' % str(has))
+
+        # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
         result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
@@ -159,8 +389,6 @@ def _query_wrapper(f):
 
         # Handle any necessary redactions
         stmts_json = result.pop('statements')
-        has = {src: _has_auth(src, api_key) for src in ['elsevier', 'medscan']}
-        logger.info('Auths: %s' % str(has))
         medscan_redactions = 0
         medscan_removals = 0
         elsevier_redactions = 0
@@ -209,7 +437,7 @@ def _query_wrapper(f):
         result['statement_limit'] = MAX_STATEMENTS
         result['statements_returned'] = len(stmts_json)
 
-        if format == 'html':
+        if fmt == 'html':
             title = TITLE + ': ' + 'Results'
             ev_totals = result.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
@@ -217,7 +445,8 @@ def _query_wrapper(f):
                                            source_counts, title=title,
                                            db_rest_url=request.url_root[:-1])
             idbr_template = env.get_template('idbr_statements_view.html')
-            content = html_assembler.make_model(idbr_template)
+            content = html_assembler.make_model(idbr_template,
+                                    identity=user.identity() if user else None)
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
                                for lvl, n in tracker.get_level_stats().items()]
@@ -248,46 +477,6 @@ def _query_wrapper(f):
     return decorator
 
 
-@app.route('/', methods=['GET'])
-def iamalive():
-    return redirect('welcome', code=302)
-
-
-@app.route('/welcome', methods=['GET'])
-def welcome():
-    logger.info("Browser welcome page.")
-    onclick = ("window.location = window.location.href.replace('welcome', "
-               "'statements')")
-    return render_my_template('welcome.html', 'Welcome',
-                              onclick_action=onclick)
-
-
-with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
-    CURATION_JS = f.read()
-
-
-@app.route('/code/curationFunctions.js')
-def serve_js():
-    return Response(CURATION_JS, mimetype='text/javascript')
-
-
-with open(path.join(HERE, 'static', 'favicon.ico'), 'rb') as f:
-    ICON = f.read()
-
-
-@app.route('/favicon.ico')
-def serve_icon():
-    return Response(ICON, mimetype='image/x-icon')
-
-
-@app.route('/statements', methods=['GET'])
-def get_statements_query_format():
-    # Create a template object from the template file, load once
-    return render_my_template('search_statements.html', 'Search',
-                              message="Welcome! Try asking a question.",
-                              endpoint=request.url_root)
-
-
 def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
                          ev_limit, best_first):
     # Fix the case, if we got a statement type.
@@ -315,6 +504,39 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
                                         max_stmts=max_stmts, ev_limit=ev_limit,
                                         best_first=best_first)
     return result
+
+
+# ====================================================
+# Define some endpoints for accessing minor resources.
+# ====================================================
+
+
+with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
+    CURATION_JS = f.read()
+
+
+@app.route('/code/curationFunctions.js')
+def serve_js():
+    return Response(CURATION_JS, mimetype='text/javascript')
+
+
+# ==========================
+# Here begins the API proper
+# ==========================
+
+
+@app.route('/', methods=['GET'])
+def iamalive():
+    return redirect('statements', code=302)
+
+
+@app.route('/statements', methods=['GET'])
+@jwt_optional
+def get_statements_query_format():
+    # Create a template object from the template file, load once
+    return render_my_template('search_statements.html', 'Search',
+                              message="Welcome! Try asking a question.",
+                              endpoint=request.url_root)
 
 
 @app.route('/statements/from_agents', methods=['GET'])
@@ -423,30 +645,41 @@ def describe_curation():
 
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
+@jwt_optional
 def submit_curation_endpoint(hash_val, **kwargs):
+    user, roles = _resolve_auth(dict(request.args))
+    if not roles and not user:
+        res_dict = {"result": "failure", "reason": "Invalid Credentials"}
+        return jsonify(res_dict), 401
+
+    if user:
+        email = user.email
+    else:
+        email = request.json.get('email')
+        if not email:
+            res_dict = {"result": "failure",
+                        "reason": "POST with API key requires a user email."}
+            return jsonify(res_dict), 400
+
     logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')
     source_api = request.json.pop('source', 'DB REST API')
     tag = request.json.get('tag')
     ip = request.remote_addr
     text = request.json.get('text')
-    curator = request.json.get('curator')
-    api_key = request.args.get('api_key', kwargs.pop('api_key', None))
-    logger.info("Curator %s %s key"
-                % (curator, 'with' if api_key else 'without'))
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'
         try:
-            dbid = submit_curation(hash_val, tag, curator, ip, api_key, text,
-                                   ev_hash, source_api)
+            dbid = submit_curation(hash_val, tag, email, ip, text, ev_hash,
+                                   source_api)
         except BadHashError as e:
             abort(Response("Invalid hash: %s." % e.mk_hash, 400))
         res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}
     logger.info("Got result: %s" % str(res))
-    return Response(json.dumps(res), mimetype='application/json')
+    return jsonify(res)
 
 
 if __name__ == '__main__':

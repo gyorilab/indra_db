@@ -162,7 +162,7 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
                         ('agB_name', pair[1][2]),
                         ('stmt_type', info_dict['type']),
                         ('evidence_count', info_dict['ev_count']),
-                        ('hash', hash)])
+                        ('stmt_hash', hash)])
                 rows.append(row)
         if nkey_errors:
             ef = 'key_errors.csv'

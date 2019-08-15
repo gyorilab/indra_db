@@ -40,7 +40,8 @@ class SifDumperTester(unittest.TestCase):
 
         # Check column names
         assert {'agA_id', 'agA_name', 'agA_ns', 'agB_id', 'agB_name', 'agB_ns',
-                'evidence_count', 'hash', 'stmt_type'} == set(self.df.columns)
+                'evidence_count', 'stmt_hash', 'stmt_type'} == set(
+            self.df.columns)
 
         # Check for None's
         assert sum(self.df['agA_name'] == None) == 0
@@ -55,16 +56,16 @@ class SifDumperTester(unittest.TestCase):
         assert isinstance(self.df.head(1)['agB_name'][0], str)
         assert isinstance(self.df.head(1)['stmt_type'][0], str)
         assert isinstance(self.df.head(1)['evidence_count'][0], np.int64)
-        assert isinstance(self.df.head(1)['hash'][0], np.int64)
+        assert isinstance(self.df.head(1)['stmt_hash'][0], np.int64)
 
         # Check that we don't have significant keyerrors from creating the df
         key_error_file = path.join(path.dirname(__file__), 'key_errors.csv')
         if path.exists(key_error_file):
             key_errors = pd.read_csv(key_error_file, sep=',',
-                                     names=['hash', 'ag_num'], header=None)
+                                     names=['stmt_hash', 'ag_num'], header=None)
             remove(key_error_file)
-            missing_hashes = set(key_errors['hash'].values)
-            df_hashes = set(self.df['hash'].values)
+            missing_hashes = set(key_errors['stmt_hash'].values)
+            df_hashes = set(self.df['stmt_hash'].values)
 
             assert len(missing_hashes.intersection(df_hashes)) / \
                 len(df_hashes) < 0.5
@@ -80,6 +81,6 @@ class SifDumperTester(unittest.TestCase):
             break
 
         # Check that some keys exist in the df
-        df_hashes = set(self.df['hash'].values)
+        df_hashes = set(self.df['stmt_hash'].values)
         sd_hashes = set(ev_dict.keys())
         assert len(sd_hashes.intersection(df_hashes)) / len(sd_hashes) > 0.25

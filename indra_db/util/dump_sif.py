@@ -1,6 +1,5 @@
 __all__ = ['load_db_content', 'make_dataframe', 'make_ev_strata', 'NS_LIST']
 
-import sys
 import pickle
 import logging
 import argparse
@@ -14,12 +13,12 @@ except ImportError:
     pd = None
 
 from indra_db import util as dbu
-from indra.databases import hgnc_client, go_client, mesh_client
 
 logger = logging.getLogger(__name__)
 
 NS_PRIORITY_LIST = (
     'FPLX',
+    'MIRBASE',
     'HGNC',
     'GO',
     'MESH',
@@ -31,7 +30,8 @@ NS_PRIORITY_LIST = (
 
 # All namespaces here (except NAME) should also be included in the
 # NS_PRIORITY_LIST above
-NS_LIST = ('NAME', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI', 'PUBCHEM')
+NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
+           'PUBCHEM')
 
 
 def load_db_content(reload, ns_list, pkl_filename=None, db=None):
@@ -160,7 +160,7 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
                         ('agB_name', pair[1][2]),
                         ('stmt_type', info_dict['type']),
                         ('evidence_count', info_dict['ev_count']),
-                        ('hash', hash)])
+                        ('stmt_hash', hash)])
                 rows.append(row)
         if nkey_errors:
             ef = 'key_errors.csv'

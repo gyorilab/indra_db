@@ -11,7 +11,8 @@ from indra.util import batch_iter, clockit
 from indra.statements import Statement
 from indra.tools import assemble_corpus as ac
 from indra.preassembler.sitemapper import logger as site_logger
-from indra.preassembler.grounding_mapper import logger as grounding_logger
+from indra.preassembler.grounding_mapper.mapper import logger \
+                                                    as grounding_logger
 from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies

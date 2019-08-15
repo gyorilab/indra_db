@@ -1,6 +1,5 @@
 __all__ = ['load_db_content', 'make_dataframe', 'make_ev_strata', 'NS_LIST']
 
-import sys
 import pickle
 import logging
 import argparse
@@ -14,7 +13,6 @@ except ImportError:
     pd = None
 
 from indra_db import util as dbu
-from indra.databases import hgnc_client, go_client, mesh_client
 
 logger = logging.getLogger(__name__)
 

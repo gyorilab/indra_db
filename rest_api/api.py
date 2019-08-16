@@ -506,20 +506,6 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
     return result
 
 
-# ====================================================
-# Define some endpoints for accessing minor resources.
-# ====================================================
-
-
-with open(path.join(HERE, 'static', 'curationFunctions.js'), 'r') as f:
-    CURATION_JS = f.read()
-
-
-@app.route('/code/curationFunctions.js')
-def serve_js():
-    return Response(CURATION_JS, mimetype='text/javascript')
-
-
 # ==========================
 # Here begins the API proper
 # ==========================

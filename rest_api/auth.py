@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, request
 from rest_api.models import User, Role, BadIdentity, IntegrityError, \
     start_fresh, AuthLog
 
-auth = Blueprint('auth_bp', __name__)
+auth = Blueprint('auth', __name__)
 
 logger = logging.getLogger(__name__)
 

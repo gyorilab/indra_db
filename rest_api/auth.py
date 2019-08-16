@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, request
 from rest_api.models import User, Role, BadIdentity, IntegrityError, \
     start_fresh, AuthLog
 
-auth_bp = Blueprint('auth_bp', __name__)
+auth = Blueprint('auth_bp', __name__)
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def auth_wrapper(func):
     return with_auth_log
 
 
-@auth_bp.route('/register', methods=['POST'])
+@auth.route('/register', methods=['POST'])
 @auth_wrapper
 def register(auth_details, user_identity):
     try:
@@ -104,7 +104,7 @@ def register(auth_details, user_identity):
                                    'Something unexpected went wrong.'}), 500
 
 
-@auth_bp.route('/login', methods=['POST'])
+@auth.route('/login', methods=['POST'])
 @auth_wrapper
 def login(auth_details, user_identity):
     try:
@@ -152,7 +152,7 @@ def login(auth_details, user_identity):
     return resp
 
 
-@auth_bp.route('/logout', methods=['POST'])
+@auth.route('/logout', methods=['POST'])
 @auth_wrapper
 def logout(auth_details, user_identity):
     # Stash user details

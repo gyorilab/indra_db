@@ -19,13 +19,13 @@ from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, BadHashError
 
-from rest_api.auth import auth_bp, _resolve_auth, config_auth
+from rest_api.auth import auth, _resolve_auth, config_auth
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
-app.register_blueprint(auth_bp)
+app.register_blueprint(auth)
 
 app.config['DEBUG'] = True
 SC, jwt = config_auth(app)

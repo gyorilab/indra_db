@@ -56,9 +56,9 @@
     </style>
     <script>
         let AUTH_URLS = {
-            'login': "{{ url_for('login') }}",
-            'register': "{{ url_for('register') }}",
-            'logout': "{{ url_for('logout') }}"
+            'login': "{{ url_for('auth.login') }}",
+            'register': "{{ url_for('auth.register') }}",
+            'logout': "{{ url_for('auth.logout') }}"
         };
 
         function report_login_result(msg) {

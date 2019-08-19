@@ -20,7 +20,7 @@ from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, BadHashError
 
-from ui_util.auth import auth, resolve_auth, config_auth
+from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)

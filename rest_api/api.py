@@ -6,6 +6,7 @@ from functools import wraps
 from io import StringIO
 from os import path
 
+import requests
 from flask import Flask, request, abort, Response, redirect, url_for, jsonify
 from flask_compress import Compress
 from flask_cors import CORS
@@ -69,13 +70,23 @@ class DbAPIError(Exception):
 
 def __process_agent(agent_param):
     """Get the agent id and namespace from an input param."""
+
     if not agent_param.endswith('@TEXT'):
         param_parts = agent_param.split('@')
         if len(param_parts) == 2:
             ag, ns = param_parts
         elif len(param_parts) == 1:
-            ag = agent_param
-            ns = 'NAME'
+            try:
+                resp = requests.post('http://grounding.indra.bio/ground',
+                                     json={'text': param_parts[0]})
+                info = resp.json()
+                ns = info['term']['db']
+                ag = info['term']['id']
+            except Exception as e:
+                logger.exception(e)
+                logger.warning("Could not use Gilda, assuming name.")
+                ns = 'NAME'
+                ag = param_parts[0]
         else:
             raise DbAPIError('Unrecognized agent spec: \"%s\"' % agent_param)
     else:

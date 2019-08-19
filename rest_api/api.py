@@ -20,7 +20,7 @@ from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
     submit_curation, BadHashError
 
-from rest_api.auth import auth, _resolve_auth, config_auth
+from ui_util.auth import auth, resolve_auth, config_auth
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)
@@ -177,7 +177,7 @@ def _query_wrapper(f):
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
-        user, roles = _resolve_auth(query)
+        user, roles = resolve_auth(query)
         for role in roles:
             for resource in has.keys():
                 has[resource] |= role.permissions.get(resource, False)
@@ -439,7 +439,7 @@ def describe_curation():
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_optional
 def submit_curation_endpoint(hash_val, **kwargs):
-    user, roles = _resolve_auth(dict(request.args))
+    user, roles = resolve_auth(dict(request.args))
     if not roles and not user:
         res_dict = {"result": "failure", "reason": "Invalid Credentials"}
         return jsonify(res_dict), 401

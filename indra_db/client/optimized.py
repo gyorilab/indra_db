@@ -23,6 +23,16 @@ def _get_id_col(tr, id_type):
 
 
 @clockit
+def get_statements_from_agents(*args, **kwargs):
+    """Get Statement objects given agent refs and the Statement type.
+
+    This is a shallow wrap around `get_statement_jsons_from_agents`.
+    """
+    stmt_jsons = get_statement_jsons_from_agents(*args, **kwargs)
+    return stmts_from_json(stmt_jsons)
+
+
+@clockit
 def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
     """Get raw statement jsons for a given list of papers.
 

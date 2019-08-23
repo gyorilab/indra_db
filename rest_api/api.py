@@ -11,9 +11,10 @@ from flask import Flask, request, abort, Response, redirect, url_for, jsonify
 from flask_compress import Compress
 from flask_cors import CORS
 from flask_jwt_extended import get_jwt_identity, jwt_optional
-from jinja2 import Environment
+from jinja2 import Environment, ChoiceLoader
 
-from indra.assemblers.html import HtmlAssembler, IndraHTMLLoader
+from indra.assemblers.html import HtmlAssembler
+from indra.assemblers.html.assembler import loader as indra_loader
 from indra.statements import make_statement_camel, stmts_from_json
 from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
@@ -44,10 +45,7 @@ TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
 
 # Instantiate a jinja2 env.
-env = Environment(
-    loader=IndraHTMLLoader({None: HERE,
-                            'indra': IndraHTMLLoader.native_path})
-)
+env = Environment(loader=ChoiceLoader([app.jinja_loader, indra_loader]))
 
 # Here we can add functions to the jinja2 env.
 env.globals.update(url_for=url_for)

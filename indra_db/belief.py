@@ -91,18 +91,19 @@ def load_mock_statements(db):
                              db.RawUniqueLinks.raw_stmt_id],
                             *db.link(db.Reading, db.RawUniqueLinks))
     res_dbs = db.select_all([db.DBInfo.source_api,
+                             db.DBInfo.db_name,
                              db.RawUniqueLinks.pa_stmt_mk_hash,
                              db.RawUniqueLinks.raw_stmt_id],
                             *db.link(db.DBInfo, db.RawUniqueLinks))
     stmts_dict = {}
-    for src_api, mk_hash, sid in res_rdg + res_dbs:
+    for src_api, db_name, mk_hash, sid in res_rdg + res_dbs:
         # If the statement is new, add it to the dict.
         if mk_hash not in stmts_dict.keys():
             stmts_dict[mk_hash] = MockStatement(mk_hash)
 
         # Add the new evidence.
-        stmts_dict[mk_hash].evidence.append(MockEvidence(src_api.lower(),
-                                                         raw_sid=sid))
+        mev = MockEvidence(src_api.lower(), raw_sid=sid, source_sub_id=db_name)
+        stmts_dict[mk_hash].evidence.append(mev)
 
     sup_links = db.select_all([db.PASupportLinks.supported_mk_hash,
                                db.PASupportLinks.supporting_mk_hash])

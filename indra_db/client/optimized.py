@@ -6,7 +6,8 @@ from sqlalchemy import or_, desc, true, select, intersect_all
 logger = logging.getLogger(__file__)
 
 from indra.util import clockit
-from indra.statements import get_statement_by_name
+from indra.statements import get_statement_by_name, stmts_from_json, Agent, \
+    ActiveForm
 from indra_db.util import get_primary_db, regularize_agent_id
 
 
@@ -358,6 +359,33 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
         meta_dict[h]['agents'][ag_num] = ag_name
 
     return meta_dict
+
+
+def get_interaction_statements_from_agents(*args, **kwargs):
+    """Get high-level statements for interactions apparent in db metadata.
+
+    This function is a fairly thin wrapper around
+    `get_interaction_jsons_from_agents`
+    """
+    meta_dict = get_interaction_jsons_from_agents(*args, *kwargs)
+
+    stmts = []
+    for h, meta in meta_dict.items():
+        StmtClass = get_statement_by_name(meta['type'])
+        if issubclass(StmtClass, ActiveForm):
+            continue
+        if meta['type'] == 'Complex':
+            agents = [Agent(name) for name in meta['agents'].values()]
+            stmt = StmtClass(agents)
+        else:
+            agents = [Agent(meta['agents'][i])
+                      if meta['agents'].get(i)
+                      else None
+                      for i in range(len(StmtClass._agent_order))]
+            stmt = StmtClass(*agents)
+        stmts.append(stmt)
+
+    return stmts
 
 
 @clockit

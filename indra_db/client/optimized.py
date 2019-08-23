@@ -87,6 +87,52 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
     return result_dict
 
 
+@clockit
+def get_direct_raw_stmt_jsons_from_agents(agents=None, stmt_type=None, db=None,
+                                          max_stmts=None, offset=None):
+    """Get Raw statement jsons from a list of agent refs and Statement type."""
+    if db is None:
+        db = get_primary_db()
+    entity_queries = []
+    for role, ag_dbid, ns in agents:
+        # Make the id match paradigms for the database.
+        ag_dbid = regularize_agent_id(ag_dbid, ns)
+
+        # Sanitize wildcards.
+        for char in ['%', '_']:
+            ag_dbid = ag_dbid.replace(char, '\%s' % char)
+
+        # Generate the query
+        q = (db.session
+             .query(db.RawAgents.stmt_id.label('stmt_id'))
+             .filter(db.RawAgents.db_id.like(ag_dbid)))
+
+        if ns is not None:
+            q = q.filter(db.RawAgents.db_name.like(ns))
+
+        if role is not None:
+            q = q.filter(db.RawAgents.role == role.upper())
+
+        entity_queries.append(q)
+
+    ag_query_al = intersect_all(*entity_queries).alias('intersection')
+    ag_query = db.session.query(ag_query_al).distinct().subquery('ag_stmt_ids')
+
+    json_q = (db.session.query(db.RawStatements.json, ag_query)
+                        .filter(db.RawStatements.id == ag_query.c.stmt_id))
+
+    if stmt_type is not None:
+        json_q = json_q.filter(db.RawStatements.type == stmt_type)
+
+    if max_stmts is not None:
+        json_q = json_q.limit(max_stmts)
+
+    if offset is not None:
+        json_q = json_q.offset(offset)
+
+    return json_q
+
+
 def _apply_limits(db, mk_hashes_q, best_first, max_stmts, offset,
                   ev_count_obj=None, mk_hashes_alias=None):
     # Handle limiting.

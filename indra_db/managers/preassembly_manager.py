@@ -303,6 +303,8 @@ class PreassemblyManager(object):
         self.__tag = 'supplement'
 
         last_update = self._get_latest_updatetime(db)
+        assert last_update is not None, \
+            "The preassembly tables have not yet been initialized."
         start_date = datetime.utcnow()
         self._log("Latest update was: %s" % last_update)
 

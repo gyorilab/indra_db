@@ -122,8 +122,9 @@ def calculate_belief(stmts):
     return {s.matches_key(): s.belief for s in stmts}
 
 
-def run():
-    db = get_primary_db()
+def run(db=None):
+    if db is None:
+        db = get_primary_db()
     stmts = load_mock_statements(db)
     return calculate_belief(stmts)
 

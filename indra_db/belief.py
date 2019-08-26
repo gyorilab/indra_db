@@ -12,7 +12,7 @@ from indra_db import get_primary_db
 
 logger = logging.getLogger('db_belief')
 
-from indra.belief import BeliefEngine
+from indra.belief import BeliefEngine, SimpleScorer
 
 
 class LoadError(Exception):
@@ -113,7 +113,10 @@ def load_mock_statements(db):
 
 
 def calculate_belief(stmts):
-    be = BeliefEngine()
+    scorer = SimpleScorer(subtype_probs={
+        'biopax': {'pc11': 0.2, 'phosphosite': 0.01},
+    })
+    be = BeliefEngine(scorer=scorer)
     be.set_prior_probs(stmts)
     be.set_hierarchy_probs(stmts)
     return {s.matches_key(): s.belief for s in stmts}

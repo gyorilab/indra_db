@@ -12,7 +12,7 @@ from indra_db import get_primary_db
 
 logger = logging.getLogger('db_belief')
 
-from indra.belief import BeliefEngine
+from indra.belief import BeliefEngine, SimpleScorer
 
 
 class LoadError(Exception):
@@ -86,24 +86,36 @@ def populate_support(stmts, links):
 
 def load_mock_statements(db):
     """Generate a list of mock statements from the pa statement table."""
-    res_rdg = db.select_all([db.Reading.reader,
-                             db.RawUniqueLinks.pa_stmt_mk_hash,
-                             db.RawUniqueLinks.raw_stmt_id],
-                            *db.link(db.Reading, db.RawUniqueLinks))
-    res_dbs = db.select_all([db.DBInfo.source_api,
-                             db.RawUniqueLinks.pa_stmt_mk_hash,
-                             db.RawUniqueLinks.raw_stmt_id],
-                            *db.link(db.DBInfo, db.RawUniqueLinks))
+    # Initialize a dictionary of evidence keyed by hash.
     stmts_dict = {}
-    for src_api, mk_hash, sid in res_rdg + res_dbs:
-        # If the statement is new, add it to the dict.
+
+    def add_evidence(src_api, mk_hash, sid, db_name=None):
+        # Add a new mock statement if applicable.
         if mk_hash not in stmts_dict.keys():
             stmts_dict[mk_hash] = MockStatement(mk_hash)
 
         # Add the new evidence.
-        stmts_dict[mk_hash].evidence.append(MockEvidence(src_api.lower(),
-                                                         raw_sid=sid))
+        mev = MockEvidence(src_api.lower(), raw_sid=sid, source_sub_id=db_name)
+        stmts_dict[mk_hash].evidence.append(mev)
 
+    # Handle the evidence from reading.
+    res_rdg = db.select_all([db.Reading.reader,
+                             db.RawUniqueLinks.pa_stmt_mk_hash,
+                             db.RawUniqueLinks.raw_stmt_id],
+                            *db.link(db.Reading, db.RawUniqueLinks))
+    for src_api, mk_hash, sid in res_rdg:
+        add_evidence(src_api, mk_hash, sid)
+
+    # Handle the evidence from knowledge bases.
+    res_dbs = db.select_all([db.DBInfo.source_api,
+                             db.DBInfo.db_name,
+                             db.RawUniqueLinks.pa_stmt_mk_hash,
+                             db.RawUniqueLinks.raw_stmt_id],
+                            *db.link(db.DBInfo, db.RawUniqueLinks))
+    for src_api, db_name, mk_hash, sid in res_dbs:
+        add_evidence(src_api, mk_hash, sid, db_name)
+
+    # Get the support links and populate
     sup_links = db.select_all([db.PASupportLinks.supported_mk_hash,
                                db.PASupportLinks.supporting_mk_hash])
     populate_support(stmts_dict, sup_links)
@@ -112,14 +124,18 @@ def load_mock_statements(db):
 
 
 def calculate_belief(stmts):
-    be = BeliefEngine()
+    scorer = SimpleScorer(subtype_probs={
+        'biopax': {'pc11': 0.2, 'phosphosite': 0.01},
+    })
+    be = BeliefEngine(scorer=scorer)
     be.set_prior_probs(stmts)
     be.set_hierarchy_probs(stmts)
     return {s.matches_key(): s.belief for s in stmts}
 
 
-def run():
-    db = get_primary_db()
+def run(db=None):
+    if db is None:
+        db = get_primary_db()
     stmts = load_mock_statements(db)
     return calculate_belief(stmts)
 

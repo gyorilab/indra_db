@@ -93,6 +93,8 @@ def get_direct_raw_stmt_jsons_from_agents(agents=None, stmt_type=None, db=None,
     """Get Raw statement jsons from a list of agent refs and Statement type."""
     if db is None:
         db = get_primary_db()
+
+    # Turn the agents parameters into an intersection of queries for stmt ids.
     entity_queries = []
     for role, ag_dbid, ns in agents:
         # Make the id match paradigms for the database.
@@ -118,19 +120,46 @@ def get_direct_raw_stmt_jsons_from_agents(agents=None, stmt_type=None, db=None,
     ag_query_al = intersect_all(*entity_queries).alias('intersection')
     ag_query = db.session.query(ag_query_al).distinct().subquery('ag_stmt_ids')
 
-    json_q = (db.session.query(db.RawStatements.json, ag_query)
+    # Create a query for the raw statement json
+    rid_c = db.RawStatements.reading_id.label('rid')
+    json_q = (db.session.query(db.RawStatements.json, rid_c, ag_query)
                         .filter(db.RawStatements.id == ag_query.c.stmt_id))
 
+    # Filter by type, if applicable.
     if stmt_type is not None:
         json_q = json_q.filter(db.RawStatements.type == stmt_type)
 
+    # Apply count limits and such.
     if max_stmts is not None:
         json_q = json_q.limit(max_stmts)
 
     if offset is not None:
         json_q = json_q.offset(offset)
 
-    return json_q
+    # Construct final query, that joins with text ref info on the database.
+    json_q = json_q.subquery('json_content')
+    ref_q = (db.session
+             .query(json_q, db.Reading.text_content_id.label('tcid'),
+                    db.TextRef)
+             .outerjoin(db.Reading, db.Reading.id == json_q.c.rid)
+             .join(db.TextContent,
+                   db.TextContent.id == db.Reading.text_content_id)
+             .join(db.TextRef, db.TextRef.id == db.TextContent.text_ref_id))
+
+    # Process the jsons, filling text ref info.
+    raw_stmt_jsons = {}
+    for json_bytes, rid, sid, tcid, tr in ref_q.all():
+        raw_j = json.loads(json_bytes)
+        ev = raw_j['evidence'][0]
+        ev['text_refs'] = tr.get_ref_dict()
+        ev['text_refs']['TCID'] = tcid
+        ev['text_refs']['READING_ID'] = rid
+        if tr.pmid:
+            ev['pmid'] = tr.pmid
+
+        raw_stmt_jsons[sid] = raw_j
+
+    return raw_stmt_jsons
 
 
 def _apply_limits(db, mk_hashes_q, best_first, max_stmts, offset,

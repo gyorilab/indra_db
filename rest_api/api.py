@@ -45,7 +45,8 @@ TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
 
 # Instantiate a jinja2 env.
-env = Environment(loader=ChoiceLoader([app.jinja_loader, indra_loader]))
+env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
+                                       indra_loader]))
 
 # Here we can add functions to the jinja2 env.
 env.globals.update(url_for=url_for)

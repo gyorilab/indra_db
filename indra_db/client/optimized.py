@@ -6,7 +6,8 @@ from sqlalchemy import or_, desc, true, select, intersect_all
 logger = logging.getLogger(__file__)
 
 from indra.util import clockit
-from indra.statements import get_statement_by_name
+from indra.statements import get_statement_by_name, stmts_from_json, Agent, \
+    ActiveForm
 from indra_db.util import get_primary_db, regularize_agent_id
 
 
@@ -19,6 +20,16 @@ def _get_id_col(tr, id_type):
         except AttributeError:
             raise ValueError("Invalid id_type: %s" % id_type)
     return id_attr
+
+
+@clockit
+def get_statements_from_agents(*args, **kwargs):
+    """Get Statement objects given agent refs and the Statement type.
+
+    This is a shallow wrap around `get_statement_jsons_from_agents`.
+    """
+    stmt_jsons = get_statement_jsons_from_agents(*args, **kwargs)
+    return stmts_from_json(stmt_jsons)
 
 
 @clockit
@@ -77,10 +88,82 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
 
 
 @clockit
-def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
-                                         max_stmts=None, offset=None,
-                                         ev_limit=None, mk_hashes_alias=None,
-                                         ev_count_obj=None):
+def get_direct_raw_stmt_jsons_from_agents(agents=None, stmt_type=None, db=None,
+                                          max_stmts=None, offset=None):
+    """Get Raw statement jsons from a list of agent refs and Statement type."""
+    if db is None:
+        db = get_primary_db()
+
+    # Turn the agents parameters into an intersection of queries for stmt ids.
+    entity_queries = []
+    for role, ag_dbid, ns in agents:
+        # Make the id match paradigms for the database.
+        ag_dbid = regularize_agent_id(ag_dbid, ns)
+
+        # Sanitize wildcards.
+        for char in ['%', '_']:
+            ag_dbid = ag_dbid.replace(char, '\%s' % char)
+
+        # Generate the query
+        q = (db.session
+             .query(db.RawAgents.stmt_id.label('stmt_id'))
+             .filter(db.RawAgents.db_id.like(ag_dbid)))
+
+        if ns is not None:
+            q = q.filter(db.RawAgents.db_name.like(ns))
+
+        if role is not None:
+            q = q.filter(db.RawAgents.role == role.upper())
+
+        entity_queries.append(q)
+
+    ag_query_al = intersect_all(*entity_queries).alias('intersection')
+    ag_query = db.session.query(ag_query_al).distinct().subquery('ag_stmt_ids')
+
+    # Create a query for the raw statement json
+    rid_c = db.RawStatements.reading_id.label('rid')
+    json_q = (db.session.query(db.RawStatements.json, rid_c, ag_query)
+                        .filter(db.RawStatements.id == ag_query.c.stmt_id))
+
+    # Filter by type, if applicable.
+    if stmt_type is not None:
+        json_q = json_q.filter(db.RawStatements.type == stmt_type)
+
+    # Apply count limits and such.
+    if max_stmts is not None:
+        json_q = json_q.limit(max_stmts)
+
+    if offset is not None:
+        json_q = json_q.offset(offset)
+
+    # Construct final query, that joins with text ref info on the database.
+    json_q = json_q.subquery('json_content')
+    ref_q = (db.session
+             .query(json_q, db.Reading.text_content_id.label('tcid'),
+                    db.TextRef)
+             .outerjoin(db.Reading, db.Reading.id == json_q.c.rid)
+             .join(db.TextContent,
+                   db.TextContent.id == db.Reading.text_content_id)
+             .join(db.TextRef, db.TextRef.id == db.TextContent.text_ref_id))
+
+    # Process the jsons, filling text ref info.
+    raw_stmt_jsons = {}
+    for json_bytes, rid, sid, tcid, tr in ref_q.all():
+        raw_j = json.loads(json_bytes)
+        ev = raw_j['evidence'][0]
+        ev['text_refs'] = tr.get_ref_dict()
+        ev['text_refs']['TCID'] = tcid
+        ev['text_refs']['READING_ID'] = rid
+        if tr.pmid:
+            ev['pmid'] = tr.pmid
+
+        raw_stmt_jsons[sid] = raw_j
+
+    return raw_stmt_jsons
+
+
+def _apply_limits(db, mk_hashes_q, best_first, max_stmts, offset,
+                  ev_count_obj=None, mk_hashes_alias=None):
     # Handle limiting.
     mk_hashes_q = mk_hashes_q.distinct()
     if best_first:
@@ -94,6 +177,18 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
         mk_hashes_q = mk_hashes_q.limit(max_stmts)
     if offset is not None:
         mk_hashes_q = mk_hashes_q.offset(offset)
+
+    return mk_hashes_q
+
+
+@clockit
+def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
+                                         max_stmts=None, offset=None,
+                                         ev_limit=None, mk_hashes_alias=None,
+                                         ev_count_obj=None):
+    # Handle the limiting
+    mk_hashes_q = _apply_limits(db, mk_hashes_q, best_first, max_stmts, offset,
+                                ev_count_obj, mk_hashes_alias)
 
     # Create the link
     mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
@@ -207,6 +302,57 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q, best_first=True,
     return ret
 
 
+def _labelled_hash_and_count(meta):
+    return meta.mk_hash.label('mk_hash'), meta.ev_count.label('ev_count')
+
+
+def _make_mk_hashes_query(db, agents, stmt_type):
+
+    queries = []
+    for role, ag_dbid, ns in agents:
+        # Make the id match paradigms for the database.
+        ag_dbid = regularize_agent_id(ag_dbid, ns)
+
+        # Sanitize wildcards.
+        for char in ['%', '_']:
+            ag_dbid = ag_dbid.replace(char, '\%s' % char)
+
+        # Create this query (for this agent)
+        if ns == 'NAME':
+            q = (db.session
+                 .query(*_labelled_hash_and_count(db.NameMeta))
+                 .filter(db.NameMeta.db_id.like(ag_dbid)))
+            meta = db.NameMeta
+        elif ns == 'TEXT':
+            q = (db.session
+                 .query(*_labelled_hash_and_count(db.TextMeta))
+                 .filter(db.TextMeta.db_id.like(ag_dbid)))
+            meta = db.TextMeta
+        else:
+            q = (db.session
+                 .query(*_labelled_hash_and_count(db.OtherMeta))
+                 .filter(db.OtherMeta.db_id.like(ag_dbid)))
+            if ns is not None:
+                q = q.filter(db.OtherMeta.db_name.like(ns))
+            meta = db.OtherMeta
+
+        if stmt_type is not None:
+            q = q.filter(meta.type.like(stmt_type))
+
+        if role is not None:
+            q = q.filter(meta.role == role.upper())
+
+        # Intersect with the previous query.
+        queries.append(q)
+
+    assert queries,\
+        "No queries formed from agents=%s, stmt_type=%s." % (agents, stmt_type)
+
+    mk_hashes_al = intersect_all(*queries).alias('intersection')
+    mk_hashes_q = db.session.query(mk_hashes_al)
+    return mk_hashes_q, mk_hashes_al
+
+
 @clockit
 def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
                                     **kwargs):
@@ -262,57 +408,69 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
     if db is None:
         db = get_primary_db()
 
-    # TODO: Extend this to allow retrieval of raw statements.
-    def labelled_hash_and_count(meta):
-        return meta.mk_hash.label('mk_hash'), meta.ev_count.label('ev_count')
-
     logger.debug("Constructing query to search for agents of type %s "
                  "with agents: %s." % (stmt_type, agents))
 
-    queries = []
-    for role, ag_dbid, ns in agents:
-        # Make the id match paradigms for the database.
-        ag_dbid = regularize_agent_id(ag_dbid, ns)
-
-        # Sanitize wildcards.
-        for char in ['%', '_']:
-            ag_dbid = ag_dbid.replace(char, '\%s' % char)
-
-        # Create this query (for this agent)
-        if ns == 'NAME':
-            q = (db.session
-                 .query(*labelled_hash_and_count(db.NameMeta))
-                 .filter(db.NameMeta.db_id.like(ag_dbid)))
-            meta = db.NameMeta
-        elif ns == 'TEXT':
-            q = (db.session
-                 .query(*labelled_hash_and_count(db.TextMeta))
-                 .filter(db.TextMeta.db_id.like(ag_dbid)))
-            meta = db.TextMeta
-        else:
-            q = (db.session
-                 .query(*labelled_hash_and_count(db.OtherMeta))
-                 .filter(db.OtherMeta.db_id.like(ag_dbid)))
-            if ns is not None:
-                q = q.filter(db.OtherMeta.db_name.like(ns))
-            meta = db.OtherMeta
-
-        if stmt_type is not None:
-            q = q.filter(meta.type.like(stmt_type))
-
-        if role is not None:
-            q = q.filter(meta.role == role.upper())
-
-        # Intersect with the previous query.
-        queries.append(q)
-    assert queries, "No conditions imposed."
-
-    mk_hashes_al = intersect_all(*queries).alias('intersection')
-    mk_hashes_q = db.session.query(mk_hashes_al)
+    mk_hashes_q, mk_hashes_al = _make_mk_hashes_query(db, agents, stmt_type)
 
     return _get_pa_stmt_jsons_w_mkhash_subquery(db, mk_hashes_q,
                                                 mk_hashes_alias=mk_hashes_al,
                                                 **kwargs)
+
+
+@clockit
+def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
+                                      best_first=True, max_relations=None,
+                                      offset=None):
+    """Get simple reaction information available from Statement metadata."""
+    if db is None:
+        db = get_primary_db()
+
+    mk_hashes_q, mk_hashes_al = _make_mk_hashes_query(db, agents, stmt_type)
+
+    _apply_limits(db, mk_hashes_q, best_first, max_relations, offset,
+                  mk_hashes_alias=mk_hashes_al)
+
+    mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
+    names = (db.session.query(db.NameMeta.mk_hash, db.NameMeta.db_id,
+                                db.NameMeta.ag_num, db.NameMeta.type)
+                       .filter(db.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash)
+                       .all())
+
+    meta_dict = {}
+    for h, ag_name, ag_num, stmt_type in names:
+        if h not in meta_dict.keys():
+            meta_dict[h] = {'type': stmt_type, 'agents': {}}
+        meta_dict[h]['agents'][ag_num] = ag_name
+
+    return meta_dict
+
+
+def get_interaction_statements_from_agents(*args, **kwargs):
+    """Get high-level statements for interactions apparent in db metadata.
+
+    This function is a fairly thin wrapper around
+    `get_interaction_jsons_from_agents`
+    """
+    meta_dict = get_interaction_jsons_from_agents(*args, **kwargs)
+
+    stmts = []
+    for h, meta in meta_dict.items():
+        StmtClass = get_statement_by_name(meta['type'])
+        if issubclass(StmtClass, ActiveForm):
+            continue
+        if meta['type'] == 'Complex':
+            agents = [Agent(name) for name in meta['agents'].values()]
+            stmt = StmtClass(agents)
+        else:
+            agents = [Agent(meta['agents'][i])
+                      if meta['agents'].get(i)
+                      else None
+                      for i in range(len(StmtClass._agent_order))]
+            stmt = StmtClass(*agents)
+        stmts.append(stmt)
+
+    return stmts
 
 
 @clockit

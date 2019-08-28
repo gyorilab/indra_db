@@ -298,12 +298,13 @@ class DatabaseManager(object):
         # Normal Tables -------------------------------------------------------
         class TextRef(self.Base, Displayable):
             __tablename__ = 'text_ref'
+            _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
             id = Column(Integer, primary_key=True)
             pmid = Column(String(20))
             pmcid = Column(String(20))
             doi = Column(String(100))
             pii = Column(String(250))
-            url = Column(String(250), unique=True)  # Maybe longer?
+            url = Column(String, unique=True)
             manuscript_id = Column(String(100), unique=True)
             create_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
@@ -311,6 +312,15 @@ class DatabaseManager(object):
                 UniqueConstraint('pmid', 'doi', name='pmid-doi'),
                 UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
                 )
+
+            def get_ref_dict(self):
+                ref_dict = {}
+                for ref in self._ref_cols:
+                    val = getattr(self, ref, None)
+                    if val:
+                        ref_dict[ref.upper()] = val
+                ref_dict['TRID'] = self.id
+                return ref_dict
 
         self.TextRef = TextRef
         self.tables[TextRef.__tablename__] = TextRef

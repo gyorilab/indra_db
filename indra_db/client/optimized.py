@@ -433,14 +433,17 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
 
     mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
     names = (db.session.query(db.NameMeta.mk_hash, db.NameMeta.db_id,
-                                db.NameMeta.ag_num, db.NameMeta.type)
-                       .filter(db.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash)
+                              db.NameMeta.ag_num, db.NameMeta.type,
+                              db.PaStmtSrc)
+                       .filter(db.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
+                               db.PaStmtSrc.mk_hash == mk_hashes_sq.c.mk_hash)
                        .all())
 
     meta_dict = {}
-    for h, ag_name, ag_num, stmt_type in names:
+    for h, ag_name, ag_num, stmt_type, srcs in names:
         if h not in meta_dict.keys():
-            meta_dict[h] = {'type': stmt_type, 'agents': {}}
+            meta_dict[h] = {'type': stmt_type, 'agents': {},
+                            'srcs': srcs.get_sources()}
         meta_dict[h]['agents'][ag_num] = ag_name
 
     return meta_dict

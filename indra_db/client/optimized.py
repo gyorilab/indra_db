@@ -452,7 +452,7 @@ def get_interaction_statements_from_agents(*args, **kwargs):
     This function is a fairly thin wrapper around
     `get_interaction_jsons_from_agents`
     """
-    meta_dict = get_interaction_jsons_from_agents(*args, *kwargs)
+    meta_dict = get_interaction_jsons_from_agents(*args, **kwargs)
 
     stmts = []
     for h, meta in meta_dict.items():

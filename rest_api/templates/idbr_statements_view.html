@@ -5,7 +5,7 @@
 {% block scripts %}
     {{ super() }}
 
-    <script src="{{ url_for('static', filename='curationFunction.js') }}"></script>
+    <script src="{{ url_for('static', filename='curationFunctions.js') }}"></script>
     <script>
         let CURATION_ADDR = "{{ url_for('submit_curation_endpoint', hash_val='') }}";
     </script>

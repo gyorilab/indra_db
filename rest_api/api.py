@@ -6,7 +6,6 @@ from functools import wraps
 from io import StringIO
 from os import path
 
-import requests
 from flask import Flask, request, abort, Response, redirect, url_for, jsonify
 from flask_compress import Compress
 from flask_cors import CORS
@@ -75,17 +74,8 @@ def __process_agent(agent_param):
         if len(param_parts) == 2:
             ag, ns = param_parts
         elif len(param_parts) == 1:
-            try:
-                resp = requests.post('http://grounding.indra.bio/ground',
-                                     json={'text': param_parts[0]})
-                info = resp.json()
-                ns = info['term']['db']
-                ag = info['term']['id']
-            except Exception as e:
-                logger.exception(e)
-                logger.warning("Could not use Gilda, assuming name.")
-                ns = 'NAME'
-                ag = param_parts[0]
+            ns = 'NAME'
+            ag = param_parts[0]
         else:
             raise DbAPIError('Unrecognized agent spec: \"%s\"' % agent_param)
     else:
@@ -95,6 +85,7 @@ def __process_agent(agent_param):
     if ns == 'HGNC-SYMBOL':
         ns = 'NAME'
 
+    logger.info("Resolved %s to ag=%s, ns=%s" % (agent_param, ag, ns))
     return ag, ns
 
 

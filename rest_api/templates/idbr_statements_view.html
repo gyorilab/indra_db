@@ -1,10 +1,11 @@
 {% extends "indra/statements_view.html" %}
-{% from "idbr_template.html" import login_overlay, login_header %}
+{% from "auth_macros.html" import login_overlay %}
+{% from "idbr_template.html" import login_header %}
 
 {% block scripts %}
     {{ super() }}
 
-    <script src="{{ url_for('serve_js') }}"></script>
+    <script src="{{ url_for('static', filename='curationFunctions.js') }}"></script>
     <script>
         let CURATION_ADDR = "{{ url_for('submit_curation_endpoint', hash_val='') }}";
     </script>

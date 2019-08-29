@@ -421,11 +421,24 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
 @clockit
 def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
                                       best_first=True, max_relations=None,
-                                      offset=None):
-    """Get simple reaction information available from Statement metadata."""
+                                      offset=None, detail_level='hash'):
+    """Get simple reaction information available from Statement metadata.
+
+    There are three levels of detail:
+        hash -> Each entry in the result corresponds to a single preassembled
+                statement, distinguished by its hash.
+        detailed -> Each entry in the result corresponds to a relation, meaning
+                an interaction type, and the names of the agents involved.
+        pairs -> Each entry is simply a pair (or more) of Agents involved in
+                an interaction.
+    """
+    if detail_level not in {'hash', 'detailed', 'pairs'}:
+        raise ValueError("Invalid detail_level: %s" % detail_level)
+
     if db is None:
         db = get_primary_db()
 
+    # Make a really fancy query to the database.
     mk_hashes_q, mk_hashes_al = _make_mk_hashes_query(db, agents, stmt_type)
 
     _apply_limits(db, mk_hashes_q, best_first, max_relations, offset,
@@ -439,6 +452,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
                                db.PaStmtSrc.mk_hash == mk_hashes_sq.c.mk_hash)
                        .all())
 
+    # Group the agents together.
     meta_dict = {}
     for h, ag_name, ag_num, stmt_type, srcs in names:
         if h not in meta_dict.keys():
@@ -446,7 +460,58 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
                             'srcs': srcs.get_sources()}
         meta_dict[h]['agents'][ag_num] = ag_name
 
-    return meta_dict
+    # Condense the results, as indicated.
+    result = []
+    if detail_level == 'hash':
+        for h, data in meta_dict.items():
+            data['hash'] = h
+            data['tot'] = sum(data['srcs'].values())
+            result.append(data)
+    else:
+
+        # Re-aggregate the statements.
+        condensed = {}
+        dense = defaultdict(lambda: {'hashes': {},
+                                     'srcs': defaultdict(lambda: 0),
+                                     'tot': 0})
+        for h, data in meta_dict.items():
+            # Make the agent key
+            ag_dict = data['agents']
+
+            num_agents = max(ag_dict.keys()) + 1  # Could be trailing Nones...
+            agent_key = tuple([ag_dict.get(n) for n in range(num_agents)])
+
+            # Make the overall key
+            if detail_level == 'detailed':
+                key = (data['type'], agent_key)
+            else:
+                key = agent_key
+
+            # Handle new entries
+            if key not in condensed:
+                condensed[key] = {'hashes': {}, 'srcs': defaultdict(lambda: 0),
+                                  'tot': 0, 'agents': data['agents']}
+                if detail_level == 'detailed':
+                    condensed[key]['type'] = data['type']
+                else:
+                    condensed[key]['types'] = set()
+
+            # Update existing entries.
+            entry = condensed[key]
+            if detail_level == 'pairs':
+                entry['types'].add(data['type'])
+
+            for src, cnt in data['srcs'].items():
+                entry['srcs'][src] += cnt
+                entry['tot'] += cnt
+            entry['hashes'][h] = data['srcs'].copy()
+
+        # Convert defaultdict to normal dict and add to list.
+        for entry in dense.values():
+            entry['srcs'] = dict(entry['srcs'])
+            result.append(entry)
+
+    return result
 
 
 def get_interaction_statements_from_agents(*args, **kwargs):

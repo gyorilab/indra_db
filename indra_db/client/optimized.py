@@ -427,12 +427,12 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
     There are three levels of detail:
         hash -> Each entry in the result corresponds to a single preassembled
                 statement, distinguished by its hash.
-        detailed -> Each entry in the result corresponds to a relation, meaning
+        relations -> Each entry in the result corresponds to a relation, meaning
                 an interaction type, and the names of the agents involved.
-        pairs -> Each entry is simply a pair (or more) of Agents involved in
+        agents -> Each entry is simply a pair (or more) of Agents involved in
                 an interaction.
     """
-    if detail_level not in {'hash', 'detailed', 'pairs'}:
+    if detail_level not in {'hash', 'relations', 'agents'}:
         raise ValueError("Invalid detail_level: %s" % detail_level)
 
     if db is None:
@@ -479,7 +479,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
             agent_key = tuple([ag_dict.get(n) for n in range(num_agents)])
 
             # Make the overall key
-            if detail_level == 'detailed':
+            if detail_level == 'relations':
                 key = (data['type'], agent_key)
             else:
                 key = agent_key
@@ -488,24 +488,26 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
             if key not in condensed:
                 condensed[key] = {'hashes': {}, 'srcs': defaultdict(lambda: 0),
                                   'tot': 0, 'agents': data['agents']}
-                if detail_level == 'detailed':
+                if detail_level == 'relations':
                     condensed[key]['type'] = data['type']
                 else:
-                    condensed[key]['types'] = set()
+                    condensed[key]['types'] = defaultdict(lambda: 0)
 
             # Update existing entries.
             entry = condensed[key]
-            if detail_level == 'pairs':
-                entry['types'].add(data['type'])
+            if detail_level == 'agents':
+                entry['types'][data['type']] += sum(data['srcs'].valuse())
 
             for src, cnt in data['srcs'].items():
                 entry['srcs'][src] += cnt
                 entry['tot'] += cnt
-            entry['hashes'][h] = data['srcs'].copy()
+            entry['hashes'][h] = sum(data['srcs'].values())
 
         # Convert defaultdict to normal dict and add to list.
         for entry in condensed.values():
             entry['srcs'] = dict(entry['srcs'])
+            if detail_level == 'agents':
+                entry['types'] = dict(entry['types'])
             result.append(entry)
 
     return result

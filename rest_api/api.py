@@ -506,7 +506,8 @@ def get_metadata(level):
                                             offset=pop('offset'),
                                             best_first=pop('best_first', True))
 
-    logger.info("Got %s results." % len(res))
+    dt = (datetime.utcnow() - start).total_seconds()
+    logger.info("Got %s results after %.2f." % (len(res), dt))
 
     # Currently, a has could get through (in one of the less detailed results)
     # that is entirely dependent on medscan.
@@ -519,12 +520,16 @@ def get_metadata(level):
         res = censored_res
 
     dt = (datetime.utcnow() - start).total_seconds()
-    logger.info("Returning with %s results after %s seconds."
+    logger.info("Returning with %s results after %.2f seconds."
                 % (len(res), dt))
 
-    return Response(json.dumps(sorted(res, key=lambda e: e['tot'],
+    resp = Response(json.dumps(sorted(res, key=lambda e: e['tot'],
                                       reverse=True)),
                     mimetype='application/json')
+
+    dt = (datetime.utcnow() - start).total_seconds()
+    logger.info("Result prepared after %.2f seconds." % dt)
+    return resp
 
 
 if __name__ == '__main__':

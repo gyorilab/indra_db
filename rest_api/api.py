@@ -494,15 +494,16 @@ def get_metadata(level):
         abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
         return
 
-    def pop_bool(k, default=None):
+    def pop(k, default=None):
         if isinstance(default, bool):
             return query.pop(k, str(default).lower()) == 'true'
         return query.pop(k, default)
 
     res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
-                                            max_relations=pop_bool('limit'),
-                                            offset=pop_bool('offset'),
-                                            best_first=pop_bool('best_first', True))
+                                            stmt_type=pop('type'),
+                                            max_relations=pop('limit'),
+                                            offset=pop('offset'),
+                                            best_first=pop('best_first', True))
 
     logger.info("Got %s results." % len(res))
 

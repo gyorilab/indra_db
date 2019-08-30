@@ -500,8 +500,10 @@ def get_metadata(level):
             return query.pop(k, str(default).lower()) == 'true'
         return query.pop(k, default)
 
+    stmt_type = pop('type')
+    stmt_type = None if stmt_type is None else make_statement_camel(stmt_type)
     res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
-                                            stmt_type=pop('type'),
+                                            stmt_type=stmt_type,
                                             max_relations=pop('limit'),
                                             offset=pop('offset'),
                                             best_first=pop('best_first', True))

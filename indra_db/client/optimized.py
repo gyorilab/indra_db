@@ -510,7 +510,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
                 entry['types'] = dict(entry['types'])
             result.append(entry)
 
-    return result
+    return sorted(result, key=lambda data: data['tot'], reverse=True)
 
 
 def get_interaction_statements_from_agents(*args, **kwargs):

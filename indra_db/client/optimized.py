@@ -471,9 +471,6 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
 
         # Re-aggregate the statements.
         condensed = {}
-        dense = defaultdict(lambda: {'hashes': {},
-                                     'srcs': defaultdict(lambda: 0),
-                                     'tot': 0})
         for h, data in meta_dict.items():
             # Make the agent key
             ag_dict = data['agents']
@@ -507,7 +504,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
             entry['hashes'][h] = data['srcs'].copy()
 
         # Convert defaultdict to normal dict and add to list.
-        for entry in dense.values():
+        for entry in condensed.values():
             entry['srcs'] = dict(entry['srcs'])
             result.append(entry)
 

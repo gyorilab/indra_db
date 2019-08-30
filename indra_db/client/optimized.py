@@ -441,8 +441,8 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
     # Make a really fancy query to the database.
     mk_hashes_q, mk_hashes_al = _make_mk_hashes_query(db, agents, stmt_type)
 
-    _apply_limits(db, mk_hashes_q, best_first, max_relations, offset,
-                  mk_hashes_alias=mk_hashes_al)
+    mk_hashes_q = _apply_limits(db, mk_hashes_q, best_first, max_relations,
+                                offset, mk_hashes_alias=mk_hashes_al)
 
     mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
     names = (db.session.query(db.NameMeta.mk_hash, db.NameMeta.db_id,

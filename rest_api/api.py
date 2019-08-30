@@ -467,6 +467,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
 @app.route('/metadata/<level>/from_agents', methods=['GET'])
 @jwt_optional
 def get_metadata(level):
+    start = datetime.utcnow()
     query = request.args.copy()
 
     # Figure out authorization.
@@ -517,7 +518,9 @@ def get_metadata(level):
                 censored_res.append(entry)
         res = censored_res
 
-    logger.info("Returning with %s results." % len(res))
+    dt = (datetime.utcnow() - start).total_seconds()
+    logger.info("Returning with %s results after %s seconds."
+                % (len(res), dt))
 
     return jsonify(list(sorted(res, key=lambda e: e['tot'], reverse=True)))
 

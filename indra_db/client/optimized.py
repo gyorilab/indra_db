@@ -496,7 +496,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
             # Update existing entries.
             entry = condensed[key]
             if detail_level == 'agents':
-                entry['types'][data['type']] += sum(data['srcs'].valuse())
+                entry['types'][data['type']] += sum(data['srcs'].values())
 
             for src, cnt in data['srcs'].items():
                 entry['srcs'][src] += cnt

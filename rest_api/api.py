@@ -18,7 +18,7 @@ from indra.statements import make_statement_camel, stmts_from_json
 from indra.util import batch_iter
 from indra_db.client import get_statement_jsons_from_agents, \
     get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation, BadHashError
+    submit_curation, BadHashError, get_interaction_jsons_from_agents
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -462,6 +462,63 @@ def submit_curation_endpoint(hash_val, **kwargs):
         res = {'result': 'test passed', 'ref': None}
     logger.info("Got result: %s" % str(res))
     return jsonify(res)
+
+
+@app.route('/metadata/<level>/from_agents', methods=['GET'])
+@jwt_optional
+def get_metadata(level):
+    query = request.args.copy()
+
+    # Figure out authorization.
+    has = dict.fromkeys(['elsevier', 'medscan'], False)
+    user, roles = resolve_auth(query)
+    for role in roles:
+        for resource in has.keys():
+            has[resource] |= role.permissions.get(resource, False)
+    logger.info('Auths: %s' % str(has))
+
+    logger.info("Getting query details.")
+    try:
+        # Get the agents without specified locations (subject or object).
+        agents = [(None,) + __process_agent(ag)
+                  for ag in query.poplist('agent')]
+        ofaks = {k for k in query.keys() if k.startswith('agent')}
+        agents += [(None,) + __process_agent(query.pop(k)) for k in ofaks]
+
+        # Get the agents with specified roles.
+        agents += [(role,) +__process_agent(query.pop(role))
+                   for role in ['subject', 'object']
+                   if query.get(role) is not None]
+    except DbAPIError as e:
+        logger.exception(e)
+        abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
+        return
+
+    def pop_bool(k, default=None):
+        if isinstance(default, bool):
+            return query.pop(k, str(default).lower()) == 'true'
+        return query.pop(k, default)
+
+    res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
+                                            max_relations=pop_bool('limit'),
+                                            offset=pop_bool('offset'),
+                                            best_first=pop_bool('best_first', True))
+
+    logger.info("Got %s results." % len(res))
+
+    # Currently, a has could get through (in one of the less detailed results)
+    # that is entirely dependent on medscan.
+    if not has['medscan']:
+        censored_res = []
+        for entry in res:
+            entry['tot'] -= entry['srcs'].pop('medscan', 0)
+            if entry['srcs']:
+                censored_res.append(entry)
+        res = censored_res
+
+    logger.info("Returning with %s results." % len(res))
+
+    return jsonify(list(sorted(res, key=lambda e: e['tot'], reverse=True)))
 
 
 if __name__ == '__main__':

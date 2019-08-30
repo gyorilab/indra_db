@@ -421,18 +421,18 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, db=None,
 @clockit
 def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
                                       best_first=True, max_relations=None,
-                                      offset=None, detail_level='hash'):
+                                      offset=None, detail_level='hashes'):
     """Get simple reaction information available from Statement metadata.
 
     There are three levels of detail:
-        hash -> Each entry in the result corresponds to a single preassembled
+        hashes -> Each entry in the result corresponds to a single preassembled
                 statement, distinguished by its hash.
         relations -> Each entry in the result corresponds to a relation, meaning
                 an interaction type, and the names of the agents involved.
         agents -> Each entry is simply a pair (or more) of Agents involved in
                 an interaction.
     """
-    if detail_level not in {'hash', 'relations', 'agents'}:
+    if detail_level not in {'hashes', 'relations', 'agents'}:
         raise ValueError("Invalid detail_level: %s" % detail_level)
 
     if db is None:
@@ -462,7 +462,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
 
     # Condense the results, as indicated.
     result = []
-    if detail_level == 'hash':
+    if detail_level == 'hashes':
         for h, data in meta_dict.items():
             data['hash'] = h
             data['tot'] = sum(data['srcs'].values())

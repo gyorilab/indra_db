@@ -522,7 +522,9 @@ def get_metadata(level):
     logger.info("Returning with %s results after %s seconds."
                 % (len(res), dt))
 
-    return jsonify(list(sorted(res, key=lambda e: e['tot'], reverse=True)))
+    return Response(json.dumps(sorted(res, key=lambda e: e['tot'],
+                                      reverse=True)),
+                    mimetype='application/json')
 
 
 if __name__ == '__main__':

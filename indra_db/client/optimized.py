@@ -457,7 +457,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
     for h, ag_name, ag_num, stmt_type, srcs in names:
         if h not in meta_dict.keys():
             meta_dict[h] = {'type': stmt_type, 'agents': {},
-                            'srcs': srcs.get_sources()}
+                            'source_counts': srcs.get_sources()}
         meta_dict[h]['agents'][ag_num] = ag_name
 
     # Condense the results, as indicated.
@@ -465,7 +465,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
     if detail_level == 'hashes':
         for h, data in meta_dict.items():
             data['hash'] = h
-            data['tot'] = sum(data['srcs'].values())
+            data['total_count'] = sum(data['source_counts'].values())
             result.append(data)
     else:
 
@@ -486,8 +486,9 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
 
             # Handle new entries
             if key not in condensed:
-                condensed[key] = {'hashes': {}, 'srcs': defaultdict(lambda: 0),
-                                  'tot': 0, 'agents': data['agents']}
+                condensed[key] = {'hashes': {},
+                                  'source_counts': defaultdict(lambda: 0),
+                                  'total_count': 0, 'agents': data['agents']}
                 if detail_level == 'relations':
                     condensed[key]['type'] = data['type']
                 else:
@@ -496,21 +497,21 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
             # Update existing entries.
             entry = condensed[key]
             if detail_level == 'agents':
-                entry['types'][data['type']] += sum(data['srcs'].values())
+                entry['types'][data['type']] += sum(data['source_counts'].values())
 
-            for src, cnt in data['srcs'].items():
-                entry['srcs'][src] += cnt
-                entry['tot'] += cnt
-            entry['hashes'][h] = sum(data['srcs'].values())
+            for src, cnt in data['source_counts'].items():
+                entry['source_counts'][src] += cnt
+                entry['total_count'] += cnt
+            entry['hashes'][h] = sum(data['source_counts'].values())
 
         # Convert defaultdict to normal dict and add to list.
         for entry in condensed.values():
-            entry['srcs'] = dict(entry['srcs'])
+            entry['source_counts'] = dict(entry['source_counts'])
             if detail_level == 'agents':
                 entry['types'] = dict(entry['types'])
             result.append(entry)
 
-    return sorted(result, key=lambda data: data['tot'], reverse=True)
+    return sorted(result, key=lambda data: data['total_count'], reverse=True)
 
 
 def get_interaction_statements_from_agents(*args, **kwargs):

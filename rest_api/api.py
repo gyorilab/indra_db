@@ -511,13 +511,13 @@ def get_metadata(level):
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Got %s results after %.2f." % (len(res), dt))
 
-    # Currently, a has could get through (in one of the less detailed results)
+    # Currently, a hash could get through (in one of the less detailed results)
     # that is entirely dependent on medscan.
     if not has['medscan']:
         censored_res = []
         for entry in res:
-            entry['tot'] -= entry['srcs'].pop('medscan', 0)
-            if entry['srcs']:
+            entry['total_count'] -= entry['source_counts'].pop('medscan', 0)
+            if entry['source_counts']:
                 censored_res.append(entry)
         res = censored_res
 
@@ -525,7 +525,7 @@ def get_metadata(level):
     logger.info("Returning with %s results after %.2f seconds."
                 % (len(res), dt))
 
-    resp = Response(json.dumps(sorted(res, key=lambda e: e['tot'],
+    resp = Response(json.dumps(sorted(res, key=lambda e: e['total_count'],
                                       reverse=True)),
                     mimetype='application/json')
 

@@ -878,6 +878,14 @@ class DatabaseManager(object):
                 cls.loaded = True
                 return
 
+            def get_sources(self, include_none=False):
+                src_dict = {}
+                for k, v in self.__dict__.items():
+                    if k not in {'mk_hash'} and not k.startswith('_'):
+                        if include_none or v is not None:
+                            src_dict[k] = v
+                return src_dict
+
             mk_hash = Column(BigInteger, primary_key=True)
         self.__PaStmtSrc = PaStmtSrc
         self.m_views[PaStmtSrc.__tablename__] = PaStmtSrc

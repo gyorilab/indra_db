@@ -477,13 +477,14 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
             ag_dict = data['agents']
 
             num_agents = max(ag_dict.keys()) + 1  # Could be trailing Nones...
-            agent_key = str(tuple([ag_dict.get(n) for n in range(num_agents)]))
+            ordered_agents = [ag_dict.get(n) for n in range(num_agents)]
+            agent_key = '(' + ', '.join(ordered_agents) + ')'
 
             # Make the overall key
             if detail_level == 'relations':
                 key = data['type'] + agent_key
             else:
-                key = agent_key
+                key = 'Interaction' + agent_key
 
             # Handle new entries
             if key not in condensed:

@@ -465,6 +465,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
     if detail_level == 'hashes':
         for h, data in meta_dict.items():
             data['hash'] = h
+            data['id'] = str(h)
             data['total_count'] = sum(data['source_counts'].values())
             result.append(data)
     else:
@@ -476,17 +477,17 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, db=None,
             ag_dict = data['agents']
 
             num_agents = max(ag_dict.keys()) + 1  # Could be trailing Nones...
-            agent_key = tuple([ag_dict.get(n) for n in range(num_agents)])
+            agent_key = str(tuple([ag_dict.get(n) for n in range(num_agents)]))
 
             # Make the overall key
             if detail_level == 'relations':
-                key = (data['type'], agent_key)
+                key = data['type'] + agent_key
             else:
                 key = agent_key
 
             # Handle new entries
             if key not in condensed:
-                condensed[key] = {'hashes': {},
+                condensed[key] = {'hashes': {}, 'id': key,
                                   'source_counts': defaultdict(lambda: 0),
                                   'total_count': 0, 'agents': data['agents']}
                 if detail_level == 'relations':

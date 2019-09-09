@@ -1,2 +1,2 @@
-from .primary import get_primary_schema
-from .read_view import get_read_view_schema
+from .principal_schema import get_primary_schema
+from .readonly_schema import get_readonly_schema

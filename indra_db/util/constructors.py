@@ -3,7 +3,7 @@ __all__ = ['get_primary_db', 'get_db']
 import re
 import logging
 
-from indra_db.managers.database_manager import DatabaseManager
+from indra_db.managers.database_manager import PrincipalDatabaseManager
 from indra_db.exceptions import IndraDbException
 from indra_db.config import get_databases as get_defaults
 
@@ -61,7 +61,7 @@ def get_primary_db(force_new=False):
 
     global __PRIMARY_DB
     if __PRIMARY_DB is None or force_new:
-        __PRIMARY_DB = DatabaseManager(primary_host, label='primary')
+        __PRIMARY_DB = PrincipalDatabaseManager(primary_host, label='primary')
         __PRIMARY_DB.grab_session()
     return __PRIMARY_DB
 
@@ -75,4 +75,4 @@ def get_db(db_label):
         logger.error("Poorly formed db name: %s" % db_name)
         return
     sqltype = m.groups()[0]
-    return DatabaseManager(db_name, sqltype=sqltype, label=db_label)
+    return PrincipalDatabaseManager(db_name, sqltype=sqltype, label=db_label)

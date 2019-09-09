@@ -4,7 +4,6 @@ __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
 import re
 import random
 import logging
-from uuid import uuid4
 from io import BytesIO
 from numbers import Number
 from datetime import datetime
@@ -21,8 +20,8 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from indra.util import batch_iter
 
 from indra_db.exceptions import IndraDbException
-from indra_db.schemas import get_primary_schema, get_read_view_schema
-from indra_db.schemas.primary import foreign_key_map
+from indra_db.schemas import get_primary_schema, get_readonly_schema
+from indra_db.schemas.principal_schema import foreign_key_map
 
 try:
     import networkx as nx
@@ -172,24 +171,19 @@ class DatabaseManager(object):
     For more sophisticated examples, several use cases can be found in
     `indra.tests.test_db`.
     """
-    def __init__(self, host, sqltype='postgresql', label=None):
+    def __init__(self, host, sqltype='postgresql', label=None,
+                 foreign_key_map=None):
         self.host = host
         self.session = None
         self.Base = declarative_base()
         self.sqltype = sqltype
         self.label = label
 
-        self.tables = get_primary_schema(self.Base, sqltype)
-        self.views = get_read_view_schema(self.Base)
-
-        for tbl in (t for d in [self.tables, self.views] for t in d.values()):
-            setattr(self, tbl.__name__, tbl)
-
         self.engine = create_engine(host)
 
         # There are some useful shortcuts that can be used if
         # networkx is available, specifically the DatabaseManager.link
-        if WITH_NX:
+        if WITH_NX and foreign_key_map:
             G = nx.Graph()
             G.add_edges_from(foreign_key_map)
             self.__foreign_key_graph = G
@@ -243,53 +237,6 @@ class DatabaseManager(object):
             logger.debug("Creating %s..." % tbl_name)
             self.tables[tbl_name].__table__.create(bind=self.engine)
             logger.debug("Table created.")
-        return
-
-    def manage_views(self, mode, view_list=None, with_data=True):
-        """Manage the materialized views.
-
-        Parameters
-        ----------
-        mode : 'create' or 'update'
-            Select which management task you wish to perform.
-        view_list : list or None
-            Default None. A list of materialized view names or None. If None,
-            all available views will be build.
-        with_data : bool
-            Default True. If True, the views are updated "with data", meaning
-            they are more like instantiated tables, otherwise they are only a
-            pre-computation.
-        """
-        ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
-                         'name_meta', 'text_meta', 'other_meta',
-                         'raw_stmt_src', 'pa_stmt_src']
-        other_views = {'reading_ref_link'}
-        active_views = self.get_active_views()
-
-        def iter_views():
-            for i, view in enumerate(ordered_views):
-                yield str(i), view
-            for view in other_views:
-                yield '-', view
-
-        for i, view_name in iter_views():
-            if view_list is not None and view_name not in view_list:
-                continue
-
-            view = self.views[view_name]
-
-            if mode == 'create':
-                if view_name in active_views:
-                    logger.info('[%s] View %s already exists. Skipping.'
-                                % (i, view_name))
-                    continue
-                logger.info('[%s] Creating %s view...' % (i, view_name))
-                view.create(self, with_data)
-            elif mode == 'update':
-                logger.info('[%s] Updating %s view...' % (i, view_name))
-                view.update(self, with_data)
-            else:
-                raise ValueError("Invalid mode: %s." % mode)
         return
 
     def drop_tables(self, tbl_list=None, force=False):
@@ -454,7 +401,7 @@ class DatabaseManager(object):
                                                         fk_path[i])
             if link is None:
                 raise IndraDbException("There is no foreign key in %s "
-                                         "pointing to %s."
+                                       "pointing to %s."
                                        % (table_name_1, table_name_2))
             links.append(link)
         return links
@@ -657,9 +604,6 @@ class DatabaseManager(object):
             self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
         return
 
-    def generate_materialized_view(self, mode, view, with_data=True):
-        """Create or refresh the given materialized view."""
-
     def filter_query(self, tbls, *args):
         "Query a table and filter results."
         self.grab_session()
@@ -838,6 +782,83 @@ class DatabaseManager(object):
         "Check whether an entry/entries matching given specs live in the db."
         q = self.filter_query(tbls, *args)
         return self.session.query(q.exists()).first()[0]
+
+    def _make_table_attrs(self, tables):
+        for tbl in tables:
+            setattr(self, tbl.__name__, tbl)
+
+
+class PrincipalDatabaseManager(DatabaseManager):
+    """This class represents the methods special to the principal database."""
+    def __init__(self, host, sqltype='postgresql', label=None):
+        super(self.__class__, self).__init__(host, sqltype, label,
+                                             foreign_key_map)
+
+        self.tables = get_primary_schema(self.Base, sqltype)
+        self.views = get_readonly_schema(self.Base)
+
+        self._make_table_attrs((t for d in [self.tables, self.views]
+                                for t in d.values()))
+
+        return
+
+    def manage_views(self, mode, view_list=None, with_data=True):
+        """Manage the materialized views.
+
+        Parameters
+        ----------
+        mode : 'create' or 'update'
+            Select which management task you wish to perform.
+        view_list : list or None
+            Default None. A list of materialized view names or None. If None,
+            all available views will be build.
+        with_data : bool
+            Default True. If True, the views are updated "with data", meaning
+            they are more like instantiated tables, otherwise they are only a
+            pre-computation.
+        """
+        ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
+                         'name_meta', 'text_meta', 'other_meta',
+                         'raw_stmt_src', 'pa_stmt_src']
+        other_views = {'reading_ref_link'}
+        active_views = self.get_active_views()
+
+        def iter_views():
+            for i, view in enumerate(ordered_views):
+                yield str(i), view
+            for view in other_views:
+                yield '-', view
+
+        for i, view_name in iter_views():
+            if view_list is not None and view_name not in view_list:
+                continue
+
+            view = self.views[view_name]
+
+            if mode == 'create':
+                if view_name in active_views:
+                    logger.info('[%s] View %s already exists. Skipping.'
+                                % (i, view_name))
+                    continue
+                logger.info('[%s] Creating %s view...' % (i, view_name))
+                view.create(self, with_data)
+            elif mode == 'update':
+                logger.info('[%s] Updating %s view...' % (i, view_name))
+                view.update(self, with_data)
+            else:
+                raise ValueError("Invalid mode: %s." % mode)
+        return
+
+
+class ReadonlyDatabaseManager(DatabaseManager):
+    """This class represents the readonly database."""
+
+    def __init__(self, host, sqltype='postgresql', label=None):
+        super(self.__class__, self).__init__(host, sqltype, label)
+
+        self.tables = get_readonly_schema(self.Base)
+        self._make_table_attrs(self.tables.values())
+        return
 
 
 class LazyCopyManager(CopyManager):

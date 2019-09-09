@@ -1,4 +1,4 @@
-__all__ = ['get_read_view_schema']
+__all__ = ['get_readonly_schema']
 
 import logging
 
@@ -14,7 +14,7 @@ from .indexes import *
 logger = logging.getLogger(__name__)
 
 
-def get_read_view_schema(Base):
+def get_readonly_schema(Base):
     '''Return the schema for the reading view of the database.
 
     We use materialized views to allow fast and efficient load of data,

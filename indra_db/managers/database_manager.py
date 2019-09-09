@@ -14,7 +14,7 @@ from sqlalchemy.schema import DropTable
 from sqlalchemy.sql.expression import Delete, Update
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, UniqueConstraint, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
@@ -618,7 +618,7 @@ class DatabaseManager(object):
                 (cols, tbl_name)
 
         # Do the copy. Use pgcopy if available.
-        if self.sqltype == sqltypes.POSTGRESQL and CAN_COPY:
+        if self.sqltype == 'postgresql' and CAN_COPY:
             # Check for automatic timestamps which won't be applied by the
             # database when using copy, and manually insert them.
             auto_timestamp_type = type(func.now())

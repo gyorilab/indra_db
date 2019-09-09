@@ -150,8 +150,6 @@ class DatabaseManager(object):
     ----------
     host : str
         The database to which you want to interface.
-    sqltype : OPTIONAL[str]
-        The type of sql library used. Default is 'postgresql'.
     label : OPTIONAL[str]
         A short string to indicate the purpose of the db instance. Set as
         primary when initialized be `get_primary_db` or `get_db`.
@@ -171,12 +169,10 @@ class DatabaseManager(object):
     For more sophisticated examples, several use cases can be found in
     `indra.tests.test_db`.
     """
-    def __init__(self, host, sqltype='postgresql', label=None,
-                 foreign_key_map=None):
+    def __init__(self, host, label=None, foreign_key_map=None):
         self.host = host
         self.session = None
         self.Base = declarative_base()
-        self.sqltype = sqltype
         self.label = label
 
         self.engine = create_engine(host)
@@ -510,7 +506,7 @@ class DatabaseManager(object):
                 (cols, tbl_name)
 
         # Do the copy. Use pgcopy if available.
-        if self.sqltype == 'postgresql' and CAN_COPY:
+        if CAN_COPY:
             # Check for automatic timestamps which won't be applied by the
             # database when using copy, and manually insert them.
             auto_timestamp_type = type(func.now())
@@ -790,11 +786,10 @@ class DatabaseManager(object):
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
-    def __init__(self, host, sqltype='postgresql', label=None):
-        super(self.__class__, self).__init__(host, sqltype, label,
-                                             foreign_key_map)
+    def __init__(self, host, label=None):
+        super(self.__class__, self).__init__(host, label, foreign_key_map)
 
-        self.tables = get_primary_schema(self.Base, sqltype)
+        self.tables = get_primary_schema(self.Base)
         self.views = get_readonly_schema(self.Base)
 
         self._make_table_attrs((t for d in [self.tables, self.views]
@@ -853,8 +848,8 @@ class PrincipalDatabaseManager(DatabaseManager):
 class ReadonlyDatabaseManager(DatabaseManager):
     """This class represents the readonly database."""
 
-    def __init__(self, host, sqltype='postgresql', label=None):
-        super(self.__class__, self).__init__(host, sqltype, label)
+    def __init__(self, host, label=None):
+        super(self.__class__, self).__init__(host, label)
 
         self.tables = get_readonly_schema(self.Base)
         self._make_table_attrs(self.tables.values())

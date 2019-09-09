@@ -70,9 +70,4 @@ def get_db(db_label):
     """Get a db instance base on it's name in the config or env."""
     defaults = get_defaults()
     db_name = defaults[db_label]
-    m = re.match('(\w+)://.*?/([\w.]+)', db_name)
-    if m is None:
-        logger.error("Poorly formed db name: %s" % db_name)
-        return
-    sqltype = m.groups()[0]
-    return PrincipalDatabaseManager(db_name, sqltype=sqltype, label=db_label)
+    return PrincipalDatabaseManager(db_name, label=db_label)

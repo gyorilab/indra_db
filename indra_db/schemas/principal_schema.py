@@ -1,7 +1,7 @@
 __all__ = ['get_primary_schema', 'foreign_key_map']
 
 from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
-     Boolean, DateTime, func, BigInteger, LargeBinary
+     Boolean, DateTime, func, BigInteger
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA, INET
 
@@ -19,13 +19,8 @@ foreign_key_map = [
 ]
 
 
-def get_primary_schema(Base, sql_type):
+def get_primary_schema(Base):
     table_dict = {}
-
-    if sql_type == 'postgresql':
-        Bytea = BYTEA
-    else:
-        Bytea = LargeBinary
 
     class TextRef(Base, IndraDBTable):
         __tablename__ = 'text_ref'
@@ -75,7 +70,7 @@ def get_primary_schema(Base, sql_type):
         id = Column(Integer, primary_key=True)
         init_upload = Column(Boolean, nullable=False)
         source = Column(String(250), nullable=False)
-        unresolved_conflicts_file = Column(Bytea)
+        unresolved_conflicts_file = Column(BYTEA)
         datetime = Column(DateTime, default=func.now())
     table_dict[Updates.__tablename__] = Updates
 
@@ -91,7 +86,7 @@ def get_primary_schema(Base, sql_type):
         source = Column(String(250), nullable=False)
         format = Column(String(250), nullable=False)
         text_type = Column(String(250), nullable=False)
-        content = Column(Bytea, nullable=False)
+        content = Column(BYTEA, nullable=False)
         insert_date = Column(DateTime, default=func.now())
         last_updated = Column(DateTime, onupdate=func.now())
         __table_args__ = (
@@ -113,7 +108,7 @@ def get_primary_schema(Base, sql_type):
         reader = Column(String(20), nullable=False)
         reader_version = Column(String(20), nullable=False)
         format = Column(String(20), nullable=False)  # xml, json, etc.
-        bytes = Column(Bytea)
+        bytes = Column(BYTEA)
         create_date = Column(DateTime, default=func.now())
         last_updated = Column(DateTime, onupdate=func.now())
         __table_args__ = (
@@ -160,7 +155,7 @@ def get_primary_schema(Base, sql_type):
         reading = relationship(Reading)
         type = Column(String(100), nullable=False)
         indra_version = Column(String(100), nullable=False)
-        json = Column(Bytea, nullable=False)
+        json = Column(BYTEA, nullable=False)
         create_date = Column(DateTime, default=func.now())
         __table_args__ = (
             UniqueConstraint('mk_hash', 'text_hash', 'reading_id',
@@ -186,7 +181,7 @@ def get_primary_schema(Base, sql_type):
         reading = relationship(Reading)
         type = Column(String(100), nullable=False)
         indra_version = Column(String(100), nullable=False)
-        json = Column(Bytea, nullable=False)
+        json = Column(BYTEA, nullable=False)
         create_date = Column(DateTime, default=func.now())
     table_dict[RejectedStatements.__tablename__] = RejectedStatements
 
@@ -269,7 +264,7 @@ def get_primary_schema(Base, sql_type):
         uuid = Column(String(40), unique=True, nullable=False)
         type = Column(String(100), nullable=False)
         indra_version = Column(String(100), nullable=False)
-        json = Column(Bytea, nullable=False)
+        json = Column(BYTEA, nullable=False)
         create_date = Column(DateTime, default=func.now())
     table_dict[PAStatements.__tablename__] = PAStatements
 

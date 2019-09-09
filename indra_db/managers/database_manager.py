@@ -195,12 +195,6 @@ class DatabaseManager(object):
         except:
             print("Failed to execute rollback of database upon deletion.")
 
-    def __getattribute__(self, item):
-        if item == 'PaStmtSrc':
-            self.__PaStmtSrc.load_cols(self.engine)
-            return self.__PaStmtSrc
-        return super(DatabaseManager, self).__getattribute__(item)
-
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."
         ordered_tables = ['text_ref', 'text_content', 'reading', 'db_info',
@@ -777,10 +771,6 @@ class DatabaseManager(object):
         q = self.filter_query(tbls, *args)
         return self.session.query(q.exists()).first()[0]
 
-    def _make_table_attrs(self, tables):
-        for tbl in tables:
-            setattr(self, tbl.__name__, tbl)
-
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
@@ -790,11 +780,20 @@ class PrincipalDatabaseManager(DatabaseManager):
         self.tables = principal_schema.get_schema(self.Base)
         self.views = readonly_schema.get_schema(self.Base)
 
-        self._make_table_attrs((t for d in [self.tables, self.views]
-                                for t in d.values()))
+        for tbl in (t for d in [self.tables, self.views] for t in d.values()):
+            if tbl.__name__ == 'PaStmtSrc':
+                self.__PaStmtSrc = tbl
+            else:
+                setattr(self, tbl.__name__, tbl)
 
         self._init_foreign_key_map(principal_schema.foreign_key_map)
         return
+
+    def __getattribute__(self, item):
+        if item == 'PaStmtSrc':
+            self.__PaStmtSrc.load_cols(self.engine)
+            return self.__PaStmtSrc
+        return super(DatabaseManager, self).__getattribute__(item)
 
     def manage_views(self, mode, view_list=None, with_data=True):
         """Manage the materialized views.
@@ -851,7 +850,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
         super(self.__class__, self).__init__(host, label)
 
         self.tables = readonly_schema.get_schema(self.Base)
-        self._make_table_attrs(self.tables.values())
+        for tbl in self.tables.values():
+            setattr(self, tbl.__name__, tbl)
         return
 
 

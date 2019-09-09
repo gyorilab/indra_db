@@ -5,7 +5,7 @@ from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA, INET
 
-from indra_db.schemas.mixins import Displayable
+from indra_db.schemas.mixins import IndraDBTable
 
 foreign_key_map = [
     ('pa_agents', 'pa_statements'),
@@ -27,7 +27,7 @@ def get_primary_schema(Base, sql_type):
     else:
         Bytea = LargeBinary
 
-    class TextRef(Base, Displayable):
+    class TextRef(Base, IndraDBTable):
         __tablename__ = 'text_ref'
         _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
         _always_disp = ['id', 'pmid', 'pmcid']
@@ -56,7 +56,7 @@ def get_primary_schema(Base, sql_type):
 
     table_dict[TextRef.__tablename__] = TextRef
 
-    class SourceFile(Base, Displayable):
+    class SourceFile(Base, IndraDBTable):
         __tablename__ = 'source_file'
         _always_disp = ['source', 'name']
         id = Column(Integer, primary_key=True)
@@ -68,7 +68,7 @@ def get_primary_schema(Base, sql_type):
         )
     table_dict[SourceFile.__tablename__] = SourceFile
 
-    class Updates(Base, Displayable):
+    class Updates(Base, IndraDBTable):
         __tablename__ = 'updates'
         _skip_disp = ['unresolved_conflicts_file']
         _always_disp = ['source', 'datetime']
@@ -79,7 +79,7 @@ def get_primary_schema(Base, sql_type):
         datetime = Column(DateTime, default=func.now())
     table_dict[Updates.__tablename__] = Updates
 
-    class TextContent(Base, Displayable):
+    class TextContent(Base, IndraDBTable):
         __tablename__ = 'text_content'
         _skip_disp = ['content']
         _always_disp = ['id', 'text_ref_id', 'source', 'format', 'text_type']
@@ -100,7 +100,7 @@ def get_primary_schema(Base, sql_type):
         )
     table_dict[TextContent.__tablename__] = TextContent
 
-    class Reading(Base, Displayable):
+    class Reading(Base, IndraDBTable):
         __tablename__ = 'reading'
         _skip_disp = ['bytes']
         _always_disp = ['id', 'text_content_id', 'reader', 'reader_version']
@@ -122,7 +122,7 @@ def get_primary_schema(Base, sql_type):
         )
     table_dict[Reading.__tablename__] = Reading
 
-    class ReadingUpdates(Base, Displayable):
+    class ReadingUpdates(Base, IndraDBTable):
         __tablename__ = 'reading_updates'
         _always_disp = ['reader', 'reader_version', 'run_datetime']
         id = Column(Integer, primary_key=True)
@@ -134,7 +134,7 @@ def get_primary_schema(Base, sql_type):
         latest_datetime = Column(DateTime, nullable=False)
     table_dict[ReadingUpdates.__tablename__] = ReadingUpdates
 
-    class DBInfo(Base, Displayable):
+    class DBInfo(Base, IndraDBTable):
         __tablename__ = 'db_info'
         _always_disp = ['id', 'db_name', 'source_api']
         id = Column(Integer, primary_key=True)
@@ -144,7 +144,7 @@ def get_primary_schema(Base, sql_type):
         last_updated = Column(DateTime, onupdate=func.now())
     table_dict[DBInfo.__tablename__] = DBInfo
 
-    class RawStatements(Base, Displayable):
+    class RawStatements(Base, IndraDBTable):
         __tablename__ = 'raw_statements'
         _skip_disp = ['json']
         _always_disp = ['id', 'db_info_id', 'reading_id', 'type']
@@ -170,7 +170,7 @@ def get_primary_schema(Base, sql_type):
         )
     table_dict[RawStatements.__tablename__] = RawStatements
 
-    class RejectedStatements(Base, Displayable):
+    class RejectedStatements(Base, IndraDBTable):
         __tablename__ = 'rejected_statements'
         _skip_disp = ['json']
         _always_disp = ['id', 'db_info_id', 'reading_id', 'type']
@@ -190,7 +190,7 @@ def get_primary_schema(Base, sql_type):
         create_date = Column(DateTime, default=func.now())
     table_dict[RejectedStatements.__tablename__] = RejectedStatements
 
-    class RawAgents(Base, Displayable):
+    class RawAgents(Base, IndraDBTable):
         __tablename__ = 'raw_agents'
         _always_disp = ['stmt_id', 'db_name', 'db_id', 'ag_num']
         id = Column(Integer, primary_key=True)
@@ -208,7 +208,7 @@ def get_primary_schema(Base, sql_type):
         )
     table_dict[RawAgents.__tablename__] = RawAgents
 
-    class RawMods(Base, Displayable):
+    class RawMods(Base, IndraDBTable):
         __tablename__ = 'raw_mods'
         _always_disp = ['stmt_id', 'type', 'position', 'residue', 'modified',
                         'ag_num']
@@ -223,7 +223,7 @@ def get_primary_schema(Base, sql_type):
         ag_num = Column(Integer, nullable=False)
     table_dict[RawMods.__tablename__] = RawMods
 
-    class RawMuts(Base, Displayable):
+    class RawMuts(Base, IndraDBTable):
         __tablename__ = 'raw_muts'
         _always_disp = ['stmt_id', 'position', 'residue_from', 'residue_to',
                         'ag_num']
@@ -237,7 +237,7 @@ def get_primary_schema(Base, sql_type):
         ag_num = Column(Integer, nullable=False)
     table_dict[RawMuts.__tablename__] = RawMuts
 
-    class RawUniqueLinks(Base, Displayable):
+    class RawUniqueLinks(Base, IndraDBTable):
         __tablename__ = 'raw_unique_links'
         _always_disp = ['raw_stmt_id', 'pa_stmt_mk_hash']
         id = Column(Integer, primary_key=True)
@@ -252,7 +252,7 @@ def get_primary_schema(Base, sql_type):
         )
     table_dict[RawUniqueLinks.__tablename__] = RawUniqueLinks
 
-    class PreassemblyUpdates(Base, Displayable):
+    class PreassemblyUpdates(Base, IndraDBTable):
         __tablename__ = 'preassembly_updates'
         _always_disp = ['corpus_init', 'run_datetime']
         id = Column(Integer, primary_key=True)
@@ -260,7 +260,7 @@ def get_primary_schema(Base, sql_type):
         run_datetime = Column(DateTime, default=func.now())
     table_dict[PreassemblyUpdates.__tablename__] = PreassemblyUpdates
 
-    class PAStatements(Base, Displayable):
+    class PAStatements(Base, IndraDBTable):
         __tablename__ = 'pa_statements'
         _skip_disp = ['json']
         _always_disp = ['mk_hash', 'type']
@@ -273,7 +273,7 @@ def get_primary_schema(Base, sql_type):
         create_date = Column(DateTime, default=func.now())
     table_dict[PAStatements.__tablename__] = PAStatements
 
-    class PAAgents(Base, Displayable):
+    class PAAgents(Base, IndraDBTable):
         __tablename__ = 'pa_agents'
         _always_disp = ['stmt_mk_hash', 'db_name', 'db_id', 'ag_num']
         id = Column(Integer, primary_key=True)
@@ -291,7 +291,7 @@ def get_primary_schema(Base, sql_type):
         )
     table_dict[PAAgents.__tablename__] = PAAgents
 
-    class PAMods(Base, Displayable):
+    class PAMods(Base, IndraDBTable):
         __tablename__ = 'pa_mods'
         _always_disp = ['stmt_mk_hash', 'type', 'position', 'residue',
                         'modified', 'ag_num']
@@ -307,7 +307,7 @@ def get_primary_schema(Base, sql_type):
         ag_num = Column(Integer, nullable=False)
     table_dict[PAMods.__tablename__] = PAMods
 
-    class PAMuts(Base, Displayable):
+    class PAMuts(Base, IndraDBTable):
         __tablename__ = 'pa_muts'
         _always_disp = ['stmt_mk_hash', 'position', 'residue_from',
                         'residue_to', 'ag_num']
@@ -322,7 +322,7 @@ def get_primary_schema(Base, sql_type):
         ag_num = Column(Integer, nullable=False)
     table_dict[PAMuts.__tablename__] = PAMuts
 
-    class PASupportLinks(Base, Displayable):
+    class PASupportLinks(Base, IndraDBTable):
         __tablename__ = 'pa_support_links'
         _always_disp = ['supporting_mk_hash', 'supported_mk_hash']
         id = Column(Integer, primary_key=True)
@@ -334,7 +334,7 @@ def get_primary_schema(Base, sql_type):
                                    nullable=False)
     table_dict[PASupportLinks.__tablename__] = PASupportLinks
 
-    class Curation(Base, Displayable):
+    class Curation(Base, IndraDBTable):
         __tablename__ = 'curation'
         _always_disp = ['pa_hash', 'source_hash', 'tag', 'curator', 'date']
         id = Column(Integer, primary_key=True)

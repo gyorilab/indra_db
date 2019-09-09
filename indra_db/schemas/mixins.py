@@ -4,9 +4,31 @@ from psycopg2.errors import DuplicateTable
 logger = logging.getLogger(__name__)
 
 
-class Displayable(object):
+class IndraDBTable(object):
+    _indices = []
     _skip_disp = []
     _always_disp = ['id']
+
+    @classmethod
+    def create_index(cls, db, index, commit=True):
+        inp_data = {'idx_name': index.name,
+                    'table_name': cls.__tablename__,
+                    'idx_def': index.definition}
+        sql = ("CREATE INDEX {idx_name} ON public.{table_name} "
+               "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
+        if commit:
+            try:
+                cls.execute(db, sql)
+            except DuplicateTable as err:
+                logger.warning("Got error (%s) when building %s. Skipping."
+                               % (err, index.name))
+        return sql
+
+    @classmethod
+    def build_indices(cls, db):
+        for index in cls._indices:
+            print("Building index: %s" % index.name)
+            cls.create_index(db, index)
 
     def _make_str(self):
         s = self.__tablename__ + ':\n'
@@ -45,9 +67,8 @@ class Displayable(object):
         return ret
 
 
-class MaterializedView(Displayable):
+class MaterializedView(IndraDBTable):
     __definition__ = NotImplemented
-    _indices = []
 
     @classmethod
     def create(cls, db, with_data=True, commit=True):
@@ -77,27 +98,6 @@ class MaterializedView(Displayable):
         cursor.execute(sql)
         conn.commit()
         return
-
-    @classmethod
-    def create_index(cls, db, index, commit=True):
-        inp_data = {'idx_name': index.name,
-                    'table_name': cls.__tablename__,
-                    'idx_def': index.definition}
-        sql = ("CREATE INDEX {idx_name} ON public.{table_name} "
-               "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
-        if commit:
-            try:
-                cls.execute(db, sql)
-            except DuplicateTable as err:
-                logger.warning("Got error (%s) when building %s. Skipping."
-                               % (err, index.name))
-        return sql
-
-    @classmethod
-    def build_indices(cls, db):
-        for index in cls._indices:
-            print("Building index: %s" % index.name)
-            cls.create_index(db, index)
 
 
 class NamespaceLookup(MaterializedView):

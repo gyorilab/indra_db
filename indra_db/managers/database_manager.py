@@ -1,7 +1,5 @@
-from sqlalchemy.exc import NoSuchTableError
-
-__all__ = ['sqltypes', 'texttypes', 'formats', 'DatabaseManager',
-           'IndraDbException', 'sql_expressions', 'readers', 'reader_versions']
+__all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
+           'sql_expressions', 'readers', 'reader_versions']
 
 import re
 import random
@@ -16,15 +14,15 @@ from sqlalchemy.schema import DropTable
 from sqlalchemy.sql.expression import Delete, Update
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
-from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
-    create_engine, inspect, LargeBinary, Boolean, DateTime, func, BigInteger
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-from sqlalchemy.dialects.postgresql import BYTEA, INET
-from psycopg2.errors import DuplicateTable
+
+from indra.util import batch_iter
 
 from indra_db.exceptions import IndraDbException
-from indra.util import batch_iter
+from indra_db.schemas import get_primary_schema, get_read_view_schema
+from indra_db.schemas.primary import foreign_key_map
 
 try:
     import networkx as nx
@@ -103,11 +101,6 @@ class _map_class(object):
         return self._getattrs().keys()
 
 
-class sqltypes(_map_class):
-    POSTGRESQL = 'postgresql'
-    SQLITE = 'sqlite'
-
-
 class texttypes(_map_class):
     FULLTEXT = 'fulltext'
     ABSTRACT = 'abstract'
@@ -139,108 +132,6 @@ class IndraTableError(IndraDbException):
         super(IndraTableError, self).__init__(self, msg)
 
 
-class Displayable(object):
-    _skip_disp = []
-
-    def _make_str(self):
-        s = self.__tablename__ + ':\n'
-        for k, v in self.__dict__.items():
-            if not k.startswith('_'):
-                if k in self._skip_disp:
-                    s += '\t%s: [not shown]\n' % k
-                else:
-                    s += '\t%s: %s\n' % (k, v)
-        return s
-
-    def display(self):
-        """Display the values of this entry."""
-        print(self._make_str())
-
-    def __str__(self):
-        return self._make_str()
-
-
-class MaterializedView(Displayable):
-    __definition__ = NotImplemented
-    _indices = []
-
-    @classmethod
-    def create(cls, db, with_data=True, commit=True):
-        sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-              % (cls.__tablename__, cls.get_definition(),
-                 '' if with_data else "NO")
-        if commit:
-            cls.execute(db, sql)
-        return sql
-
-    @classmethod
-    def update(cls, db, with_data=True, commit=True):
-        sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
-              % (cls.__tablename__, '' if with_data else 'NO')
-        if commit:
-            cls.execute(db, sql)
-        return sql
-
-    @classmethod
-    def get_definition(cls):
-        return cls.__definition__
-
-    @staticmethod
-    def execute(db, sql):
-        conn = db.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        conn.commit()
-        return
-
-    @classmethod
-    def create_index(cls, db, index, commit=True):
-        inp_data = {'idx_name': index.name,
-                    'table_name': cls.__tablename__,
-                    'idx_def': index.definition}
-        sql = ("CREATE INDEX {idx_name} ON public.{table_name} "
-               "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
-        if commit:
-            try:
-                cls.execute(db, sql)
-            except DuplicateTable as err:
-                logger.warning("Got error (%s) when building %s. Skipping."
-                               % (err, index.name))
-        return sql
-
-    @classmethod
-    def build_indices(cls, db):
-        for index in cls._indices:
-            print("Building index: %s" % index.name)
-            cls.create_index(db, index)
-
-
-class BtreeIndex(object):
-    def __init__(self, name, colname, opts=None):
-        self.name = name
-        self.colname = colname
-        contents = colname
-        if opts is not None:
-            contents += ' ' + opts
-        self.definition = ('btree (%s)' % contents)
-
-
-class StringIndex(BtreeIndex):
-    def __init__(self, name, colname):
-        opts = 'COLLATE pg_catalog."en_US.utf8" varchar_ops ASC NULLS LAST'
-        super().__init__(name, colname, opts)
-
-
-class NamespaceLookup(MaterializedView):
-    __dbname__ = NotImplemented
-
-    @classmethod
-    def get_definition(cls):
-        return ("SELECT db_id, ag_id, role, ag_num, type, "
-                "mk_hash, ev_count FROM pa_meta "
-                "WHERE db_name = '%s'" % cls.__dbname__)
-
-
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -261,11 +152,10 @@ class DatabaseManager(object):
     host : str
         The database to which you want to interface.
     sqltype : OPTIONAL[str]
-        The type of sql library used. Use one of the sql types provided by
-        `sqltypes`. Default is `sqltypes.POSTGRESQL`
+        The type of sql library used. Default is 'postgresql'.
     label : OPTIONAL[str]
         A short string to indicate the purpose of the db instance. Set as
-        primary when initialized be `get_primary_db`.
+        primary when initialized be `get_primary_db` or `get_db`.
 
     Example
     -------
@@ -282,613 +172,18 @@ class DatabaseManager(object):
     For more sophisticated examples, several use cases can be found in
     `indra.tests.test_db`.
     """
-    def __init__(self, host, sqltype=sqltypes.POSTGRESQL, label=None):
+    def __init__(self, host, sqltype='postgresql', label=None):
         self.host = host
         self.session = None
         self.Base = declarative_base()
         self.sqltype = sqltype
         self.label = label
-        self.tables = {}
 
-        if sqltype is sqltypes.POSTGRESQL:
-            Bytea = BYTEA
-        else:
-            Bytea = LargeBinary
+        self.tables = get_primary_schema(self.Base, sqltype)
+        self.views = get_read_view_schema(self.Base)
 
-        # Normal Tables -------------------------------------------------------
-        class TextRef(self.Base, Displayable):
-            __tablename__ = 'text_ref'
-            _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
-            id = Column(Integer, primary_key=True)
-            pmid = Column(String(20))
-            pmcid = Column(String(20))
-            doi = Column(String(100))
-            pii = Column(String(250))
-            url = Column(String, unique=True)
-            manuscript_id = Column(String(100), unique=True)
-            create_date = Column(DateTime, default=func.now())
-            last_updated = Column(DateTime, onupdate=func.now())
-            __table_args__ = (
-                UniqueConstraint('pmid', 'doi', name='pmid-doi'),
-                UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
-                )
-
-            def get_ref_dict(self):
-                ref_dict = {}
-                for ref in self._ref_cols:
-                    val = getattr(self, ref, None)
-                    if val:
-                        ref_dict[ref.upper()] = val
-                ref_dict['TRID'] = self.id
-                return ref_dict
-
-        self.TextRef = TextRef
-        self.tables[TextRef.__tablename__] = TextRef
-
-        class SourceFile(self.Base, Displayable):
-            __tablename__ = 'source_file'
-            id = Column(Integer, primary_key=True)
-            source = Column(String(250), nullable=False)
-            name = Column(String(250), nullable=False)
-            load_date = Column(DateTime, default=func.now())
-            __table_args__ = (
-                UniqueConstraint('source', 'name', name='source-name'),
-                )
-        self.SourceFile = SourceFile
-        self.tables[SourceFile.__tablename__] = SourceFile
-
-        class Updates(self.Base, Displayable):
-            __tablename__ = 'updates'
-            _skip_disp = ['unresolved_conflicts_file']
-            id = Column(Integer, primary_key=True)
-            init_upload = Column(Boolean, nullable=False)
-            source = Column(String(250), nullable=False)
-            unresolved_conflicts_file = Column(Bytea)
-            datetime = Column(DateTime, default=func.now())
-        self.Updates = Updates
-        self.tables[Updates.__tablename__] = Updates
-
-        class TextContent(self.Base, Displayable):
-            __tablename__ = 'text_content'
-            _skip_disp = ['content']
-            id = Column(Integer, primary_key=True)
-            text_ref_id = Column(Integer,
-                                 ForeignKey('text_ref.id'),
-                                 nullable=False)
-            text_ref = relationship(TextRef)
-            source = Column(String(250), nullable=False)
-            format = Column(String(250), nullable=False)
-            text_type = Column(String(250), nullable=False)
-            content = Column(Bytea, nullable=False)
-            insert_date = Column(DateTime, default=func.now())
-            last_updated = Column(DateTime, onupdate=func.now())
-            __table_args__ = (
-                UniqueConstraint('text_ref_id', 'source', 'format',
-                                 'text_type', name='content-uniqueness'),
-                )
-        self.TextContent = TextContent
-        self.tables[TextContent.__tablename__] = TextContent
-
-        class Reading(self.Base, Displayable):
-            __tablename__ = 'reading'
-            _skip_disp = ['bytes']
-            id = Column(BigInteger, primary_key=True, default=None)
-            text_content_id = Column(Integer,
-                                     ForeignKey('text_content.id'),
-                                     nullable=False)
-            batch_id = Column(Integer, nullable=False)
-            text_content = relationship(TextContent)
-            reader = Column(String(20), nullable=False)
-            reader_version = Column(String(20), nullable=False)
-            format = Column(String(20), nullable=False)  # xml, json, etc.
-            bytes = Column(Bytea)
-            create_date = Column(DateTime, default=func.now())
-            last_updated = Column(DateTime, onupdate=func.now())
-            __table_args__ = (
-                UniqueConstraint('text_content_id', 'reader', 'reader_version',
-                                 name='reading-uniqueness'),
-                )
-        self.Reading = Reading
-        self.tables[Reading.__tablename__] = Reading
-
-        class ReadingUpdates(self.Base, Displayable):
-            __tablename__ = 'reading_updates'
-            id = Column(Integer, primary_key=True)
-            complete_read = Column(Boolean, nullable=False)
-            reader = Column(String(250), nullable=False)
-            reader_version = Column(String(250), nullable=False)
-            run_datetime = Column(DateTime, default=func.now())
-            earliest_datetime = Column(DateTime)
-            latest_datetime = Column(DateTime, nullable=False)
-        self.ReadingUpdates = ReadingUpdates
-        self.tables[ReadingUpdates.__tablename__] = ReadingUpdates
-
-        class DBInfo(self.Base, Displayable):
-            __tablename__ = 'db_info'
-            id = Column(Integer, primary_key=True)
-            db_name = Column(String(20), nullable=False)
-            source_api = Column(String, nullable=False)
-            create_date = Column(DateTime, default=func.now())
-            last_updated = Column(DateTime, onupdate=func.now())
-        self.DBInfo = DBInfo
-        self.tables[DBInfo.__tablename__] = DBInfo
-
-        class RawStatements(self.Base, Displayable):
-            __tablename__ = 'raw_statements'
-            _skip_disp = ['json']
-            id = Column(Integer, primary_key=True)
-            uuid = Column(String(40), unique=True, nullable=False)
-            batch_id = Column(Integer, nullable=False)
-            mk_hash = Column(BigInteger, nullable=False)
-            text_hash = Column(BigInteger)
-            source_hash = Column(BigInteger, nullable=False)
-            db_info_id = Column(Integer, ForeignKey('db_info.id'))
-            db_info = relationship(DBInfo)
-            reading_id = Column(BigInteger, ForeignKey('reading.id'))
-            reading = relationship(Reading)
-            type = Column(String(100), nullable=False)
-            indra_version = Column(String(100), nullable=False)
-            json = Column(Bytea, nullable=False)
-            create_date = Column(DateTime, default=func.now())
-            __table_args__ = (
-                UniqueConstraint('mk_hash', 'text_hash', 'reading_id',
-                                 name='reading_raw_statement_uniqueness'),
-                UniqueConstraint('mk_hash', 'source_hash', 'db_info_id',
-                                 name='db_info_raw_statement_uniqueness'),
-                )
-        self.RawStatements = RawStatements
-        self.tables[RawStatements.__tablename__] = RawStatements
-
-        class RejectedStatements(self.Base, Displayable):
-            __tablename__ = 'rejected_statements'
-            _skip_disp = ['json']
-            id = Column(Integer, primary_key=True)
-            uuid = Column(String(40), unique=True, nullable=False)
-            batch_id = Column(Integer, nullable=False)
-            mk_hash = Column(BigInteger, nullable=False)
-            text_hash = Column(BigInteger)
-            source_hash = Column(BigInteger, nullable=False)
-            db_info_id = Column(Integer, ForeignKey('db_info.id'))
-            db_info = relationship(DBInfo)
-            reading_id = Column(BigInteger, ForeignKey('reading.id'))
-            reading = relationship(Reading)
-            type = Column(String(100), nullable=False)
-            indra_version = Column(String(100), nullable=False)
-            json = Column(Bytea, nullable=False)
-            create_date = Column(DateTime, default=func.now())
-        self.RejectedStatements = RejectedStatements
-        self.tables[RejectedStatements.__tablename__] = RejectedStatements
-
-        class RawAgents(self.Base, Displayable):
-            __tablename__ = 'raw_agents'
-            id = Column(Integer, primary_key=True)
-            stmt_id = Column(Integer,
-                             ForeignKey('raw_statements.id'),
-                             nullable=False)
-            statements = relationship(RawStatements)
-            db_name = Column(String(40), nullable=False)
-            db_id = Column(String, nullable=False)
-            ag_num = Column(Integer, nullable=False)
-            role = Column(String(20), nullable=False)
-            __table_args = (
-                UniqueConstraint('stmt_id', 'db_name', 'db_id', 'role',
-                                 name='raw-agents-uniqueness'),
-                )
-        self.RawAgents = RawAgents
-        self.tables[RawAgents.__tablename__] = RawAgents
-
-        class RawMods(self.Base, Displayable):
-            __tablename__ = 'raw_mods'
-            id = Column(Integer, primary_key=True)
-            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
-                             nullable=False)
-            statements = relationship(RawStatements)
-            type = Column(String, nullable=False)
-            position = Column(String(10))
-            residue = Column(String(5))
-            modified = Column(Boolean)
-            ag_num = Column(Integer, nullable=False)
-        self.RawMods = RawMods
-        self.tables[RawMods.__tablename__] = RawMods
-
-        class RawMuts(self.Base, Displayable):
-            __tablename__ = 'raw_muts'
-            id = Column(Integer, primary_key=True)
-            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
-                             nullable=False)
-            statements = relationship(RawStatements)
-            position = Column(String(10))
-            residue_from = Column(String(5))
-            residue_to = Column(String(5))
-            ag_num = Column(Integer, nullable=False)
-        self.RawMuts = RawMuts
-        self.tables[RawMuts.__tablename__] = RawMuts
-
-        class RawUniqueLinks(self.Base, Displayable):
-            __tablename__ = 'raw_unique_links'
-            id = Column(Integer, primary_key=True)
-            raw_stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
-                                 nullable=False)
-            pa_stmt_mk_hash = Column(BigInteger,
-                                     ForeignKey('pa_statements.mk_hash'),
-                                     nullable=False)
-            __table_args = (
-                UniqueConstraint('raw_stmt_id', 'pa_stmt_mk_hash',
-                                 name='stmt-link-uniqueness'),
-                )
-        self.RawUniqueLinks = RawUniqueLinks
-        self.tables[RawUniqueLinks.__tablename__] = RawUniqueLinks
-
-        class PreassemblyUpdates(self.Base, Displayable):
-            __tablename__ = 'preassembly_updates'
-            id = Column(Integer, primary_key=True)
-            corpus_init = Column(Boolean, nullable=False)
-            run_datetime = Column(DateTime, default=func.now())
-        self.PreassemblyUpdates = PreassemblyUpdates
-        self.tables[PreassemblyUpdates.__tablename__] = PreassemblyUpdates
-
-        class PAStatements(self.Base, Displayable):
-            __tablename__ = 'pa_statements'
-            _skip_disp = ['json']
-            mk_hash = Column(BigInteger, primary_key=True)
-            matches_key = Column(String, unique=True, nullable=False)
-            uuid = Column(String(40), unique=True, nullable=False)
-            type = Column(String(100), nullable=False)
-            indra_version = Column(String(100), nullable=False)
-            json = Column(Bytea, nullable=False)
-            create_date = Column(DateTime, default=func.now())
-        self.PAStatements = PAStatements
-        self.tables[PAStatements.__tablename__] = PAStatements
-
-        class PAAgents(self.Base, Displayable):
-            __tablename__ = 'pa_agents'
-            id = Column(Integer, primary_key=True)
-            stmt_mk_hash = Column(BigInteger,
-                                  ForeignKey('pa_statements.mk_hash'),
-                                  nullable=False)
-            statements = relationship(PAStatements)
-            db_name = Column(String(40), nullable=False)
-            db_id = Column(String, nullable=False)
-            role = Column(String(20), nullable=False)
-            ag_num = Column(Integer, nullable=False)
-            __table_args__ = (
-                UniqueConstraint('stmt_mk_hash', 'db_name', 'db_id', 'role',
-                                 name='pa-agent-uniqueness'),
-                )
-        self.PAAgents = PAAgents
-        self.tables[PAAgents.__tablename__] = PAAgents
-
-        class PAMods(self.Base, Displayable):
-            __tablename__ = 'pa_mods'
-            id = Column(Integer, primary_key=True)
-            stmt_mk_hash = Column(BigInteger,
-                                  ForeignKey('pa_statements.mk_hash'),
-                                  nullable=False)
-            statements = relationship(PAStatements)
-            type = Column(String, nullable=False)
-            position = Column(String(10))
-            residue = Column(String(5))
-            modified = Column(Boolean)
-            ag_num = Column(Integer, nullable=False)
-        self.PAMods = PAMods
-        self.tables[PAMods.__tablename__] = PAMods
-
-        class PAMuts(self.Base, Displayable):
-            __tablename__ = 'pa_muts'
-            id = Column(Integer, primary_key=True)
-            stmt_mk_hash = Column(BigInteger,
-                                  ForeignKey('pa_statements.mk_hash'),
-                                  nullable=False)
-            statements = relationship(PAStatements)
-            position = Column(String(10))
-            residue_from = Column(String(5))
-            residue_to = Column(String(5))
-            ag_num = Column(Integer, nullable=False)
-        self.PAMuts = PAMuts
-        self.tables[PAMuts.__tablename__] = PAMuts
-
-        class Curation(self.Base, Displayable):
-            __tablename__ = 'curation'
-            id = Column(Integer, primary_key=True)
-            pa_hash = Column(BigInteger, ForeignKey('pa_statements.mk_hash'))
-            pa_statements = relationship(PAStatements)
-            source_hash = Column(BigInteger)
-            tag = Column(String)
-            text = Column(String)
-            curator = Column(String, nullable=False)
-            auth_id = Column(Integer)
-            source = Column(String)
-            ip = Column(INET)
-            date = Column(DateTime, default=func.now())
-        self.Curation = Curation
-        self.tables[Curation.__tablename__] = Curation
-
-        class PASupportLinks(self.Base, Displayable):
-            __tablename__ = 'pa_support_links'
-            id = Column(Integer, primary_key=True)
-            supporting_mk_hash = Column(BigInteger,
-                                        ForeignKey('pa_statements.mk_hash'),
-                                        nullable=False)
-            supported_mk_hash = Column(BigInteger,
-                                       ForeignKey('pa_statements.mk_hash'),
-                                       nullable=False)
-        self.PASupportLinks = PASupportLinks
-        self.tables[PASupportLinks.__tablename__] = PASupportLinks
-
-        class Auth(self.Base, Displayable):
-            __tablename__ = 'auth'
-            id = Column(Integer, primary_key=True)
-            name = Column(String, unique=True)
-            email = Column(String)
-            api_key = Column(String, unique=True)
-            elsevier_access = Column(Boolean, default=False)
-            medscan_access = Column(Boolean, default=False)
-        self._Auth = Auth
-
-        # Materialized Views
-        # ---------------------------------------------------------------------
-        # We use materialized views to allow fast and efficient load of data,
-        # and to add a layer of separation between the processes of updating
-        # the content of the database and accessing the content of the
-        # database. However, it is not practical to have the views created
-        # through sqlalchemy: instead they are generated and updated manually
-        # (or by other non-sqlalchemy scripts).
-        #
-        # The following views must be built in this specific order:
-        #   1. fast_raw_pa_link
-        #   2. evidence_counts
-        #   3. pa_meta
-        #   4. raw_stmt_src
-        #   5. pa_stmt_src
-        # The following can be built at any time and in any order:
-        #   - reading_ref_link
-        # Note that the order of views below is determined not by the above
-        # order but by constraints imposed by use-case.
-
-        self.m_views = {}
-
-        class EvidenceCounts(self.Base, MaterializedView):
-            __tablename__ = 'evidence_counts'
-            __definition__ = ('SELECT count(id) AS ev_count, mk_hash '
-                              'FROM fast_raw_pa_link '
-                              'GROUP BY mk_hash')
-            mk_hash = Column(BigInteger, primary_key=True)
-            ev_count = Column(Integer)
-        self.EvidenceCounts = EvidenceCounts
-        self.m_views[EvidenceCounts.__tablename__] = EvidenceCounts
-
-        class ReadingRefLink(self.Base, MaterializedView):
-            __tablename__ = 'reading_ref_link'
-            __definition__ = ('SELECT pmid, pmcid, tr.id AS trid, doi, '
-                              'pii, url, manuscript_id, tc.id AS tcid, '
-                              'source, r.id AS rid, reader '
-                              'FROM text_ref AS tr JOIN text_content AS tc '
-                              'ON tr.id = tc.text_ref_id JOIN reading AS r '
-                              'ON tc.id = r.text_content_id')
-            _indices = [BtreeIndex('rrl_rid_idx', 'rid'),
-                        StringIndex('rrl_pmid_idx', 'pmid'),
-                        StringIndex('rrl_pmcid_idx', 'pmcid'),
-                        StringIndex('rrl_doi_idx', 'doi'),
-                        StringIndex('rrl_manuscript_id_idx', 'manuscript_id'),
-                        BtreeIndex('rrl_tcid_idx', 'tcid'),
-                        BtreeIndex('rrl_trid_idx', 'trid')]
-            trid = Column(Integer)
-            pmid = Column(String(20))
-            pmcid = Column(String(20))
-            doi = Column(String(100))
-            pii = Column(String(250))
-            url = Column(String(250))
-            manuscript_id = Column(String(100))
-            tcid = Column(Integer)
-            source = Column(String(250))
-            rid = Column(Integer, primary_key=True)
-            reader = Column(String(20))
-        self.ReadingRefLink = ReadingRefLink
-        self.m_views[ReadingRefLink.__tablename__] = ReadingRefLink
-
-        class FastRawPaLink(self.Base, MaterializedView):
-            __tablename__ = 'fast_raw_pa_link'
-            __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
-                              'raw.reading_id, raw.db_info_id, '
-                              'pa.mk_hash, pa.json AS pa_json, pa.type '
-                              'FROM raw_statements AS raw, '
-                              'pa_statements AS pa, '
-                              'raw_unique_links AS link '
-                              'WHERE link.raw_stmt_id = raw.id '
-                              'AND link.pa_stmt_mk_hash = pa.mk_hash')
-            _skip_disp = ['raw_json', 'pa_json']
-            _indices = [BtreeIndex('hash_index', 'mk_hash')]
-            id = Column(Integer, primary_key=True)
-            raw_json = Column(BYTEA)
-            reading_id = Column(BigInteger, ForeignKey('reading_ref_link.rid'))
-            reading_ref = relationship(ReadingRefLink)
-            db_info_id = Column(Integer)
-            mk_hash = Column(BigInteger, ForeignKey('evidence_counts.mk_hash'))
-            ev_counts = relationship(EvidenceCounts)
-            pa_json = Column(BYTEA)
-            type = Column(String)
-        self.FastRawPaLink = FastRawPaLink
-        self.m_views[FastRawPaLink.__tablename__] = FastRawPaLink
-
-        class PaMeta(self.Base, MaterializedView):
-            __tablename__ = 'pa_meta'
-            __definition__ = ('SELECT pa_agents.db_name, pa_agents.db_id, '
-                              'pa_agents.id AS ag_id, pa_agents.role, '
-                              'pa_agents.ag_num, pa_statements.type, '
-                              'pa_statements.mk_hash, evidence_counts.ev_count '
-                              'FROM pa_agents, pa_statements, evidence_counts '
-                              'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
-                              'AND pa_statements.mk_hash = evidence_counts.mk_hash')
-            _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
-                        StringIndex('pa_meta_db_id_idx', 'db_id'),
-                        BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
-            ag_id = Column(Integer, primary_key=True)
-            ag_num = Column(Integer)
-            db_name = Column(String)
-            db_id = Column(String)
-            role = Column(String(20))
-            type = Column(String(100))
-            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
-            raw_pa_link = relationship(FastRawPaLink)
-            ev_count = Column(Integer)
-        self.PaMeta = PaMeta
-        self.m_views[PaMeta.__tablename__] = PaMeta
-
-        class TextMeta(self.Base, NamespaceLookup):
-            __tablename__ = 'text_meta'
-            __dbname__ = 'TEXT'
-            _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
-                        StringIndex('text_meta_type_idx', 'type')]
-            ag_id = Column(Integer, primary_key=True)
-            ag_num = Column(Integer)
-            db_id = Column(String)
-            role = Column(String(20))
-            type = Column(String(100))
-            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
-            raw_pa_link = relationship(FastRawPaLink)
-            ev_count = Column(Integer)
-        self.TextMeta = TextMeta
-        self.m_views[TextMeta.__tablename__] = TextMeta
-
-        class NameMeta(self.Base, NamespaceLookup):
-            __tablename__ = 'name_meta'
-            __dbname__ = 'NAME'
-            _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
-                        StringIndex('name_meta_type_idx', 'type')]
-            ag_id = Column(Integer, primary_key=True)
-            ag_num = Column(Integer)
-            db_id = Column(String)
-            role = Column(String(20))
-            type = Column(String(100))
-            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
-            raw_pa_link = relationship(FastRawPaLink)
-            ev_count = Column(Integer)
-        self.NameMeta = NameMeta
-        self.m_views[NameMeta.__tablename__] = NameMeta
-
-        class OtherMeta(self.Base, MaterializedView):
-            __tablename__ = 'other_meta'
-            __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
-                              "type, mk_hash, ev_count FROM pa_meta "
-                              "WHERE db_name NOT IN ('NAME', 'TEXT')")
-            _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
-                        StringIndex('other_meta_type_idx', 'type'),
-                        StringIndex('other_meta_db_name_idx', 'db_name')]
-            ag_id = Column(Integer, primary_key=True)
-            ag_num = Column(Integer)
-            db_name = Column(String)
-            db_id = Column(String)
-            role = Column(String(20))
-            type = Column(String(100))
-            mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
-            raw_pa_link = relationship(FastRawPaLink)
-            ev_count = Column(Integer)
-        self.OtherMeta = OtherMeta
-        self.m_views[OtherMeta.__tablename__] = OtherMeta
-
-        class RawStmtSrc(self.Base, MaterializedView):
-            __tablename__ = 'raw_stmt_src'
-            __definition__ = ('SELECT raw_statements.id AS sid, '
-                              'lower(reading.reader) AS src '
-                              'FROM raw_statements, reading '
-                              'WHERE reading.id = raw_statements.reading_id '
-                              'UNION '
-                              'SELECT raw_statements.id AS sid, '
-                              'lower(db_info.db_name) AS src '
-                              'FROM raw_statements, db_info '
-                              'WHERE db_info.id = raw_statements.db_info_id')
-            sid = Column(Integer, primary_key=True)
-            src = Column(String)
-        self.RawStmtSrc = RawStmtSrc
-        self.m_views[RawStmtSrc.__tablename__] = RawStmtSrc
-
-        class PaStmtSrc(self.Base, MaterializedView):
-            __tablename__ = 'pa_stmt_src'
-            __definition_fmt__ = ("SELECT * FROM crosstab("
-                                  "'SELECT mk_hash, src, count(sid) "
-                                  "  FROM raw_stmt_src "
-                                  "   JOIN fast_raw_pa_link ON sid = id "
-                                  "  GROUP BY (mk_hash, src)', "
-                                  "$$SELECT unnest('{%s}'::text[])$$"
-                                  " ) final_result(mk_hash bigint, %s)")
-            _indices = [BtreeIndex('pa_stmt_src_mk_hash_idx', 'mk_hash')]
-            loaded = False
-
-            @classmethod
-            def definition(cls, db):
-                db.grab_session()
-                logger.info("Discovering the possible sources...")
-                src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
-                logger.info("Found the following sources: %s"
-                            % [src for src, in src_list])
-                entries = []
-                cols = []
-                for src, in src_list:
-                    if not cls.loaded:
-                        setattr(cls, src, Column(BigInteger))
-                    cols.append(src)
-                    entries.append('%s bigint' % src)
-                sql = cls.__definition_fmt__ % (', '.join(cols),
-                                                ', '.join(entries))
-                return sql
-
-            @classmethod
-            def create(cls, db, with_data=True, commit=True):
-                # Make sure the necessary extension is installed.
-                with db.engine.connect() as conn:
-                    conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
-
-                # Create the materialized view.
-                cls.__definition__ = cls.definition(db)
-                sql = super(cls, cls).create(db, with_data, commit)
-                cls.loaded = True
-                return sql
-
-            @classmethod
-            def update(cls, db, with_data=True, commit=True):
-                # Make sure the necessary extension is installed.
-                with db.engine.connect() as conn:
-                    conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
-
-                # Drop the table entirely and replace it because the columns
-                # may have changed.
-                sql_fmt = 'DROP MATERIALIZED VIEW IF EXISTS %s; %s'
-                create_sql = cls.create(db, with_data, commit=False)
-                sql = sql_fmt % (cls.__tablename__, create_sql)
-                cls.execute(db, sql)
-                cls.load_cols(db.engine)
-                return sql
-
-            @classmethod
-            def load_cols(cls, engine):
-                if cls.loaded:
-                    return
-
-                try:
-                    cols = inspect(engine).get_columns('pa_stmt_src')
-                except NoSuchTableError:
-                    return
-
-                for col in cols:
-                    if col['name'] == 'mk_hash':
-                        continue
-
-                    setattr(cls, col['name'], Column(BigInteger))
-
-                cls.loaded = True
-                return
-
-            def get_sources(self, include_none=False):
-                src_dict = {}
-                for k, v in self.__dict__.items():
-                    if k not in {'mk_hash'} and not k.startswith('_'):
-                        if include_none or v is not None:
-                            src_dict[k] = v
-                return src_dict
-
-            mk_hash = Column(BigInteger, primary_key=True)
-        self.__PaStmtSrc = PaStmtSrc
-        self.m_views[PaStmtSrc.__tablename__] = PaStmtSrc
+        for tbl in (t for d in [self.tables, self.views] for t in d.values()):
+            setattr(self, tbl.__class__.__name__, tbl)
 
         self.engine = create_engine(host)
 
@@ -896,16 +191,7 @@ class DatabaseManager(object):
         # networkx is available, specifically the DatabaseManager.link
         if WITH_NX:
             G = nx.Graph()
-            G.add_edges_from([
-                ('pa_agents', 'pa_statements'),
-                ('raw_unique_links', 'pa_statements'),
-                ('raw_unique_links', 'raw_statements'),
-                ('raw_statements', 'reading'),
-                ('raw_agents', 'raw_statements'),
-                ('raw_statements', 'db_info'),
-                ('reading', 'text_content'),
-                ('text_content', 'text_ref')
-                ])
+            G.add_edges_from(foreign_key_map)
             self.__foreign_key_graph = G
         else:
             self.__foreign_key_graph = None
@@ -1045,7 +331,7 @@ class DatabaseManager(object):
             if view_list is not None and view_name not in view_list:
                 continue
 
-            view = self.m_views[view_name]
+            view = self.views[view_name]
 
             if mode == 'create':
                 if view_name in active_views:
@@ -1094,14 +380,14 @@ class DatabaseManager(object):
             logger.info("Removing all materialized views...")
             with self.engine.connect() as conn:
                 conn.execute('DROP MATERIALIZED VIEW IF EXISTS %s CASCADE;'
-                             % (', '.join(self.m_views.keys())))
+                             % (', '.join(self.views.keys())))
             logger.info("Removing all tables...")
             self.Base.metadata.drop_all(self.engine)
             logger.debug("All tables removed.")
         else:
             for tbl in tbl_list:
                 logger.info("Removing %s..." % tbl.__tablename__)
-                if tbl in self.m_views.values():
+                if tbl in self.views.values():
                     with self.engine.connect() as conn:
                         conn.execute('DROP MATERIALIZED VIEW IF EXISTS %s '
                                      'CASCADE;' % tbl.__tablename__)
@@ -1573,14 +859,14 @@ class DatabaseManager(object):
         # Get the base set of tables needed.
         if isinstance(table, str):
             # This should be the string name for a table or view.
-            if table in self.tables.keys() or table in self.m_views.keys():
+            if table in self.tables.keys() or table in self.views.keys():
                 true_table = getattr(self, table)
             else:
                 raise IndraDbException("Invalid table name: %s." % table)
         elif hasattr(table, 'class_'):
             # This is technically an attribute of a table.
             true_table = table.class_
-        elif table in self.tables.values() or table in self.m_views.values():
+        elif table in self.tables.values() or table in self.views.values():
             # This is an actual table object
             true_table = table
         else:

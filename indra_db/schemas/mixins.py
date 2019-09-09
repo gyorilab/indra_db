@@ -27,6 +27,8 @@ class Displayable(object):
 
     def __repr__(self):
         ret = self.__class__.__name__ + '('
+
+        entries = []
         for attr_name in self._always_disp:
             attr = getattr(self, attr_name)
             if isinstance(attr, str):
@@ -36,7 +38,9 @@ class Displayable(object):
             else:
                 fmt = '%s=%s'
 
-            ret += fmt % (attr_name, attr)
+            entries.append(fmt % (attr_name, attr))
+
+        ret += ', '.join(entries)
         ret += ')'
         return ret
 

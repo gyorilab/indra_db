@@ -109,9 +109,6 @@ class DatabaseEnv(object):
             self.stmt_tuples = self.test_data['raw_statements']['tuples']
 
         self.used_stmt_tuples = set()
-        self.test_db._init_auth()
-        _, api_key = self.test_db._add_auth('tester')
-        self.tester_key = api_key
         return
 
     def get_available_stmt_tuples(self):

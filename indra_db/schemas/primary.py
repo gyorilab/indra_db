@@ -30,6 +30,7 @@ def get_primary_schema(Base, sql_type):
     class TextRef(Base, Displayable):
         __tablename__ = 'text_ref'
         _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
+        _always_disp = ['id', 'pmid', 'pmcid']
         id = Column(Integer, primary_key=True)
         pmid = Column(String(20))
         pmcid = Column(String(20))
@@ -57,6 +58,7 @@ def get_primary_schema(Base, sql_type):
 
     class SourceFile(Base, Displayable):
         __tablename__ = 'source_file'
+        _always_disp = ['source', 'name']
         id = Column(Integer, primary_key=True)
         source = Column(String(250), nullable=False)
         name = Column(String(250), nullable=False)
@@ -69,6 +71,7 @@ def get_primary_schema(Base, sql_type):
     class Updates(Base, Displayable):
         __tablename__ = 'updates'
         _skip_disp = ['unresolved_conflicts_file']
+        _always_disp = ['source', 'datetime']
         id = Column(Integer, primary_key=True)
         init_upload = Column(Boolean, nullable=False)
         source = Column(String(250), nullable=False)
@@ -79,6 +82,7 @@ def get_primary_schema(Base, sql_type):
     class TextContent(Base, Displayable):
         __tablename__ = 'text_content'
         _skip_disp = ['content']
+        _always_disp = ['id', 'text_ref_id', 'source', 'format', 'text_type']
         id = Column(Integer, primary_key=True)
         text_ref_id = Column(Integer,
                              ForeignKey('text_ref.id'),
@@ -99,6 +103,7 @@ def get_primary_schema(Base, sql_type):
     class Reading(Base, Displayable):
         __tablename__ = 'reading'
         _skip_disp = ['bytes']
+        _always_disp = ['id', 'text_content_id', 'reader', 'reader_version']
         id = Column(BigInteger, primary_key=True, default=None)
         text_content_id = Column(Integer,
                                  ForeignKey('text_content.id'),
@@ -119,6 +124,7 @@ def get_primary_schema(Base, sql_type):
 
     class ReadingUpdates(Base, Displayable):
         __tablename__ = 'reading_updates'
+        _always_disp = ['reader', 'reader_version', 'run_datetime']
         id = Column(Integer, primary_key=True)
         complete_read = Column(Boolean, nullable=False)
         reader = Column(String(250), nullable=False)
@@ -130,6 +136,7 @@ def get_primary_schema(Base, sql_type):
 
     class DBInfo(Base, Displayable):
         __tablename__ = 'db_info'
+        _always_disp = ['id', 'db_name', 'source_api']
         id = Column(Integer, primary_key=True)
         db_name = Column(String(20), nullable=False)
         source_api = Column(String, nullable=False)
@@ -140,6 +147,7 @@ def get_primary_schema(Base, sql_type):
     class RawStatements(Base, Displayable):
         __tablename__ = 'raw_statements'
         _skip_disp = ['json']
+        _always_disp = ['id', 'db_info_id', 'reading_id', 'type']
         id = Column(Integer, primary_key=True)
         uuid = Column(String(40), unique=True, nullable=False)
         batch_id = Column(Integer, nullable=False)
@@ -165,6 +173,7 @@ def get_primary_schema(Base, sql_type):
     class RejectedStatements(Base, Displayable):
         __tablename__ = 'rejected_statements'
         _skip_disp = ['json']
+        _always_disp = ['id', 'db_info_id', 'reading_id', 'type']
         id = Column(Integer, primary_key=True)
         uuid = Column(String(40), unique=True, nullable=False)
         batch_id = Column(Integer, nullable=False)
@@ -183,6 +192,7 @@ def get_primary_schema(Base, sql_type):
 
     class RawAgents(Base, Displayable):
         __tablename__ = 'raw_agents'
+        _always_disp = ['stmt_id', 'db_name', 'db_id', 'ag_num']
         id = Column(Integer, primary_key=True)
         stmt_id = Column(Integer,
                          ForeignKey('raw_statements.id'),
@@ -200,6 +210,8 @@ def get_primary_schema(Base, sql_type):
 
     class RawMods(Base, Displayable):
         __tablename__ = 'raw_mods'
+        _always_disp = ['stmt_id', 'type', 'position', 'residue', 'modified',
+                        'ag_num']
         id = Column(Integer, primary_key=True)
         stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
                          nullable=False)
@@ -213,6 +225,8 @@ def get_primary_schema(Base, sql_type):
 
     class RawMuts(Base, Displayable):
         __tablename__ = 'raw_muts'
+        _always_disp = ['stmt_id', 'position', 'residue_from', 'residue_to',
+                        'ag_num']
         id = Column(Integer, primary_key=True)
         stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
                          nullable=False)
@@ -225,6 +239,7 @@ def get_primary_schema(Base, sql_type):
 
     class RawUniqueLinks(Base, Displayable):
         __tablename__ = 'raw_unique_links'
+        _always_disp = ['raw_stmt_id', 'pa_stmt_mk_hash']
         id = Column(Integer, primary_key=True)
         raw_stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
                              nullable=False)
@@ -239,6 +254,7 @@ def get_primary_schema(Base, sql_type):
 
     class PreassemblyUpdates(Base, Displayable):
         __tablename__ = 'preassembly_updates'
+        _always_disp = ['corpus_init', 'run_datetime']
         id = Column(Integer, primary_key=True)
         corpus_init = Column(Boolean, nullable=False)
         run_datetime = Column(DateTime, default=func.now())
@@ -247,6 +263,7 @@ def get_primary_schema(Base, sql_type):
     class PAStatements(Base, Displayable):
         __tablename__ = 'pa_statements'
         _skip_disp = ['json']
+        _always_disp = ['mk_hash', 'type']
         mk_hash = Column(BigInteger, primary_key=True)
         matches_key = Column(String, unique=True, nullable=False)
         uuid = Column(String(40), unique=True, nullable=False)
@@ -258,6 +275,7 @@ def get_primary_schema(Base, sql_type):
 
     class PAAgents(Base, Displayable):
         __tablename__ = 'pa_agents'
+        _always_disp = ['stmt_mk_hash', 'db_name', 'db_id', 'ag_num']
         id = Column(Integer, primary_key=True)
         stmt_mk_hash = Column(BigInteger,
                               ForeignKey('pa_statements.mk_hash'),
@@ -275,6 +293,8 @@ def get_primary_schema(Base, sql_type):
 
     class PAMods(Base, Displayable):
         __tablename__ = 'pa_mods'
+        _always_disp = ['stmt_mk_hash', 'type', 'position', 'residue',
+                        'modified', 'ag_num']
         id = Column(Integer, primary_key=True)
         stmt_mk_hash = Column(BigInteger,
                               ForeignKey('pa_statements.mk_hash'),
@@ -289,6 +309,8 @@ def get_primary_schema(Base, sql_type):
 
     class PAMuts(Base, Displayable):
         __tablename__ = 'pa_muts'
+        _always_disp = ['stmt_mk_hash', 'position', 'residue_from',
+                        'residue_to', 'ag_num']
         id = Column(Integer, primary_key=True)
         stmt_mk_hash = Column(BigInteger,
                               ForeignKey('pa_statements.mk_hash'),
@@ -302,6 +324,7 @@ def get_primary_schema(Base, sql_type):
 
     class PASupportLinks(Base, Displayable):
         __tablename__ = 'pa_support_links'
+        _always_disp = ['supporting_mk_hash', 'supported_mk_hash']
         id = Column(Integer, primary_key=True)
         supporting_mk_hash = Column(BigInteger,
                                     ForeignKey('pa_statements.mk_hash'),
@@ -313,6 +336,7 @@ def get_primary_schema(Base, sql_type):
 
     class Curation(Base, Displayable):
         __tablename__ = 'curation'
+        _always_disp = ['pa_hash', 'source_hash', 'tag', 'curator', 'date']
         id = Column(Integer, primary_key=True)
         pa_hash = Column(BigInteger, ForeignKey('pa_statements.mk_hash'))
         pa_statements = relationship(PAStatements)

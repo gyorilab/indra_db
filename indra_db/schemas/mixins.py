@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 class Displayable(object):
     _skip_disp = []
+    _always_disp = ['id']
 
     def _make_str(self):
         s = self.__tablename__ + ':\n'
@@ -23,6 +24,21 @@ class Displayable(object):
 
     def __str__(self):
         return self._make_str()
+
+    def __repr__(self):
+        ret = self.__class__.__name__ + '('
+        for attr_name in self._always_disp:
+            attr = getattr(self, attr_name)
+            if isinstance(attr, str):
+                fmt = '%s="%s"'
+            elif isinstance(attr, bytes):
+                fmt = '%s=b"%s"'
+            else:
+                fmt = '%s=%s'
+
+            ret += fmt % (attr_name, attr)
+        ret += ')'
+        return ret
 
 
 class MaterializedView(Displayable):

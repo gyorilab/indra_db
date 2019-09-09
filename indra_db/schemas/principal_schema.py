@@ -1,4 +1,4 @@
-__all__ = ['get_primary_schema', 'foreign_key_map']
+__all__ = ['get_schema', 'foreign_key_map']
 
 from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
      Boolean, DateTime, func, BigInteger
@@ -19,7 +19,7 @@ foreign_key_map = [
 ]
 
 
-def get_primary_schema(Base):
+def get_schema(Base):
     table_dict = {}
 
     class TextRef(Base, IndraDBTable):

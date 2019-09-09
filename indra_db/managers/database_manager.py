@@ -20,8 +20,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from indra.util import batch_iter
 
 from indra_db.exceptions import IndraDbException
-from indra_db.schemas import get_primary_schema, get_readonly_schema
-from indra_db.schemas.principal_schema import foreign_key_map
+from indra_db.schemas import principal_schema, readonly_schema
 
 try:
     import networkx as nx
@@ -169,14 +168,16 @@ class DatabaseManager(object):
     For more sophisticated examples, several use cases can be found in
     `indra.tests.test_db`.
     """
-    def __init__(self, host, label=None, foreign_key_map=None):
+    def __init__(self, host, label=None):
         self.host = host
         self.session = None
         self.Base = declarative_base()
         self.label = label
-
         self.engine = create_engine(host)
+        self._conn = None
+        return
 
+    def _init_foreign_key_map(self, foreign_key_map):
         # There are some useful shortcuts that can be used if
         # networkx is available, specifically the DatabaseManager.link
         if WITH_NX and foreign_key_map:
@@ -185,10 +186,6 @@ class DatabaseManager(object):
             self.__foreign_key_graph = G
         else:
             self.__foreign_key_graph = None
-
-        self._conn = None
-
-        return
 
     def __del__(self, *args, **kwargs):
         try:
@@ -787,14 +784,15 @@ class DatabaseManager(object):
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
     def __init__(self, host, label=None):
-        super(self.__class__, self).__init__(host, label, foreign_key_map)
+        super(self.__class__, self).__init__(host, label)
 
-        self.tables = get_primary_schema(self.Base)
-        self.views = get_readonly_schema(self.Base)
+        self.tables = principal_schema.get_schema(self.Base)
+        self.views = readonly_schema.get_schema(self.Base)
 
         self._make_table_attrs((t for d in [self.tables, self.views]
                                 for t in d.values()))
 
+        self._init_foreign_key_map(principal_schema.foreign_key_map)
         return
 
     def manage_views(self, mode, view_list=None, with_data=True):
@@ -851,7 +849,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
 
-        self.tables = get_readonly_schema(self.Base)
+        self.tables = readonly_schema.get_schema(self.Base)
         self._make_table_attrs(self.tables.values())
         return
 

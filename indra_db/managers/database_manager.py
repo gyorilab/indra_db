@@ -1,5 +1,6 @@
 __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
-           'sql_expressions', 'readers', 'reader_versions']
+           'sql_expressions', 'readers', 'reader_versions',
+           'PrincipalDatabaseManager', 'ReadonlyDatabaseManager']
 
 import re
 import random

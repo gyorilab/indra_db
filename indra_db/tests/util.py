@@ -5,8 +5,7 @@ from functools import wraps
 from os import path
 
 import indra_db.util as dbu
-from indra_db.managers.database_manager import DatabaseManager
-
+from indra_db.managers.database_manager import PrincipalDatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ def capitalize_list_of_tpls(l):
 
 def get_temp_db(clear=False):
     """Get a DatabaseManager for the test database."""
-    db = DatabaseManager('postgresql://postgres:@localhost/indradb_test')
+    db = PrincipalDatabaseManager('postgresql://postgres:@localhost/indradb_test')
     if db is None:
         logger.error("Could not find any test database names.")
     if clear:

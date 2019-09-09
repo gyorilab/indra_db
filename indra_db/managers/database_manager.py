@@ -183,7 +183,7 @@ class DatabaseManager(object):
         self.views = get_read_view_schema(self.Base)
 
         for tbl in (t for d in [self.tables, self.views] for t in d.values()):
-            setattr(self, tbl.__class__.__name__, tbl)
+            setattr(self, tbl.__name__, tbl)
 
         self.engine = create_engine(host)
 

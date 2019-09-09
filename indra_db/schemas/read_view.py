@@ -35,7 +35,6 @@ def get_read_view_schema(Base):
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
     '''
-
     read_views = {}
 
     class EvidenceCounts(Base, MaterializedView):

@@ -213,61 +213,6 @@ class DatabaseManager(object):
             return self.__PaStmtSrc
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def _init_auth(self):
-        """Create the auth table."""
-        self._Auth.__table__.create(bind=self.engine)
-
-    def _get_auth(self, api_key):
-        res = (self.session
-               .query(self._Auth)
-               .filter(self._Auth.api_key == api_key).all())
-        if not res:
-            return None
-        assert len(res) == 1
-        return res[0]
-
-    def _get_auth_info(self, api_key):
-        """Check if an api key is valid."""
-        if api_key is None:
-            return None
-        auth = self._get_auth(api_key)
-        if auth is None:
-            return None
-        else:
-            return auth.id, auth.name
-
-    def _get_api_key(self, name):
-        """Get an API key from the username."""
-        if name is None:
-            return None
-        auth_record = self.select_one(self._Auth, self._Auth.name == name)
-        if not auth_record:
-            return None
-        return auth_record.api_key
-
-    def _add_auth(self, name, email=None, **access_params):
-        """Add a new api key to the database."""
-        new_uuid = str(uuid4())
-        dbid = self.insert(self._Auth, api_key=new_uuid, name=name,
-                           email=email, **access_params)
-        return dbid, new_uuid
-
-    def _has_auth(self, resource, api_key):
-        if api_key is None:
-            logger.info("API key is None. Denied.")
-            return False
-        auth = self._get_auth(api_key)
-        if auth is None:
-            logger.info("No auth record found. Denied.")
-            return False
-        if resource == 'elsevier':
-            return auth.elsevier_access
-        elif resource == 'medscan':
-            return auth.medscan_access
-        else:
-            logger.info("Invalid resource: %s. Denied." % resource)
-            return False
-
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."
         ordered_tables = ['text_ref', 'text_content', 'reading', 'db_info',

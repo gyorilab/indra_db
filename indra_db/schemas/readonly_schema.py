@@ -25,13 +25,15 @@ def get_schema(Base):
     (or by other non-sqlalchemy scripts).
 
     The following views must be built in this specific order:
-      1. readonly.fast_raw_pa_link
-      2. readonly.evidence_counts
+      1. fast_raw_pa_link
+      2. evidence_counts
       3. pa_meta
-      4. raw_stmt_src
-      5. pa_stmt_src
+      4. text_meta
+      5. name_meta
+      6. raw_stmt_src
+      7. pa_stmt_src
     The following can be built at any time and in any order:
-      - readonly.reading_ref_link
+      - reading_ref_link
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
     '''

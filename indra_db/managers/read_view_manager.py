@@ -54,4 +54,4 @@ if __name__ == '__main__':
         views = args.m_views
 
     db = get_db(args.database)
-    db.manage_views(args.task, view_list=views)
+    db.generate_readonly(args.task, view_list=views)

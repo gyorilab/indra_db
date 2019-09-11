@@ -785,9 +785,10 @@ class PrincipalDatabaseManager(DatabaseManager):
         super(self.__class__, self).__init__(host, label)
 
         self.tables = principal_schema.get_schema(self.Base)
-        self.views = readonly_schema.get_schema(self.Base)
+        self.readonly = readonly_schema.get_schema(self.Base)
 
-        for tbl in (t for d in [self.tables, self.views] for t in d.values()):
+        for tbl in (t for d in [self.tables, self.readonly]
+                    for t in d.values()):
             if tbl.__name__ == 'PaStmtSrc':
                 self.__PaStmtSrc = tbl
             else:
@@ -802,26 +803,19 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__PaStmtSrc
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def manage_views(self, mode, view_list=None, with_data=True):
+    def generate_readonly(self, view_list=None):
         """Manage the materialized views.
 
         Parameters
         ----------
-        mode : 'create' or 'update'
-            Select which management task you wish to perform.
         view_list : list or None
             Default None. A list of materialized view names or None. If None,
             all available views will be build.
-        with_data : bool
-            Default True. If True, the views are updated "with data", meaning
-            they are more like instantiated tables, otherwise they are only a
-            pre-computation.
         """
         ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
                          'name_meta', 'text_meta', 'other_meta',
                          'raw_stmt_src', 'pa_stmt_src']
         other_views = {'reading_ref_link'}
-        active_views = self.get_active_views()
 
         def iter_views():
             for i, view in enumerate(ordered_views):
@@ -833,20 +827,10 @@ class PrincipalDatabaseManager(DatabaseManager):
             if view_list is not None and view_name not in view_list:
                 continue
 
-            view = self.views[view_name]
+            view = self.readonly['readonly.' + view_name]
 
-            if mode == 'create':
-                if view_name in active_views:
-                    logger.info('[%s] View %s already exists. Skipping.'
-                                % (i, view_name))
-                    continue
-                logger.info('[%s] Creating %s view...' % (i, view_name))
-                view.create(self, with_data)
-            elif mode == 'update':
-                logger.info('[%s] Updating %s view...' % (i, view_name))
-                view.update(self, with_data)
-            else:
-                raise ValueError("Invalid mode: %s." % mode)
+            logger.info('[%s] Creating %s view...' % (i, view_name))
+            view.create(self)
         return
 
 

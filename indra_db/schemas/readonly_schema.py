@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA
 from sqlalchemy.exc import NoSuchTableError
 
-from .mixins import MaterializedView, NamespaceLookup
+from .mixins import ReadonlyTable, NamespaceLookup
 from .indexes import *
 
 
@@ -39,7 +39,7 @@ def get_schema(Base):
     '''
     read_views = {}
 
-    class EvidenceCounts(Base, MaterializedView):
+    class EvidenceCounts(Base, ReadonlyTable):
         __tablename__ = 'readonly.evidence_counts'
         __definition__ = ('SELECT count(id) AS ev_count, mk_hash '
                           'FROM readonly.fast_raw_pa_link '
@@ -48,7 +48,7 @@ def get_schema(Base):
         ev_count = Column(Integer)
     read_views[EvidenceCounts.__tablename__] = EvidenceCounts
 
-    class ReadingRefLink(Base, MaterializedView):
+    class ReadingRefLink(Base, ReadonlyTable):
         __tablename__ = 'readonly.reading_ref_link'
         __definition__ = ('SELECT pmid, pmcid, tr.id AS trid, doi, '
                           'pii, url, manuscript_id, tc.id AS tcid, '
@@ -76,7 +76,7 @@ def get_schema(Base):
         reader = Column(String(20))
     read_views[ReadingRefLink.__tablename__] = ReadingRefLink
 
-    class FastRawPaLink(Base, MaterializedView):
+    class FastRawPaLink(Base, ReadonlyTable):
         __tablename__ = 'readonly.fast_raw_pa_link'
         __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
                           'raw.reading_id, raw.db_info_id, '
@@ -101,7 +101,7 @@ def get_schema(Base):
         type = Column(String)
     read_views[FastRawPaLink.__tablename__] = FastRawPaLink
 
-    class PaMeta(Base, MaterializedView):
+    class PaMeta(Base, ReadonlyTable):
         __tablename__ = 'readonly.pa_meta'
         __definition__ = (
             'SELECT pa_agents.db_name, pa_agents.db_id, '
@@ -159,7 +159,7 @@ def get_schema(Base):
         ev_count = Column(Integer)
     read_views[NameMeta.__tablename__] = NameMeta
 
-    class OtherMeta(Base, MaterializedView):
+    class OtherMeta(Base, ReadonlyTable):
         __tablename__ = 'readonly.other_meta'
         __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
                           "type, mk_hash, ev_count FROM readonly.pa_meta "
@@ -179,7 +179,7 @@ def get_schema(Base):
         ev_count = Column(Integer)
     read_views[OtherMeta.__tablename__] = OtherMeta
 
-    class RawStmtSrc(Base, MaterializedView):
+    class RawStmtSrc(Base, ReadonlyTable):
         __tablename__ = 'readonly.raw_stmt_src'
         __definition__ = ('SELECT raw_statements.id AS sid, '
                           'lower(reading.reader) AS src '
@@ -194,7 +194,7 @@ def get_schema(Base):
         src = Column(String)
     read_views[RawStmtSrc.__tablename__] = RawStmtSrc
 
-    class PaStmtSrc(Base, MaterializedView):
+    class PaStmtSrc(Base, ReadonlyTable):
         __tablename__ = 'readonly.pa_stmt_src'
         __definition_fmt__ = ("SELECT * FROM crosstab("
                               "'SELECT mk_hash, src, count(sid) "

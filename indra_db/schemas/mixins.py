@@ -67,7 +67,7 @@ class IndraDBTable(object):
         return ret
 
 
-class MaterializedView(IndraDBTable):
+class ReadonlyTable(IndraDBTable):
     __definition__ = NotImplemented
 
     @classmethod
@@ -91,7 +91,7 @@ class MaterializedView(IndraDBTable):
         return
 
 
-class NamespaceLookup(MaterializedView):
+class NamespaceLookup(ReadonlyTable):
     __dbname__ = NotImplemented
 
     @classmethod

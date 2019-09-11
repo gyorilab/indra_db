@@ -324,6 +324,12 @@ class DatabaseManager(object):
                 res.append(r)
         return res
 
+    def create_schema(self, schema_name):
+        """Create a schema with the given name."""
+        with self.engine.connect() as con:
+            con.execute('CREATE SCHEMA IF NOT EXISTS %s;' % schema_name)
+        return
+
     def get_column_names(self, tbl_name):
         "Get a list of the column labels for a table."
         return self.get_column_objects(tbl_name).keys()
@@ -812,6 +818,10 @@ class PrincipalDatabaseManager(DatabaseManager):
             Default None. A list of materialized view names or None. If None,
             all available views will be build.
         """
+        # Make sure the schema exists
+        self.create_schema('readonly')
+
+        # Create each of the readonly view tables (in order, where necessary).
         ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
                          'name_meta', 'text_meta', 'other_meta',
                          'raw_stmt_src', 'pa_stmt_src']

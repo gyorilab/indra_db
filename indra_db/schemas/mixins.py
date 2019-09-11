@@ -72,17 +72,8 @@ class MaterializedView(IndraDBTable):
 
     @classmethod
     def create(cls, db, with_data=True, commit=True):
-        sql = "CREATE MATERIALIZED VIEW public.%s AS %s WITH %s DATA;" \
-              % (cls.__tablename__, cls.get_definition(),
-                 '' if with_data else "NO")
-        if commit:
-            cls.execute(db, sql)
-        return sql
-
-    @classmethod
-    def update(cls, db, with_data=True, commit=True):
-        sql = "REFRESH MATERIALIZED VIEW %s WITH %s DATA;" \
-              % (cls.__tablename__, '' if with_data else 'NO')
+        sql = "CREATE TABLE %s AS %s;" \
+              % (cls.__tablename__, cls.get_definition(db))
         if commit:
             cls.execute(db, sql)
         return sql

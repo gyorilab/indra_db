@@ -290,7 +290,7 @@ def get_pa_loaded_db(num_stmts, split=None, pam=None):
 
 def get_db_with_views(num_stmts):
     db, _ = get_prepped_db(num_stmts, with_pa=True, with_agents=True)
-    db.manage_views('create')
+    db.generate_readonly()
     return db
 
 

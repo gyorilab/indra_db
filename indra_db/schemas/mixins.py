@@ -72,7 +72,7 @@ class ReadonlyTable(IndraDBTable):
 
     @classmethod
     def create(cls, db, commit=True):
-        sql = "CREATE TABLE %s AS %s;" \
+        sql = "CREATE TABLE IF NOT EXISTS %s AS %s;" \
               % (cls.__tablename__, cls.get_definition())
         if commit:
             cls.execute(db, sql)

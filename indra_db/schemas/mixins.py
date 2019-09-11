@@ -73,7 +73,7 @@ class MaterializedView(IndraDBTable):
     @classmethod
     def create(cls, db, commit=True):
         sql = "CREATE TABLE %s AS %s;" \
-              % (cls.__tablename__, cls.get_definition(db))
+              % (cls.__tablename__, cls.get_definition())
         if commit:
             cls.execute(db, sql)
         return sql

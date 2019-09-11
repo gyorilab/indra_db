@@ -97,6 +97,6 @@ class NamespaceLookup(MaterializedView):
     @classmethod
     def get_definition(cls):
         return ("SELECT db_id, ag_id, role, ag_num, type, "
-                "mk_hash, ev_count FROM pa_meta "
+                "mk_hash, ev_count FROM readonly.pa_meta "
                 "WHERE db_name = '%s'" % cls.__dbname__)
 

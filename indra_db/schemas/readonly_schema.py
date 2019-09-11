@@ -25,13 +25,13 @@ def get_schema(Base):
     (or by other non-sqlalchemy scripts).
 
     The following views must be built in this specific order:
-      1. fast_raw_pa_link
-      2. evidence_counts
+      1. readonly.fast_raw_pa_link
+      2. readonly.evidence_counts
       3. pa_meta
       4. raw_stmt_src
       5. pa_stmt_src
     The following can be built at any time and in any order:
-      - reading_ref_link
+      - readonly.reading_ref_link
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
     '''
@@ -40,7 +40,7 @@ def get_schema(Base):
     class EvidenceCounts(Base, MaterializedView):
         __tablename__ = 'readonly.evidence_counts'
         __definition__ = ('SELECT count(id) AS ev_count, mk_hash '
-                          'FROM fast_raw_pa_link '
+                          'FROM readonly.fast_raw_pa_link '
                           'GROUP BY mk_hash')
         mk_hash = Column(BigInteger, primary_key=True)
         ev_count = Column(Integer)
@@ -88,10 +88,12 @@ def get_schema(Base):
         _indices = [BtreeIndex('hash_index', 'mk_hash')]
         id = Column(Integer, primary_key=True)
         raw_json = Column(BYTEA)
-        reading_id = Column(BigInteger, ForeignKey('reading_ref_link.rid'))
+        reading_id = Column(BigInteger,
+                            ForeignKey('readonly.reading_ref_link.rid'))
         reading_ref = relationship(ReadingRefLink)
         db_info_id = Column(Integer)
-        mk_hash = Column(BigInteger, ForeignKey('evidence_counts.mk_hash'))
+        mk_hash = Column(BigInteger,
+                         ForeignKey('readonly.evidence_counts.mk_hash'))
         ev_counts = relationship(EvidenceCounts)
         pa_json = Column(BYTEA)
         type = Column(String)
@@ -99,13 +101,15 @@ def get_schema(Base):
 
     class PaMeta(Base, MaterializedView):
         __tablename__ = 'readonly.pa_meta'
-        __definition__ = ('SELECT pa_agents.db_name, pa_agents.db_id, '
-                          'pa_agents.id AS ag_id, pa_agents.role, '
-                          'pa_agents.ag_num, pa_statements.type, '
-                          'pa_statements.mk_hash, evidence_counts.ev_count '
-                          'FROM pa_agents, pa_statements, evidence_counts '
-                          'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
-                          'AND pa_statements.mk_hash = evidence_counts.mk_hash')
+        __definition__ = (
+            'SELECT pa_agents.db_name, pa_agents.db_id, '
+            'pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,'
+            'pa_statements.type, pa_statements.mk_hash, '
+            'readonly.evidence_counts.ev_count '
+            'FROM pa_agents, pa_statements, readonly.evidence_counts '
+            'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
+            'AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash'
+        )
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),
                     BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
@@ -115,7 +119,8 @@ def get_schema(Base):
         db_id = Column(String)
         role = Column(String(20))
         type = Column(String(100))
-        mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+        mk_hash = Column(BigInteger,
+                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
     read_views[PaMeta.__tablename__] = PaMeta
@@ -130,7 +135,8 @@ def get_schema(Base):
         db_id = Column(String)
         role = Column(String(20))
         type = Column(String(100))
-        mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+        mk_hash = Column(BigInteger,
+                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
     read_views[TextMeta.__tablename__] = TextMeta
@@ -145,7 +151,8 @@ def get_schema(Base):
         db_id = Column(String)
         role = Column(String(20))
         type = Column(String(100))
-        mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+        mk_hash = Column(BigInteger,
+                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
     read_views[NameMeta.__tablename__] = NameMeta
@@ -153,7 +160,7 @@ def get_schema(Base):
     class OtherMeta(Base, MaterializedView):
         __tablename__ = 'readonly.other_meta'
         __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
-                          "type, mk_hash, ev_count FROM pa_meta "
+                          "type, mk_hash, ev_count FROM readonly.pa_meta "
                           "WHERE db_name NOT IN ('NAME', 'TEXT')")
         _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
                     StringIndex('other_meta_type_idx', 'type'),
@@ -164,7 +171,8 @@ def get_schema(Base):
         db_id = Column(String)
         role = Column(String(20))
         type = Column(String(100))
-        mk_hash = Column(BigInteger, ForeignKey('fast_raw_pa_link.mk_hash'))
+        mk_hash = Column(BigInteger,
+                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
     read_views[OtherMeta.__tablename__] = OtherMeta
@@ -189,7 +197,7 @@ def get_schema(Base):
         __definition_fmt__ = ("SELECT * FROM crosstab("
                               "'SELECT mk_hash, src, count(sid) "
                               "  FROM raw_stmt_src "
-                              "   JOIN fast_raw_pa_link ON sid = id "
+                              "   JOIN readonly.fast_raw_pa_link ON sid = id "
                               "  GROUP BY (mk_hash, src)', "
                               "$$SELECT unnest('{%s}'::text[])$$"
                               " ) final_result(mk_hash bigint, %s)")
@@ -232,7 +240,7 @@ def get_schema(Base):
                 return
 
             try:
-                cols = inspect(engine).get_columns('pa_stmt_src')
+                cols = inspect(engine).get_columns(cls.__tablename__)
             except NoSuchTableError:
                 return
 

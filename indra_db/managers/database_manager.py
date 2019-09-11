@@ -314,8 +314,15 @@ class DatabaseManager(object):
         "Get the tables currently active in the database."
         return inspect(self.engine).get_table_names()
 
-    def get_active_views(self):
-        return inspect(self.engine).get_view_names()
+    def get_schemas(self):
+        """Return the list of schema names currently in the database."""
+        res = []
+        with self.engine.connect() as con:
+            raw_res = con.execute('SELECT schema_name '
+                                  'FROM information_schema.schemata;')
+            for r, in raw_res:
+                res.append(r)
+        return res
 
     def get_column_names(self, tbl_name):
         "Get a list of the column labels for a table."

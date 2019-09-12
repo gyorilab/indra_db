@@ -40,7 +40,8 @@ def get_schema(Base):
     read_views = {}
 
     class EvidenceCounts(Base, ReadonlyTable):
-        __tablename__ = 'readonly.evidence_counts'
+        __tablename__ = 'evidence_counts'
+        __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT count(id) AS ev_count, mk_hash '
                           'FROM readonly.fast_raw_pa_link '
                           'GROUP BY mk_hash')
@@ -49,7 +50,8 @@ def get_schema(Base):
     read_views[EvidenceCounts.__tablename__] = EvidenceCounts
 
     class ReadingRefLink(Base, ReadonlyTable):
-        __tablename__ = 'readonly.reading_ref_link'
+        __tablename__ = 'reading_ref_link'
+        __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT pmid, pmcid, tr.id AS trid, doi, '
                           'pii, url, manuscript_id, tc.id AS tcid, '
                           'source, r.id AS rid, reader '
@@ -77,7 +79,8 @@ def get_schema(Base):
     read_views[ReadingRefLink.__tablename__] = ReadingRefLink
 
     class FastRawPaLink(Base, ReadonlyTable):
-        __tablename__ = 'readonly.fast_raw_pa_link'
+        __tablename__ = 'fast_raw_pa_link'
+        __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
                           'raw.reading_id, raw.db_info_id, '
                           'pa.mk_hash, pa.json AS pa_json, pa.type '
@@ -102,7 +105,8 @@ def get_schema(Base):
     read_views[FastRawPaLink.__tablename__] = FastRawPaLink
 
     class PaMeta(Base, ReadonlyTable):
-        __tablename__ = 'readonly.pa_meta'
+        __tablename__ = 'pa_meta'
+        __table_args__ = {'schema': 'readonly'}
         __definition__ = (
             'SELECT pa_agents.db_name, pa_agents.db_id, '
             'pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,'
@@ -128,7 +132,8 @@ def get_schema(Base):
     read_views[PaMeta.__tablename__] = PaMeta
 
     class TextMeta(Base, NamespaceLookup):
-        __tablename__ = 'readonly.text_meta'
+        __tablename__ = 'text_meta'
+        __table_args__ = {'schema': 'readonly'}
         __dbname__ = 'TEXT'
         _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
                     StringIndex('text_meta_type_idx', 'type')]
@@ -144,7 +149,8 @@ def get_schema(Base):
     read_views[TextMeta.__tablename__] = TextMeta
 
     class NameMeta(Base, NamespaceLookup):
-        __tablename__ = 'readonly.name_meta'
+        __tablename__ = 'name_meta'
+        __table_args__ = {'schema': 'readonly'}
         __dbname__ = 'NAME'
         _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
                     StringIndex('name_meta_type_idx', 'type')]
@@ -160,7 +166,8 @@ def get_schema(Base):
     read_views[NameMeta.__tablename__] = NameMeta
 
     class OtherMeta(Base, ReadonlyTable):
-        __tablename__ = 'readonly.other_meta'
+        __tablename__ = 'other_meta'
+        __table_args__ = {'schema': 'readonly'}
         __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
                           "type, mk_hash, ev_count FROM readonly.pa_meta "
                           "WHERE db_name NOT IN ('NAME', 'TEXT')")
@@ -180,7 +187,8 @@ def get_schema(Base):
     read_views[OtherMeta.__tablename__] = OtherMeta
 
     class RawStmtSrc(Base, ReadonlyTable):
-        __tablename__ = 'readonly.raw_stmt_src'
+        __tablename__ = 'raw_stmt_src'
+        __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT raw_statements.id AS sid, '
                           'lower(reading.reader) AS src '
                           'FROM raw_statements, reading '
@@ -195,10 +203,11 @@ def get_schema(Base):
     read_views[RawStmtSrc.__tablename__] = RawStmtSrc
 
     class PaStmtSrc(Base, ReadonlyTable):
-        __tablename__ = 'readonly.pa_stmt_src'
+        __tablename__ = 'pa_stmt_src'
+        __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = ("SELECT * FROM crosstab("
                               "'SELECT mk_hash, src, count(sid) "
-                              "  FROM raw_stmt_src "
+                              "  FROM readonly.raw_stmt_src "
                               "   JOIN readonly.fast_raw_pa_link ON sid = id "
                               "  GROUP BY (mk_hash, src)', "
                               "$$SELECT unnest('{%s}'::text[])$$"

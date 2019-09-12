@@ -69,11 +69,13 @@ class IndraDBTable(object):
 
 class ReadonlyTable(IndraDBTable):
     __definition__ = NotImplemented
+    __table_args__ = NotImplemented
 
     @classmethod
     def create(cls, db, commit=True):
-        sql = "CREATE TABLE IF NOT EXISTS %s AS %s;" \
-              % (cls.__tablename__, cls.get_definition())
+        sql = "CREATE TABLE IF NOT EXISTS %s.%s AS %s;" \
+              % (cls.__table_args__['schema'], cls.__tablename__,
+                 cls.get_definition())
         if commit:
             cls.execute(db, sql)
         return sql

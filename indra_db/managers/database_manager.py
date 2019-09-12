@@ -837,7 +837,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             if view_list is not None and view_name not in view_list:
                 continue
 
-            view = self.readonly['readonly.' + view_name]
+            view = self.readonly[view_name]
 
             logger.info('[%s] Creating %s view...' % (i, view_name))
             view.create(self)

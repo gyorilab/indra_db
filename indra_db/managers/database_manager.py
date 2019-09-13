@@ -1,3 +1,5 @@
+from sqlalchemy.engine.url import make_url
+
 __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
            'sql_expressions', 'readers', 'reader_versions',
            'PrincipalDatabaseManager', 'ReadonlyDatabaseManager']
@@ -148,7 +150,7 @@ class DatabaseManager(object):
 
     Parameters
     ----------
-    host : str
+    url : str
         The database to which you want to interface.
     label : OPTIONAL[str]
         A short string to indicate the purpose of the db instance. Set as
@@ -169,12 +171,12 @@ class DatabaseManager(object):
     For more sophisticated examples, several use cases can be found in
     `indra.tests.test_db`.
     """
-    def __init__(self, host, label=None):
-        self.host = host
+    def __init__(self, url, label=None):
+        self.url = make_url(url)
         self.session = None
         self.Base = declarative_base()
         self.label = label
-        self.engine = create_engine(host)
+        self.engine = create_engine(self.url)
         self._conn = None
         return
 

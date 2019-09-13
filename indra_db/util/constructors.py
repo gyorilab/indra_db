@@ -1,4 +1,4 @@
-__all__ = ['get_primary_db', 'get_db']
+__all__ = ['get_primary_db', 'get_db', 'get_ro']
 
 import logging
 

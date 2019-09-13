@@ -332,10 +332,11 @@ class DatabaseManager(object):
             con.execute('CREATE SCHEMA IF NOT EXISTS %s;' % schema_name)
         return
 
-    def drop_schema(self, schema_name):
-        """Drop a schema (rather forcefully)"""
+    def drop_schema(self, schema_name, cascade=True):
+        """Drop a schema (rather forcefully by default)"""
         with self.engine.connect() as con:
-            con.execute('DROP SCHEMA IF EXISTS %s;' % schema_name)
+            con.execute('DROP SCHEMA IF EXISTS %s %s;'
+                        % (schema_name, 'CASCADE' if cascade else ''))
         return
 
     def get_column_names(self, tbl_name):

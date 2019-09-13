@@ -332,6 +332,12 @@ class DatabaseManager(object):
             con.execute('CREATE SCHEMA IF NOT EXISTS %s;' % schema_name)
         return
 
+    def drop_schema(self, schema_name):
+        """Drop a schema (rather forcefully)"""
+        with self.engine.connect() as con:
+            con.execute('DROP SCHEMA IF EXISTS %s;' % schema_name)
+        return
+
     def get_column_names(self, tbl_name):
         "Get a list of the column labels for a table."
         return self.get_column_objects(tbl_name).keys()
@@ -844,6 +850,10 @@ class PrincipalDatabaseManager(DatabaseManager):
             logger.info('[%s] Creating %s view...' % (i, view_name))
             view.create(self)
         return
+
+    def clear_readonly(self):
+        """Clear out the readonly table (after a transfer has occurred)"""
+        self.drop_schema('readonly')
 
 
 class ReadonlyDatabaseManager(DatabaseManager):

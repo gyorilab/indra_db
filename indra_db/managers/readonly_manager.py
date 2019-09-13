@@ -130,6 +130,7 @@ def main():
 
     readonly_db = get_ro(args.readonly)
     transfer_readonly(principal_db, readonly_db)
+    principal_db.clear_readonly()
     return
 
 

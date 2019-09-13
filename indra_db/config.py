@@ -14,7 +14,9 @@ DB_CONFIG_DIR = path.expanduser('~/.config/indra')
 DB_CONFIG_PATH = path.join(DB_CONFIG_DIR, 'db_config.ini')
 
 DB_STR_FMT = "{prefix}://{username}{password}{host}{port}/{name}"
-ENV_PREFIX = 'INDRADB'
+PRINCIPAL_ENV_PREFIX = 'INDRADB'
+READONLY_ENV_PREFIX = 'INDRARO'
+S3_DUMP_ENV_VAR = 'INDRA_DB_S3_PREFIX'
 
 
 logger = logging.getLogger('db_config')
@@ -37,38 +39,89 @@ if not path.exists(DB_CONFIG_PATH) and CONFIG_EXISTS:
         logger.warning("Unable to copy config file into config dir: %s" % e)
 
 
-DATABASES = None
-S3_DUMP = None
+# In hindsight I profoundly wish I had done all of this with objects rather
+# than globals, however this could lead to some profound backwards
+# compatibility/signature change problems.
+#
+# Actually, for that matter, I wish I had made the config a simple JSON
+# file rather than this cumbersome config format, but that presents even more
+# widespread compatibility problems.
+CONFIG = None
+
+
+def _get_urls_from_env(prefix):
+    return {k[len(prefix):].lower(): v
+            for k, v in environ.items()
+            if k.startswith(prefix)}
+
+
+def _load_config():
+    parser = ConfigParser()
+    parser.read(DB_CONFIG_PATH)
+    for section in parser.sections():
+        def_dict = {k: parser.get(section, k)
+                    for k in parser.options(section)}
+
+        # Handle the case for the s3 bucket spec.
+        if section == 'aws-s3':
+            CONFIG['s3_dump'] = def_dict
+            continue
+
+        # Extract all the database connection data
+        if def_dict['host']:
+            def_dict['host'] = '@' + def_dict['host']
+        def_dict['prefix'] = def_dict['dialect']
+        if def_dict['driver']:
+            def_dict['prefix'] += def_dict['driver']
+        if def_dict['port']:
+            def_dict['port'] = ':' + def_dict['port']
+        if def_dict['password']:
+            def_dict['password'] = ':' + def_dict['password']
+
+        # Get the role of the database
+        if def_dict['role'] == 'readonly':
+            CONFIG['readonly'][section] = DB_STR_FMT.format(**def_dict)
+        else:
+            CONFIG['databases'][section] = DB_STR_FMT.format(**def_dict)
+
+
+def _load_env_config():
+    assert CONFIG, "CONFIG must be defined BEFORE calling this function."
+
+    CONFIG['databases'].update(_get_urls_from_env(PRINCIPAL_ENV_PREFIX))
+    CONFIG['readonly'].update(_get_urls_from_env(READONLY_ENV_PREFIX))
+
+    if S3_DUMP_ENV_VAR in environ:
+        CONFIG['s3_dump'] = environ[S3_DUMP_ENV_VAR]
+
+    return
+
+
+def _load(include_config=True):
+    global CONFIG
+    CONFIG = {'databases': {}, 'readonly': {}, 's3_dump': {}}
+    if CONFIG_EXISTS and include_config:
+        _load_config()
+    _load_env_config()
+    return
 
 
 def get_databases(force_update=False, include_config=True):
-    global DATABASES
-    if DATABASES is None or force_update:
-        DATABASES = {}
-        if CONFIG_EXISTS and include_config:
-            parser = ConfigParser()
-            parser.read(DB_CONFIG_PATH)
-            for db_name in parser.sections():
-                def_dict = {k: parser.get(db_name, k)
-                            for k in parser.options(db_name)}
+    if CONFIG or force_update:
+        _load(include_config)
 
-                # Handle the case for the s3 bucket spec.
-                if db_name == 'aws-s3':
-                    global S3_DUMP
-                    S3_DUMP = def_dict
-                    continue
+    return CONFIG['databases']
 
-                if def_dict['host']:
-                    def_dict['host'] = '@' + def_dict['host']
-                def_dict['prefix'] = def_dict['dialect']
-                if def_dict['driver']:
-                    def_dict['prefix'] += def_dict['driver']
-                if def_dict['port']:
-                    def_dict['port'] = ':' + def_dict['port']
-                if def_dict['password']:
-                    def_dict['password'] = ':' + def_dict['password']
-                DATABASES[db_name] = DB_STR_FMT.format(**def_dict)
-        DATABASES.update({k[len(ENV_PREFIX):].lower(): v
-                          for k, v in environ.items()
-                          if k.startswith(ENV_PREFIX)})
-    return DATABASES
+
+def get_readonly_databases(force_update=False, include_config=True):
+    if CONFIG or force_update:
+        _load(include_config)
+
+    return CONFIG['readonly']
+
+
+def get_s3_dump(force_update=False, include_config=True):
+    if CONFIG or force_update:
+        _load(include_config)
+
+    return CONFIG['s3_dump']

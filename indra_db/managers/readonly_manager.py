@@ -17,67 +17,31 @@ Note that the order of views below is determined not by the above
 order but by constraints imposed by use-case.
 """
 import logging
-from datetime import datetime
-from subprocess import check_call
 from argparse import ArgumentParser
 
 from indra_db.util import get_db, get_ro
-from indra_db.config import get_s3_dump
-from indra_db.exceptions import IndraDbException
 
 logger = logging.getLogger(__name__)
 
 
-def _form_db_args(url):
-    """Arrange the url elements into a list of arguments for pg calls."""
-    return ['-h', url.host,
-            '-U', url.username,
-            '-W', url.password,
-            '-d', url.database]
+def main():
+    args = parse_args()
+    if args.m_views == 'all':
+        views = None
+    else:
+        views = args.m_views
 
+    principal_db = get_db(args.database)
+    readonly_db = get_ro(args.readonly)
 
-def dump(principal_db, dump_file=None):
-    """Dump the readonly schema to s3."""
-    # Form the name of the s3 file, if not given.
-    if dump_file is None:
-        dump_file = 's3://{bucket}/{prefix}'.format(**get_s3_dump())
-        if not dump_file.endswith('/'):
-            dump_file += '/'
-        now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
-        dump_file += 'readonly-%s.dump' % now_str
+    logger.info("Generating readonly schema (est. a long time)")
+    principal_db.generate_readonly(args.task, view_list=views)
 
-    # Dump the database onto s3, piping through this machine.
-    check_call(["pg_dump",
-                *_form_db_args(principal_db.url),
-                '-n', 'readonly',
-                '|', 'aws', 's3', 'cp', '-', dump_file])
-    return dump_file
-
-
-def push(readonly_db, dump_file, force_clear=True):
-    """Load the data from a dump onto a database."""
-    # Make sure the database is clear.
-    if readonly_db.get_active_tables():
-        if force_clear:
-            readonly_db.drop_tables()
-        else:
-            raise IndraDbException("Tables already exist and force_clear "
-                                   "is False.")
-
-    # Pipe the database dump from s3 through this machine into the database.
-    check_call(['aws', 's3', 'cp', dump_file, '-', '|',
-                'psql', *_form_db_args(readonly_db.url)])
-
-    return
-
-
-def transfer_readonly(principal_db, readonly_db):
-    """Move the contents of the new schema from the old DB to the new db."""
     logger.info("Beginning dump of database (est. 1 + epsilon hours)")
-    dump_file = dump(principal_db)
+    dump_file = principal_db.dump_readonly()
 
     logger.info("Beginning upload of content (est. ~30 minutes)")
-    push(readonly_db, dump_file)
+    readonly_db.load_dump(dump_file)
     return
 
 
@@ -116,22 +80,6 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-
-
-def main():
-    args = parse_args()
-    if args.m_views == 'all':
-        views = None
-    else:
-        views = args.m_views
-
-    principal_db = get_db(args.database)
-    principal_db.generate_readonly(args.task, view_list=views)
-
-    readonly_db = get_ro(args.readonly)
-    transfer_readonly(principal_db, readonly_db)
-    principal_db.clear_readonly()
-    return
 
 
 if __name__ == '__main__':

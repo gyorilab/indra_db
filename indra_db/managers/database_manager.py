@@ -792,6 +792,13 @@ class DatabaseManager(object):
         q = self.filter_query(tbls, *args)
         return self.session.query(q.exists()).first()[0]
 
+    def _form_pg_args(self):
+        """Arrange the url elements into a list of arguments for pg calls."""
+        return ['-h', self.url.host,
+                '-U', self.url.username,
+                '-W', self.url.password,
+                '-d', self.url.database]
+
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
@@ -851,9 +858,31 @@ class PrincipalDatabaseManager(DatabaseManager):
             view.create(self)
         return
 
-    def clear_readonly(self):
-        """Clear out the readonly table (after a transfer has occurred)"""
+    def dump_readonly(self, dump_file=None):
+        """Dump the readonly schema to s3."""
+        from subprocess import check_call
+        from indra_db.config import get_s3_dump
+
+        # Form the name of the s3 file, if not given.
+        if dump_file is None:
+            dump_file = 's3://{bucket}/{prefix}'.format(**get_s3_dump())
+            if not dump_file.endswith('/'):
+                dump_file += '/'
+            now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+            dump_file += 'readonly-%s.dump' % now_str
+
+        # Dump the database onto s3, piping through this machine (errors if
+        # anything went wrong).
+        check_call(["pg_dump",
+                    *self._form_pg_args(),
+                    '-n', 'readonly',
+                    '|', 'aws', 's3', 'cp', '-', dump_file])
+
+        # This database no longer needs this schema (this only executes if
+        # the check_call does not error).
         self.drop_schema('readonly')
+
+        return dump_file
 
 
 class ReadonlyDatabaseManager(DatabaseManager):
@@ -865,6 +894,23 @@ class ReadonlyDatabaseManager(DatabaseManager):
         self.tables = readonly_schema.get_schema(self.Base)
         for tbl in self.tables.values():
             setattr(self, tbl.__name__, tbl)
+        return
+
+    def load_dump(self, dump_file, force_clear=True):
+        """Load from a dump of the readonly schema on s3."""
+        from subprocess import check_call
+
+        # Make sure the database is clear.
+        if self.get_active_tables():
+            if force_clear:
+                self.drop_tables()
+            else:
+                raise IndraDbException("Tables already exist and force_clear "
+                                       "is False.")
+
+        # Pipe the database dump from s3 through this machine into the database
+        check_call(['aws', 's3', 'cp', dump_file, '-', '|',
+                    'psql', *self._form_pg_args()])
         return
 
 

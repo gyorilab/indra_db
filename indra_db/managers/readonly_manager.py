@@ -21,8 +21,8 @@ from datetime import datetime
 from subprocess import check_call
 from argparse import ArgumentParser
 
-from indra_db.util import get_db
-from indra_db.config import S3_DUMP
+from indra_db.util import get_db, get_ro
+from indra_db.config import get_s3_dump
 from indra_db.exceptions import IndraDbException
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def dump(principal_db, dump_file=None):
     """Dump the readonly schema to s3."""
     # Form the name of the s3 file, if not given.
     if dump_file is None:
-        dump_file = 's3://{bucket}/{prefix}'.format(**S3_DUMP)
+        dump_file = 's3://{bucket}/{prefix}'.format(**get_s3_dump())
         if not dump_file.endswith('/'):
             dump_file += '/'
         now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
@@ -81,38 +81,57 @@ def transfer_readonly(principal_db, readonly_db):
     return
 
 
-if __name__ == '__main__':
+def parse_args():
     parser = ArgumentParser(
         description='Manage the materialized views.'
-        )
+    )
     parser.add_argument(
         choices=['create', 'update'],
         dest='task',
         help=('Choose whether you want to create the materialized views for '
               'the first time, or simply update existing views. Create is '
               'necessary if the definition of the view changes.')
-        )
+    )
     parser.add_argument(
         '-D', '--database',
         default='primary',
         help=('Choose a database from the names given in the config or '
-              'environment, for example primary is INDRA_DB_PRIMAY in the '
+              'environment, for example primary is [primary] in the '
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'.')
-        )
+    )
+    parser.add_argument(
+        '-R', '--readonly',
+        default='primary',
+        help=('Choose a readonly database from the names given in the config '
+              'file, or INDRARO... in the env (e.g. INDRAROPRIMARY for the '
+              '"primary" database.')
+    )
     parser.add_argument(
         '-m', '--m_views',
         default='all',
         nargs='+',
         help='Specify certain views to create or refresh.'
-        )
+    )
 
     args = parser.parse_args()
+    return args
 
+
+def main():
+    args = parse_args()
     if args.m_views == 'all':
         views = None
     else:
         views = args.m_views
 
-    db = get_db(args.database)
-    db.generate_readonly(args.task, view_list=views)
+    principal_db = get_db(args.database)
+    principal_db.generate_readonly(args.task, view_list=views)
+
+    readonly_db = get_ro(args.readonly)
+    transfer_readonly(principal_db, readonly_db)
+    return
+
+
+if __name__ == '__main__':
+    main()

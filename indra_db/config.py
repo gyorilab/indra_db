@@ -79,7 +79,7 @@ def _load_config():
             def_dict['password'] = ':' + def_dict['password']
 
         # Get the role of the database
-        if def_dict['role'] == 'readonly':
+        if def_dict.get('role') == 'readonly':
             CONFIG['readonly'][section] = DB_STR_FMT.format(**def_dict)
         else:
             CONFIG['databases'][section] = DB_STR_FMT.format(**def_dict)

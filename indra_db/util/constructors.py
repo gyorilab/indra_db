@@ -1,11 +1,11 @@
 __all__ = ['get_primary_db', 'get_db']
 
-import re
 import logging
 
-from indra_db.managers.database_manager import PrincipalDatabaseManager
+from indra_db.managers.database_manager import PrincipalDatabaseManager, \
+    ReadonlyDatabaseManager
 from indra_db.exceptions import IndraDbException
-from indra_db.config import get_databases as get_defaults
+from indra_db.config import get_databases, get_readonly_databases
 
 
 logger = logging.getLogger('util-constructors')
@@ -53,7 +53,7 @@ def get_primary_db(force_new=False):
         An instance of the database manager that is attached to the primary
         database.
     """
-    defaults = get_defaults()
+    defaults = get_databases()
     if 'primary' in defaults.keys():
         primary_host = defaults['primary']
     else:
@@ -68,6 +68,13 @@ def get_primary_db(force_new=False):
 
 def get_db(db_label):
     """Get a db instance base on it's name in the config or env."""
-    defaults = get_defaults()
-    db_name = defaults[db_label]
-    return PrincipalDatabaseManager(db_name, label=db_label)
+    defaults = get_databases()
+    db_url = defaults[db_label]
+    return PrincipalDatabaseManager(db_url, label=db_label)
+
+
+def get_ro(ro_label):
+    """Get a readonly database instance, based on its name/"""
+    defaults = get_readonly_databases()
+    db_url = defaults[ro_label]
+    return ReadonlyDatabaseManager(db_url, label=ro_label)

@@ -17,6 +17,7 @@ Note that the order of views below is determined not by the above
 order but by constraints imposed by use-case.
 """
 import logging
+from datetime import datetime
 from argparse import ArgumentParser
 
 from indra_db.util import get_db, get_ro
@@ -34,13 +35,16 @@ def main():
     principal_db = get_db(args.database)
     readonly_db = get_ro(args.readonly)
 
-    logger.info("Generating readonly schema (est. a long time)")
-    principal_db.generate_readonly(args.task, view_list=views)
+    logger.info("%s - Generating readonly schema (est. a long time)"
+                % datetime.now())
+    principal_db.generate_readonly(view_list=views)
 
-    logger.info("Beginning dump of database (est. 1 + epsilon hours)")
+    logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
+                % datetime.now())
     dump_file = principal_db.dump_readonly()
 
-    logger.info("Beginning upload of content (est. ~30 minutes)")
+    logger.info("%s - Beginning upload of content (est. ~30 minutes)"
+                % datetime.now())
     readonly_db.load_dump(dump_file)
     return
 
@@ -48,13 +52,6 @@ def main():
 def parse_args():
     parser = ArgumentParser(
         description='Manage the materialized views.'
-    )
-    parser.add_argument(
-        choices=['create', 'update'],
-        dest='task',
-        help=('Choose whether you want to create the materialized views for '
-              'the first time, or simply update existing views. Create is '
-              'necessary if the definition of the view changes.')
     )
     parser.add_argument(
         '-D', '--database',

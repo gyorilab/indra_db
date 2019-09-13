@@ -107,21 +107,21 @@ def _load(include_config=True):
 
 
 def get_databases(force_update=False, include_config=True):
-    if CONFIG or force_update:
+    if not CONFIG or force_update:
         _load(include_config)
 
     return CONFIG['databases']
 
 
 def get_readonly_databases(force_update=False, include_config=True):
-    if CONFIG or force_update:
+    if not CONFIG or force_update:
         _load(include_config)
 
     return CONFIG['readonly']
 
 
 def get_s3_dump(force_update=False, include_config=True):
-    if CONFIG or force_update:
+    if not CONFIG or force_update:
         _load(include_config)
 
     return CONFIG['s3_dump']

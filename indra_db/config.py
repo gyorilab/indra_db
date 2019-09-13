@@ -38,6 +38,7 @@ if not path.exists(DB_CONFIG_PATH) and CONFIG_EXISTS:
 
 
 DATABASES = None
+S3_DUMP = None
 
 
 def get_databases(force_update=False, include_config=True):
@@ -50,6 +51,13 @@ def get_databases(force_update=False, include_config=True):
             for db_name in parser.sections():
                 def_dict = {k: parser.get(db_name, k)
                             for k in parser.options(db_name)}
+
+                # Handle the case for the s3 bucket spec.
+                if db_name == 'aws-s3':
+                    global S3_DUMP
+                    S3_DUMP = def_dict
+                    continue
+
                 if def_dict['host']:
                     def_dict['host'] = '@' + def_dict['host']
                 def_dict['prefix'] = def_dict['dialect']

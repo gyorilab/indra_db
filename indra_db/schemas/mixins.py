@@ -13,8 +13,9 @@ class IndraDBTable(object):
     def create_index(cls, db, index, commit=True):
         inp_data = {'idx_name': index.name,
                     'table_name': cls.__tablename__,
-                    'idx_def': index.definition}
-        sql = ("CREATE INDEX {idx_name} ON public.{table_name} "
+                    'idx_def': index.definition,
+                    'schema': cls.__table_args__.get('schema', 'public')}
+        sql = ("CREATE INDEX {idx_name} ON {schema}.{table_name} "
                "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
         if commit:
             try:

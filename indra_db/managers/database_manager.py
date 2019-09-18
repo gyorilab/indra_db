@@ -905,6 +905,11 @@ class ReadonlyDatabaseManager(DatabaseManager):
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
         from subprocess import check_call
+        from os import environ
+
+        # Add the password to the env
+        my_env = environ.copy()
+        my_env['PGPASSWORD'] = self.url.password
 
         # Make sure the database is clear.
         if self.get_active_tables():
@@ -915,8 +920,9 @@ class ReadonlyDatabaseManager(DatabaseManager):
                                        "is False.")
 
         # Pipe the database dump from s3 through this machine into the database
-        check_call(['aws', 's3', 'cp', dump_file, '-', '|',
-                    'psql', *self._form_pg_args()])
+        check_call(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
+                             'pg_restore', *self._form_pg_args()]),
+                   env=my_env, shell=True)
         return
 
 

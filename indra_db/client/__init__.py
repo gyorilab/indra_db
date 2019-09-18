@@ -15,8 +15,7 @@ primary tables of the database and are generally slower. The
 recall, as they are the back-end to the REST API.
 """
 
-from .content import *
-from .curation import *
 from .datasets import *
-from .optimized import *
+from .readonly import *
+from .principal import *
 from .statements import *

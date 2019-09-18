@@ -2,10 +2,10 @@ import logging
 from itertools import permutations
 from sqlalchemy import or_
 
-logger = logging.getLogger('db_dataset_client')
-
 from indra.databases import hgnc_client
 from indra_db.util import get_primary_db, get_statement_object
+
+logger = logging.getLogger(__name__)
 
 
 def get_statement_essentials(clauses, count=1000, db=None, preassembled=True):

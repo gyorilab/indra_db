@@ -1,9 +1,11 @@
+__all__ = ['get_reader_output', 'get_content_by_refs']
+
 import logging
 from collections import defaultdict
 
-logger = logging.getLogger('db_content_client')
-
 from indra_db.util import unpack, _get_trids
+
+logger = logging.getLogger(__name__)
 
 
 def get_reader_output(db, ref_id, ref_type='tcid', reader=None,

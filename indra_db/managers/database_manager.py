@@ -881,7 +881,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         # anything went wrong).
         check_call(["pg_dump",
                     *self._form_pg_args(),
-                    '-n', 'readonly',
+                    '-n', 'readonly', '-Fc',
                     '|', 'aws', 's3', 'cp', '-', dump_file])
 
         # This database no longer needs this schema (this only executes if
@@ -921,7 +921,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
         # Pipe the database dump from s3 through this machine into the database
         check_call(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
-                             'pg_restore', *self._form_pg_args()]),
+                             'pg_restore', *self._form_pg_args(),
+                             '--no-owner']),
                    env=my_env, shell=True)
         return
 

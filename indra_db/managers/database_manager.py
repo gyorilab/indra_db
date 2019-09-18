@@ -797,7 +797,7 @@ class DatabaseManager(object):
         """Arrange the url elements into a list of arguments for pg calls."""
         return ['-h', self.url.host,
                 '-U', self.url.username,
-                '-W', self.url.password,
+                '-w',  # Don't prompt for a password, forces use of env.
                 '-d', self.url.database]
 
 
@@ -863,6 +863,11 @@ class PrincipalDatabaseManager(DatabaseManager):
         """Dump the readonly schema to s3."""
         from subprocess import check_call
         from indra_db.config import get_s3_dump
+        from os import environ
+
+        # Add the password to the env
+        my_env = environ.copy()
+        my_env['PGPASSWORD'] = self.url.password
 
         # Form the name of the s3 file, if not given.
         if dump_file is None:

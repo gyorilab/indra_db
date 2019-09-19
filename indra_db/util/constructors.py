@@ -70,11 +70,15 @@ def get_db(db_label):
     """Get a db instance base on it's name in the config or env."""
     defaults = get_databases()
     db_url = defaults[db_label]
-    return PrincipalDatabaseManager(db_url, label=db_label)
+    db = PrincipalDatabaseManager(db_url, label=db_label)
+    db.grab_session()
+    return db
 
 
 def get_ro(ro_label):
     """Get a readonly database instance, based on its name/"""
     defaults = get_readonly_databases()
     db_url = defaults[ro_label]
-    return ReadonlyDatabaseManager(db_url, label=ro_label)
+    ro = ReadonlyDatabaseManager(db_url, label=ro_label)
+    ro.grab_session()
+    return ro

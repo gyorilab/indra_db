@@ -339,14 +339,22 @@ class DatabaseManager(object):
                         % (schema_name, 'CASCADE' if cascade else ''))
         return
 
-    def get_column_names(self, tbl_name):
-        "Get a list of the column labels for a table."
-        return self.get_column_objects(tbl_name).keys()
+    def get_column_names(self, table):
+        """"Get a list of the column labels for a table.
+
+        Note that if the table involves a schema, the schema name must be
+        prepended to the table name.
+        """
+        return self.get_column_objects(table).keys()
 
     def get_column_objects(self, table):
-        'Get a list of the column object for the given table.'
+        """Get a list of the column object for the given table.
+
+        Note that if the table involves a schema, the schema name must be
+        prepended to the table name.
+        """
         if isinstance(table, type(self.Base)):
-            table = table.__tablename__
+            table = table.full_name()
         return self.Base.metadata.tables[table].columns
 
     def commit(self, err_msg):

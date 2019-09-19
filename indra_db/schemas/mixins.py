@@ -12,10 +12,9 @@ class IndraDBTable(object):
     @classmethod
     def create_index(cls, db, index, commit=True):
         inp_data = {'idx_name': index.name,
-                    'table_name': cls.__tablename__,
-                    'idx_def': index.definition,
-                    'schema': cls.__table_args__.get('schema', 'public')}
-        sql = ("CREATE INDEX {idx_name} ON {schema}.{table_name} "
+                    'full_name': cls.full_name(force_schema=True),
+                    'idx_def': index.definition}
+        sql = ("CREATE INDEX {idx_name} ON {full_name} "
                "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
         if commit:
             try:
@@ -31,8 +30,21 @@ class IndraDBTable(object):
             print("Building index: %s" % index.name)
             cls.create_index(db, index)
 
+    @classmethod
+    def full_name(cls, force_schema=False):
+        """Get the full name including the schema, if supplied."""
+        name = cls.__tablename__
+
+        schema_name = cls.__table_args__.get('schema')
+        if schema_name:
+            name = schema_name + '.' + name
+        elif force_schema:
+            name = 'public' + '.' + name
+
+        return name
+
     def _make_str(self):
-        s = self.__tablename__ + ':\n'
+        s = self.full_name() + ':\n'
         for k, v in self.__dict__.items():
             if not k.startswith('_'):
                 if k in self._skip_disp:

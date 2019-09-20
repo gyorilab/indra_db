@@ -5,7 +5,7 @@ from functools import wraps
 from os import path
 
 import indra_db.util as dbu
-from indra_db.managers.database_manager import PrincipalDatabaseManager
+from indra_db.databases import PrincipalDatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def _with_quiet_db_logs(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         # Make the database manager logger quieter.
-        from indra_db.managers.database_manager import logger as dbm_logger
+        from indra_db.databases import logger as dbm_logger
         original_level = dbm_logger.level
         dbm_logger.setLevel(logging.WARNING)
 

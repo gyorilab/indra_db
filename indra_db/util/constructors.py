@@ -2,7 +2,7 @@ __all__ = ['get_primary_db', 'get_db', 'get_ro']
 
 import logging
 
-from indra_db.managers.database_manager import PrincipalDatabaseManager, \
+from indra_db.databases import PrincipalDatabaseManager, \
     ReadonlyDatabaseManager
 from indra_db.exceptions import IndraDbException
 from indra_db.config import get_databases, get_readonly_databases

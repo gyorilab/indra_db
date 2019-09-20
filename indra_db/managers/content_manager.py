@@ -24,8 +24,8 @@ from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
 
 from indra_db.util import get_primary_db, get_db
-from indra_db.managers.database_manager import texttypes, formats
-from indra_db.managers.database_manager import sql_expressions as sql_exp
+from indra_db.databases import texttypes, formats
+from indra_db.databases import sql_expressions as sql_exp
 
 
 try:
@@ -1547,7 +1547,7 @@ def _main():
     args = parser.parse_args()
     if args.debug:
         logger.setLevel(logging.DEBUG)
-        from indra.db.database_manager import logger as db_logger
+        from indra_db.databases import logger as db_logger
         db_logger.setLevel(logging.DEBUG)
 
     if not args.continuing and args.task == 'upload':

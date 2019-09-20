@@ -13,8 +13,6 @@ from indra import get_config
 from indra.statements import stmts_from_json
 from indra.databases import hgnc_client
 
-from indra_db import get_primary_db
-
 from .api import app, MAX_STATEMENTS, get_source, REDACT_MESSAGE
 
 

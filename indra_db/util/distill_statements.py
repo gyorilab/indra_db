@@ -11,7 +11,7 @@ from collections import defaultdict
 from indra.util import clockit
 from indra.statements import Statement
 from indra.util.nested_dict import NestedDict
-from indra_db.managers.database_manager import reader_versions
+from indra_db.databases import reader_versions
 
 from .helpers import _set_evidence_text_ref
 

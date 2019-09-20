@@ -79,10 +79,16 @@ def _load_config():
             def_dict['password'] = ':' + def_dict['password']
 
         # Get the role of the database
+        url = DB_STR_FMT.format(**def_dict)
         if def_dict.get('role') == 'readonly':
-            CONFIG['readonly'][section] = DB_STR_FMT.format(**def_dict)
+            # Include the entry both with and without the -ro. This is only
+            # needed when sometimes a readonly database has the same name
+            # as a principal database (e.g. primary).
+            if section.endswith('-ro'):
+                CONFIG['readonly'][section[:-3]] = url
+            CONFIG['readonly'][section] = url
         else:
-            CONFIG['databases'][section] = DB_STR_FMT.format(**def_dict)
+            CONFIG['databases'][section] = url
 
 
 def _load_env_config():

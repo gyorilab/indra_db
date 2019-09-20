@@ -45,6 +45,7 @@ def get_schema(Base):
         __definition__ = ('SELECT count(id) AS ev_count, mk_hash '
                           'FROM readonly.fast_raw_pa_link '
                           'GROUP BY mk_hash')
+        _indices = [BtreeIndex('evidence_counts_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
         ev_count = Column(Integer)
     read_views[EvidenceCounts.__tablename__] = EvidenceCounts
@@ -90,7 +91,9 @@ def get_schema(Base):
                           'WHERE link.raw_stmt_id = raw.id '
                           'AND link.pa_stmt_mk_hash = pa.mk_hash')
         _skip_disp = ['raw_json', 'pa_json']
-        _indices = [BtreeIndex('hash_index', 'mk_hash')]
+        _indices = [BtreeIndex('hash_index', 'mk_hash'),
+                    BtreeIndex('frp_reading_id_idx', 'reading_id'),
+                    BtreeIndex('frp_db_info_id_idx', 'db_info_id')]
         id = Column(Integer, primary_key=True)
         raw_json = Column(BYTEA)
         reading_id = Column(BigInteger,

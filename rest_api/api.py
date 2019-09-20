@@ -16,11 +16,13 @@ from indra.assemblers.html import HtmlAssembler
 from indra.assemblers.html.assembler import loader as indra_loader
 from indra.statements import make_statement_camel, stmts_from_json
 from indra.util import batch_iter
-from indra_db.client import get_statement_jsons_from_agents, \
-    get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
-    submit_curation, BadHashError, get_interaction_jsons_from_agents
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
+
+from indra_db.exceptions import BadHashError
+from indra_db.client import get_statement_jsons_from_agents, \
+    get_statement_jsons_from_hashes, get_statement_jsons_from_papers, \
+    submit_curation, get_interaction_jsons_from_agents
 
 logger = logging.getLogger("db-api")
 logger.setLevel(logging.INFO)

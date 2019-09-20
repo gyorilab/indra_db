@@ -74,7 +74,7 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, ro=None,
     """
     # First look for statements matching the role'd agents.
     if ro is None:
-        ro = get_ro('primary')
+        ro = get_ro('primary-ro')
 
     logger.debug("Constructing query to search for agents of type %s "
                  "with agents: %s." % (stmt_type, agents))
@@ -124,7 +124,7 @@ def get_statement_jsons_from_papers(paper_refs, ro=None, **kwargs):
     shallow matches-key hashes.
     """
     if ro is None:
-        ro = get_ro('primary')
+        ro = get_ro('primary-ro')
 
     # Create a sub-query on the reading metadata
     q = ro.session.query(ro.ReadingRefLink.rid.label('rid'))
@@ -159,7 +159,7 @@ def get_statement_jsons_from_papers(paper_refs, ro=None, **kwargs):
 def get_statement_jsons_from_hashes(mk_hashes, ro=None, **kwargs):
     """Get statement jsons using the appropriate hashes."""
     if ro is None:
-        ro = get_ro('primary')
+        ro = get_ro('primary-ro')
     mk_hash_ints = [int(h) for h in mk_hashes]
     mk_hashes_q = (ro.session.query(ro.PaMeta.mk_hash, ro.PaMeta.ev_count)
                    .filter(ro.PaMeta.mk_hash.in_(mk_hash_ints)))

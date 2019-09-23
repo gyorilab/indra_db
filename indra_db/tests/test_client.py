@@ -2,6 +2,7 @@ import os
 import pickle
 import random
 from collections import defaultdict
+from unittest import SkipTest
 
 from nose.plugins.attrib import attr
 
@@ -18,7 +19,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 @attr('nonpublic', 'slow')
 def test_get_statements():
     num_stmts = 10000
-    db, _ = get_prepped_db(num_stmts)
+    db = get_prepped_db(num_stmts)
 
     # Test getting all statements
     stmts = dbc.get_statements([], preassembled=False, db=db)
@@ -54,7 +55,7 @@ def test_get_statements():
 def test_get_statements_by_grot():
     """Test get statements by gene-role-type."""
     num_stmts = 10000
-    db, _ = get_prepped_db(num_stmts, with_agents=True)
+    db = get_prepped_db(num_stmts, with_agents=True)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', preassembled=False,
                                                  db=db)
@@ -76,7 +77,7 @@ def test_get_statements_by_grot():
 @attr('nonpublic', 'known_failing')
 def test_get_statments_grot_wo_evidence():
     num_stmts = 10000
-    db, _ = get_prepped_db(num_stmts, with_agents=True)
+    db = get_prepped_db(num_stmts, with_agents=True)
 
     stmts = dbc.get_statements_by_gene_role_type('MAP2K1', with_evidence=False,
                                                  db=db)
@@ -85,7 +86,7 @@ def test_get_statments_grot_wo_evidence():
 
 @attr('nonpublic')
 def test_get_content_by_refs():
-    db, _ = get_prepped_db(100)
+    db = get_prepped_db(100)
     tcid = db.select_one(db.TextContent.id)[0]
     reading_dict = dbc.get_reader_output(db, tcid)
     assert reading_dict
@@ -337,16 +338,16 @@ def test_stmts_from_papers():
 
 @attr('nonpublic')
 def test_pa_curation():
-    db, key = get_prepped_db(100, with_pa=True)
+    db = get_prepped_db(100, with_pa=True)
     sample = db.select_sample_from_table(2, db.PAStatements)
     mk_hashes = {s.mk_hash for s in sample}
     i = 0
     for pa_hash in mk_hashes:
-        dbc.submit_curation(pa_hash, api_key=key, tag='test1',
+        dbc.submit_curation(pa_hash, tag='test1',
                             text='This is a test.', curator='tester%d' % i,
                             ip='192.0.2.1', source='test_app', db=db)
         i += 1
-        dbc.submit_curation(pa_hash, api_key=key, tag='test2',
+        dbc.submit_curation(pa_hash, tag='test2',
                             text='This is a test too.',
                             curator='tester%d' % i, ip='192.0.2.32',
                             source='test_app', db=db)
@@ -361,9 +362,9 @@ def test_pa_curation():
 
 @attr('nonpublic')
 def test_bad_hash_curation():
-    db, key = get_prepped_db(100, with_pa=True)
+    db = get_prepped_db(100, with_pa=True)
     try:
-        dbc.submit_curation(0, api_key=key, tag='test', text='text',
+        dbc.submit_curation(0, tag='test', text='text',
                             curator='tester', ip='192.0.2.1', db=db)
     except dbc.BadHashError:
         return
@@ -374,7 +375,7 @@ def test_bad_hash_curation():
 
 @attr('nonpublic')
 def test_source_hash():
-    db, _ = get_prepped_db(100)
+    db = get_prepped_db(100)
     res = db.select_all(db.RawStatements)
     pairs = [(dbu.get_statement_object(db_raw), db_raw.source_hash)
              for db_raw in res]

@@ -250,7 +250,7 @@ def get_prepped_db(num_stmts, with_pa=False, with_agents=False):
     dts.add_statements()
     if with_pa:
         dts.insert_pa_statements(with_agents)
-    return dts.test_db, dts.tester_key
+    return dts.test_db
 
 
 class PaDatabaseEnv(DatabaseEnv):

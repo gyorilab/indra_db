@@ -10,7 +10,7 @@ from indra.statements import stmts_from_json
 
 from indra_db import util as dbu
 from indra_db import client as dbc
-from indra_db.tests.util import get_prepped_db, get_db_with_views, get_temp_db
+from indra_db.tests.util import get_prepped_db, get_filled_ro, get_temp_db
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -92,8 +92,8 @@ def test_get_content_by_refs():
 
 
 def test_materialize_view_creation():
-    db = get_db_with_views(1000)
-    res = db.select_all(db.PaStmtSrc)
+    ro = get_filled_ro(1000)
+    res = ro.select_all(ro.PaStmtSrc)
     assert len(res), res
 
 

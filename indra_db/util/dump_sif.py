@@ -60,15 +60,15 @@ def load_db_content(reload, ns_list, pkl_filename=None, db=None):
     return results
 
 
-def make_ev_strata(pkl_filename=None, db=None):
+def make_ev_strata(pkl_filename=None, ro=None):
     """Returns a dict of dicts with evidence count per source, per statement
 
     The dictionary is at the top level keyed by statement hash and each
     entry contains a dictionary keyed by the source that support the
     statement where the entries are the evidence count for that source."""
-    if not db:
-        db = dbu.get_primary_db()
-    res = db.select_all(db.PaStmtSrc)
+    if not ro:
+        ro = dbu.get_ro('primary')
+    res = ro.select_all(ro.PaStmtSrc)
     ev = {}
     for r in res:
         rd = r.__dict__

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def get_schema(Base):
     '''Return the schema for the reading view of the database.
 
-    We use materialized views to allow fast and efficient load of data,
+    We use a readonly database to allow fast and efficient load of data,
     and to add a layer of separation between the processes of updating
     the content of the database and accessing the content of the
     database. However, it is not practical to have the views created

@@ -1,21 +1,3 @@
-"""Manage Materialized Views
----------------------------------------------------------------------
-We use materialized views to allow fast and efficient load of data,
-and to add a layer of separation between the processes of updating
-the content of the database and accessing the content of the
-database. Note that the materialized views are not created using SQL Alchemy.
-
-The following views must be built in this specific order:
-  1. fast_raw_pa_link
-  2. evidence_counts
-  3. pa_meta
-  4. raw_stmt_src
-  5. pa_stmt_src
-The following can be built at any time and in any order:
-  - reading_ref_link
-Note that the order of views below is determined not by the above
-order but by constraints imposed by use-case.
-"""
 import logging
 from datetime import datetime
 from argparse import ArgumentParser

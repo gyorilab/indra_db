@@ -49,6 +49,7 @@ install:
 before_script:
   # Create a test database.
   - psql -c 'create database indradb_test;' -U postgres
+  - psql -c 'create database indradb_ro_test;' -U postgres
   # Enable plotting on fake display
   - export DISPLAY=:99.0
   - sleep 3

@@ -259,21 +259,13 @@ class DatabaseManager(object):
                 logger.info('Aborting clear.')
                 return False
         if tbl_list is None:
-            logger.info("Removing all materialized views...")
-            with self.engine.connect() as conn:
-                conn.execute('DROP MATERIALIZED VIEW IF EXISTS %s CASCADE;'
-                             % (', '.join(self.views.keys())))
             logger.info("Removing all tables...")
             self.Base.metadata.drop_all(self.engine)
             logger.debug("All tables removed.")
         else:
             for tbl in tbl_list:
                 logger.info("Removing %s..." % tbl.__tablename__)
-                if tbl in self.views.values():
-                    with self.engine.connect() as conn:
-                        conn.execute('DROP MATERIALIZED VIEW IF EXISTS %s '
-                                     'CASCADE;' % tbl.__tablename__)
-                elif tbl.__table__.exists(self.engine):
+                if tbl.__table__.exists(self.engine):
                     tbl.__table__.drop(self.engine)
                     logger.debug("Table removed.")
                 else:

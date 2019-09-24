@@ -300,7 +300,7 @@ def get_pa_loaded_db(num_stmts, split=None, pam=None):
 
 
 def get_filled_ro(num_stmts):
-    db, _ = get_prepped_db(num_stmts, with_pa=True, with_agents=True)
+    db = get_prepped_db(num_stmts, with_pa=True, with_agents=True)
     db.generate_readonly()
     fname = 's3://{bucket}/test-{prefix}'.format(**get_s3_dump())
     if not fname.endswith('/'):

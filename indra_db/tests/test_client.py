@@ -92,7 +92,7 @@ def test_get_content_by_refs():
     assert reading_dict
 
 
-def test_materialize_view_creation():
+def test_readonly_creation():
     ro = get_filled_ro(1000)
     res = ro.select_all(ro.PaStmtSrc)
     assert len(res), res

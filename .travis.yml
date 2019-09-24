@@ -15,6 +15,7 @@ addons:
 before_install:
   - sudo apt-get update
   - sudo apt-get install openjdk-8-jdk
+  - sudo apt-get install postgresql-client
   - pip install numpy scipy sympy cython nose lxml matplotlib==1.5.0 pandas
         awscli
 install:

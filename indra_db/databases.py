@@ -825,7 +825,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__PaStmtSrc
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def generate_readonly(self, ro_list=None):
+    def generate_readonly(self, ro_list=None, force=False):
         """Manage the materialized views.
 
         Parameters
@@ -833,7 +833,13 @@ class PrincipalDatabaseManager(DatabaseManager):
         ro_list : list or None
             Default None. A list of readonly table names or None. If None,
             all defined readonly tables will be build.
+        force : bool
+            Force the readonly tables to be built even if they already exist.
         """
+        if 'readonly' in self.get_schemas() and not force:
+            logger.info("Schema already exists.")
+            return
+
         # Make sure the schema exists
         self.create_schema('readonly')
 

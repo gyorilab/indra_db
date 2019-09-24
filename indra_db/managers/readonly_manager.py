@@ -10,16 +10,18 @@ logger = logging.getLogger(__name__)
 def main():
     args = parse_args()
     if args.m_views == 'all':
-        views = None
+        ro_names = None
     else:
-        views = args.m_views
+        ro_names = args.m_views
 
     principal_db = get_db(args.database)
     readonly_db = get_ro(args.readonly)
 
     logger.info("%s - Generating readonly schema (est. a long time)"
                 % datetime.now())
-    principal_db.generate_readonly(view_list=views)
+    principal_db.generate_readonly(ro_list=ro_names)
+    for ro_name in ro_names:
+        principal_db.readonly[ro_name]
 
     logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
                 % datetime.now())

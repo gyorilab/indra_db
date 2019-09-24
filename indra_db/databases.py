@@ -825,38 +825,39 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__PaStmtSrc
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def generate_readonly(self, view_list=None):
+    def generate_readonly(self, ro_list=None):
         """Manage the materialized views.
 
         Parameters
         ----------
-        view_list : list or None
-            Default None. A list of materialized view names or None. If None,
-            all available views will be build.
+        ro_list : list or None
+            Default None. A list of readonly table names or None. If None,
+            all defined readonly tables will be build.
         """
         # Make sure the schema exists
         self.create_schema('readonly')
 
         # Create each of the readonly view tables (in order, where necessary).
-        ordered_views = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
-                         'name_meta', 'text_meta', 'other_meta',
-                         'raw_stmt_src', 'pa_stmt_src']
-        other_views = {'reading_ref_link'}
+        ordered_ros = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
+                       'name_meta', 'text_meta', 'other_meta',
+                       'raw_stmt_src', 'pa_stmt_src']
+        other_ros = {'reading_ref_link'}
 
-        def iter_views():
-            for i, view in enumerate(ordered_views):
+        def iter_names():
+            for i, view in enumerate(ordered_ros):
                 yield str(i), view
-            for view in other_views:
+            for view in other_ros:
                 yield '-', view
 
-        for i, view_name in iter_views():
-            if view_list is not None and view_name not in view_list:
+        for i, ro_name in iter_names():
+            if ro_list is not None and ro_name not in ro_list:
                 continue
 
-            view = self.readonly[view_name]
+            ro_tbl = self.readonly[ro_name]
 
-            logger.info('[%s] Creating %s view...' % (i, view_name))
-            view.create(self)
+            logger.info('[%s] Creating %s readonly table...' % (i, ro_name))
+            ro_tbl.create(self)
+            ro_tbl.build_indices(self)
         return
 
     def dump_readonly(self, dump_file=None):
@@ -879,10 +880,10 @@ class PrincipalDatabaseManager(DatabaseManager):
 
         # Dump the database onto s3, piping through this machine (errors if
         # anything went wrong).
-        check_call(["pg_dump",
-                    *self._form_pg_args(),
-                    '-n', 'readonly', '-Fc',
-                    '|', 'aws', 's3', 'cp', '-', dump_file])
+        cmd = ' '.join(["pg_dump", *self._form_pg_args(),
+                        '-n', 'readonly', '-Fc',
+                        '|', 'aws', 's3', 'cp', '-', dump_file])
+        check_call(cmd, shell=True)
 
         # This database no longer needs this schema (this only executes if
         # the check_call does not error).

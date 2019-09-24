@@ -57,6 +57,7 @@ before_script:
 script:
   - export PYTHONPATH=$PYTHONPATH:$TRAVIS_BUILD_DIR
   - export SITEMAPPER_CACHE_PATH=$TRAVIS_BUILD_DIR/site_mapper_cache.pkl
+  - export INDRA_DB_S3_PREFIX=bigmech:indra-db/dumps
   # Run standard unit tests
   - cd $TRAVIS_BUILD_DIR
   # doctests on Travis would otherwise fail

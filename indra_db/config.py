@@ -98,7 +98,8 @@ def _load_env_config():
     CONFIG['readonly'].update(_get_urls_from_env(READONLY_ENV_PREFIX))
 
     if S3_DUMP_ENV_VAR in environ:
-        CONFIG['s3_dump'] = environ[S3_DUMP_ENV_VAR]
+        bucket, prefix = environ[S3_DUMP_ENV_VAR].split(':')
+        CONFIG['s3_dump'] = {'bucket': bucket, 'prefix': prefix}
 
     return
 

@@ -20,8 +20,6 @@ def main():
     logger.info("%s - Generating readonly schema (est. a long time)"
                 % datetime.now())
     principal_db.generate_readonly(ro_list=ro_names)
-    for ro_name in ro_names:
-        principal_db.readonly[ro_name]
 
     logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
                 % datetime.now())

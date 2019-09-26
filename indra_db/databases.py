@@ -872,6 +872,10 @@ class PrincipalDatabaseManager(DatabaseManager):
         from indra_db.config import get_s3_dump
         from os import environ
 
+        # Make sure the session is fresh and any previous session are done.
+        self.session.close()
+        self.grab_session()
+
         # Add the password to the env
         my_env = environ.copy()
         my_env['PGPASSWORD'] = self.url.password
@@ -893,6 +897,8 @@ class PrincipalDatabaseManager(DatabaseManager):
 
         # This database no longer needs this schema (this only executes if
         # the check_call does not error).
+        self.session.close()
+        self.grab_session()
         self.drop_schema('readonly')
 
         return dump_file
@@ -922,12 +928,15 @@ class ReadonlyDatabaseManager(DatabaseManager):
         from subprocess import check_call
         from os import environ
 
+        self.session.close()
+        self.grab_session()
+
         # Add the password to the env
         my_env = environ.copy()
         my_env['PGPASSWORD'] = self.url.password
 
         # Make sure the database is clear.
-        if self.get_active_tables():
+        if 'readonly' in self.get_schemas():
             if force_clear:
                 # For some reason, dropping tables does not work.
                 self.drop_schema('readonly')
@@ -941,6 +950,9 @@ class ReadonlyDatabaseManager(DatabaseManager):
                              'pg_restore', *self._form_pg_args(),
                              '--no-owner']),
                    env=my_env, shell=True)
+
+        self.session.close()
+        self.grab_session()
         return
 
 

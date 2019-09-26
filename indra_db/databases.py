@@ -906,8 +906,16 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
         self.tables = readonly_schema.get_schema(self.Base)
         for tbl in self.tables.values():
-            setattr(self, tbl.__name__, tbl)
-        return
+            if tbl.__name__ == 'PaStmtSrc':
+                self.__PaStmtSrc = tbl
+            else:
+                setattr(self, tbl.__name__, tbl)
+
+    def __getattribute__(self, item):
+        if item == 'PaStmtSrc':
+            self.__PaStmtSrc.load_cols(self.engine)
+            return self.__PaStmtSrc
+        return super(DatabaseManager, self).__getattribute__(item)
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""

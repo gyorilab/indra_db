@@ -254,7 +254,9 @@ def get_schema(Base):
                 return
 
             try:
-                cols = inspect(engine).get_columns(cls.__tablename__)
+                schema = cls.__table_args__.get('schema', 'public')
+                cols = inspect(engine).get_columns(cls.__tablename__,
+                                                   schema=schema)
             except NoSuchTableError:
                 return
 

@@ -35,11 +35,24 @@ class IndraDBTable(object):
         """Get the full name including the schema, if supplied."""
         name = cls.__tablename__
 
-        schema_name = cls.__table_args__.get('schema')
+        # If we are definitely going to include the schema, default to public
+        if force_schema:
+            schema_name = 'public'
+        else:
+            schema_name = None
+
+        # Look for any information in the __table_args__ about the schema
+        if isinstance(cls.__table_args__, dict):
+            schema_name = cls.__table_args__.get('schema')
+        elif isinstance(cls.__table_args__, tuple):
+            for arg in cls.__table_args__:
+                if isinstance(arg, dict) and 'schema' in arg.keys():
+                    schema_name = arg['schema']
+                    break
+
+        # Prepend if we found something.
         if schema_name:
             name = schema_name + '.' + name
-        elif force_schema:
-            name = 'public' + '.' + name
 
         return name
 

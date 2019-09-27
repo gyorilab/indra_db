@@ -8,7 +8,7 @@ from indra_db.util.dump_sif import load_db_content, make_ev_strata, \
     make_dataframe, NS_LIST
 
 # Get db
-db = tu.get_db_with_views(1000)
+db = tu.get_filled_ro(1000)
 
 
 class SifDumperTester(unittest.TestCase):
@@ -73,7 +73,7 @@ class SifDumperTester(unittest.TestCase):
     def test_stratified_evidence(self):
         """Check the stratified evidence dumper"""
 
-        ev_dict = make_ev_strata(db=self.db)
+        ev_dict = make_ev_strata(ro=self.db)
 
         # Check if nested dict
         for k in ev_dict:

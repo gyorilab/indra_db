@@ -611,7 +611,7 @@ def _main():
     args = parser.parse_args()
     if args.debug:
         logger.setLevel(logging.DEBUG)
-        from indra.db.database_manager import logger as db_logger
+        from indra_db.databases import logger as db_logger
         db_logger.setLevel(logging.DEBUG)
     print("Getting %s database." % args.database)
     db = get_db(args.database)

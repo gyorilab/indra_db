@@ -1,18 +1,8 @@
-These are the core tools that are used to manage the content in the database
-and perform updates and operations on/with that content.
+Pipeline Managers
+=================
 
-.. automodule:: indra_db.managers
-    :members:
-
-Database Manager (:py:mod:`indra_db.managers.database_manager`)
----------------------------------------------------------------
-
-The Database Manager object is the core interface with the database,
-implemented with SQLAlchemy, providing useful short-cuts but also
-allowing full access to SQLAlchemy's API.
-
-.. automodule:: indra_db.managers.database_manager
-    :members:
+This module contains the pipelines used to update content and knowledge in the
+database, and move or transform that knowledge on a regular basis.
 
 Content Manager (:py:mod:`indra_db.managers.content_manager`)
 -------------------------------------------------------------
@@ -23,7 +13,7 @@ sources (e.g. PubMed) can be defined by inheriting from this parent. This file
 is also used as the shell command to run updates of the content.
 
 .. automodule:: indra_db.managers.content_manager
-    :members:
+   :members:
 
 Reading Manager (:py:mod:`indra_db.managers.reading_manager`)
 -------------------------------------------------------------
@@ -33,7 +23,7 @@ of those readings into statements. As with Content Managers, different reading
 pipelines can be handled by defining children of a parent class.
 
 .. automodule:: indra_db.managers.reading_manager
-    :members:
+   :members:
 
 
 PreAssembly Manager (:py:mod:`indra_db.managers.preassembly_manager`)
@@ -46,4 +36,27 @@ distilled into a corpus of unique statements, with links back to the raw
 Statements, and their history and provenance.
 
 .. automodule:: indra_db.managers.preassembly_manager
-    :members:
+   :members:
+
+
+Knowledge Base Manager (:py:mod:`indra_db.managers.knowledgebase_manager`)
+--------------------------------------------------------------------------
+
+The INDRA Databases also derives much of its knowledge from external databases
+and other resources not extracted from plain text, referred to in this repo as
+"knowledge bases", so as to avoid the ambiguity of "database". This manager
+handles the updates of those knowledge bases, each of which requires different
+handling.
+
+.. automodule:: indra_db.managers.knowledgebase_manager
+   :members:
+
+
+Readonly Manager (:py:mod:`indra_db.managers.readonly_manager`)
+---------------------------------------------------------------
+
+This handles the generation of the content for the readonly database from the
+principal database.
+
+.. automodule:: indra_db.managers.readonly_manager
+   :members:

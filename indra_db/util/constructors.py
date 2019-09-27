@@ -1,11 +1,11 @@
-__all__ = ['get_primary_db', 'get_db']
+__all__ = ['get_primary_db', 'get_db', 'get_ro']
 
-import re
 import logging
 
-from indra_db.managers.database_manager import DatabaseManager
+from indra_db.databases import PrincipalDatabaseManager, \
+    ReadonlyDatabaseManager
 from indra_db.exceptions import IndraDbException
-from indra_db.config import get_databases as get_defaults
+from indra_db.config import get_databases, get_readonly_databases
 
 
 logger = logging.getLogger('util-constructors')
@@ -53,7 +53,7 @@ def get_primary_db(force_new=False):
         An instance of the database manager that is attached to the primary
         database.
     """
-    defaults = get_defaults()
+    defaults = get_databases()
     if 'primary' in defaults.keys():
         primary_host = defaults['primary']
     else:
@@ -61,18 +61,24 @@ def get_primary_db(force_new=False):
 
     global __PRIMARY_DB
     if __PRIMARY_DB is None or force_new:
-        __PRIMARY_DB = DatabaseManager(primary_host, label='primary')
+        __PRIMARY_DB = PrincipalDatabaseManager(primary_host, label='primary')
         __PRIMARY_DB.grab_session()
     return __PRIMARY_DB
 
 
 def get_db(db_label):
     """Get a db instance base on it's name in the config or env."""
-    defaults = get_defaults()
-    db_name = defaults[db_label]
-    m = re.match('(\w+)://.*?/([\w.]+)', db_name)
-    if m is None:
-        logger.error("Poorly formed db name: %s" % db_name)
-        return
-    sqltype = m.groups()[0]
-    return DatabaseManager(db_name, sqltype=sqltype, label=db_label)
+    defaults = get_databases()
+    db_url = defaults[db_label]
+    db = PrincipalDatabaseManager(db_url, label=db_label)
+    db.grab_session()
+    return db
+
+
+def get_ro(ro_label):
+    """Get a readonly database instance, based on its name/"""
+    defaults = get_readonly_databases()
+    db_url = defaults[ro_label]
+    ro = ReadonlyDatabaseManager(db_url, label=ro_label)
+    ro.grab_session()
+    return ro

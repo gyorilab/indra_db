@@ -24,7 +24,7 @@ from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
 from indra.util import zip_string, batch_iter
 
 from indra_db import get_primary_db, formats
-from indra_db.managers.database_manager import readers, reader_versions
+from indra_db.databases import readers, reader_versions
 from indra_db.util import insert_raw_agents, unpack
 
 logger = logging.getLogger(__name__)

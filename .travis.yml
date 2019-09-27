@@ -15,6 +15,7 @@ addons:
 before_install:
   - sudo apt-get update
   - sudo apt-get install openjdk-8-jdk
+  - sudo apt-get install postgresql-client
   - pip install numpy scipy sympy cython nose lxml matplotlib==1.5.0 pandas
         awscli
 install:
@@ -49,12 +50,14 @@ install:
 before_script:
   # Create a test database.
   - psql -c 'create database indradb_test;' -U postgres
+  - psql -c 'create database indradb_ro_test;' -U postgres
   # Enable plotting on fake display
   - export DISPLAY=:99.0
   - sleep 3
 script:
   - export PYTHONPATH=$PYTHONPATH:$TRAVIS_BUILD_DIR
   - export SITEMAPPER_CACHE_PATH=$TRAVIS_BUILD_DIR/site_mapper_cache.pkl
+  - export INDRA_DB_S3_PREFIX=bigmech:indra-db/dumps
   # Run standard unit tests
   - cd $TRAVIS_BUILD_DIR
   # doctests on Travis would otherwise fail

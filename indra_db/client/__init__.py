@@ -15,28 +15,7 @@ primary tables of the database and are generally slower. The
 recall, as they are the back-end to the REST API.
 """
 
-from .content import *
-from .curation import *
 from .datasets import *
-from .optimized import *
+from .readonly import *
+from .principal import *
 from .statements import *
-
-
-def _has_auth(resource, api_key, db=None):
-    logger.info("Checking auth of secret key for %s." % resource)
-    if db is None:
-        db = get_primary_db()
-    res = db._has_auth(resource, api_key)
-    logger.info("User %s access to %s."
-                % ('has' if res else 'lacks', resource))
-    return res
-
-
-def _get_api_key(name, db=None):
-    logger.info("Looking up API key")
-    if db is None:
-        db = get_primary_db()
-    ret = db._get_api_key(name)
-    logger.info("%s api key." % ("Found" if ret is not None
-                                 else "Did not find"))
-    return ret

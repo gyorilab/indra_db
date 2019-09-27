@@ -12,8 +12,8 @@ from indra.statements import Unresolved, Evidence, Statement
 from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
     get_statement_object, regularize_agent_id
 from indra_db.client.datasets import get_statement_essentials
-from indra_db.client.optimized import get_raw_stmt_jsons_from_papers, \
-    get_statement_jsons_from_papers
+from indra_db.client.readonly import get_statement_jsons_from_papers
+from indra_db.client.principal import get_raw_stmt_jsons_from_papers
 
 
 def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',

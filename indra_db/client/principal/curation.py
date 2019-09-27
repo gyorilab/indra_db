@@ -1,19 +1,14 @@
-import logging
+__all__ = ['submit_curation', 'get_curations', 'get_grounding_curations']
+
 import re
+import logging
 
 from sqlalchemy.exc import IntegrityError
 
-logger = logging.getLogger("db_curation_client")
-
 from indra_db.util import get_primary_db
-from indra_db.exceptions import NoAuthError, IndraDbException
+from indra_db.exceptions import BadHashError
 
-
-class BadHashError(IndraDbException):
-    def __init__(self, mk_hash):
-        self.bad_hash = mk_hash
-        msg = 'The matches-key hash %s is not valid.' % mk_hash
-        super(BadHashError, self).__init__(msg)
+logger = logging.getLogger(__name__)
 
 
 def submit_curation(hash_val, tag, curator, ip, text=None,

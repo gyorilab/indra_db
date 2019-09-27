@@ -72,7 +72,7 @@ def test_belief_calc_up_to_hierarchy():
 
 @attr('nonpublic')
 def test_mock_stmt_load_and_belief_calc():
-    db, _ = get_prepped_db(1000, with_pa=True)
+    db = get_prepped_db(1000, with_pa=True)
     stmts = load_mock_statements(db)
     assert 500 <= len(stmts) <= 1000, len(stmts)
     assert all([len(s.evidence) >= 1 for s in stmts])

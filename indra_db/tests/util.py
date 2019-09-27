@@ -1,12 +1,14 @@
 import random
 import pickle
 import logging
+from datetime import datetime
 from functools import wraps
 from os import path
 
 import indra_db.util as dbu
-from indra_db.managers.database_manager import DatabaseManager
-
+from indra_db.config import get_s3_dump
+from indra_db.databases import PrincipalDatabaseManager, \
+    ReadonlyDatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +32,22 @@ def capitalize_list_of_tpls(l):
 
 def get_temp_db(clear=False):
     """Get a DatabaseManager for the test database."""
-    db = DatabaseManager('postgresql://postgres:@localhost/indradb_test')
-    if db is None:
-        logger.error("Could not find any test database names.")
+    db = PrincipalDatabaseManager('postgresql://postgres:@localhost/indradb_test')
     if clear:
         db._clear(force=True)
     db.grab_session()
     db.session.rollback()
     return db
+
+
+def get_temp_ro(clear=False):
+    """Get a manager for a Readonly Database."""
+    ro = ReadonlyDatabaseManager('postgresql://postgres:@localhost/indradb_ro_test')
+    if clear:
+        ro._clear(force=True)
+    ro.grab_session()
+    ro.session.rollback()
+    return ro
 
 
 TEST_FTP_PATH = path.abspath(path.join(path.dirname(__file__), path.pardir,
@@ -74,7 +84,7 @@ def _with_quiet_db_logs(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         # Make the database manager logger quieter.
-        from indra_db.managers.database_manager import logger as dbm_logger
+        from indra_db.databases import logger as dbm_logger
         original_level = dbm_logger.level
         dbm_logger.setLevel(logging.WARNING)
 
@@ -110,9 +120,6 @@ class DatabaseEnv(object):
             self.stmt_tuples = self.test_data['raw_statements']['tuples']
 
         self.used_stmt_tuples = set()
-        self.test_db._init_auth()
-        _, api_key = self.test_db._add_auth('tester')
-        self.tester_key = api_key
         return
 
     def get_available_stmt_tuples(self):
@@ -243,7 +250,7 @@ def get_prepped_db(num_stmts, with_pa=False, with_agents=False):
     dts.add_statements()
     if with_pa:
         dts.insert_pa_statements(with_agents)
-    return dts.test_db, dts.tester_key
+    return dts.test_db
 
 
 class PaDatabaseEnv(DatabaseEnv):
@@ -292,10 +299,20 @@ def get_pa_loaded_db(num_stmts, split=None, pam=None):
     return dts.test_db
 
 
-def get_db_with_views(num_stmts):
-    db, _ = get_prepped_db(num_stmts, with_pa=True, with_agents=True)
-    db.manage_views('create')
-    return db
+def get_filled_ro(num_stmts):
+    db = get_prepped_db(num_stmts, with_pa=True, with_agents=True)
+    db.generate_readonly()
+    s3_dict = get_s3_dump()
+    assert s3_dict, "No s3 config available for db dumps."
+    fname = 's3://{bucket}/{prefix}-test'.format(**s3_dict)
+    if not fname.endswith('/'):
+        fname += '/'
+    now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+    fname += 'readonly-%s.dump' % now_str
+    db.dump_readonly(fname)
+    ro = get_temp_ro()
+    ro.load_dump(fname)
+    return ro
 
 
 

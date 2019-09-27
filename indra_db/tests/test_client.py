@@ -385,3 +385,16 @@ def test_source_hash():
         assert sh_rec == sh,\
             "Recreated source hash %s does not match database sourch hash %s."\
             % (sh_rec, sh)
+
+
+def test_get_raw_statement_jsons_from_agents():
+    db = get_prepped_db(100000)
+    res = dbc.get_direct_raw_stmt_jsons_from_agents(db=db, agents=[
+        ('SUBJECT', 'MEK', 'FPLX'),
+    ])
+    assert len(res)
+    assert isinstance(res, dict)
+    stmts = stmts_from_json(res.values())
+    assert stmts
+    assert all('MEK' == s.agent_list()[0].db_refs['FPLX']
+               for s in stmts), stmts

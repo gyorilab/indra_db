@@ -405,7 +405,7 @@ def test_get_raw_statement_json_from_papers():
     pmid, = db.select_one(db.TextRef.pmid, db.TextRef.pmid.isnot(None),
                           *db.link(db.TextRef, db.RawStatements))
 
-    res = dbc.get_raw_stmt_jsons_from_papers([pmid], id_type='pmid')
+    res = dbc.get_raw_stmt_jsons_from_papers([pmid], id_type='pmid', db=db)
     assert len(res) == 1, len(res)
     assert pmid in res.keys(), 'Expected %s in %s' % (pmid, res.keys())
     stmts = stmts_from_json(res[pmid])

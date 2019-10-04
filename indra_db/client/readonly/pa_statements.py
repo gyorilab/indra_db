@@ -174,7 +174,7 @@ def get_statement_jsons_from_hashes(mk_hashes, ro=None, **kwargs):
 def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
                                          max_stmts=None, offset=None,
                                          ev_limit=None, mk_hashes_alias=None,
-                                         ev_count_obj=None):
+                                         ev_count_obj=None, source_specs=None):
     # Handle the limiting
     mk_hashes_q = _apply_limits(ro, mk_hashes_q, best_first, max_stmts, offset,
                                 ev_count_obj, mk_hashes_alias)
@@ -208,6 +208,39 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
     cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
 
     selection = select(cols).select_from(stmts_q)
+
+    # Build up the source condition.
+    if source_specs:
+        cond = None
+        for source_name, relation, value in source_specs:
+            # Get the column object, check if None
+            src = getattr(ro.PaStmtSrc, source_name)
+            if src is None:
+                raise ValueError("'%s' is not a valid source"
+                                 % source_name)
+
+            # Encode the relation.
+            if relation == 'eq':
+                new_cond = src == value
+            elif relation == 'lt':
+                new_cond = src < value
+            elif relation == 'gt':
+                new_cond = src > value
+            elif relation == 'is not':
+                new_cond = src.isnot(value)
+            elif relation == 'is':
+                new_cond = src.is_(value)
+            else:
+                raise ValueError("Invalid relation: %s" % relation)
+
+            # Add the new condition.
+            if cond is None:
+                cond = new_cond
+            else:
+                cond &= new_cond
+
+        selection = selection.where(cond)
+
     logger.debug("Executing sql to get statements:\n%s" % str(selection))
 
     proxy = ro.session.connection().execute(selection)

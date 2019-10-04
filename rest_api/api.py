@@ -234,6 +234,9 @@ def _query_wrapper(f):
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
         result['statements_returned'] = len(stmts_json)
+        result['end_of_statements'] = ((len(stmts_json) + medscan_removals)
+                                       < MAX_STATEMENTS)
+        result['statements_removed'] = medscan_removals
 
         if fmt == 'html':
             title = TITLE + ': ' + 'Results'

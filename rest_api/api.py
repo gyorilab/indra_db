@@ -308,17 +308,19 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
     return result
 
 
-RELS = {'=', 'eq', '<', 'lt', '>', 'gt', 'is', 'is not'}
+RELS = {'=': 'eq', '<': 'lt', '>': 'gt', 'is': 'is', 'is not': 'is not',
+        '>=': 'gte', '<=': 'lte'}
 
 
 def _build_source_filter_patt():
     padded_rels = set()
-    for rel in RELS:
-        if rel.isalpha():
-            pad = r'\s+'
-        else:
-            pad = r'\s*'
-        padded_rels.add(pad + repr(rel) + pad)
+    for pair in RELS.items():
+        for rel in pair:
+            if rel.isalpha():
+                pad = r'\s+'
+            else:
+                pad = r'\s*'
+            padded_rels.add(pad + rel + pad)
 
     patt_str = r'^(\w+)(' + r'|'.join(padded_rels) + r')(\w+)$'
 
@@ -338,10 +340,16 @@ def _parse_source_str(source_relation):
     # Extract the groups.
     source, rel, value = m.groups()
 
-    # Verify that rel is valid.
-    if rel not in RELS:
-        raise ValueError("Unrecognized relation: %s. Options are: %s"
-                         % (rel, RELS))
+    # Verify that rel is valid, and normalize.
+    rel = rel.strip()
+    if rel not in RELS.values():
+        if rel not in RELS.keys():
+            raise ValueError("Unrecognized relation: %s. Options are: %s"
+                             % (rel, {s for pair in RELS.items()
+                                      for s in pair}))
+        else:
+            # replace with a standardized representation.
+            rel = RELS[rel]
 
     # Convert/verify the type of the value.
     if value.lower() in {'null', 'none'}:

@@ -162,8 +162,6 @@ def _query_wrapper(f):
         best_first_str = query.pop('best_first', 'true')
         best_first = True if best_first_str.lower() == 'true' \
                              or best_first_str else False
-        do_stream_str = query.pop('stream', 'false')
-        do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
@@ -262,13 +260,7 @@ def _query_wrapper(f):
             content = json.dumps(result)
             mimetype = 'application/json'
 
-        if do_stream:
-            # Returning a generator should stream the data.
-            resp_json_bts = content
-            gen = batch_iter(resp_json_bts, 10000)
-            resp = Response(gen, mimetype=mimetype)
-        else:
-            resp = Response(content, mimetype=mimetype)
+        resp = Response(content, mimetype=mimetype)
         logger.info("Exiting with %d statements with %d/%d evidence of size "
                     "%f MB after %s seconds."
                     % (result['statements_returned'],

@@ -165,6 +165,9 @@ def _query_wrapper(f):
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
+        source_restrictions = {_parse_source_str(query.pop(k))
+                               for k in query.keys()
+                               if k.startswith('src')}
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -177,7 +180,8 @@ def _query_wrapper(f):
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
-        result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
+        result = f(query, offs, max_stmts, ev_lim, best_first,
+                   source_restrictions, *args, **kwargs)
         if isinstance(result, Response):
             return result
 
@@ -272,7 +276,7 @@ def _query_wrapper(f):
 
 
 def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
-                         ev_limit, best_first):
+                         ev_limit, best_first, source_specs):
     # Fix the case, if we got a statement type.
     act = None if act_raw is None else make_statement_camel(act_raw)
 
@@ -296,7 +300,8 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
     result = \
         get_statement_jsons_from_agents(agent_iter, stmt_type=act, offset=offs,
                                         max_stmts=max_stmts, ev_limit=ev_limit,
-                                        best_first=best_first)
+                                        best_first=best_first,
+                                        source_specs=source_specs)
     return result
 
 
@@ -386,7 +391,8 @@ def get_statements_query_format():
 
 @app.route('/statements/from_agents', methods=['GET'])
 @_query_wrapper
-def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
+def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
+                   source_specs):
     """Get some statements constrained by query."""
     logger.info("Getting query details.")
     if ev_limit is None:
@@ -418,12 +424,13 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
         return
 
     return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
-                                max_stmts, ev_limit, best_first)
+                                max_stmts, ev_limit, best_first, source_specs)
 
 
 @app.route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
-def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
+def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first,
+                             source_specs):
     if ev_lim is None:
         ev_lim = 20
     hashes = request.json.get('hashes')
@@ -437,24 +444,27 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
 
     result = get_statement_jsons_from_hashes(hashes, max_stmts=max_stmts,
                                              offset=offs, ev_limit=ev_lim,
-                                             best_first=best_first)
+                                             best_first=best_first,
+                                             source_specs=source_specs)
     return result
 
 
 @app.route('/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
-                          hash_val):
+                          source_specs, hash_val):
     if ev_limit is None:
         ev_limit = 10000
     return get_statement_jsons_from_hashes([hash_val], max_stmts=max_stmts,
                                            offset=offs, ev_limit=ev_limit,
-                                           best_first=best_first)
+                                           best_first=best_first,
+                                           source_specs=source_specs)
 
 
 @app.route('/statements/from_papers', methods=['POST'])
 @_query_wrapper
-def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
+def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first,
+                         source_specs):
     """Get Statements from a papers with the given ids."""
     if ev_limit is None:
         ev_limit = 10
@@ -480,7 +490,8 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     logger.info('Getting statements for %d papers.' % len(id_tpls))
     result = get_statement_jsons_from_papers(id_tpls, max_stmts=max_stmts,
                                              offset=offs, ev_limit=ev_limit,
-                                             best_first=best_first)
+                                             best_first=best_first,
+                                             source_specs=source_specs)
     return result
 
 

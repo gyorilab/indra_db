@@ -354,6 +354,16 @@ def _parse_source_str(source_relation):
     # Convert/verify the type of the value.
     if value.lower() in {'null', 'none'}:
         value = None
+
+        # Assume the obvious intention behind =
+        if rel == 'eq':
+            rel = 'is'
+
+        # Make sure that relation is "is" or "is not". Size comparisons don't
+        # make sense.
+        if rel not in {'is', 'is not'}:
+            raise ValueError("Cannot us comparator \"%s\" with None." % rel)
+
     elif value.isdigit():
         value = int(value)
     else:

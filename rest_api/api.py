@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sys
 from datetime import datetime
 from functools import wraps
@@ -305,6 +306,53 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
                                         max_stmts=max_stmts, ev_limit=ev_limit,
                                         best_first=best_first)
     return result
+
+
+RELS = {'=', 'eq', '<', 'lt', '>', 'gt', 'is', 'is not'}
+
+
+def _build_source_filter_patt():
+    padded_rels = set()
+    for rel in RELS:
+        if rel.isalpha():
+            pad = r'\s+'
+        else:
+            pad = r'\s*'
+        padded_rels.add(pad + repr(rel) + pad)
+
+    patt_str = r'^(\w+)(' + r'|'.join(padded_rels) + r')(\w+)$'
+
+    return re.compile(patt_str)
+
+
+source_patt = _build_source_filter_patt()
+
+
+def _parse_source_str(source_relation):
+    # Match to the source relation.
+    m = source_patt.match(source_relation)
+    if m is None:
+        raise ValueError("Could not parse source relation: %s"
+                         % source_relation)
+
+    # Extract the groups.
+    source, rel, value = m.groups()
+
+    # Verify that rel is valid.
+    if rel not in RELS:
+        raise ValueError("Unrecognized relation: %s. Options are: %s"
+                         % (rel, RELS))
+
+    # Convert/verify the type of the value.
+    if value.lower() in {'null', 'none'}:
+        value = None
+    elif value.isdigit():
+        value = int(value)
+    else:
+        raise ValueError("Can only match value to null or int, not: %s."
+                         % value)
+
+    return source.lower(), rel, value
 
 
 # ==========================

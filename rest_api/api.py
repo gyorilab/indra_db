@@ -177,6 +177,10 @@ def _query_wrapper(f):
                 has[resource] |= role.permissions.get(resource, False)
         logger.info('Auths: %s' % str(has))
 
+        # Avoid loading medscan:
+        if not has['medscan']:
+            source_restrictions.add(('medscan', 'is', None))
+
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
@@ -190,42 +194,19 @@ def _query_wrapper(f):
 
         # Handle any necessary redactions
         stmts_json = result.pop('statements')
-        medscan_redactions = 0
-        medscan_removals = 0
         elsevier_redactions = 0
         source_counts = result['source_counts']
-        if not all(has.values()):
+        if not has['elsevier']:
             for h, stmt_json in stmts_json.copy().items():
                 for ev_json in stmt_json['evidence'][:]:
 
                     # Check for elsevier and redact if necessary
-                    if get_source(ev_json) == 'elsevier' \
-                            and not has['elsevier']:
+                    if get_source(ev_json) == 'elsevier':
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
                             elsevier_redactions += 1
 
-                    # Check for medscan and redact if necessary
-                    elif ev_json['source_api'] == 'medscan' \
-                            and not has['medscan']:
-                        medscan_redactions += 1
-                        stmt_json['evidence'].remove(ev_json)
-                        if len(stmt_json['evidence']) == 0:
-                            medscan_removals += 1
-                            stmts_json.pop(h)
-                            result['source_counts'].pop(h)
-
-            # Take medscan counts out of the source counts.
-            if not has['medscan']:
-                source_counts = {h: {src: count
-                                     for src, count in src_count.items()
-                                     if src is not 'medscan'}
-                                 for h, src_count in source_counts.items()}
-
-        logger.info(f"Redacted {medscan_redactions} medscan evidence, "
-                    f"resulting in the complete removal of {medscan_removals} "
-                    f"statements.")
         logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
                     f"evidence.")
 
@@ -237,9 +218,8 @@ def _query_wrapper(f):
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
         result['statements_returned'] = len(stmts_json)
-        result['end_of_statements'] = ((len(stmts_json) + medscan_removals)
-                                       < MAX_STATEMENTS)
-        result['statements_removed'] = medscan_removals
+        result['end_of_statements'] = (len(stmts_json) < MAX_STATEMENTS)
+        result['statements_removed'] = 0
 
         if fmt == 'html':
             title = TITLE + ': ' + 'Results'

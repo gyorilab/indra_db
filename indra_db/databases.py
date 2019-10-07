@@ -893,7 +893,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         cmd = ' '.join(["pg_dump", *self._form_pg_args(),
                         '-n', 'readonly', '-Fc',
                         '|', 'aws', 's3', 'cp', '-', dump_file])
-        check_call(cmd, shell=True)
+        check_call(cmd, shell=True, env=my_env)
 
         # This database no longer needs this schema (this only executes if
         # the check_call does not error).

@@ -24,13 +24,14 @@ def get_schema(Base):
     (or by other non-sqlalchemy scripts).
 
     The following views must be built in this specific order:
-      1. fast_raw_pa_link
-      2. evidence_counts
-      3. pa_meta
-      4. text_meta
-      5. name_meta
-      6. raw_stmt_src
-      7. pa_stmt_src
+      1. raw_stmt_src
+      2. pa_stmt_src
+      3. fast_raw_pa_link
+      4. evidence_counts
+      5. pa_source_lookup
+      6. pa_meta
+      7. text_meta
+      8. name_meta
     The following can be built at any time and in any order:
       - reading_ref_link
     Note that the order of views below is determined not by the above
@@ -255,6 +256,82 @@ def get_schema(Base):
                         src_dict[k] = v
             return src_dict
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
+
+    class PaSourceLookup(Base, SpecialColumnTable):
+        __tablename__ = 'pa_source_lookup'
+        __table_args__ = {'schema': 'readonly'}
+        __definition_fmt__ = (
+            'WITH jsonified AS (\n'
+            '    SELECT mk_hash, \n'
+            '           json_strip_nulls(json_build_object({all_sources})) \n'
+            '           AS src_json \n'
+            '    FROM readonly.pa_stmt_src\n'
+            ')\n'
+            'SELECT readonly.pa_stmt_src.*, \n'
+            '       readonly.evidence_counts.ev_count, \n'
+            '       diversity.num_srcs, \n'
+            '       jsonified.src_json, \n'
+            '       CASE WHEN diversity.num_srcs = 1 \n'
+            '            THEN (ARRAY(\n'
+            '              SELECT json_object_keys(jsonified.src_json)\n'
+            '              ))[1]\n'
+            '            ELSE null \n'
+            '            END as only_src,\n'
+            '       CASE WHEN ARRAY(\n'
+            '              SELECT json_object_keys(jsonified.src_json)\n'
+            '              ) \n'
+            '              &&\n'
+            '              ARRAY[{reading_sources}]\n'
+            '            THEN TRUE \n'
+            '            ELSE FALSE \n'
+            '            END as has_rd,\n'
+            '       CASE WHEN ARRAY(\n'
+            '              SELECT json_object_keys(jsonified.src_json)\n'
+            '              ) \n'
+            '              &&\n'
+            '              ARRAY[{db_sources}]\n'
+            '            THEN TRUE\n'
+            '            ELSE FALSE\n'
+            '            END as has_db\n'
+            'FROM (\n'
+            '  SELECT mk_hash, count(src) AS num_srcs \n'
+            '  FROM jsonified, json_object_keys(jsonified.src_json) as src \n'
+            '  GROUP BY mk_hash\n'
+            ') AS diversity\n'
+            'JOIN jsonified \n'
+            '  ON jsonified.mk_hash = diversity.mk_hash\n'
+            'JOIN readonly.pa_stmt_src \n'
+            '  ON diversity.mk_hash = readonly.pa_stmt_src.mk_hash\n'
+            'JOIN readonly.evidence_counts \n'
+            '  ON diversity.mk_hash = readonly.evidence_counts.mk_hash;'
+        )
+        _indices = [BtreeIndex('pa_source_lookup_mk_hash_idx', 'mk_hash'),
+                    StringIndex('pa_source_lookup_only_src', 'only_src')]
+        loaded = False
+
+        mk_hash = Column(BigInteger, primary_key=True)
+        ev_count = Column(Integer)
+        num_srcs = Column(Integer)
+        src_json = Column(JSON)
+        only_src = Column(String)
+        has_rd = Column(Boolean)
+        has_db = Column(Boolean)
+
+        @classmethod
+        def definition(cls, db):
+            db.grab_session()
+            srcs = set(db.get_column_names(db.PaStmtSrc)) - {'mk_hash'}
+            all_sources = ', '.join(s for src in srcs
+                                    for s in (repr(src), src))
+            rd_sources = ', '.join(repr(src)
+                                   for src in SOURCE_GROUPS['reading'])
+            db_sources = ', '.join(repr(src)
+                                   for src in SOURCE_GROUPS['databases'])
+            sql = cls.__definition_fmt__.format(all_sources=all_sources,
+                                                reading_sources=rd_sources,
+                                                db_sources=db_sources)
+            return sql
+    read_views[PaSourceLookup.__tablename__] = PaSourceLookup
 
     return read_views
 

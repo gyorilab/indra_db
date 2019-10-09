@@ -12,6 +12,11 @@ from .indexes import *
 
 logger = logging.getLogger(__name__)
 
+CREATE_ORDER = ['raw_stmt_src', 'pa_stmt_src', 'fast_raw_pa_link',
+                'evidence_counts', 'pa_source_lookup', 'pa_meta', 'text_meta',
+                'name_meta']
+CREATE_UNORDERED = {'reading_ref_link'}
+
 
 def get_schema(Base):
     '''Return the schema for the reading view of the database.
@@ -299,7 +304,7 @@ def get_schema(Base):
             'JOIN readonly.pa_stmt_src \n'
             '  ON diversity.mk_hash = readonly.pa_stmt_src.mk_hash\n'
             'JOIN readonly.evidence_counts \n'
-            '  ON diversity.mk_hash = readonly.evidence_counts.mk_hash;'
+            '  ON diversity.mk_hash = readonly.evidence_counts.mk_hash'
         )
         _indices = [BtreeIndex('pa_source_lookup_mk_hash_idx', 'mk_hash'),
                     StringIndex('pa_source_lookup_only_src', 'only_src'),

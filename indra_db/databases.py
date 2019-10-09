@@ -1,5 +1,3 @@
-from sqlalchemy.engine.url import make_url
-
 __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
            'sql_expressions', 'readers', 'reader_versions',
            'PrincipalDatabaseManager', 'ReadonlyDatabaseManager']
@@ -19,11 +17,14 @@ from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy import create_engine, inspect, UniqueConstraint, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
 
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
+from indra_db.schemas.readonly_schema import CREATE_ORDER, CREATE_UNORDERED
+
 
 try:
     import networkx as nx
@@ -844,15 +845,10 @@ class PrincipalDatabaseManager(DatabaseManager):
         self.create_schema('readonly')
 
         # Create each of the readonly view tables (in order, where necessary).
-        ordered_ros = ['fast_raw_pa_link', 'evidence_counts', 'pa_meta',
-                       'name_meta', 'text_meta', 'other_meta',
-                       'raw_stmt_src', 'pa_stmt_src']
-        other_ros = {'reading_ref_link'}
-
         def iter_names():
-            for i, view in enumerate(ordered_ros):
+            for i, view in enumerate(CREATE_ORDER):
                 yield str(i), view
-            for view in other_ros:
+            for view in CREATE_UNORDERED:
                 yield '-', view
 
         for i, ro_name in iter_names():

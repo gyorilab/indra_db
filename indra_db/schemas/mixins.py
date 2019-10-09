@@ -98,11 +98,12 @@ class IndraDBTable(object):
 class ReadonlyTable(IndraDBTable):
     __definition__ = NotImplemented
     __table_args__ = NotImplemented
+    __create_table_fmt__ = "CREATE TABLE IF NOT EXISTS %s AS %s;"
 
     @classmethod
     def create(cls, db, commit=True):
-        sql = "CREATE TABLE IF NOT EXISTS %s.%s AS %s;" \
-              % (cls.__table_args__['schema'], cls.__tablename__,
+        sql = cls.__create_table_fmt__ \
+              % (cls.full_name(force_schema=True),
                  cls.get_definition())
         if commit:
             cls.execute(db, sql)
@@ -125,10 +126,12 @@ class SpecialColumnTable(ReadonlyTable):
 
     @classmethod
     def create(cls, db, commit=True):
-
-        # Create the materialized view.
         cls.__definition__ = cls.definition(db)
-        sql = super(cls, cls).create(db, commit)
+        sql = cls.__create_table_fmt__ \
+            % (cls.full_name(force_schema=True),
+               cls.__definition__)
+        if commit:
+            cls.execute(db, sql)
         cls.loaded = True
         return sql
 

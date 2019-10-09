@@ -2,12 +2,11 @@ __all__ = ['get_schema']
 
 import logging
 
-from sqlalchemy import Column, Integer, String, ForeignKey, inspect, BigInteger
+from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, Boolean
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import BYTEA
-from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.dialects.postgresql import BYTEA, JSON
 
-from .mixins import ReadonlyTable, NamespaceLookup
+from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable
 from .indexes import *
 
 
@@ -205,7 +204,7 @@ def get_schema(Base):
         src = Column(String)
     read_views[RawStmtSrc.__tablename__] = RawStmtSrc
 
-    class PaStmtSrc(Base, ReadonlyTable):
+    class PaStmtSrc(Base, SpecialColumnTable):
         __tablename__ = 'pa_stmt_src'
         __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = ("SELECT * FROM crosstab("
@@ -218,9 +217,16 @@ def get_schema(Base):
         _indices = [BtreeIndex('pa_stmt_src_mk_hash_idx', 'mk_hash')]
         loaded = False
 
+        mk_hash = Column(BigInteger, primary_key=True)
+
         @classmethod
         def definition(cls, db):
             db.grab_session()
+
+            # Make sure the necessary extension is installed.
+            with db.engine.connect() as conn:
+                conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
+
             logger.info("Discovering the possible sources...")
             src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
             logger.info("Found the following sources: %s"
@@ -236,39 +242,6 @@ def get_schema(Base):
                                             ', '.join(entries))
             return sql
 
-        @classmethod
-        def create(cls, db, commit=True):
-            # Make sure the necessary extension is installed.
-            with db.engine.connect() as conn:
-                conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
-
-            # Create the materialized view.
-            cls.__definition__ = cls.definition(db)
-            sql = super(cls, cls).create(db, commit)
-            cls.loaded = True
-            return sql
-
-        @classmethod
-        def load_cols(cls, engine):
-            if cls.loaded:
-                return
-
-            try:
-                schema = cls.__table_args__.get('schema', 'public')
-                cols = inspect(engine).get_columns(cls.__tablename__,
-                                                   schema=schema)
-            except NoSuchTableError:
-                return
-
-            for col in cols:
-                if col['name'] == 'mk_hash':
-                    continue
-
-                setattr(cls, col['name'], Column(BigInteger))
-
-            cls.loaded = True
-            return
-
         def get_sources(self, include_none=False):
             src_dict = {}
             for k, v in self.__dict__.items():
@@ -276,8 +249,6 @@ def get_schema(Base):
                     if include_none or v is not None:
                         src_dict[k] = v
             return src_dict
-
-        mk_hash = Column(BigInteger, primary_key=True)
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
     return read_views

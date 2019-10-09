@@ -302,7 +302,8 @@ def get_schema(Base):
             '  ON diversity.mk_hash = readonly.evidence_counts.mk_hash;'
         )
         _indices = [BtreeIndex('pa_source_lookup_mk_hash_idx', 'mk_hash'),
-                    StringIndex('pa_source_lookup_only_src', 'only_src')]
+                    StringIndex('pa_source_lookup_only_src', 'only_src'),
+                    BtreeIndex('pa_source_lookup_num_srcs', 'num_srcs')]
         loaded = False
 
         mk_hash = Column(BigInteger, primary_key=True)

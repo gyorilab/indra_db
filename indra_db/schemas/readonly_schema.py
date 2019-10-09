@@ -83,16 +83,19 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
                           'raw.reading_id, raw.db_info_id, '
-                          'pa.mk_hash, pa.json AS pa_json, pa.type '
+                          'pa.mk_hash, pa.json AS pa_json, pa.type,'
+                          'raw_src.src '
                           'FROM raw_statements AS raw, '
                           'pa_statements AS pa, '
-                          'raw_unique_links AS link '
+                          'raw_unique_links AS link,'
+                          'readonly.raw_stmt_src as raw_src '
                           'WHERE link.raw_stmt_id = raw.id '
                           'AND link.pa_stmt_mk_hash = pa.mk_hash')
         _skip_disp = ['raw_json', 'pa_json']
         _indices = [BtreeIndex('hash_index', 'mk_hash'),
                     BtreeIndex('frp_reading_id_idx', 'reading_id'),
-                    BtreeIndex('frp_db_info_id_idx', 'db_info_id')]
+                    BtreeIndex('frp_db_info_id_idx', 'db_info_id'),
+                    StringIndex('frp_src_idx', 'src')]
         id = Column(Integer, primary_key=True)
         raw_json = Column(BYTEA)
         reading_id = Column(BigInteger,
@@ -200,6 +203,8 @@ def get_schema(Base):
                           'lower(db_info.db_name) AS src '
                           'FROM raw_statements, db_info '
                           'WHERE db_info.id = raw_statements.db_info_id')
+        _indices = [BtreeIndex('raw_stmt_src_sid_idx', 'sid'),
+                    StringIndex('raw_stmt_src_src_idx', 'src')]
         sid = Column(Integer, primary_key=True)
         src = Column(String)
     read_views[RawStmtSrc.__tablename__] = RawStmtSrc
@@ -252,3 +257,10 @@ def get_schema(Base):
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
     return read_views
+
+
+SOURCE_GROUPS = {'databases': ['phosphosite', 'cbn', 'pc11', 'biopax',
+                               'bel_lc', 'signor', 'biogrid', 'tas',
+                               'lincs_drug', 'hprd', 'trrust'],
+                 'reading': ['geneways', 'tees', 'isi', 'trips', 'rlimsp',
+                             'medscan', 'sparser', 'reach']}

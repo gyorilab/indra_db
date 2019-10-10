@@ -212,8 +212,9 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
     ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
                      if not k.startswith('_')]
 
-    cols = [ro.PaSourceLookup.src_json, mk_hashes_al.c.ev_count,
-            json_content_al.c.raw_json, json_content_al.c.pa_json]
+    cols = [mk_hashes_al.c.mk_hash, ro.PaSourceLookup.src_json,
+            mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
+            json_content_al.c.pa_json]
     cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
 
     selection = select(cols).select_from(stmts_q)
@@ -270,8 +271,8 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
         row_gen = iter(row)
 
         mk_hash = next(row_gen)
-        src_dict = {src: 0 if count is None else count
-                    for src, count in zip(src_list, row_gen)}
+        src_dict = dict.fromkeys(src_list, 0)
+        src_dict.update(next(row_gen))
         ev_count = next(row_gen)
         raw_json_bts = next(row_gen)
         pa_json_bts = next(row_gen)

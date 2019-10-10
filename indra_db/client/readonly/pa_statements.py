@@ -174,10 +174,12 @@ def get_statement_jsons_from_hashes(mk_hashes, ro=None, **kwargs):
 def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
                                          max_stmts=None, offset=None,
                                          ev_limit=None, mk_hashes_alias=None,
-                                         ev_count_obj=None, source_specs=None):
+                                         ev_count_obj=None, source_specs=None,
+                                         censured_sources=None):
     # Handle the limiting
     mk_hashes_q = _apply_limits(ro, mk_hashes_q, best_first, max_stmts, offset,
-                                ev_count_obj, mk_hashes_alias)
+                                ev_count_obj, mk_hashes_alias,
+                                censured_sources)
 
     # Create the link
     mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
@@ -186,6 +188,11 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
     reading_id_c = ro.FastRawPaLink.reading_id.label('rid')
     cont_q = ro.session.query(raw_json_c, pa_json_c, reading_id_c)
     cont_q = cont_q.filter(ro.FastRawPaLink.mk_hash == mk_hashes_al.c.mk_hash)
+
+    if censured_sources is not None:
+        cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
+        for src in censured_sources:
+            cont_q = cont_q.filter(ro.RawStmtSrc.src.notlike(src))
 
     if ev_limit is not None:
         cont_q = cont_q.limit(ev_limit)
@@ -197,13 +204,13 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
                .outerjoin(json_content_al, true())
                .outerjoin(ro.ReadingRefLink,
                           ro.ReadingRefLink.rid == json_content_al.c.rid)
-               .outerjoin(ro.PaStmtSrc,
-                          ro.PaStmtSrc.mk_hash == mk_hashes_al.c.mk_hash))
+               .outerjoin(ro.PaSourceLookup,
+                          ro.PaSourceLookup.mk_hash == mk_hashes_al.c.mk_hash))
 
     ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
                      if not k.startswith('_')]
 
-    cols = [ro.PaStmtSrc, mk_hashes_al.c.ev_count,
+    cols = [ro.PaSourceLookup.src_json, mk_hashes_al.c.ev_count,
             json_content_al.c.raw_json, json_content_al.c.pa_json]
     cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
 

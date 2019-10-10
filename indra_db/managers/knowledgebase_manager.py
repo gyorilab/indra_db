@@ -244,7 +244,10 @@ class BelLcManager(KnowledgebaseManager):
         from indra.sources import bel
 
         pbp = bel.process_large_corpus()
-        stmts, dups = extract_duplicates(pbp.statements,
+        stmts = pbp.statements
+        pbp = bel.process_small_corpus()
+        stmts += pbp.statements
+        stmts, dups = extract_duplicates(stmts,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))
         print(len(stmts), len(dups))

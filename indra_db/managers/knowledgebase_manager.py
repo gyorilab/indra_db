@@ -243,13 +243,11 @@ class BelLcManager(KnowledgebaseManager):
     def _get_statements(self):
         from indra.sources import bel
 
-        s3 = boto3.client('s3')
-        resp = s3.get_object(Bucket='bigmech', Key='indra-db/large_corpus.bel')
-        tmp_bel = tempfile.mktemp('lc.bel')
-        with open(tmp_bel, 'wb') as f:
-            f.write(resp['Body'].read())
-        pbp = bel.process_belscript(tmp_bel)
-        stmts, dups = extract_duplicates(pbp.statements,
+        pbp = bel.process_large_corpus()
+        stmts = pbp.statements
+        pbp = bel.process_small_corpus()
+        stmts += pbp.statements
+        stmts, dups = extract_duplicates(stmts,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))
         print(len(stmts), len(dups))

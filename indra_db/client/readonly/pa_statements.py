@@ -151,6 +151,7 @@ def get_statement_jsons_from_papers(paper_refs, ro=None, **kwargs):
                            ro.FastRawPaLink.reading_id == sub_al.c.rid))
 
     return _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q,
+                                                mk_hash_obj=ro.EvidenceCounts.mk_hash,
                                                 ev_count_obj=ro.EvidenceCounts.ev_count,
                                                 **kwargs)
 
@@ -174,11 +175,12 @@ def get_statement_jsons_from_hashes(mk_hashes, ro=None, **kwargs):
 def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
                                          max_stmts=None, offset=None,
                                          ev_limit=None, mk_hashes_alias=None,
-                                         ev_count_obj=None, source_specs=None,
+                                         mk_hash_obj=None, ev_count_obj=None,
+                                         source_specs=None,
                                          censured_sources=None):
     # Handle the limiting
     mk_hashes_q = _apply_limits(ro, mk_hashes_q, best_first, max_stmts, offset,
-                                ev_count_obj, mk_hashes_alias,
+                                mk_hash_obj, ev_count_obj, mk_hashes_alias,
                                 censured_sources)
 
     # Create the link

@@ -552,8 +552,7 @@ class Pubmed(_NihManager):
         article_info = pubmed_client.get_metadata_from_xml_tree(
             tree,
             get_abstracts=True,
-            prepend_title=False,
-            mesh_annotations=True
+            prepend_title=False
             )
         if q is not None:
             q.put((xml_file, article_info))

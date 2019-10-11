@@ -53,7 +53,7 @@ def get_schema(Base):
 
     class MeshRefAnnotations(Base, IndraDBTable):
         __tablename__ = 'mesh_ref_annotations'
-        _always_disp = ['mesh_id', 'mesh_text', 'text_ref_id']
+        _always_disp = ['mesh_text', 'qual_text', 'text_ref_id']
 
         id = Column(Integer, primary_key=True)
         mesh_id = Column(String, nullable=False)

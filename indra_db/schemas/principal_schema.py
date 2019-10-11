@@ -51,6 +51,21 @@ def get_schema(Base):
 
     table_dict[TextRef.__tablename__] = TextRef
 
+    class MeshRefAnnotations(Base, IndraDBTable):
+        __tablename__ = 'mesh_ref_annotations'
+        _always_disp = ['mesh_id', 'mesh_text', 'text_ref_id']
+
+        id = Column(Integer, primary_key=True)
+        mesh_id = Column(String, nullable=False)
+        mesh_text = Column(String, nullable=False)
+        text_ref_id = Column(Integer, ForeignKey('text_ref.id'),
+                             nullable=False)
+        text_ref = relationship(TextRef)
+        major_topic = Column(Boolean, default=False)
+        qual_id = Column(String)
+        qual_text = Column(String)
+    table_dict[MeshRefAnnotations.__tablename__] = MeshRefAnnotations
+
     class SourceFile(Base, IndraDBTable):
         __tablename__ = 'source_file'
         _always_disp = ['source', 'name']
@@ -79,8 +94,7 @@ def get_schema(Base):
         _skip_disp = ['content']
         _always_disp = ['id', 'text_ref_id', 'source', 'format', 'text_type']
         id = Column(Integer, primary_key=True)
-        text_ref_id = Column(Integer,
-                             ForeignKey('text_ref.id'),
+        text_ref_id = Column(Integer, ForeignKey('text_ref.id'),
                              nullable=False)
         text_ref = relationship(TextRef)
         source = Column(String(250), nullable=False)

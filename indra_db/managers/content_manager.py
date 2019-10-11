@@ -575,7 +575,9 @@ class Pubmed(_NihManager):
     def load_annotations(self, db, article_info):
         "Load annotations into the database."
         for pmid, info_dict in article_info.items():
-            self.annotations[pmid] = info_dict['mesh_annotations']
+            self.annotations[(pmid, article_info.get('pmcid'))] \
+                = info_dict['mesh_annotations']
+
         return
 
     def load_text_refs(self, db, article_info, carefully=False):

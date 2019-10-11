@@ -2,16 +2,20 @@ __all__ = ['get_schema']
 
 import logging
 
-from sqlalchemy import Column, Integer, String, ForeignKey, inspect, BigInteger
+from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, Boolean
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import BYTEA
-from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.dialects.postgresql import BYTEA, JSON
 
-from .mixins import ReadonlyTable, NamespaceLookup
+from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable
 from .indexes import *
 
 
 logger = logging.getLogger(__name__)
+
+CREATE_ORDER = ['raw_stmt_src', 'pa_stmt_src', 'fast_raw_pa_link',
+                'evidence_counts', 'pa_source_lookup', 'pa_meta', 'text_meta',
+                'name_meta']
+CREATE_UNORDERED = {'reading_ref_link'}
 
 
 def get_schema(Base):
@@ -25,13 +29,14 @@ def get_schema(Base):
     (or by other non-sqlalchemy scripts).
 
     The following views must be built in this specific order:
-      1. fast_raw_pa_link
-      2. evidence_counts
-      3. pa_meta
-      4. text_meta
-      5. name_meta
-      6. raw_stmt_src
-      7. pa_stmt_src
+      1. raw_stmt_src
+      2. pa_stmt_src
+      3. fast_raw_pa_link
+      4. evidence_counts
+      5. pa_source_lookup
+      6. pa_meta
+      7. text_meta
+      8. name_meta
     The following can be built at any time and in any order:
       - reading_ref_link
     Note that the order of views below is determined not by the above
@@ -84,16 +89,19 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
                           'raw.reading_id, raw.db_info_id, '
-                          'pa.mk_hash, pa.json AS pa_json, pa.type '
+                          'pa.mk_hash, pa.json AS pa_json, pa.type,'
+                          'raw_src.src '
                           'FROM raw_statements AS raw, '
                           'pa_statements AS pa, '
-                          'raw_unique_links AS link '
+                          'raw_unique_links AS link,'
+                          'readonly.raw_stmt_src as raw_src '
                           'WHERE link.raw_stmt_id = raw.id '
                           'AND link.pa_stmt_mk_hash = pa.mk_hash')
         _skip_disp = ['raw_json', 'pa_json']
         _indices = [BtreeIndex('hash_index', 'mk_hash'),
                     BtreeIndex('frp_reading_id_idx', 'reading_id'),
-                    BtreeIndex('frp_db_info_id_idx', 'db_info_id')]
+                    BtreeIndex('frp_db_info_id_idx', 'db_info_id'),
+                    StringIndex('frp_src_idx', 'src')]
         id = Column(Integer, primary_key=True)
         raw_json = Column(BYTEA)
         reading_id = Column(BigInteger,
@@ -201,11 +209,13 @@ def get_schema(Base):
                           'lower(db_info.db_name) AS src '
                           'FROM raw_statements, db_info '
                           'WHERE db_info.id = raw_statements.db_info_id')
+        _indices = [BtreeIndex('raw_stmt_src_sid_idx', 'sid'),
+                    StringIndex('raw_stmt_src_src_idx', 'src')]
         sid = Column(Integer, primary_key=True)
         src = Column(String)
     read_views[RawStmtSrc.__tablename__] = RawStmtSrc
 
-    class PaStmtSrc(Base, ReadonlyTable):
+    class PaStmtSrc(Base, SpecialColumnTable):
         __tablename__ = 'pa_stmt_src'
         __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = ("SELECT * FROM crosstab("
@@ -218,9 +228,16 @@ def get_schema(Base):
         _indices = [BtreeIndex('pa_stmt_src_mk_hash_idx', 'mk_hash')]
         loaded = False
 
+        mk_hash = Column(BigInteger, primary_key=True)
+
         @classmethod
         def definition(cls, db):
             db.grab_session()
+
+            # Make sure the necessary extension is installed.
+            with db.engine.connect() as conn:
+                conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
+
             logger.info("Discovering the possible sources...")
             src_list = db.session.query(db.RawStmtSrc.src).distinct().all()
             logger.info("Found the following sources: %s"
@@ -236,39 +253,6 @@ def get_schema(Base):
                                             ', '.join(entries))
             return sql
 
-        @classmethod
-        def create(cls, db, commit=True):
-            # Make sure the necessary extension is installed.
-            with db.engine.connect() as conn:
-                conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
-
-            # Create the materialized view.
-            cls.__definition__ = cls.definition(db)
-            sql = super(cls, cls).create(db, commit)
-            cls.loaded = True
-            return sql
-
-        @classmethod
-        def load_cols(cls, engine):
-            if cls.loaded:
-                return
-
-            try:
-                schema = cls.__table_args__.get('schema', 'public')
-                cols = inspect(engine).get_columns(cls.__tablename__,
-                                                   schema=schema)
-            except NoSuchTableError:
-                return
-
-            for col in cols:
-                if col['name'] == 'mk_hash':
-                    continue
-
-                setattr(cls, col['name'], Column(BigInteger))
-
-            cls.loaded = True
-            return
-
         def get_sources(self, include_none=False):
             src_dict = {}
             for k, v in self.__dict__.items():
@@ -276,8 +260,86 @@ def get_schema(Base):
                     if include_none or v is not None:
                         src_dict[k] = v
             return src_dict
-
-        mk_hash = Column(BigInteger, primary_key=True)
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
+    class PaSourceLookup(Base, SpecialColumnTable):
+        __tablename__ = 'pa_source_lookup'
+        __table_args__ = {'schema': 'readonly'}
+        __definition_fmt__ = (
+            'WITH jsonified AS (\n'
+            '    SELECT mk_hash, \n'
+            '           json_strip_nulls(json_build_object({all_sources})) \n'
+            '           AS src_json \n'
+            '    FROM readonly.pa_stmt_src\n'
+            ')\n'
+            'SELECT readonly.pa_stmt_src.*, \n'
+            '       readonly.evidence_counts.ev_count, \n'
+            '       diversity.num_srcs, \n'
+            '       jsonified.src_json, \n'
+            '       CASE WHEN diversity.num_srcs = 1 \n'
+            '            THEN (ARRAY(\n'
+            '              SELECT json_object_keys(jsonified.src_json)\n'
+            '              ))[1]\n'
+            '            ELSE null \n'
+            '            END as only_src,\n'
+            '       ARRAY(\n'
+            '         SELECT json_object_keys(jsonified.src_json)\n'
+            '         ) \n'
+            '         &&\n'
+            '         ARRAY[{reading_sources}]\n'
+            '         as has_rd,\n'
+            '       ARRAY(\n'
+            '         SELECT json_object_keys(jsonified.src_json)\n'
+            '         ) \n'
+            '         &&\n'
+            '        ARRAY[{db_sources}]\n'
+            '        as has_db\n'
+            'FROM (\n'
+            '  SELECT mk_hash, count(src) AS num_srcs \n'
+            '  FROM jsonified, json_object_keys(jsonified.src_json) as src \n'
+            '  GROUP BY mk_hash\n'
+            ') AS diversity\n'
+            'JOIN jsonified \n'
+            '  ON jsonified.mk_hash = diversity.mk_hash\n'
+            'JOIN readonly.pa_stmt_src \n'
+            '  ON diversity.mk_hash = readonly.pa_stmt_src.mk_hash\n'
+            'JOIN readonly.evidence_counts \n'
+            '  ON diversity.mk_hash = readonly.evidence_counts.mk_hash'
+        )
+        _indices = [BtreeIndex('pa_source_lookup_mk_hash_idx', 'mk_hash'),
+                    StringIndex('pa_source_lookup_only_src', 'only_src'),
+                    BtreeIndex('pa_source_lookup_num_srcs', 'num_srcs')]
+        loaded = False
+
+        mk_hash = Column(BigInteger, primary_key=True)
+        ev_count = Column(Integer)
+        num_srcs = Column(Integer)
+        src_json = Column(JSON)
+        only_src = Column(String)
+        has_rd = Column(Boolean)
+        has_db = Column(Boolean)
+
+        @classmethod
+        def definition(cls, db):
+            db.grab_session()
+            srcs = set(db.get_column_names(db.PaStmtSrc)) - {'mk_hash'}
+            all_sources = ', '.join(s for src in srcs
+                                    for s in (repr(src), src))
+            rd_sources = ', '.join(repr(src)
+                                   for src in SOURCE_GROUPS['reading'])
+            db_sources = ', '.join(repr(src)
+                                   for src in SOURCE_GROUPS['databases'])
+            sql = cls.__definition_fmt__.format(all_sources=all_sources,
+                                                reading_sources=rd_sources,
+                                                db_sources=db_sources)
+            return sql
+    read_views[PaSourceLookup.__tablename__] = PaSourceLookup
+
     return read_views
+
+
+SOURCE_GROUPS = {'databases': ['phosphosite', 'cbn', 'pc11', 'biopax',
+                               'bel_lc', 'signor', 'biogrid', 'tas',
+                               'lincs_drug', 'hprd', 'trrust'],
+                 'reading': ['geneways', 'tees', 'isi', 'trips', 'rlimsp',
+                             'medscan', 'sparser', 'reach']}

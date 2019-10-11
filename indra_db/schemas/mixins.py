@@ -1,5 +1,7 @@
 import logging
 from psycopg2.errors import DuplicateTable
+from sqlalchemy import inspect, Column, BigInteger
+from sqlalchemy.exc import NoSuchTableError
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +98,12 @@ class IndraDBTable(object):
 class ReadonlyTable(IndraDBTable):
     __definition__ = NotImplemented
     __table_args__ = NotImplemented
+    __create_table_fmt__ = "CREATE TABLE IF NOT EXISTS %s AS %s;"
 
     @classmethod
     def create(cls, db, commit=True):
-        sql = "CREATE TABLE IF NOT EXISTS %s.%s AS %s;" \
-              % (cls.__table_args__['schema'], cls.__tablename__,
+        sql = cls.__create_table_fmt__ \
+              % (cls.full_name(force_schema=True),
                  cls.get_definition())
         if commit:
             cls.execute(db, sql)
@@ -116,6 +119,42 @@ class ReadonlyTable(IndraDBTable):
         cursor = conn.cursor()
         cursor.execute(sql)
         conn.commit()
+        return
+
+
+class SpecialColumnTable(ReadonlyTable):
+
+    @classmethod
+    def create(cls, db, commit=True):
+        cls.__definition__ = cls.definition(db)
+        sql = cls.__create_table_fmt__ \
+            % (cls.full_name(force_schema=True),
+               cls.__definition__)
+        if commit:
+            cls.execute(db, sql)
+        cls.loaded = True
+        return sql
+
+    @classmethod
+    def load_cols(cls, engine):
+        if cls.loaded:
+            return
+
+        try:
+            schema = cls.__table_args__.get('schema', 'public')
+            cols = inspect(engine).get_columns(cls.__tablename__,
+                                               schema=schema)
+        except NoSuchTableError:
+            return
+
+        existing_cols = {col.name for col in cls.__table__.columns}
+        for col in cols:
+            if col['name'] in existing_cols:
+                continue
+
+            setattr(cls, col['name'], Column(BigInteger))
+
+        cls.loaded = True
         return
 
 

@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sys
 from datetime import datetime
 from functools import wraps
@@ -161,8 +162,6 @@ def _query_wrapper(f):
         best_first_str = query.pop('best_first', 'true')
         best_first = True if best_first_str.lower() == 'true' \
                              or best_first_str else False
-        do_stream_str = query.pop('stream', 'false')
-        do_stream = True if do_stream_str == 'true' else False
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
@@ -175,10 +174,16 @@ def _query_wrapper(f):
                 has[resource] |= role.permissions.get(resource, False)
         logger.info('Auths: %s' % str(has))
 
+        # Avoid loading medscan:
+        censured_sources = set()
+        if not has['medscan']:
+            censured_sources.add('medscan')
+
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
-        result = f(query, offs, max_stmts, ev_lim, best_first, *args, **kwargs)
+        result = f(query, offs, max_stmts, ev_lim, best_first,
+                   censured_sources, *args, **kwargs)
         if isinstance(result, Response):
             return result
 
@@ -187,42 +192,19 @@ def _query_wrapper(f):
 
         # Handle any necessary redactions
         stmts_json = result.pop('statements')
-        medscan_redactions = 0
-        medscan_removals = 0
         elsevier_redactions = 0
         source_counts = result['source_counts']
-        if not all(has.values()):
+        if not has['elsevier']:
             for h, stmt_json in stmts_json.copy().items():
                 for ev_json in stmt_json['evidence'][:]:
 
                     # Check for elsevier and redact if necessary
-                    if get_source(ev_json) == 'elsevier' \
-                            and not has['elsevier']:
+                    if get_source(ev_json) == 'elsevier':
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
                             elsevier_redactions += 1
 
-                    # Check for medscan and redact if necessary
-                    elif ev_json['source_api'] == 'medscan' \
-                            and not has['medscan']:
-                        medscan_redactions += 1
-                        stmt_json['evidence'].remove(ev_json)
-                        if len(stmt_json['evidence']) == 0:
-                            medscan_removals += 1
-                            stmts_json.pop(h)
-                            result['source_counts'].pop(h)
-
-            # Take medscan counts out of the source counts.
-            if not has['medscan']:
-                source_counts = {h: {src: count
-                                     for src, count in src_count.items()
-                                     if src is not 'medscan'}
-                                 for h, src_count in source_counts.items()}
-
-        logger.info(f"Redacted {medscan_redactions} medscan evidence, "
-                    f"resulting in the complete removal of {medscan_removals} "
-                    f"statements.")
         logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
                     f"evidence.")
 
@@ -234,9 +216,8 @@ def _query_wrapper(f):
         result['evidence_limit'] = ev_lim
         result['statement_limit'] = MAX_STATEMENTS
         result['statements_returned'] = len(stmts_json)
-        result['end_of_statements'] = ((len(stmts_json) + medscan_removals)
-                                       < MAX_STATEMENTS)
-        result['statements_removed'] = medscan_removals
+        result['end_of_statements'] = (len(stmts_json) < MAX_STATEMENTS)
+        result['statements_removed'] = 0
 
         if fmt == 'html':
             title = TITLE + ': ' + 'Results'
@@ -261,13 +242,7 @@ def _query_wrapper(f):
             content = json.dumps(result)
             mimetype = 'application/json'
 
-        if do_stream:
-            # Returning a generator should stream the data.
-            resp_json_bts = content
-            gen = batch_iter(resp_json_bts, 10000)
-            resp = Response(gen, mimetype=mimetype)
-        else:
-            resp = Response(content, mimetype=mimetype)
+        resp = Response(content, mimetype=mimetype)
         logger.info("Exiting with %d statements with %d/%d evidence of size "
                     "%f MB after %s seconds."
                     % (result['statements_returned'],
@@ -279,7 +254,7 @@ def _query_wrapper(f):
 
 
 def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
-                         ev_limit, best_first):
+                         ev_limit, best_first, censured_sources):
     # Fix the case, if we got a statement type.
     act = None if act_raw is None else make_statement_camel(act_raw)
 
@@ -303,8 +278,74 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
     result = \
         get_statement_jsons_from_agents(agent_iter, stmt_type=act, offset=offs,
                                         max_stmts=max_stmts, ev_limit=ev_limit,
-                                        best_first=best_first)
+                                        best_first=best_first,
+                                        censured_sources=censured_sources)
     return result
+
+
+RELS = {'=': 'eq', '<': 'lt', '>': 'gt', 'is': 'is', 'is not': 'is not',
+        '>=': 'gte', '<=': 'lte'}
+
+
+def _build_source_filter_patt():
+    padded_rels = set()
+    for pair in RELS.items():
+        for rel in pair:
+            if rel.isalpha():
+                pad = r'\s+'
+            else:
+                pad = r'\s*'
+            padded_rels.add(pad + rel + pad)
+
+    patt_str = r'^(\w+)(' + r'|'.join(padded_rels) + r')(\w+)$'
+
+    return re.compile(patt_str)
+
+
+source_patt = _build_source_filter_patt()
+
+
+def _parse_source_str(source_relation):
+    # Match to the source relation.
+    m = source_patt.match(source_relation)
+    if m is None:
+        raise ValueError("Could not parse source relation: %s"
+                         % source_relation)
+
+    # Extract the groups.
+    source, rel, value = m.groups()
+
+    # Verify that rel is valid, and normalize.
+    rel = rel.strip()
+    if rel not in RELS.values():
+        if rel not in RELS.keys():
+            raise ValueError("Unrecognized relation: %s. Options are: %s"
+                             % (rel, {s for pair in RELS.items()
+                                      for s in pair}))
+        else:
+            # replace with a standardized representation.
+            rel = RELS[rel]
+
+    # Convert/verify the type of the value.
+    if value.lower() in {'null', 'none'}:
+        value = None
+
+        # Assume the obvious intention behind =
+        if rel == 'eq':
+            rel = 'is'
+
+        # Make sure that relation is "is" or "is not". Size comparisons don't
+        # make sense.
+        if rel not in {'is', 'is not'}:
+            raise ValueError("Cannot us comparator \"%s\" with None." % rel)
+
+    elif value.isdigit():
+        value = int(value)
+    else:
+        raise ValueError("Can only match value to null or int, not: %s."
+                         % value)
+
+    return source.lower(), rel, value
 
 
 # ==========================
@@ -328,7 +369,8 @@ def get_statements_query_format():
 
 @app.route('/statements/from_agents', methods=['GET'])
 @_query_wrapper
-def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
+def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
+                   censured_sources):
     """Get some statements constrained by query."""
     logger.info("Getting query details.")
     if ev_limit is None:
@@ -360,12 +402,14 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first):
         return
 
     return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
-                                max_stmts, ev_limit, best_first)
+                                max_stmts, ev_limit, best_first,
+                                censured_sources)
 
 
 @app.route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
-def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
+def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first,
+                             censured_sources):
     if ev_lim is None:
         ev_lim = 20
     hashes = request.json.get('hashes')
@@ -379,24 +423,27 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first):
 
     result = get_statement_jsons_from_hashes(hashes, max_stmts=max_stmts,
                                              offset=offs, ev_limit=ev_lim,
-                                             best_first=best_first)
+                                             best_first=best_first,
+                                             censured_sources=censured_sources)
     return result
 
 
 @app.route('/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
-                          hash_val):
+                          censured_sources, hash_val):
     if ev_limit is None:
         ev_limit = 10000
     return get_statement_jsons_from_hashes([hash_val], max_stmts=max_stmts,
                                            offset=offs, ev_limit=ev_limit,
-                                           best_first=best_first)
+                                           best_first=best_first,
+                                           censured_sources=censured_sources)
 
 
 @app.route('/statements/from_papers', methods=['POST'])
 @_query_wrapper
-def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
+def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first,
+                         censured_sources):
     """Get Statements from a papers with the given ids."""
     if ev_limit is None:
         ev_limit = 10
@@ -422,7 +469,8 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first):
     logger.info('Getting statements for %d papers.' % len(id_tpls))
     result = get_statement_jsons_from_papers(id_tpls, max_stmts=max_stmts,
                                              offset=offs, ev_limit=ev_limit,
-                                             best_first=best_first)
+                                             best_first=best_first,
+                                             censured_sources=censured_sources)
     return result
 
 

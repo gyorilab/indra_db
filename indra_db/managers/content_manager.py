@@ -694,7 +694,6 @@ class Pubmed(_NihManager):
         logger.info("%d PMIDs in XML dataset" % len(article_info))
 
         self.load_annotations(db, article_info)
-        return
 
         # Process and load the text refs, updating where appropriate.
         if 'text_ref' in self.tables:
@@ -725,6 +724,8 @@ class Pubmed(_NihManager):
             if continuing and xml_files == existing_files:
                 logger.info("All files have been loaded. Nothing to do.")
                 return False
+        else:
+            existing_files = set()
 
         logger.info('Beginning upload with %d processes...' % n_procs)
         if n_procs > 1:
@@ -802,9 +803,9 @@ class Pubmed(_NihManager):
     @ContentManager._record_for_review
     def update(self, db, n_procs=1):
         """Update the contents of the database with the latest articles."""
-        #did_base = self.load_files(db, 'baseline', n_procs, True, True)
+        did_base = self.load_files(db, 'baseline', n_procs, True, True)
         did_update = self.load_files(db, 'updatefiles', n_procs, True, True)
-        return #did_base or did_update
+        return did_base or did_update
 
 
 class PmcManager(_NihManager):

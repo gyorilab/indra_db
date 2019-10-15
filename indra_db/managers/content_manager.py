@@ -786,6 +786,10 @@ class Pubmed(_NihManager):
 
     def dump_annotations(self, db):
         """Dump all the annotations that have been saved so far."""
+        # If there are no annotations, don't waste time.
+        if not self.annotations:
+            return False
+
         # Generate a dictionary mapping pmid/pmcid pairs to trids
         rows = db.select_all([db.TextRef.pmid, db.TextRef.pmcid,
                               db.TextRef.id],
@@ -825,7 +829,7 @@ class Pubmed(_NihManager):
         self.copy_into_db(db, 'mesh_ref_annotations', copy_rows,
                           ('text_ref_id', 'mesh_id', 'mesh_text',
                            'major_topic', 'qual_id', 'qual_text'))
-        return
+        return True
 
     def load_files_and_annotations(self, db, *args, **kwargs):
         """Thin wrapper around load_files that also loads annotations."""

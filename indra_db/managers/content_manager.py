@@ -784,6 +784,57 @@ class Pubmed(_NihManager):
 
         return True
 
+    def dump_annotations(self, db):
+        """Dump all the annotations that have been saved so far."""
+        # Generate a dictionary mapping pmid/pmcid pairs to trids
+        rows = db.select_all([db.TextRef.pmid, db.TextRef.pmcid,
+                              db.TextRef.id],
+                             db.TextRef.pmid.isnot(None))
+
+        # Create a mapping with an entry for every pmid and pmcid.
+        # To make sure we can capture all results generated from the pubmed
+        # files, include an entry both with and without the pmcid if the pmcid
+        # is not None, because we get many pmcids in later parts of the
+        # pipeline that might not be known to pubmed.
+        mapping = {(pmid, pmcid_): trid for pmid, pmcid, trid in rows
+                   for pmcid_ in {None, pmcid}}
+
+        copy_rows = []
+        for key, annotation in self.annotations.items():
+            # Get the trid (this should hopefully always work...)
+            trid = mapping.get(key)
+            if trid is None:
+                logger.warning("Key (pmid, pmcid) could not be mapped in "
+                               "database: %s" % str(key))
+                continue
+
+            # Format the row.
+            copy_row = (trid, annotation['mesh'], annotation['text'],
+                              annotation['major_topic'])
+
+            # Handle the qualifier
+            qual = annotation['qualifier']
+            if qual is None:
+                copy_row += (None, None)
+            else:
+                copy_row += (qual['mesh'], qual['text'])
+
+            copy_rows.append(copy_row)
+
+        # Copy the results into the database
+        self.copy_into_db(db, 'mesh_ref_annotations', copy_rows,
+                          ('text_ref_id', 'mesh_id', 'mesh_text',
+                           'major_topic', 'qual_id', 'qual_text'))
+        return
+
+    def load_files_and_annotations(self, db, *args, **kwargs):
+        """Thin wrapper around load_files that also loads annotations."""
+        try:
+            ret = self.load_files(db, *args, **kwargs)
+        finally:
+            self.dump_annotations(db)
+        return ret
+
     @ContentManager._record_for_review
     def populate(self, db, n_procs=1, continuing=False):
         """Perform the initial input of the pubmed content into the database.
@@ -800,13 +851,16 @@ class Pubmed(_NihManager):
             source files contained in the database. If false, all files will be
             read and parsed.
         """
-        return self.load_files(db, 'baseline', n_procs, continuing, False)
+        return self.load_files_and_annotations(db, 'baseline', n_procs,
+                                               continuing, False)
 
     @ContentManager._record_for_review
     def update(self, db, n_procs=1):
         """Update the contents of the database with the latest articles."""
-        did_base = self.load_files(db, 'baseline', n_procs, True, True)
-        did_update = self.load_files(db, 'updatefiles', n_procs, True, True)
+        did_base = self.load_files_and_annotations(db, 'baseline', n_procs,
+                                                   True, True)
+        did_update = self.load_files_and_annotations(db, 'updatefiles',
+                                                     n_procs, True, True)
         return did_base or did_update
 
 

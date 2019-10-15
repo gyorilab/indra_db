@@ -31,8 +31,7 @@ class ReadingManager(object):
         the content upload pipeline and the reading pipeline.
     """
     def __init__(self, reader_names, buffer_days=1):
-        self.reader_classes = [get_reader_class(reader_name)
-                               for reader_name in reader_names]
+        self.reader_names = reader_names
         self.buffer = timedelta(days=buffer_days)
         self.run_datetime = None
         self.begin_datetime = None
@@ -43,25 +42,26 @@ class ReadingManager(object):
     def _run_all_readers(cls, func):
         @wraps(func)
         def run_and_record_update(self, db, *args, **kwargs):
-            for reader_class in self.reader_classes:
+            for reader_name in self.reader_names:
                 self.run_datetime = datetime.utcnow()
-                completed = func(self, db, reader_class, *args, **kwargs)
+                completed = func(self, db, reader_name, *args, **kwargs)
                 if completed:
                     is_read_all = (func.__name__ == 'read_all')
+                    reader_version = get_reader_class(reader_name).get_version()
                     db.insert('reading_updates', complete_read=is_read_all,
-                              reader=reader_class.name,
-                              reader_version=reader_class.get_version(),
+                              reader=reader_name,
+                              reader_version=reader_version,
                               run_datetime=self.run_datetime,
                               earliest_datetime=self.begin_datetime,
                               latest_datetime=self.end_datetime)
             return completed
         return run_and_record_update
 
-    def _get_latest_updatetime(self, db, reader_class):
+    def _get_latest_updatetime(self, db, reader_name):
         """Get the date of the latest update."""
         update_list = db.select_all(
             db.ReadingUpdates,
-            db.ReadingUpdates.reader == reader_class.name
+            db.ReadingUpdates.reader == reader_name
             )
         if not len(update_list):
             logger.warning("The database has not had an initial upload, or "
@@ -70,14 +70,14 @@ class ReadingManager(object):
 
         return max([u.latest_datetime for u in update_list])
 
-    def read_all(self, db, reader):
+    def read_all(self, db, reader_name):
         """Perform an initial reading all content in the database (populate).
 
         This must be defined in a child class.
         """
         raise NotImplementedError
 
-    def read_new(self, db, reader):
+    def read_new(self, db, reader_name):
         """Read only new content (update).
 
         This must be defined in a child class.
@@ -90,22 +90,22 @@ class BulkReadingManager(ReadingManager):
 
     This takes exactly the parameters used by :py:class:`ReadingManager`.
     """
-    def _run_reading(self, db, tcids, reader_class, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
         raise NotImplementedError("_run_reading must be defined in child.")
 
     @ReadingManager._run_all_readers
-    def read_all(self, db, reader_class):
+    def read_all(self, db, reader_name):
         """Read everything available on the database."""
         self.end_datetime = self.run_datetime
         tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
-        self._run_reading(db, tcids, reader_class)
+        self._run_reading(db, tcids, reader_name)
         return True
 
     @ReadingManager._run_all_readers
-    def read_new(self, db, reader_class):
+    def read_new(self, db, reader_name):
         """Update the readings and raw statements in the database."""
         self.end_datetime = self.run_datetime
-        latest_updatetime = self._get_latest_updatetime(db, reader_class)
+        latest_updatetime = self._get_latest_updatetime(db, reader_name)
         if latest_updatetime is not None:
             self.begin_datetime = latest_updatetime - self.buffer
         else:
@@ -116,7 +116,7 @@ class BulkReadingManager(ReadingManager):
             db.TextContent.insert_date > self.begin_datetime
             )
         tcids = {tcid for tcid, in tcid_q.all()}
-        self._run_reading(db, tcids, reader_class)
+        self._run_reading(db, tcids, reader_name)
         return True
 
 
@@ -139,21 +139,21 @@ class BulkAwsReadingManager(BulkReadingManager):
         super(BulkAwsReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, tcids, reader_class, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
         if len(tcids)/ids_per_job >= 1000:
             raise ReadingUpdateError("Too many id's for one submission. "
                                      "Break it up and do it manually.")
 
         logger.info("Producing readings on aws for %d text refs with new "
                     "content not read by %s."
-                    % (len(tcids), reader_class.name))
+                    % (len(tcids), reader_name))
         job_prefix = ('%s_reading_%s'
-                      % (reader_class.name.lower(),
+                      % (reader_name.lower(),
                          self.run_datetime.strftime('%Y%m%d_%H%M%S')))
         with open(job_prefix + '.txt', 'w') as f:
             f.write('\n'.join(['%s' % tcid for tcid in tcids]))
         logger.info("Submitting jobs...")
-        sub = DbReadingSubmitter(job_prefix, [reader_class.name.lower()],
+        sub = DbReadingSubmitter(job_prefix, [reader_name.lower()],
                                  self.project_name)
         sub.submit_reading(job_prefix + '.txt', 0, None, ids_per_job)
 
@@ -183,16 +183,17 @@ class BulkLocalReadingManager(BulkReadingManager):
         super(BulkLocalReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, tcids, reader_class, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
         if len(tcids) > ids_per_job:
             raise ReadingUpdateError("Too many id's to run locally. Try "
                                      "running on batch (use_batch).")
         logger.info("Producing readings locally for %d new text refs."
                     % len(tcids))
-        base_dir = path.join(THIS_DIR, 'read_all_%s' % reader_class.name)
-        reader = reader_class(base_dir=base_dir, n_proc=self.n_proc)
+        base_dir = path.join(THIS_DIR, 'read_all_%s' % reader_name)
+        readers = rdb.construct_readers([reader_name], base_dir=base_dir,
+                                        n_proc=self.n_proc)
 
-        rdb.run_reading([reader], tcids, db=db, batch_size=ids_per_job,
+        rdb.run_reading(readers, tcids, db=db, batch_size=ids_per_job,
                         verbose=self.verbose)
         return
 

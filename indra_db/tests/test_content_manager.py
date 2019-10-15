@@ -21,9 +21,9 @@ except Exception as e:
                    + str(e))
 
 
-#==============================================================================
+# =============================================================================
 # The following are some helpful functions for the rest of the tests.
-#==============================================================================
+# =============================================================================
 def assert_contents_equal(list1, list2, msg=None):
     "Check that the contenst of two lists are the same, regardless of order."
     res = set(list1) == set(list2)
@@ -53,9 +53,9 @@ def get_test_db_with_ftp_content():
     return db
 
 
-#==============================================================================
+# =============================================================================
 # The following are tests for the database manager itself.
-#==============================================================================
+# =============================================================================
 @attr('nonpublic')
 def test_create_tables():
     "Test the create_tables feature"
@@ -171,11 +171,11 @@ def test_get_abstracts():
     assert_contents_equal(expected, received, "Didn't get expected abstracts.")
 
 
-#==============================================================================
+# =============================================================================
 # The following are tests for the initial population of the database. This
 # includes uploading data from Medline, PMC, Springer, and Elsevier. These
 # tend to make greater use of the database, and are likely to be slower.
-#==============================================================================
+# =============================================================================
 
 
 @attr('nonpublic', 'slow')

@@ -234,7 +234,8 @@ def test_full_upload():
     tc_list = db.select_all(db.TextContent)
     set_exp = {('manuscripts', 'xml', 'fulltext'),
                ('pmc_oa', 'xml', 'fulltext'),
-               ('pubmed', 'text', 'abstract')}
+               ('pubmed', 'text', 'abstract'),
+               ('pubmed', 'text', 'title')}
     set_got = set([(tc.source, tc.format, tc.text_type) for tc in tc_list])
     assert set_exp == set_got,\
         "Expected %s, got %s for content layout." % (set_exp, set_got)

@@ -804,7 +804,7 @@ class Pubmed(_NihManager):
                    for pmcid_ in {None, pmcid}}
 
         copy_rows = []
-        for key, annotation in self.annotations.items():
+        for key, annotation_list in self.annotations.items():
             # Get the trid (this should hopefully always work...)
             trid = mapping.get(key)
             if trid is None:
@@ -812,18 +812,19 @@ class Pubmed(_NihManager):
                                "database: %s" % str(key))
                 continue
 
-            # Format the row.
-            copy_row = (trid, annotation['mesh'], annotation['text'],
-                              annotation['major_topic'])
+            for annotation in annotation_list:
+                # Format the row.
+                copy_row = (trid, annotation['mesh'], annotation['text'],
+                                  annotation['major_topic'])
 
-            # Handle the qualifier
-            qual = annotation['qualifier']
-            if qual is None:
-                copy_row += (None, None)
-            else:
-                copy_row += (qual['mesh'], qual['text'])
+                # Handle the qualifier
+                qual = annotation['qualifier']
+                if qual is None:
+                    copy_row += (None, None)
+                else:
+                    copy_row += (qual['mesh'], qual['text'])
 
-            copy_rows.append(copy_row)
+                copy_rows.append(copy_row)
 
         # Copy the results into the database
         self.copy_into_db(db, 'mesh_ref_annotations', copy_rows,

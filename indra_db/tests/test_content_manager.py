@@ -40,7 +40,7 @@ def capitalize_list_of_tpls(l):
 
 def get_test_db_with_pubmed_content():
     "Populate the database with sample content from pubmed."
-    db = get_temp_db()
+    db = get_temp_db(clear=True)
     Pubmed(ftp_url=get_test_ftp_url(), local=True).populate(db)
     return db
 

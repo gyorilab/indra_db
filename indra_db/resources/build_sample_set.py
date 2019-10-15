@@ -8,18 +8,15 @@ Collections of articles covering these cases are downloaded from the NIH
 FTP services and repackaged locally in file structure mirroring that of the
 FTP services themselves.
 """
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 import xml.etree.ElementTree as ET
 import tarfile
-import zipfile
 import gzip
 import random
 import os
 import re
 import shutil
-from io import BytesIO
+from time import sleep
+from datetime import datetime
 
 if __name__ == '__main__':
     # NOTE: PEP8 will complain about this, however having the args parsed up
@@ -208,7 +205,9 @@ def build_set(n, parent_dir):
         examples.append((pmid, '', ''))
 
     # Add a special article to check article info.
-    double_doi_info = med.get_article_info('baseline/pubmed18n0343.xml.gz')
+    year_nums = str(datetime.now().year)[-2:]
+    double_doi_info = med.get_article_info('baseline/pubmed%sn0343.xml.gz'
+                                           % year_nums)
     pmids_w_double_doi = [
         k for k, v in double_doi_info.items()
         if v['doi'] is not None and len(v['doi']) > 100
@@ -225,8 +224,15 @@ def build_set(n, parent_dir):
         if tree is None:
             tree = pub.send_request(pub.pubmed_fetch, params)
         else:
-            child = pub.send_request(pub.pubmed_fetch, params).getchildren()[0]
+            resp = pub.send_request(pub.pubmed_fetch, params)
+            attempts = 1
+            while not resp and attempts <= 3:
+                resp = pub.send_request(pub.pubmed_fetch, params)
+                attempts += 1
+                sleep(1)
+            child = resp.getchildren()[0]
             tree.append(child)
+        sleep(0.5)
     if tree is not None:
         f_bts = b''
         f_bts += b"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -304,9 +310,14 @@ def build_set(n, parent_dir):
             dirfmt % tarname.replace('.tar.gz', ''),
             d['File']
             )
-        with tarfile.open(d['Tarfile'], 'r:gz') as tar:
-            print('\tExtracting %s from %s...' % (d['File'], d['Tarfile']))
-            tar.extract(d['File'])
+        try:
+            with tarfile.open(d['Tarfile'], 'r:gz') as tar:
+                print('\tExtracting %s from %s...' % (d['File'], d['Tarfile']))
+                tar.extract(d['File'])
+        except KeyError:
+            print("WARNING: Could not extract %s from %s"
+                  % (d['File'], d['Tarfile']))
+            continue
         if not os.path.exists(parent_dir):
             os.makedirs(parent_dir)
         os.rename(d['File'], test_fname)

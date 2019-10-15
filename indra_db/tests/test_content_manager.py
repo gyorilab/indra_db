@@ -38,11 +38,15 @@ def capitalize_list_of_tpls(l):
             for e in l]
 
 
-def get_test_db_with_pubmed_content():
+def get_test_db_with_pubmed_content(with_pm=False):
     "Populate the database with sample content from pubmed."
     db = get_temp_db(clear=True)
-    Pubmed(ftp_url=get_test_ftp_url(), local=True).populate(db)
-    return db
+    pm = Pubmed(ftp_url=get_test_ftp_url(), local=True)
+    pm.populate(db)
+    if with_pm:
+        return db, pm
+    else:
+        return db
 
 
 def get_test_db_with_ftp_content():
@@ -187,11 +191,18 @@ def test_full_upload():
     # this test.
 
     # Test the medline/pubmed upload.
-    db = get_test_db_with_pubmed_content()
+    db, pm = get_test_db_with_pubmed_content(with_pm=True)
     tr_list = db.select_all('text_ref')
     assert len(tr_list), "No text refs were added..."
     assert all([hasattr(tr, 'pmid') for tr in tr_list]),\
         'All text_refs MUST have pmids by now.'
+
+    mra_list = db.select_all(db.MeshRefAnnotations)
+    num_mra_exp = sum(len(ann) for ann in pm.annotations.values())
+    assert len(mra_list) == num_mra_exp,\
+        "Only %s/%s annotations added" % (len(mra_list), num_mra_exp)
+    assert all([hasattr(mra, 'mesh_id') for mra in mra_list]), \
+        'All MESH annotations should have a mesh ID.'
 
     # Test the pmc oa upload.
     PmcOA(ftp_url=get_test_ftp_url(), local=True).populate(db)

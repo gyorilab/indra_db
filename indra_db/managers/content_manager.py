@@ -514,7 +514,8 @@ class Pubmed(_NihManager):
     my_source = 'pubmed'
     tr_cols = ('pmid', 'pmcid', 'doi', 'pii',)
 
-    def __init__(self, *args, categories=None, tables=None, **kwargs):
+    def __init__(self, *args, categories=None, tables=None,
+                 max_annotations=500000, **kwargs):
         super(Pubmed, self).__init__(*args, **kwargs)
         self.deleted_pmids = None
         if categories is None:
@@ -529,6 +530,7 @@ class Pubmed(_NihManager):
             self.tables = tables[:]
 
         self.db_pmids = None
+        self.max_annotations = max_annotations
         self.annotations = {}
         return
 
@@ -572,11 +574,16 @@ class Pubmed(_NihManager):
         logger.info("Fixing doubled doi: %s" % doi)
         return doi[:L//2]
 
-    def load_annotations(self, db, article_info):
+    def add_annotations(self, db, article_info):
         "Load annotations into the database."
         for pmid, info_dict in article_info.items():
             self.annotations[(pmid, article_info.get('pmcid'))] \
                 = info_dict['mesh_annotations']
+
+        # Add mesh annotations to the db in batches.
+        if len(self.annotations) > self.max_annotations:
+            self.dump_annotations(db)
+            self.annotations = {}
 
         return
 
@@ -695,7 +702,7 @@ class Pubmed(_NihManager):
         "Process the content of an xml dataset and load into the database."
         logger.info("%d PMIDs in XML dataset" % len(article_info))
 
-        self.load_annotations(db, article_info)
+        self.add_annotations(db, article_info)
 
         # Process and load the text refs, updating where appropriate.
         if 'text_ref' in self.tables:

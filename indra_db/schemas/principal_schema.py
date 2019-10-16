@@ -35,6 +35,7 @@ def get_schema(Base):
         manuscript_id = Column(String(100), unique=True)
         create_date = Column(DateTime, default=func.now())
         last_updated = Column(DateTime, onupdate=func.now())
+        batch_id = Column(Integer, nullable=False)
         __table_args__ = (
             UniqueConstraint('pmid', 'doi', name='pmid-doi'),
             UniqueConstraint('pmcid', 'doi', name='pmcid-doi')

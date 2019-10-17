@@ -817,8 +817,8 @@ class Pubmed(_NihManager):
 
         # Copy the results into the database
         self.copy_into_db(db, 'mesh_ref_annotations', copy_rows,
-                          ('text_ref_id', 'mesh_id', 'mesh_text',
-                           'major_topic', 'qual_id', 'qual_text'))
+                          ('pmid', 'mesh_id', 'mesh_text', 'major_topic',
+                           'qual_id', 'qual_text'))
         return True
 
     def load_files_and_annotations(self, db, *args, **kwargs):

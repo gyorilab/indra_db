@@ -32,6 +32,14 @@ class IndraDBTable(object):
             print("Building index: %s" % index.name)
             cls.create_index(db, index)
 
+    @staticmethod
+    def execute(db, sql):
+        conn = db.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+        return
+
     @classmethod
     def full_name(cls, force_schema=False):
         """Get the full name including the schema, if supplied."""
@@ -112,14 +120,6 @@ class ReadonlyTable(IndraDBTable):
     @classmethod
     def get_definition(cls):
         return cls.__definition__
-
-    @staticmethod
-    def execute(db, sql):
-        conn = db.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        conn.commit()
-        return
 
 
 class SpecialColumnTable(ReadonlyTable):

@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA, INET
 
 from indra_db.schemas.mixins import IndraDBTable
+from indra_db.schemas.indexes import StringIndex
 
 foreign_key_map = [
     ('pa_agents', 'pa_statements'),
@@ -26,6 +27,8 @@ def get_schema(Base):
         __tablename__ = 'text_ref'
         _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
         _always_disp = ['id', 'pmid', 'pmcid']
+        _indices = [StringIndex('text_ref_pmid_idx', 'pmid')]
+
         id = Column(Integer, primary_key=True)
         pmid = Column(String(20))
         pmcid = Column(String(20))
@@ -35,7 +38,7 @@ def get_schema(Base):
         manuscript_id = Column(String(100), unique=True)
         create_date = Column(DateTime, default=func.now())
         last_updated = Column(DateTime, onupdate=func.now())
-        batch_id = Column(Integer, nullable=False)
+
         __table_args__ = (
             UniqueConstraint('pmid', 'doi', name='pmid-doi'),
             UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
@@ -55,16 +58,16 @@ def get_schema(Base):
     class MeshRefAnnotations(Base, IndraDBTable):
         __tablename__ = 'mesh_ref_annotations'
         _always_disp = ['mesh_text', 'qual_text', 'text_ref_id']
+        _indices = [StringIndex('mesh_ref_annotations_pmid_idx', 'pmid')]
 
         id = Column(Integer, primary_key=True)
         mesh_id = Column(String, nullable=False)
         mesh_text = Column(String, nullable=False)
-        text_ref_id = Column(Integer, ForeignKey('text_ref.id'),
-                             nullable=False)
-        text_ref = relationship(TextRef)
+        pmid = Column(String, nullable=False)
         major_topic = Column(Boolean, default=False)
         qual_id = Column(String)
         qual_text = Column(String)
+
     table_dict[MeshRefAnnotations.__tablename__] = MeshRefAnnotations
 
     class SourceFile(Base, IndraDBTable):

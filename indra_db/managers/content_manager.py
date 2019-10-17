@@ -577,8 +577,7 @@ class Pubmed(_NihManager):
     def add_annotations(self, db, article_info):
         "Load annotations into the database."
         for pmid, info_dict in article_info.items():
-            self.annotations[(pmid, article_info.get('pmcid'))] \
-                = info_dict['mesh_annotations']
+            self.annotations[pmid] = info_dict['mesh_annotations']
 
         # Add mesh annotations to the db in batches.
         if len(self.annotations) > self.max_annotations:
@@ -793,36 +792,19 @@ class Pubmed(_NihManager):
 
     def dump_annotations(self, db):
         """Dump all the annotations that have been saved so far."""
+        logger.info("Dumping mesh annotations for %d refs."
+                    % len(self.annotations))
+
         # If there are no annotations, don't waste time.
         if not self.annotations:
             return False
 
-        # Generate a dictionary mapping pmid/pmcid pairs to trids
-        rows = db.select_all([db.TextRef.pmid, db.TextRef.pmcid,
-                              db.TextRef.id],
-                             db.TextRef.pmid.isnot(None))
-
-        # Create a mapping with an entry for every pmid and pmcid.
-        # To make sure we can capture all results generated from the pubmed
-        # files, include an entry both with and without the pmcid if the pmcid
-        # is not None, because we get many pmcids in later parts of the
-        # pipeline that might not be known to pubmed.
-        mapping = {(pmid, pmcid_): trid for pmid, pmcid, trid in rows
-                   for pmcid_ in {None, pmcid}}
-
         copy_rows = []
-        for key, annotation_list in self.annotations.items():
-            # Get the trid (this should hopefully always work...)
-            trid = mapping.get(key)
-            if trid is None:
-                logger.warning("Key (pmid, pmcid) could not be mapped in "
-                               "database: %s" % str(key))
-                continue
-
+        for pmid, annotation_list in self.annotations.items():
             for annotation in annotation_list:
                 # Format the row.
-                copy_row = (trid, annotation['mesh'], annotation['text'],
-                                  annotation['major_topic'])
+                copy_row = (pmid, annotation['mesh'], annotation['text'],
+                            annotation['major_topic'])
 
                 # Handle the qualifier
                 qual = annotation['qualifier']

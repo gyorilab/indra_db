@@ -52,7 +52,9 @@ class IndraDBTable(object):
             schema_name = None
 
         # Look for any information in the __table_args__ about the schema
-        if isinstance(cls.__table_args__, dict):
+        if not hasattr(cls, '__table_args__'):
+            schema_name = None
+        elif isinstance(cls.__table_args__, dict):
             schema_name = cls.__table_args__.get('schema')
         elif isinstance(cls.__table_args__, tuple):
             for arg in cls.__table_args__:

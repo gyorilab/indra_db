@@ -58,7 +58,11 @@ def get_schema(Base):
     class MeshRefAnnotations(Base, IndraDBTable):
         __tablename__ = 'mesh_ref_annotations'
         _always_disp = ['mesh_text', 'qual_text', 'text_ref_id']
-        _indices = [StringIndex('mesh_ref_annotations_pmid_idx', 'pmid')]
+        _indices = [StringIndex('mesh_ref_annotations_pmid_idx', 'pmid'),
+                    StringIndex('mesh_ref_annotations_mesh_id_idx', 'mesh_id'),
+                    StringIndex('mesh_ref_annotations_mtext_idx', 'mesh_text'),
+                    StringIndex('mesh_ref_annotations_qual_id_idx', 'qual_id'),
+                    StringIndex('mesh_ref_annotations_qtext_idx', 'qual_text')]
 
         id = Column(Integer, primary_key=True)
         mesh_id = Column(String, nullable=False)

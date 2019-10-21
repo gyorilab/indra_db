@@ -21,9 +21,9 @@ except Exception as e:
                    + str(e))
 
 
-#==============================================================================
+# =============================================================================
 # The following are some helpful functions for the rest of the tests.
-#==============================================================================
+# =============================================================================
 def assert_contents_equal(list1, list2, msg=None):
     "Check that the contenst of two lists are the same, regardless of order."
     res = set(list1) == set(list2)
@@ -38,11 +38,15 @@ def capitalize_list_of_tpls(l):
             for e in l]
 
 
-def get_test_db_with_pubmed_content():
+def get_test_db_with_pubmed_content(with_pm=False):
     "Populate the database with sample content from pubmed."
-    db = get_temp_db()
-    Pubmed(ftp_url=get_test_ftp_url(), local=True).populate(db)
-    return db
+    db = get_temp_db(clear=True)
+    pm = Pubmed(ftp_url=get_test_ftp_url(), local=True)
+    pm.populate(db)
+    if with_pm:
+        return db, pm
+    else:
+        return db
 
 
 def get_test_db_with_ftp_content():
@@ -53,9 +57,9 @@ def get_test_db_with_ftp_content():
     return db
 
 
-#==============================================================================
+# =============================================================================
 # The following are tests for the database manager itself.
-#==============================================================================
+# =============================================================================
 @attr('nonpublic')
 def test_create_tables():
     "Test the create_tables feature"
@@ -171,11 +175,11 @@ def test_get_abstracts():
     assert_contents_equal(expected, received, "Didn't get expected abstracts.")
 
 
-#==============================================================================
+# =============================================================================
 # The following are tests for the initial population of the database. This
 # includes uploading data from Medline, PMC, Springer, and Elsevier. These
 # tend to make greater use of the database, and are likely to be slower.
-#==============================================================================
+# =============================================================================
 
 
 @attr('nonpublic', 'slow')
@@ -187,11 +191,18 @@ def test_full_upload():
     # this test.
 
     # Test the medline/pubmed upload.
-    db = get_test_db_with_pubmed_content()
+    db, pm = get_test_db_with_pubmed_content(with_pm=True)
     tr_list = db.select_all('text_ref')
     assert len(tr_list), "No text refs were added..."
     assert all([hasattr(tr, 'pmid') for tr in tr_list]),\
         'All text_refs MUST have pmids by now.'
+
+    mra_list = db.select_all(db.MeshRefAnnotations)
+    num_mra_exp = sum(len(ann) for ann in pm.annotations.values())
+    assert len(mra_list) == num_mra_exp,\
+        "Only %s/%s annotations added" % (len(mra_list), num_mra_exp)
+    assert all([hasattr(mra, 'mesh_id') for mra in mra_list]), \
+        'All MESH annotations should have a mesh ID.'
 
     # Test the pmc oa upload.
     PmcOA(ftp_url=get_test_ftp_url(), local=True).populate(db)
@@ -223,7 +234,8 @@ def test_full_upload():
     tc_list = db.select_all(db.TextContent)
     set_exp = {('manuscripts', 'xml', 'fulltext'),
                ('pmc_oa', 'xml', 'fulltext'),
-               ('pubmed', 'text', 'abstract')}
+               ('pubmed', 'text', 'abstract'),
+               ('pubmed', 'text', 'title')}
     set_got = set([(tc.source, tc.format, tc.text_type) for tc in tc_list])
     assert set_exp == set_got,\
         "Expected %s, got %s for content layout." % (set_exp, set_got)
@@ -484,10 +496,7 @@ def test_elsevier_upload():
 def test_sparser_initial_reading():
     "Test the initial reading of of sparser content"
     db = get_test_db_with_ftp_content()
-    BulkLocalReadingManager('sparser', n_proc=1).read_all(db)
-    sparser_updates_q = db.filter_query(db.ReadingUpdates,
-                                        db.ReadingUpdates.reader == 'SPARSER')
-    assert sparser_updates_q.count() == 1, "Update was not logged."
+    BulkLocalReadingManager(['sparser'], n_proc=1).read_all(db)
     sparser_readings_q = db.filter_query(db.Reading,
                                          db.Reading.reader == 'SPARSER')
     assert sparser_readings_q.count() > 0, "Failed to produce readings."
@@ -495,6 +504,9 @@ def test_sparser_initial_reading():
                                       db.RawStatements.reading_id == db.Reading.id,
                                       db.Reading.reader == 'SPARSER')
     assert sparser_stmts_q.count() > 0
+    sparser_updates_q = db.filter_query(db.ReadingUpdates,
+                                        db.ReadingUpdates.reader == 'sparser')
+    assert sparser_updates_q.count() == 1, "Update was not logged."
 
 
 def test_nested_dict():

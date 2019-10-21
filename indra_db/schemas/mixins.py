@@ -32,6 +32,14 @@ class IndraDBTable(object):
             print("Building index: %s" % index.name)
             cls.create_index(db, index)
 
+    @staticmethod
+    def execute(db, sql):
+        conn = db.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+        return
+
     @classmethod
     def full_name(cls, force_schema=False):
         """Get the full name including the schema, if supplied."""
@@ -44,7 +52,9 @@ class IndraDBTable(object):
             schema_name = None
 
         # Look for any information in the __table_args__ about the schema
-        if isinstance(cls.__table_args__, dict):
+        if not hasattr(cls, '__table_args__'):
+            schema_name = None
+        elif isinstance(cls.__table_args__, dict):
             schema_name = cls.__table_args__.get('schema')
         elif isinstance(cls.__table_args__, tuple):
             for arg in cls.__table_args__:
@@ -112,14 +122,6 @@ class ReadonlyTable(IndraDBTable):
     @classmethod
     def get_definition(cls):
         return cls.__definition__
-
-    @staticmethod
-    def execute(db, sql):
-        conn = db.engine.raw_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        conn.commit()
-        return
 
 
 class SpecialColumnTable(ReadonlyTable):

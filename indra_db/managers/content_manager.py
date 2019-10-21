@@ -514,7 +514,8 @@ class Pubmed(_NihManager):
     my_source = 'pubmed'
     tr_cols = ('pmid', 'pmcid', 'doi', 'pii',)
 
-    def __init__(self, *args, categories=None, tables=None, **kwargs):
+    def __init__(self, *args, categories=None, tables=None,
+                 max_annotations=500000, **kwargs):
         super(Pubmed, self).__init__(*args, **kwargs)
         self.deleted_pmids = None
         if categories is None:
@@ -529,6 +530,8 @@ class Pubmed(_NihManager):
             self.tables = tables[:]
 
         self.db_pmids = None
+        self.max_annotations = max_annotations
+        self.annotations = {}
         return
 
     def get_deleted_pmids(self):
@@ -570,6 +573,18 @@ class Pubmed(_NihManager):
             return doi
         logger.info("Fixing doubled doi: %s" % doi)
         return doi[:L//2]
+
+    def add_annotations(self, db, article_info):
+        "Load annotations into the database."
+        for pmid, info_dict in article_info.items():
+            self.annotations[pmid] = info_dict['mesh_annotations']
+
+        # Add mesh annotations to the db in batches.
+        if len(self.annotations) > self.max_annotations:
+            self.dump_annotations(db)
+            self.annotations = {}
+
+        return
 
     def load_text_refs(self, db, article_info, carefully=False):
         "Sanitize, update old, and upload new text refs."
@@ -686,6 +701,8 @@ class Pubmed(_NihManager):
         "Process the content of an xml dataset and load into the database."
         logger.info("%d PMIDs in XML dataset" % len(article_info))
 
+        self.add_annotations(db, article_info)
+
         # Process and load the text refs, updating where appropriate.
         if 'text_ref' in self.tables:
             valid_pmids = self.load_text_refs(db, article_info, carefully)
@@ -715,6 +732,8 @@ class Pubmed(_NihManager):
             if continuing and xml_files == existing_files:
                 logger.info("All files have been loaded. Nothing to do.")
                 return False
+        else:
+            existing_files = set()
 
         logger.info('Beginning upload with %d processes...' % n_procs)
         if n_procs > 1:
@@ -771,6 +790,45 @@ class Pubmed(_NihManager):
 
         return True
 
+    def dump_annotations(self, db):
+        """Dump all the annotations that have been saved so far."""
+        logger.info("Dumping mesh annotations for %d refs."
+                    % len(self.annotations))
+
+        # If there are no annotations, don't waste time.
+        if not self.annotations:
+            return False
+
+        copy_rows = []
+        for pmid, annotation_list in self.annotations.items():
+            for annotation in annotation_list:
+                # Format the row.
+                copy_row = (pmid, annotation['mesh'], annotation['text'],
+                            annotation['major_topic'])
+
+                # Handle the qualifier
+                qual = annotation['qualifier']
+                if qual is None:
+                    copy_row += (None, None)
+                else:
+                    copy_row += (qual['mesh'], qual['text'])
+
+                copy_rows.append(copy_row)
+
+        # Copy the results into the database
+        self.copy_into_db(db, 'mesh_ref_annotations', copy_rows,
+                          ('pmid', 'mesh_id', 'mesh_text', 'major_topic',
+                           'qual_id', 'qual_text'))
+        return True
+
+    def load_files_and_annotations(self, db, *args, **kwargs):
+        """Thin wrapper around load_files that also loads annotations."""
+        try:
+            ret = self.load_files(db, *args, **kwargs)
+        finally:
+            self.dump_annotations(db)
+        return ret
+
     @ContentManager._record_for_review
     def populate(self, db, n_procs=1, continuing=False):
         """Perform the initial input of the pubmed content into the database.
@@ -787,13 +845,16 @@ class Pubmed(_NihManager):
             source files contained in the database. If false, all files will be
             read and parsed.
         """
-        return self.load_files(db, 'baseline', n_procs, continuing, False)
+        return self.load_files_and_annotations(db, 'baseline', n_procs,
+                                               continuing, False)
 
     @ContentManager._record_for_review
     def update(self, db, n_procs=1):
         """Update the contents of the database with the latest articles."""
-        did_base = self.load_files(db, 'baseline', n_procs, True, True)
-        did_update = self.load_files(db, 'updatefiles', n_procs, True, True)
+        did_base = self.load_files_and_annotations(db, 'baseline', n_procs,
+                                                   True, True)
+        did_update = self.load_files_and_annotations(db, 'updatefiles',
+                                                     n_procs, True, True)
         return did_base or did_update
 
 

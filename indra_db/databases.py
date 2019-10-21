@@ -200,10 +200,11 @@ class DatabaseManager(object):
 
     def create_tables(self, tbl_list=None):
         "Create the tables for INDRA database."
-        ordered_tables = ['text_ref', 'text_content', 'reading', 'db_info',
-                          'raw_statements', 'raw_agents', 'raw_mods',
-                          'raw_muts', 'pa_statements', 'pa_agents', 'pa_mods',
-                          'pa_muts', 'raw_unique_links', 'support_links']
+        ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
+                          'reading', 'db_info', 'raw_statements', 'raw_agents',
+                          'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
+                          'pa_mods', 'pa_muts', 'raw_unique_links',
+                          'support_links']
         if tbl_list is None:
             tbl_list = list(self.tables.keys())
 

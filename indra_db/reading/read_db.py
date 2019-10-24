@@ -267,8 +267,8 @@ class DatabaseReader(object):
             self._db.TextContent.id == self._db.Reading.text_content_id
         logger.info("Instantiating reading handler for reader %s with version "
                     "%s using reading mode %s and statement mode %s for %d "
-                    "tcids." % (reader.name, reader.version, reading_mode,
-                                stmt_mode, len(tcids)))
+                    "tcids." % (reader.name, reader.get_version(),
+                                reading_mode, stmt_mode, len(tcids)))
 
         # To be filled.
         self.extant_readings = []
@@ -289,10 +289,11 @@ class DatabaseReader(object):
             logger.debug("Getting content to be read.")
             # Each sub query is a set of content that has been read by one of
             # the readers.
+            rv = self.reader.get_version()
             tc_sub_q = tc_query.filter(
                 self._tc_rd_link,
                 self._db.Reading.reader == self.reader.name,
-                self._db.Reading.reader_version == self.reader.version[:20]
+                self._db.Reading.reader_version == rv[:20]
                 )
 
             # Now let's exclude all of those.
@@ -342,11 +343,11 @@ class DatabaseReader(object):
         db = self._db
         if self.tcids:
             logger.info("Looking for content matching reader %s, version %s."
-                        % (self.reader.name, self.reader.version[:20]))
+                        % (self.reader.name, self.reader.get_version()[:20]))
             readings_query = db.filter_query(
                 db.Reading,
                 db.Reading.reader == self.reader.name,
-                db.Reading.reader_version == self.reader.version[:20],
+                db.Reading.reader_version == self.reader.get_version()[:20],
                 db.Reading.text_content_id.in_(self.tcids)
                 )
             for r in readings_query.yield_per(self.batch_size):

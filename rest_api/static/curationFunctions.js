@@ -1,8 +1,5 @@
 // CURATION FUNCTIONS
 
-// Global constants
-let ALL_COLLAPSED = true;
-
 // Variables
 let latestSubmission = {
     'ddSelect': '',

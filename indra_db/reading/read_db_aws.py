@@ -8,7 +8,6 @@ import boto3
 import botocore
 import logging
 import random
-from datetime import datetime
 
 from indra_db.reading.read_db import run_reading, construct_readers
 from indra_db.reading.report_db_aws import DbAwsStatReporter

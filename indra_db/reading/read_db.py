@@ -3,25 +3,24 @@ database. This may also be run as a script; for details run:
 `python read_pmids_db --help`
 """
 
+import re
 import json
 import pickle
 import random
 import logging
-import re
 from datetime import datetime
 from math import ceil
 from multiprocessing.pool import Pool
-
-import boto3
 
 from indra.statements import make_hash
 
 from indra.tools.reading.util.script_tools import get_parser
 from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
-from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
-    Content, Reader, EmptyReader
-from indra.util import zip_string, batch_iter
+from indra.tools.reading.readers import ReadingData, get_reader, Content,\
+    Reader, EmptyReader
+from indra.tools.reading.readers.util import _get_dir
+from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
 from indra_db.databases import readers, reader_versions

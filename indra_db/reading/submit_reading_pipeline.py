@@ -16,8 +16,6 @@ bash$ python submit_reading_pipeline.py --help
 
 In your favorite command line.
 """
-from collections import defaultdict
-
 import re
 import boto3
 import pickle
@@ -26,6 +24,7 @@ from numpy import median, arange, array, zeros
 import matplotlib as mpl; mpl.use('Agg')
 from matplotlib import pyplot as plt
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from indra.util.get_version import get_git_info
 from indra.util.nested_dict import NestedDict

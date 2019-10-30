@@ -19,7 +19,7 @@ from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, get_reader, Content,\
     Reader, EmptyReader
-from indra.tools.reading.readers.util import _get_dir
+from indra.tools.reading.readers.util import get_dir
 from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
@@ -674,7 +674,7 @@ def main():
     n_max = int(ceil(float(len(input_lines))/B))
 
     # Create a single base directory
-    base_dir = _get_dir(args.temp, 'run_%s' % ('_and_'.join(args.readers)))
+    base_dir = get_dir(args.temp, 'run_%s' % ('_and_'.join(args.readers)))
 
     # Get the readers objects.
     kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc}

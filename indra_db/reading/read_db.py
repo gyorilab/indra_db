@@ -48,20 +48,20 @@ class DatabaseReadingData(ReadingData):
         example: 'REACH'
     reader_version : str
         A string identifying the version of the underlying nlp reader.
-    content_format : str
-        The format of the content. Options are in indra.db.formats.
-    content : str or dict
+    reading_format : str
+        The format of the reading result. Options are in indra.db.formats.
+    reading : str or dict
         The content of the reading result. A string in the format given by
-        `content_format`.
+        `reading_format`.
     reading_id : int
         (optional) The unique integer id given to each reading result. In
         practice, this is often assigned
     """
-    def __init__(self, tcid, reader_name, reader_version, content_format,
-                 content, reading_id=None):
+    def __init__(self, tcid, reader_name, reader_version, reading_format,
+                 reading, reading_id=None):
         super(DatabaseReadingData, self).__init__(tcid, reader_name,
                                                   reader_version,
-                                                  content_format, content)
+                                                  reading_format, reading)
         self.tcid = tcid
         self.reading_id = reading_id
         return
@@ -73,12 +73,12 @@ class DatabaseReadingData(ReadingData):
         As returned by SQL Alchemy.
         """
         if db_reading.format == 'json':
-            content = json.loads(unpack(db_reading.bytes))
+            reading = json.loads(unpack(db_reading.bytes))
         else:
-            content = unpack(db_reading.bytes)
+            reading = unpack(db_reading.bytes)
         return cls(db_reading.text_content_id, db_reading.reader,
                    db_reading.reader_version, db_reading.format,
-                   content, db_reading.id)
+                   reading, db_reading.id)
 
     @staticmethod
     def get_cols():
@@ -88,13 +88,13 @@ class DatabaseReadingData(ReadingData):
 
     def zip_content(self):
         """Compress the content, returning bytes."""
-        if self.content is None:
+        if self.reading is None:
             return None
 
         if self.format == formats.JSON:
-            ret = zip_string(json.dumps(self.content))
+            ret = zip_string(json.dumps(self.reading))
         elif self.format == formats.TEXT or self.format == formats.EKB:
-            ret = zip_string(self.content)
+            ret = zip_string(self.reading)
         else:
             raise Exception('Do not know how to zip format %s.' % self.format)
         return ret

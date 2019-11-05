@@ -43,7 +43,7 @@ class DatabaseReadingData(ReadingData):
     ----------
     tcid : int
         The unique text content id provided by the database.
-    reader_class : type
+    reader_class : Type[Reader]
         The class of the reader, a child of
         `indra.tools.reading.readers.core.Reader`.
     reader_version : str

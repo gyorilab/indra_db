@@ -43,9 +43,9 @@ class DatabaseReadingData(ReadingData):
     ----------
     tcid : int
         The unique text content id provided by the database.
-    reader_name : str
-        The name of the reader, consistent with it's `name` attribute, for
-        example: 'REACH'
+    reader_class : type
+        The class of the reader, a child of
+        `indra.tools.reading.readers.core.Reader`.
     reader_version : str
         A string identifying the version of the underlying nlp reader.
     reading_format : str
@@ -57,9 +57,9 @@ class DatabaseReadingData(ReadingData):
         (optional) The unique integer id given to each reading result. In
         practice, this is often assigned
     """
-    def __init__(self, tcid, reader_name, reader_version, reading_format,
+    def __init__(self, tcid, reader_class, reader_version, reading_format,
                  reading, reading_id=None):
-        super(DatabaseReadingData, self).__init__(tcid, reader_name,
+        super(DatabaseReadingData, self).__init__(tcid, reader_class,
                                                   reader_version,
                                                   reading_format, reading)
         self.tcid = tcid
@@ -101,13 +101,13 @@ class DatabaseReadingData(ReadingData):
 
     def make_tuple(self, batch_id):
         """Make the tuple expected by the database."""
-        return (self.get_id(), self.content_id, self.reader,
+        return (self.get_id(), self.content_id, self.reader_class.name.upper(),
                 self.reader_version, self.format, self.zip_content(), batch_id)
 
     def get_id(self):
         if self.reading_id is None:
-            self.reading_id = readers[self.reader.upper()]*10e12
-            self.reading_id += (reader_versions[self.reader.lower()]
+            self.reading_id = readers[self.reader_class.name.upper()]*10e12
+            self.reading_id += (reader_versions[self.reader_class.name.lower()]
                                 .index(self.reader_version[:20])*10e10)
             self.reading_id += self.tcid
             self.reading_id = int(self.reading_id)
@@ -122,7 +122,7 @@ class DatabaseReadingData(ReadingData):
         # Note the temporary fix in clipping the reader version length. This is
         # because the version is for some reason clipped in the database.
         return (r_entry.text_content_id == self.content_id
-                and r_entry.reader == self.reader
+                and r_entry.reader.upper() == self.reader_class.name.upper()
                 and r_entry.reader_version == self.reader_version[:20])
 
 

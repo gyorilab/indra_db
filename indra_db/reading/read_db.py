@@ -18,7 +18,7 @@ from indra.tools.reading.util.script_tools import get_parser
 from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, get_reader, Content,\
-    Reader, EmptyReader
+    Reader, EmptyReader, get_reader_class
 from indra.tools.reading.readers.util import get_dir
 from indra.util import zip_string
 
@@ -76,7 +76,8 @@ class DatabaseReadingData(ReadingData):
             reading = json.loads(unpack(db_reading.bytes))
         else:
             reading = unpack(db_reading.bytes)
-        return cls(db_reading.text_content_id, db_reading.reader,
+        return cls(db_reading.text_content_id,
+                   get_reader_class(db_reading.reader),
                    db_reading.reader_version, db_reading.format,
                    reading, db_reading.id)
 

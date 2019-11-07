@@ -56,7 +56,8 @@ class DbReadingSubmitter(Submitter):
     _s3_input_name = 'id_list'
     _purpose = 'db_reading'
     _job_queue = 'run_db_reading_queue'
-    _job_def = 'run_db_reading_jobdef'
+    _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser', 'trips'],
+                     'run_db_reading_isi_jobdef': ['isi']}
 
     def __init__(self, *args, **kwargs):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)

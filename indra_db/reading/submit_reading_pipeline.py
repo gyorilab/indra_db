@@ -93,7 +93,7 @@ class DbReadingSubmitter(Submitter):
                 extensions.extend(['--' + key, val])
         return extensions
 
-    def set_options(self, stmt_mode='all', reading_mode='unread',
+    def set_options(self, stmt_mode='all', read_mode='unread',
                     max_reach_input_len=None, max_reach_space_ratio=None):
         """Set the options for this reading job.
 
@@ -106,7 +106,7 @@ class DbReadingSubmitter(Submitter):
             or 'unread'. If this option is 'unread', only the newly produced
             readings will be processed. If 'none', no statements will be
             produced.
-        reading_mode : str : 'all', 'unread', or 'none'
+        read_mode : str : 'all', 'unread', or 'none'
             Optional, default 'undread' - If 'all', read everything (generally
             slow); if 'unread', only read things that were unread, (the cache
             of old readings may still be used if `stmt_mode='all'` to get
@@ -123,7 +123,7 @@ class DbReadingSubmitter(Submitter):
             catch and avoid such problems. Recommend a value of 0.5.
         """
         self.options['stmt_mode'] = stmt_mode
-        self.options['reading_mode'] = reading_mode
+        self.options['read_mode'] = read_mode
         self.options['max_reach_input_len'] = max_reach_input_len
         self.options['max_reach_space_ratio'] = max_reach_space_ratio
         return
@@ -648,7 +648,7 @@ if __name__ == '__main__':
         help='Choose the subset of statements on which to run reading.'
     )
     parser.add_argument(
-        '-R', '--reading_mode',
+        '-R', '--read_mode',
         choices=['all', 'unread', 'none'],
         default='unread',
         help=('Choose whether you want to read everything, nothing, or only '
@@ -689,7 +689,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     sub = DbReadingSubmitter(args.basename, args.readers, args.project)
-    sub.set_options(args.stmt_mode, args.reading_mode,
+    sub.set_options(args.stmt_mode, args.read_mode,
                     args.max_reach_input_len, args.max_reach_space_ratio)
     sub.submit_reading(args.input_file, args.start_ix, args.end_ix,
                        args.ids_per_job)

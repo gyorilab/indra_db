@@ -90,7 +90,7 @@ class DbReadingSubmitter(Submitter):
         extensions = []
         for key, val in self.options.items():
             if val is not None:
-                extensions.append(['--' + key, val])
+                extensions.extend(['--' + key, val])
         return extensions
 
     def set_options(self, stmt_mode='all', reading_mode='unread',
@@ -693,6 +693,6 @@ if __name__ == '__main__':
                     args.max_reach_input_len, args.max_reach_space_ratio)
     sub.submit_reading(args.input_file, args.start_ix, args.end_ix,
                        args.ids_per_job)
-    if not args.now_wait:
+    if not args.no_wait:
         sub.watch_and_wait(idle_log_timeout=args.idle_log_timeout,
                            kill_on_timeout=not args.no_kill_on_timeout)

@@ -125,7 +125,7 @@ reader_versions = {
                 'October2018-linux'],
     'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
     'trips': ['STATIC'],
-    'isi': ['11c0daf746de']
+    'isi': ['20180503']
 }
 
 

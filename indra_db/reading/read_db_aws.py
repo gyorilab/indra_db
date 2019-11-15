@@ -8,7 +8,8 @@ import boto3
 import botocore
 import logging
 import random
-from datetime import datetime
+
+from indra.tools.reading.readers import get_reader_classes
 
 from indra_db.reading.read_db import run_reading, construct_readers
 from indra_db.reading.report_db_aws import DbAwsStatReporter
@@ -66,7 +67,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-r', '--readers',
         dest='readers',
-        choices=['reach', 'sparser', 'trips'],
+        choices=[rc.name.lower() for rc in get_reader_classes()],
         nargs='+',
         help='Choose which reader(s) to use.'
         )

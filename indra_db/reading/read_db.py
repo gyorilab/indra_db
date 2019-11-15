@@ -3,25 +3,24 @@ database. This may also be run as a script; for details run:
 `python read_pmids_db --help`
 """
 
+import re
 import json
 import pickle
 import random
 import logging
-import re
 from datetime import datetime
 from math import ceil
 from multiprocessing.pool import Pool
-
-import boto3
 
 from indra.statements import make_hash
 
 from indra.tools.reading.util.script_tools import get_parser
 from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
-from indra.tools.reading.readers import ReadingData, _get_dir, get_reader, \
-    Content, Reader, EmptyReader
-from indra.util import zip_string, batch_iter
+from indra.tools.reading.readers import ReadingData, get_reader, Content,\
+    Reader, EmptyReader, get_reader_class
+from indra.tools.reading.readers.util import get_dir
+from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
 from indra_db.databases import readers, reader_versions
@@ -44,25 +43,25 @@ class DatabaseReadingData(ReadingData):
     ----------
     tcid : int
         The unique text content id provided by the database.
-    reader_name : str
-        The name of the reader, consistent with it's `name` attribute, for
-        example: 'REACH'
+    reader_class : Type[Reader]
+        The class of the reader, a child of
+        `indra.tools.reading.readers.core.Reader`.
     reader_version : str
         A string identifying the version of the underlying nlp reader.
-    content_format : str
-        The format of the content. Options are in indra.db.formats.
-    content : str or dict
+    reading_format : str
+        The format of the reading result. Options are in indra.db.formats.
+    reading : str or dict
         The content of the reading result. A string in the format given by
-        `content_format`.
+        `reading_format`.
     reading_id : int
         (optional) The unique integer id given to each reading result. In
         practice, this is often assigned
     """
-    def __init__(self, tcid, reader_name, reader_version, content_format,
-                 content, reading_id=None):
-        super(DatabaseReadingData, self).__init__(tcid, reader_name,
+    def __init__(self, tcid, reader_class, reader_version, reading_format,
+                 reading, reading_id=None):
+        super(DatabaseReadingData, self).__init__(tcid, reader_class,
                                                   reader_version,
-                                                  content_format, content)
+                                                  reading_format, reading)
         self.tcid = tcid
         self.reading_id = reading_id
         return
@@ -74,12 +73,13 @@ class DatabaseReadingData(ReadingData):
         As returned by SQL Alchemy.
         """
         if db_reading.format == 'json':
-            content = json.loads(unpack(db_reading.bytes))
+            reading = json.loads(unpack(db_reading.bytes))
         else:
-            content = unpack(db_reading.bytes)
-        return cls(db_reading.text_content_id, db_reading.reader,
+            reading = unpack(db_reading.bytes)
+        return cls(db_reading.text_content_id,
+                   get_reader_class(db_reading.reader),
                    db_reading.reader_version, db_reading.format,
-                   content, db_reading.id)
+                   reading, db_reading.id)
 
     @staticmethod
     def get_cols():
@@ -89,26 +89,26 @@ class DatabaseReadingData(ReadingData):
 
     def zip_content(self):
         """Compress the content, returning bytes."""
-        if self.content is None:
+        if self.reading is None:
             return None
 
         if self.format == formats.JSON:
-            ret = zip_string(json.dumps(self.content))
+            ret = zip_string(json.dumps(self.reading))
         elif self.format == formats.TEXT or self.format == formats.EKB:
-            ret = zip_string(self.content)
+            ret = zip_string(self.reading)
         else:
             raise Exception('Do not know how to zip format %s.' % self.format)
         return ret
 
     def make_tuple(self, batch_id):
         """Make the tuple expected by the database."""
-        return (self.get_id(), self.content_id, self.reader,
+        return (self.get_id(), self.content_id, self.reader_class.name.upper(),
                 self.reader_version, self.format, self.zip_content(), batch_id)
 
     def get_id(self):
         if self.reading_id is None:
-            self.reading_id = readers[self.reader.upper()]*10e12
-            self.reading_id += (reader_versions[self.reader.lower()]
+            self.reading_id = readers[self.reader_class.name.upper()]*10e12
+            self.reading_id += (reader_versions[self.reader_class.name.lower()]
                                 .index(self.reader_version[:20])*10e10)
             self.reading_id += self.tcid
             self.reading_id = int(self.reading_id)
@@ -123,7 +123,7 @@ class DatabaseReadingData(ReadingData):
         # Note the temporary fix in clipping the reader version length. This is
         # because the version is for some reason clipped in the database.
         return (r_entry.text_content_id == self.content_id
-                and r_entry.reader == self.reader
+                and r_entry.reader.upper() == self.reader_class.name.upper()
                 and r_entry.reader_version == self.reader_version[:20])
 
 
@@ -267,8 +267,8 @@ class DatabaseReader(object):
             self._db.TextContent.id == self._db.Reading.text_content_id
         logger.info("Instantiating reading handler for reader %s with version "
                     "%s using reading mode %s and statement mode %s for %d "
-                    "tcids." % (reader.name, reader.version, reading_mode,
-                                stmt_mode, len(tcids)))
+                    "tcids." % (reader.name, reader.get_version(),
+                                reading_mode, stmt_mode, len(tcids)))
 
         # To be filled.
         self.extant_readings = []
@@ -289,10 +289,11 @@ class DatabaseReader(object):
             logger.debug("Getting content to be read.")
             # Each sub query is a set of content that has been read by one of
             # the readers.
+            rv = self.reader.get_version()
             tc_sub_q = tc_query.filter(
                 self._tc_rd_link,
                 self._db.Reading.reader == self.reader.name,
-                self._db.Reading.reader_version == self.reader.version[:20]
+                self._db.Reading.reader_version == rv[:20]
                 )
 
             # Now let's exclude all of those.
@@ -342,11 +343,11 @@ class DatabaseReader(object):
         db = self._db
         if self.tcids:
             logger.info("Looking for content matching reader %s, version %s."
-                        % (self.reader.name, self.reader.version[:20]))
+                        % (self.reader.name, self.reader.get_version()[:20]))
             readings_query = db.filter_query(
                 db.Reading,
                 db.Reading.reader == self.reader.name,
-                db.Reading.reader_version == self.reader.version[:20],
+                db.Reading.reader_version == self.reader.get_version()[:20],
                 db.Reading.text_content_id.in_(self.tcids)
                 )
             for r in readings_query.yield_per(self.batch_size):
@@ -674,7 +675,7 @@ def main():
     n_max = int(ceil(float(len(input_lines))/B))
 
     # Create a single base directory
-    base_dir = _get_dir(args.temp, 'run_%s' % ('_and_'.join(args.readers)))
+    base_dir = get_dir(args.temp, 'run_%s' % ('_and_'.join(args.readers)))
 
     # Get the readers objects.
     kwargs = {'base_dir': base_dir, 'n_proc': args.n_proc}

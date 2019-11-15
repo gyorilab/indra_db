@@ -16,8 +16,6 @@ bash$ python submit_reading_pipeline.py --help
 
 In your favorite command line.
 """
-from collections import defaultdict
-
 import re
 import boto3
 import pickle
@@ -26,6 +24,7 @@ from numpy import median, arange, array, zeros
 import matplotlib as mpl; mpl.use('Agg')
 from matplotlib import pyplot as plt
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from indra.util.get_version import get_git_info
 from indra.util.nested_dict import NestedDict
@@ -57,7 +56,8 @@ class DbReadingSubmitter(Submitter):
     _s3_input_name = 'id_list'
     _purpose = 'db_reading'
     _job_queue = 'run_db_reading_queue'
-    _job_def = 'run_db_reading_jobdef'
+    _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser', 'trips'],
+                     'run_db_reading_isi_jobdef': ['isi']}
 
     def __init__(self, *args, **kwargs):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
@@ -90,10 +90,10 @@ class DbReadingSubmitter(Submitter):
         extensions = []
         for key, val in self.options.items():
             if val is not None:
-                extensions.append(['--' + key, val])
+                extensions.extend(['--' + key, val])
         return extensions
 
-    def set_options(self, stmt_mode='all', reading_mode='unread',
+    def set_options(self, stmt_mode='all', read_mode='unread',
                     max_reach_input_len=None, max_reach_space_ratio=None):
         """Set the options for this reading job.
 
@@ -106,7 +106,7 @@ class DbReadingSubmitter(Submitter):
             or 'unread'. If this option is 'unread', only the newly produced
             readings will be processed. If 'none', no statements will be
             produced.
-        reading_mode : str : 'all', 'unread', or 'none'
+        read_mode : str : 'all', 'unread', or 'none'
             Optional, default 'undread' - If 'all', read everything (generally
             slow); if 'unread', only read things that were unread, (the cache
             of old readings may still be used if `stmt_mode='all'` to get
@@ -123,7 +123,7 @@ class DbReadingSubmitter(Submitter):
             catch and avoid such problems. Recommend a value of 0.5.
         """
         self.options['stmt_mode'] = stmt_mode
-        self.options['reading_mode'] = reading_mode
+        self.options['read_mode'] = read_mode
         self.options['max_reach_input_len'] = max_reach_input_len
         self.options['max_reach_space_ratio'] = max_reach_space_ratio
         return
@@ -648,7 +648,7 @@ if __name__ == '__main__':
         help='Choose the subset of statements on which to run reading.'
     )
     parser.add_argument(
-        '-R', '--reading_mode',
+        '-R', '--read_mode',
         choices=['all', 'unread', 'none'],
         default='unread',
         help=('Choose whether you want to read everything, nothing, or only '
@@ -689,10 +689,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     sub = DbReadingSubmitter(args.basename, args.readers, args.project)
-    sub.set_options(args.stmt_mode, args.reading_mode,
+    sub.set_options(args.stmt_mode, args.read_mode,
                     args.max_reach_input_len, args.max_reach_space_ratio)
     sub.submit_reading(args.input_file, args.start_ix, args.end_ix,
                        args.ids_per_job)
-    if not args.now_wait:
+    if not args.no_wait:
         sub.watch_and_wait(idle_log_timeout=args.idle_log_timeout,
                            kill_on_timeout=not args.no_kill_on_timeout)

@@ -1,10 +1,8 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 import pickle
 import numpy as np
 import matplotlib as mpl
 mpl.use('Agg')
+
 from matplotlib import pyplot as plt
 from datetime import datetime
 

@@ -209,8 +209,8 @@ def get_parser():
         help=('Choose whether you want to try to read everything, or only '
               'read the content added since the last update. Note that '
               'content from one day before the latests update will also be '
-              'checked, to avoid content update overlap errors. Note also that '
-              'no content will be re-read in either case.')
+              'checked, to avoid content update overlap errors. Note also '
+              'that no content will be re-read in either case.')
     )
     parent_read_parser.add_argument(
         '-t', '--test',
@@ -236,7 +236,7 @@ def get_parser():
     parser.add_argument(
         '--database',
         default='primary',
-        help=('Select a database from the names given in the config or '
+        help=('Choose a database from the names given in the config or '
               'environment, for example primary is INDRA_DB_PRIMAY in the '
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'. Note that this is overwridden by use of the '
@@ -247,7 +247,7 @@ def get_parser():
         '--project_name',
         help=('For use with --use_batch. Set the name of the project for '
               'which this reading is being done. This is used to label jobs '
-              'on aws batch for monitoring and accoutning purposes.')
+              'on aws batch for monitoring and accounting purposes.')
     )
     subparsers = parser.add_subparsers(title='Method')
     subparsers.required = True

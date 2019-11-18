@@ -380,7 +380,8 @@ class DatabaseReader(object):
         for rd in self.new_readings:
             # If there were no conflicts, we can add this to the copy list.
             upload_list.append(rd.make_tuple(batch_id))
-            rd_dict[(rd.tcid, rd.reader, rd.reader_version[:20])] = rd
+            rd_dict[(rd.tcid, rd.reader_class.name,
+                     rd.reader_version[:20])] = rd
 
         # Copy into the database.
         logger.info("Adding %d/%d reading entries to the database." %

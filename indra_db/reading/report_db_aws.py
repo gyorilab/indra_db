@@ -273,7 +273,8 @@ class DbAwsStatReporter(Reporter):
         stmt_outputs = [s for w in workers for s in w.statement_outputs]
 
         self.summary_dict['Total readings'] = len(reading_outputs)
-        reading_stmts = [(rd.reading_id, rd.tcid, rd.reader, rd.get_statements())
+        reading_stmts = [(rd.reading_id, rd.tcid, rd.reader_class.name,
+                          rd.get_statements())
                          for rd in reading_outputs]
         self.summary_dict['Content processed'] = \
             len({t[1] for t in reading_stmts})

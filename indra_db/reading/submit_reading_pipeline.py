@@ -79,7 +79,6 @@ class DbReadingSubmitter(Submitter):
         read_mode = self.options.get('reading_mode', 'unread')
         stmt_mode = self.options.get('stmt_mode', 'all')
 
-        job_name = '%s_%d_%d' % (self.basename, start_ix, end_ix)
         base = ['python', '-m', 'indra_db.reading.read_db_aws',
                 self.basename]
         base += [job_name]
@@ -273,6 +272,7 @@ class DbReadingSubmitter(Submitter):
                     # e.g. job_basename_startIx_endIx
                     job_segs[job_name][stage][metric] = t
                     add_job_to_plot_set(job_name)
+        job_segs = job_segs.export_dict()
         stages = [stg for _, stg in sorted(stages)]
 
         # Add data from local records, if available.
@@ -372,7 +372,7 @@ class DbReadingSubmitter(Submitter):
             ytick_pairs.append(((s_ix + e_ix)/2, '%s_%s' % (s_ix, e_ix),
                                 job_name))
 
-            if job_d['final'] == 'failed':
+            if job_d.get('final') == 'failed':
                 continue
 
             # Plot the more detailed info

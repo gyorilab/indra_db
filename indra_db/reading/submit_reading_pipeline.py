@@ -160,7 +160,12 @@ class DbReadingSubmitter(Submitter):
         super(DbReadingSubmitter, self).watch_and_wait(*args, **kwargs)
         self.end_time = datetime.utcnow()
         if self.job_list:
-            self.produce_report()
+            try:
+                self.produce_report()
+            except Exception as e:
+                logger.error("Failed to produce report.")
+                logger.info("Run record: %s" % self.run_record)
+                raise e
 
     @staticmethod
     def _parse_time(time_str):
@@ -307,6 +312,8 @@ class DbReadingSubmitter(Submitter):
         t_gap = 5
 
         def get_time_tuple(stage_data):
+            assert stage_data is not None, "Unexpected None stage data."
+
             start_seconds = (stage_data['start'] - self.start_time).total_seconds()
             dur = stage_data['duration'].total_seconds()
             if start_seconds > t_gap:
@@ -357,7 +364,8 @@ class DbReadingSubmitter(Submitter):
                 else:
                     xs = []
                     facecolors = []
-                    print("Unhandled ts: %s from job_d: %s" % (ts, job_d))
+                    logger.warning("Unhandled ts: %s for %s with\njob_d = %s"
+                                   % (ts, job_name, job_d.export_dict()))
                 ys = make_y(s_ix, e_ix, 0.9)
                 ax0.broken_barh(xs, ys, facecolors=facecolors)
 
@@ -368,10 +376,12 @@ class DbReadingSubmitter(Submitter):
                 continue
 
             # Plot the more detailed info
-            xs = [get_time_tuple(job_d.get(stg)) for stg in stages]
+            xs = [get_time_tuple(job_d.get(stg)) for stg in stages
+                  if stg in job_d.keys()]
             ys = make_y(s_ix, e_ix, 0.4)
             logger.debug("Making plot for: %s" % str((job_name, xs, ys)))
-            facecolors = [get_stage_choices(stg)[1] for stg in stages]
+            facecolors = [get_stage_choices(stg)[1] for stg in stages
+                          if stg in job_d.keys()]
             ax0.broken_barh(xs, ys, facecolors=facecolors)
 
             for n, stg in enumerate(stages + ['jobs']):
@@ -386,8 +396,8 @@ class DbReadingSubmitter(Submitter):
                     cs[(t > xs[0][0]) & (t < (xs[-1][0] + xs[-1][1]))] += 1
 
         # Format the plot
-        ax0.tick_params(top='off', left='off', right='off', bottom='off',
-                        labelleft='on', labelbottom='off')
+        ax0.tick_params(top=False, left=False, right=False, bottom=False,
+                        labelleft=True, labelbottom=False)
         for spine in ax0.spines.values():
             spine.set_visible(False)
         ax0.set_xlim(0, total_time)

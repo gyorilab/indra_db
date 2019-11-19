@@ -107,7 +107,7 @@ class DbReadingSubmitter(Submitter):
             readings will be processed. If 'none', no statements will be
             produced.
         read_mode : str : 'all', 'unread', or 'none'
-            Optional, default 'undread' - If 'all', read everything (generally
+            Optional, default 'unread' - If 'all', read everything (generally
             slow); if 'unread', only read things that were unread, (the cache
             of old readings may still be used if `stmt_mode='all'` to get
             everything); if 'none', don't read, and only retrieve existing
@@ -345,8 +345,8 @@ class DbReadingSubmitter(Submitter):
 
             # Plot the overall job run info, if known.
             if self.run_record:
-                ts = [None if job_d[k] is None
-                      else (job_d[k] - self.start_time).total_seconds()
+                ts = [None if job_d.get(k) is None
+                      else (job_d.get(k) - self.start_time).total_seconds()
                       for k in ['job_created', 'job_started', 'job_stopped']]
                 if ts[1] is None:
                     xs = [(ts[0], ts[2] - ts[0])]

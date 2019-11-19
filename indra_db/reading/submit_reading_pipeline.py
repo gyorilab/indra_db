@@ -348,7 +348,7 @@ class DbReadingSubmitter(Submitter):
                 ts = [None if job_d.get(k) is None
                       else (job_d.get(k) - self.start_time).total_seconds()
                       for k in ['job_created', 'job_started', 'job_stopped']]
-                if ts[1] is None:
+                if ts[1] is None and ts.count(None) == 1:
                     xs = [(ts[0], ts[2] - ts[0])]
                     facecolors = ['lightgray']
                 elif None not in ts:
@@ -357,7 +357,7 @@ class DbReadingSubmitter(Submitter):
                 else:
                     xs = []
                     facecolors = []
-                    print("Unhandled.")
+                    print("Unhandled ts: %s from job_d: %s" % (ts, job_d))
                 ys = make_y(s_ix, e_ix, 0.9)
                 ax0.broken_barh(xs, ys, facecolors=facecolors)
 

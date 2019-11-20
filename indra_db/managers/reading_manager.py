@@ -98,6 +98,9 @@ class BulkReadingManager(ReadingManager):
         """Read everything available on the database."""
         self.end_datetime = self.run_datetime
         tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+        if not tcids:
+            logger.info("Nothing found to read with %s." % reader_name)
+            return False
         self._run_reading(db, tcids, reader_name)
         return True
 
@@ -116,6 +119,9 @@ class BulkReadingManager(ReadingManager):
             db.TextContent.insert_date > self.begin_datetime
             )
         tcids = {tcid for tcid, in tcid_q.all()}
+        if not tcids:
+            logger.info("Nothing new to read with %s." % reader_name)
+            return False
         self._run_reading(db, tcids, reader_name)
         return True
 

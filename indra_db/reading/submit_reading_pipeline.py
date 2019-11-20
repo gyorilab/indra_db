@@ -35,7 +35,8 @@ from indra.tools.reading.util.reporter import Reporter
 from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
     create_read_parser, Submitter
 
-bucket_name = 'bigmech'
+from indra_db.reading.read_db_aws import get_s3_root, \
+    get_s3_reader_version_loc, bucket_name
 
 logger = logging.getLogger('indra_db_reading')
 
@@ -63,6 +64,7 @@ class DbReadingSubmitter(Submitter):
 
     def __init__(self, *args, **kwargs):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
+        self.s3_prefix = get_s3_root(self.basename)
         self.time_tag = datetime.now().strftime('%Y%m%d_%H%M')
         self.reporter = Reporter(self.basename + '_summary_%s' % self.time_tag)
         self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
@@ -559,12 +561,10 @@ class DbReadingSubmitter(Submitter):
 
     def produce_report(self):
         """Produce a report of the batch jobs."""
-        s3_prefix = 'reading_results/%s/logs/%s/' % (self.basename,
-                                                     self._job_queue)
         logger.info("Producing batch report for %s, from prefix %s."
-                    % (self.basename, s3_prefix))
+                    % (self.basename, self.s3_prefix))
         s3 = boto3.client('s3')
-        file_tree = get_s3_file_tree(s3, bucket_name, s3_prefix)
+        file_tree = get_s3_file_tree(s3, bucket_name, self.s3_prefix)
         logger.info("Found %d relevant files." % len(file_tree))
         stat_files = {
             'git_info.txt': (self._handle_git_info, self._report_git_info),

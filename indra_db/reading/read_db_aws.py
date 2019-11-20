@@ -134,11 +134,13 @@ def main():
     kwargs = {'base_dir': args.basename, 'n_proc': args.num_cores}
     readers = construct_readers(args.readers, **kwargs)
 
-    # Get the content from the object
-    id_list_str = id_list_obj['Body'].read().decode('utf8').strip()
-    id_str_list = id_list_str.splitlines()[args.start_index:args.end_index]
-    random.shuffle(id_str_list)
-    tcids = [int(line.strip()) for line in id_str_list]
+    # Record the reader versions used in this run.
+    reader_versions = {}
+    for reader in readers:
+        reader_versions[reader.name] = reader.get_version()
+    s3.put_object(Bucket=bucket_name,
+                  Key=get_s3_reader_version_loc(args.basename, args.job_name),
+                  Body=json.dumps(reader_versions))
 
     # Some combinations of options don't make sense:
     forbidden_combos = [('all', 'unread'), ('none', 'unread'), ('none', 'none')]

@@ -47,7 +47,7 @@ class ReadingManager(object):
                 completed = func(self, db, reader_name, *args, **kwargs)
                 if completed:
                     is_read_all = (func.__name__ == 'read_all')
-                    reader_version = get_reader_class(reader_name).get_version()
+                    reader_version = self.get_version(reader_name)
                     db.insert('reading_updates', complete_read=is_read_all,
                               reader=reader_name,
                               reader_version=reader_version,
@@ -56,6 +56,9 @@ class ReadingManager(object):
                               latest_datetime=self.end_datetime)
             return completed
         return run_and_record_update
+
+    def get_version(self, reader_name):
+        return get_reader_class(reader_name).get_version()
 
     def _get_latest_updatetime(self, db, reader_name):
         """Get the date of the latest update."""
@@ -143,7 +146,16 @@ class BulkAwsReadingManager(BulkReadingManager):
     def __init__(self, *args, **kwargs):
         self.project_name = kwargs.pop('project_name', None)
         super(BulkAwsReadingManager, self).__init__(*args, **kwargs)
+        self.reader_versions = {}
         return
+
+    def get_version(self, reader_name):
+        if reader_name not in self.reader_versions.keys():
+            logger.error("Expected to find %s in %s."
+                         % (reader_name, self.reader_versions))
+            raise ReadingUpdateError("Tried to access reader version before "
+                                     "reading completed.")
+        return self.reader_versions[reader_name]
 
     def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
         if len(tcids)/ids_per_job >= 1000:
@@ -166,6 +178,20 @@ class BulkAwsReadingManager(BulkReadingManager):
         logger.info("Waiting for complete...")
         sub.watch_and_wait(idle_log_timeout=1200, kill_on_timeout=True,
                            stash_log_method='s3')
+
+        # Get the versions of the reader reader used in all the jobs, check for
+        # consistancy and record the result (at least one result).
+        rv_dict = sub.poll_reader_versions()
+        for job_name, rvs in rv_dict.items():
+            assert len(rvs) == 1 and reader_name in rvs.keys(), \
+                "There should only %s, but got %s." % (reader_name, str(rvs))
+            if reader_name not in self.reader_versions.keys():
+                self.reader_versions[reader_name] = rvs[reader_name]
+            elif self.reader_versions[reader_name] != rvs[reader_name]:
+                logger.warning("Different jobs used different reader "
+                               "versions: %s vs. %s"
+                               % (self.reader_versions[reader_name],
+                                  rvs[reader_name]))
         return
 
 

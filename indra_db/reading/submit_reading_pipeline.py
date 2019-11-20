@@ -17,10 +17,12 @@ bash$ python submit_reading_pipeline.py --help
 In your favorite command line.
 """
 import re
+import json
 import boto3
 import pickle
 import logging
-from numpy import median, arange, array, zeros
+import botocore
+from numpy import median, arange, zeros
 import matplotlib as mpl; mpl.use('Agg')
 from matplotlib import pyplot as plt
 from datetime import datetime, timedelta
@@ -79,10 +81,10 @@ class DbReadingSubmitter(Submitter):
         read_mode = self.options.get('reading_mode', 'unread')
         stmt_mode = self.options.get('stmt_mode', 'all')
 
-        base = ['python', '-m', 'indra_db.reading.read_db_aws',
-                self.basename]
-        base += [job_name]
-        base += ['/tmp', read_mode, stmt_mode, '32', str(start_ix), str(end_ix)]
+        base = ['python3', '-m', 'indra_db.reading.read_db_aws',
+                self.basename, job_name]
+        base += ['/tmp', read_mode, stmt_mode, '32', str(start_ix),
+                 str(end_ix)]
         return base
 
     def _get_extensions(self):

@@ -329,6 +329,7 @@ class DatabaseReader(object):
         self.starts['new_readings'] = datetime.utcnow()
         # Iterate
         logger.debug("Beginning to iterate.")
+        kwargs['verbose'] = self.verbose
         self.reader.read(self.iter_over_content(), **kwargs)
         if self.reader.results:
             self.new_readings.extend(self.reader.results)

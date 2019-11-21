@@ -139,7 +139,7 @@ class DbReadingSubmitter(Submitter):
             job_name = job_d['jobName']
             s3_key = get_s3_reader_version_loc(self.basename, job_name)
             try:
-                ret = s3.get_object(Bucket=bucket_name, Key=s3_key)
+                res = s3.get_object(Bucket=bucket_name, Key=s3_key)
             except botocore.exceptions.ClientError as e:
                 # Handle a missing object gracefully
                 if e.response['Error']['Code'] == 'NoSuchKey':
@@ -150,7 +150,7 @@ class DbReadingSubmitter(Submitter):
                     logger.error("Encountered unexpected error accessing "
                                  "reader version json: " + str(e))
                 continue
-            rv_json = json.loads(ret['Body'].read())
+            rv_json = json.loads(res['Body'].read())
             ret[job_name] = rv_json
         return ret
 

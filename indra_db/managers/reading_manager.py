@@ -96,11 +96,21 @@ class BulkReadingManager(ReadingManager):
     def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
         raise NotImplementedError("_run_reading must be defined in child.")
 
+    def _get_constraints(self, db, reader_name):
+        constrains = []
+        if reader_name.lower() == 'trips':
+            constrains.append(db.TextContent.text_type == "title")
+        return constrains
+
     @ReadingManager._run_all_readers
     def read_all(self, db, reader_name):
         """Read everything available on the database."""
         self.end_datetime = self.run_datetime
-        tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+
+        constraints = self._get_constraints(db, reader_name)
+
+        tcids = {tcid for tcid, in db.select_all(db.TextContent.id,
+                                                 *constraints)}
         if not tcids:
             logger.info("Nothing found to read with %s." % reader_name)
             return False
@@ -117,9 +127,13 @@ class BulkReadingManager(ReadingManager):
         else:
             raise ReadingUpdateError("There are no previous updates. "
                                      "Please run_all.")
+
+        constraints = self._get_constraints(db, reader_name)
+
         tcid_q = db.filter_query(
             db.TextContent.id,
-            db.TextContent.insert_date > self.begin_datetime
+            db.TextContent.insert_date > self.begin_datetime,
+            *constraints
             )
         tcids = {tcid for tcid, in tcid_q.all()}
         if not tcids:

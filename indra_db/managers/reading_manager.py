@@ -338,7 +338,7 @@ def main():
     else:
         db = get_db(args.database)
 
-    readers = ['SPARSER', 'REACH', 'ISI']
+    readers = ['ISI', 'TRIPS', 'SPARSER', 'REACH']
     if args.method == 'local':
         bulk_manager = BulkLocalReadingManager(readers,
                                                buffer_days=args.buffer,

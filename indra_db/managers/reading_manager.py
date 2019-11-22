@@ -93,7 +93,7 @@ class BulkReadingManager(ReadingManager):
 
     This takes exactly the parameters used by :py:class:`ReadingManager`.
     """
-    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_name):
         raise NotImplementedError("_run_reading must be defined in child.")
 
     def _get_constraints(self, db, reader_name):
@@ -160,7 +160,15 @@ class BulkAwsReadingManager(BulkReadingManager):
     timeouts = {
         'reach': 1200,
         'sparser': 600,
-        'isi': 2400
+        'isi': 2400,
+        'trips': 500
+    }
+
+    ids_per_job = {
+        'reach': 5000,
+        'sparser': 5000,
+        'isi': 5000,
+        'trips': 500
     }
 
     def __init__(self, *args, **kwargs):
@@ -177,8 +185,8 @@ class BulkAwsReadingManager(BulkReadingManager):
                                      "reading completed.")
         return self.reader_versions[reader_name]
 
-    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
-        if len(tcids)/ids_per_job >= 1000:
+    def _run_reading(self, db, tcids, reader_name):
+        if len(tcids)/self.ids_per_job[reader_name] >= 1000:
             raise ReadingUpdateError("Too many id's for one submission. "
                                      "Break it up and do it manually.")
 
@@ -193,7 +201,8 @@ class BulkAwsReadingManager(BulkReadingManager):
         logger.info("Submitting jobs...")
         sub = DbReadingSubmitter(job_prefix, [reader_name.lower()],
                                  self.project_name)
-        sub.submit_reading(job_prefix + '.txt', 0, None, ids_per_job)
+        sub.submit_reading(job_prefix + '.txt', 0, None,
+                           self.ids_per_job[reader_name])
 
         logger.info("Waiting for complete...")
         sub.watch_and_wait(idle_log_timeout=self.timeouts[reader_name.lower()],
@@ -235,7 +244,8 @@ class BulkLocalReadingManager(BulkReadingManager):
         super(BulkLocalReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_name):
+        ids_per_job = 5000
         if len(tcids) > ids_per_job:
             raise ReadingUpdateError("Too many id's to run locally. Try "
                                      "running on batch (use_batch).")

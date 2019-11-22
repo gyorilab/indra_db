@@ -60,7 +60,8 @@ class DbReadingSubmitter(Submitter):
     _purpose = 'db_reading'
     _job_queue = 'run_db_reading_queue'
     _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser', 'trips'],
-                     'run_db_reading_isi_jobdef': ['isi']}
+                     'run_db_reading_isi_jobdef': ['isi'],
+                     'run_db_reading_trips_jobdef': ['trips']}
 
     def __init__(self, *args, **kwargs):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)

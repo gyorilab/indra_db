@@ -143,6 +143,12 @@ class BulkAwsReadingManager(BulkReadingManager):
         jobs used in reading will be tagged with this project name, for
         accounting purposes.
     """
+    timeouts = {
+        'reach': 1200,
+        'sparser': 600,
+        'isi': 2400
+    }
+
     def __init__(self, *args, **kwargs):
         self.project_name = kwargs.pop('project_name', None)
         super(BulkAwsReadingManager, self).__init__(*args, **kwargs)
@@ -176,8 +182,8 @@ class BulkAwsReadingManager(BulkReadingManager):
         sub.submit_reading(job_prefix + '.txt', 0, None, ids_per_job)
 
         logger.info("Waiting for complete...")
-        sub.watch_and_wait(idle_log_timeout=1200, kill_on_timeout=True,
-                           stash_log_method='s3')
+        sub.watch_and_wait(idle_log_timeout=self.timeouts[reader_name.lower()],
+                           kill_on_timeout=True, stash_log_method='s3')
 
         # Get the versions of the reader reader used in all the jobs, check for
         # consistancy and record the result (at least one result).

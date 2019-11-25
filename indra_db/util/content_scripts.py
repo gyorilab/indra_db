@@ -121,7 +121,7 @@ def get_stmts_with_agent_text_in(agent_texts, filter_genes=False, db=None):
     return dict(output)
 
 
-def get_text_content_from_stmt_ids(stmt_ids, db=None):
+def get_text_content_from_stmt_ids(stmt_ids, db=None, batch_size=10000):
     """Get text content for statements from a list of ids
 
     Gets the fulltext if it is available, even if the statement came from an
@@ -134,6 +134,9 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     db : Optional[:py:class:`DatabaseManager`]
         User has the option to pass in a database manager. If None
         the primary database is used. Default: None
+
+    batch_size : int
+        The size of batches in which we retrieve content.
 
 
     Returns
@@ -152,20 +155,32 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     if db is None:
         db = get_primary_db()
 
-    text_refs = db.select_all([db.RawStatements.id, db.TextRef.id],
-                              db.RawStatements.id.in_(stmt_ids),
-                              *db.link(db.RawStatements, db.TextRef))
-    text_refs = dict(text_refs)
-    texts = db.select_all([db.TextContent.text_ref_id,
-                           db.TextContent.content,
-                           db.TextContent.text_type],
-                          db.TextContent.text_ref_id.in_(text_refs.values()))
-    fulltexts = {text_id: unpack(text)
-                 for text_id, text, text_type in texts
-                 if text_type == 'fulltext'}
-    abstracts = {text_id: unpack(text)
-                 for text_id, text, text_type in texts
-                 if text_type == 'abstract'}
+    # Query for all text content for which we have statements for its text ref.
+    trid_q = (db.session.query(db.RawStatements.id.label('sid'),
+                               db.TextRef.id.label('trid'))
+                .filter(db.RawStatements.id.in_(stmt_ids),
+                        *db.link(db.RawStatements, db.TextRef)))
+    trid_q = trid_q.subquery('trids')
+    texts_q = (db.session.query(db.TextContent.content,
+                                db.TextContent.text_type,
+                                trid_q)
+                 .filter(trid_q.c.trid == db.TextContent.text_ref_id))
+
+    # Process the results.
+    text_refs = {}
+    fulltexts = {}
+    abstracts = {}
+    titles = {}
+    for content, text_type, sid, trid in texts_q.yield_per(batch_size):
+        # Build a map from statement id to text ref ids.
+        text_refs[sid] = trid
+        if text_type == 'fulltext':
+            fulltexts[trid] = unpack(content)
+        elif text_type == 'abstract':
+            abstracts[trid] = unpack(content)
+        elif text_type == 'title':
+            titles[trid] = unpack(content)
+
     ref_dict = {}
     text_dict = {}
     for stmt_id in stmt_ids:

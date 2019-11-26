@@ -96,9 +96,6 @@ class _DatabaseTestSetup(object):
     def __init__(self):
         self.test_db = get_temp_db(clear=True)
         self.test_data = _make_test_db_input()
-        self.test_db._init_auth()
-        _, api_key = self.test_db._add_auth('tester')
-        self.tester_key = api_key
 
     def load_tables(self):
         """Load in all the background provenance metadata (e.g. text_ref).

@@ -121,7 +121,7 @@ def get_stmts_with_agent_text_in(agent_texts, filter_genes=False, db=None):
     return dict(output)
 
 
-def get_text_content_from_stmt_ids(stmt_ids, db=None, batch_size=10000):
+def get_text_content_from_stmt_ids(stmt_ids, db=None):
     """Get text content for statements from a list of ids
 
     Gets the fulltext if it is available, even if the statement came from an
@@ -134,10 +134,6 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None, batch_size=10000):
     db : Optional[:py:class:`DatabaseManager`]
         User has the option to pass in a database manager. If None
         the primary database is used. Default: None
-
-    batch_size : int
-        The size of batches in which we retrieve content.
-
 
     Returns
     -------
@@ -171,9 +167,11 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None, batch_size=10000):
     fulltexts = {}
     abstracts = {}
     titles = {}
-    for content, text_type, sid, trid in texts_q.yield_per(batch_size):
+    for content, text_type, sid, trid in texts_q.all():
         # Build a map from statement id to text ref ids.
         text_refs[sid] = trid
+
+        # Build a map to the various content
         if text_type == 'fulltext':
             fulltexts[trid] = unpack(content)
         elif text_type == 'abstract':

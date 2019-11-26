@@ -45,9 +45,17 @@ class ReadingManager(object):
             for reader_name in self.reader_names:
                 self.run_datetime = datetime.utcnow()
                 completed = func(self, db, reader_name, *args, **kwargs)
+                logger.info("%s is%s completed" % ('' if completed else ' not',
+                                                   reader_name))
                 if completed:
                     is_read_all = (func.__name__ == 'read_all')
                     reader_version = self.get_version(reader_name)
+                    logger.info("Recording this reading in reading_updates: "
+                                "%s version %s running at %s reading content "
+                                "between %s and %s."
+                                % (reader_name, reader_version,
+                                   self.run_datetime, self.begin_datetime,
+                                   self.end_datetime))
                     db.insert('reading_updates', complete_read=is_read_all,
                               reader=reader_name,
                               reader_version=reader_version,

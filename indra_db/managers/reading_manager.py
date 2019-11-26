@@ -42,9 +42,11 @@ class ReadingManager(object):
     def _run_all_readers(cls, func):
         @wraps(func)
         def run_and_record_update(self, db, *args, **kwargs):
+            all_completed = False
             for reader_name in self.reader_names:
                 self.run_datetime = datetime.utcnow()
                 completed = func(self, db, reader_name, *args, **kwargs)
+                all_completed &= completed
                 logger.info("%s is%s completed" % ('' if completed else ' not',
                                                    reader_name))
                 if completed:
@@ -62,7 +64,7 @@ class ReadingManager(object):
                               run_datetime=self.run_datetime,
                               earliest_datetime=self.begin_datetime,
                               latest_datetime=self.end_datetime)
-            return completed
+            return all_completed
         return run_and_record_update
 
     def get_version(self, reader_name):

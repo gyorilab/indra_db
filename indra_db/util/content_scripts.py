@@ -2,7 +2,7 @@ __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
 
 from collections import defaultdict
-
+from sqlalchemy import func
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
 
@@ -152,33 +152,29 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
         db = get_primary_db()
 
     # Query for all text content for which we have statements for its text ref.
-    trid_q = (db.session.query(db.RawStatements.id.label('sid'),
-                               db.TextRef.id.label('trid'))
-                .filter(db.RawStatements.id.in_(stmt_ids),
-                        *db.link(db.RawStatements, db.TextRef)))
-    trid_q = trid_q.subquery('trids')
+    trid_q = (db.session.query(func.array_agg(db.RawStatements.id)
+                               .label('stmt_ids'),
+                               db.TextRef.id.label('text_ref_id'))
+              .filter(db.RawStatements.id.in_(stmt_ids),
+                      *db.link(db.RawStatements, db.TextRef))
+              .group_by(db.TextRef.id))
+    trid_q = trid_q.subquery('text_ref_ids')
     texts_q = (db.session.query(db.TextContent.content,
+                                db.TextContent.source,
                                 db.TextContent.text_type,
                                 trid_q)
-                 .filter(trid_q.c.trid == db.TextContent.text_ref_id))
+                 .filter(trid_q.c.text_ref_id ==
+                         db.TextContent.text_ref_id))
 
     # Process the results.
+    content_map = defaultdict(dict)
     text_refs = {}
-    fulltexts = {}
-    abstracts = {}
-    titles = {}
-    for content, text_type, sid, trid in texts_q.all():
-        # Build a map from statement id to text ref ids.
-        text_refs[sid] = trid
-
+    for content, source, text_type, stmts, text_ref_id in texts_q.all():
         # Build a map to the various content
-        if text_type == 'fulltext':
-            fulltexts[trid] = unpack(content)
-        elif text_type == 'abstract':
-            abstracts[trid] = unpack(content)
-        elif text_type == 'title':
-            titles[trid] = unpack(content)
-
+        content_map[text_ref_id].update({(source, text_type): content})
+        # Build a map from statement id to text ref ids
+        for stmt_id in stmts:
+            text_refs[stmt_id] = text_ref_id
     ref_dict = {}
     text_dict = {}
     for stmt_id in stmt_ids:
@@ -189,19 +185,22 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
             # if not, set fulltext to None
             ref_dict[stmt_id] = None
             continue
-        ref_dict[stmt_id] = text_ref
-        fulltext = fulltexts.get(text_ref)
-        abstract = abstracts.get(text_ref)
-        # use the fulltext if we have one
-        if fulltext is not None:
-            # if so, the text content is xml and will need to be processed
-            text_dict[text_ref] = fulltext
-        # otherwise use the abstract
-        elif abstract is not None:
-            text_dict[text_ref] = abstract
-        # if we have neither, set result to None
+        content = content_map[text_ref]
+        fulltext = [key for key in content if key[1] == 'fulltext']
+        abstract = [key for key in content if key[1] == 'abstract']
+        title = [key for key in content if key[1] == 'title']
+        if fulltext:
+            key = fulltext[0]
+        elif abstract:
+            key = abstract[0]
+        elif title:
+            key = title[0]
         else:
             text_dict[text_ref] = None
+            continue
+        content_id = '/'.join([str(text_ref), key[0], key[1]])
+        ref_dict[stmt_id] = content_id
+        text_dict[content_id] = unpack(content[key])
     return ref_dict, text_dict
 
 

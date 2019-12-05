@@ -1,10 +1,59 @@
+import re
+import boto3
 import logging
 from datetime import datetime
 from argparse import ArgumentParser
 
 from indra_db.util import get_db, get_ro
+from indra_db.config import CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+# READONLY UPDATE CONFIG
+aws_role = CONFIG['lambda']['role']
+aws_lambda_function = CONFIG['lambda']['function']
+
+
+def uncamel(word):
+    return re.sub(r'([a-z])([A-Z])', '\g<1>_\g<2>', word).lower()
+
+
+def get_lambda_client():
+    sts = boto3.client('sts')
+
+    # Check the current role
+    kwargs = {}
+    ident = sts.get_caller_identity()
+    if aws_role and not ident['Arn'].endswith(aws_role):
+        # If the role is not the default, assume that role.
+        new_role_arn = "arn:aws:iam::%s:role/%s" % (ident['Account'], aws_role)
+        res = sts.assume_role(RoleArn=new_role_arn,
+                              RoleSessionName="AssumeRoleReadonlyDBUpdate")
+        kwargs = {uncamel(k): v for k, v in res['Credentials'].items()
+                  if 'expiration' not in k}
+
+    # Get a client to Lambda
+    return boto3.client('lambda', **kwargs)
+
+
+class ReadonlyTransferEnv(object):
+    def __init__(self, db, ro):
+        self.principal = db
+        self.readonly = ro
+
+    def _set_lambda_env(self, env_dict):
+        lambda_client = get_lambda_client()
+        lambda_client.update_function_configureation(
+            FunctionName=aws_lambda_function,
+            Environment={"Variables": env_dict}
+        )
+
+    def __enter__(self):
+        self._set_lambda_env({'INDRAROOVERRIDE': str(self.principal.url)})
+
+    def __exit__(self):
+        self._set_lambda_env({})
 
 
 def main():
@@ -27,7 +76,8 @@ def main():
 
     logger.info("%s - Beginning upload of content (est. ~30 minutes)"
                 % datetime.now())
-    readonly_db.load_dump(dump_file)
+    with ReadonlyTransferEnv(principal_db, readonly_db):
+        readonly_db.load_dump(dump_file)
     return
 
 

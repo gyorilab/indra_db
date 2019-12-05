@@ -63,8 +63,8 @@ def _load_config():
                     for k in parser.options(section)}
 
         # Handle the case for the s3 bucket spec.
-        if section == 'aws-s3':
-            CONFIG['s3_dump'] = def_dict
+        if section.starswith('aws-'):
+            CONFIG[section[4:]] = def_dict
             continue
 
         # Extract all the database connection data

@@ -171,7 +171,8 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     text_refs = {}
     for content, source, text_type, stmts, text_ref_id in texts_q.all():
         # Build a map to the various content
-        content_map[text_ref_id].update({(source, text_type): content})
+        content_map[text_ref_id].update({(source, text_type):
+                                         unpack(content)})
         # Build a map from statement id to text ref ids
         for stmt_id in stmts:
             text_refs[stmt_id] = text_ref_id
@@ -200,7 +201,7 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
             continue
         content_id = '/'.join([str(text_ref), key[0], key[1]])
         ref_dict[stmt_id] = content_id
-        text_dict[content_id] = unpack(content[key])
+        text_dict[content_id] = content[key]
     return ref_dict, text_dict
 
 

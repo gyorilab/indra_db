@@ -172,13 +172,15 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     ref_dict = {}
     text_dict = {}
     for content, source, text_type, stmts, text_ref_id in texts_q.all():
-        # Build a map to the various content
+        # key uniquely identifies each piece of content
         new_key = '/'.join([str(text_ref_id), source, text_type])
         if text_ref_id not in seen_text_refs:
             text_dict[new_key] = content
             seen_text_refs[text_ref_id] = new_key
             ref_dict.update({stmt_id: new_key for stmt_id in stmts})
         else:
+            # update if we find text_type with higher priority for
+            # a given text_ref
             old_key = seen_text_refs[text_ref_id]
             old_text_type = old_key.split('/')[2]
             if priority[text_type] > priority[old_text_type]:

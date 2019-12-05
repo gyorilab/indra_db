@@ -62,9 +62,9 @@ def test_get_text_content_from_stmt_ids():
                  ' experiment.')
     db = _get_prepped_db()
     ref_dict, text_dict = get_text_content_from_stmt_ids([0, 1], db=db)
-    assert ref_dict == {0: 0, 1: 1}
-    assert text_dict[0] == fulltext0
-    assert text_dict[1] == fulltext1
+    assert ref_dict == {0: '0/pmc/fulltext', 1: '1/pmc/fulltext'}
+    assert text_dict['0/pmc/fulltext'] == fulltext0
+    assert text_dict['1/pmc/fulltext'] == fulltext1
 
 
 @attr('nonpublic')

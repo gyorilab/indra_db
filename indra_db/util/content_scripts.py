@@ -167,41 +167,27 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
                          db.TextContent.text_ref_id))
 
     # Process the results.
-    content_map = defaultdict(dict)
-    text_refs = {}
-    for content, source, text_type, stmts, text_ref_id in texts_q.all():
-        # Build a map to the various content
-        content_map[text_ref_id].update({(source, text_type):
-                                         unpack(content)})
-        # Build a map from statement id to text ref ids
-        for stmt_id in stmts:
-            text_refs[stmt_id] = text_ref_id
+    priority = {'fulltext': 2, 'abstract': 1, 'title': 0}
+    seen_text_refs = {}
     ref_dict = {}
     text_dict = {}
-    for stmt_id in stmt_ids:
-        # first check if we have text content for this statement
-        try:
-            text_ref = text_refs[stmt_id]
-        except KeyError:
-            # if not, set fulltext to None
-            ref_dict[stmt_id] = None
-            continue
-        content = content_map[text_ref]
-        fulltext = [key for key in content if key[1] == 'fulltext']
-        abstract = [key for key in content if key[1] == 'abstract']
-        title = [key for key in content if key[1] == 'title']
-        if fulltext:
-            key = fulltext[0]
-        elif abstract:
-            key = abstract[0]
-        elif title:
-            key = title[0]
+    for content, source, text_type, stmts, text_ref_id in texts_q.all():
+        # Build a map to the various content
+        new_key = '/'.join([str(text_ref_id), source, text_type])
+        if text_ref_id not in seen_text_refs:
+            text_dict[new_key] = content
+            seen_text_refs[text_ref_id] = new_key
+            ref_dict.update({stmt_id: new_key for stmt_id in stmts})
         else:
-            text_dict[text_ref] = None
-            continue
-        content_id = '/'.join([str(text_ref), key[0], key[1]])
-        ref_dict[stmt_id] = content_id
-        text_dict[content_id] = content[key]
+            old_key = seen_text_refs[text_ref_id]
+            old_text_type = old_key.split('/')[2]
+            if priority[text_type] > priority[old_text_type]:
+                seen_text_refs[text_ref_id] = new_key
+                text_dict[new_key] = content
+                text_dict.pop(old_key)
+                ref_dict.update({stmt_id: new_key for stmt_id in stmts})
+
+    text_dict = {key: unpack(content) for key, content in text_dict.items()}
     return ref_dict, text_dict
 
 

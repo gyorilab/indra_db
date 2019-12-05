@@ -60,11 +60,19 @@ def test_get_text_content_from_stmt_ids():
                  ' impact on the future of our lab. The following figure'
                  ' contains a schematic diagram of the apparatus of our'
                  ' experiment.')
+    abstract2 = ('We describe applications of deep learning (DL) to'
+                 ' grant procurement. We find that mentions of DL in'
+                 ' grant proposals has a positive correlation with the'
+                 ' likelihood an application is accepted. Research into'
+                 ' DL is shown to increase the health of research'
+                 ' programs')
     db = _get_prepped_db()
-    ref_dict, text_dict = get_text_content_from_stmt_ids([0, 1], db=db)
-    assert ref_dict == {0: '0/pmc/fulltext', 1: '1/pmc/fulltext'}
+    ref_dict, text_dict = get_text_content_from_stmt_ids([0, 1, 2], db=db)
+    assert ref_dict == {0: '0/pmc/fulltext', 1: '1/pmc/fulltext',
+                        2: '2/pubmed/abstract'}
     assert text_dict['0/pmc/fulltext'] == fulltext0
     assert text_dict['1/pmc/fulltext'] == fulltext1
+    assert text_dict['2/pubmed/abstract'] == abstract2
 
 
 @attr('nonpublic')

@@ -138,15 +138,16 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     Returns
     -------
     ref_dict: dict
-        dict mapping statement ids to associated text ref ids. Some
-        statement ids will map to None if there is no associated text
-        content.
+        dict mapping statement ids to identifiers for pieces of content.
+        These identifiers take the form `<text_ref_id>/<source>/<text_type>'.
+        No entries exist for statements with no associated text content
+        (these typically come from databases)
+
 
     text_dict: dict
-        dict mapping text ref ids to best possible text content.
-        fulltext xml from elsevier or pmc if it exists in the database,
-        otherwise an abstract if there is one in the database. Maps text_ref
-        to None if there is no text content available.
+        dict mapping content identifiers used as values in the ref_dict
+        to best available text content. The order of preference is
+        fulltext xml > plaintext abstract > title
     """
     if db is None:
         db = get_primary_db()

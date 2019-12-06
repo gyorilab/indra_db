@@ -210,7 +210,7 @@ def get_text_content_from_pmids(pmids, db=None):
 
     Returns
     -------
-    ref_dict: dict
+    identifiers : dict
         dict mapping pmids to identifiers for pieces of content.
         These identifiers are tuples of the form
         (text_ref_id, source, text_type). Each tuple uniquely specifies
@@ -218,7 +218,7 @@ def get_text_content_from_pmids(pmids, db=None):
         No entries exist for statements with no associated text content
         (these typically come from databases)
 
-    content_dict: dict
+    content : dict
         dict mapping content identifiers used as values in the ref_dict
         to the best available text content.
     """

@@ -363,7 +363,7 @@ def get_text_content(content_identifiers, db=None):
                AND tc.source = ids.source
                AND tc.text_type = ids.text_type
             """ % id_str
-    res = db.session.execute(query, params)
+    res = db.session.execute(text(query), params)
     return {(trid, source, text_type): unpack(content)
             for trid, source, text_type, content in res}
 

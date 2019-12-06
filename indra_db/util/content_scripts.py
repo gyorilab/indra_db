@@ -194,6 +194,55 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     return ref_dict, text_dict
 
 
+def get_text_content(content_identifiers, db=None):
+    """Return text_content associated to a list of content identifiers
+
+    Parameters
+    ----------
+    content_identifiers : iterable of tuple
+        A content identifier is a triple with three elements, text_ref_id,
+        source, and text_type. These three pieces of information uniquely
+        specify a piece of content in the database. content_identifiers
+        is a list of these triples
+
+     db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
+    Returns
+    -------
+    dict
+        A dictionary mapping content identifiers to pieces of
+        text content. content identifiers for which no content
+        exists in the database are excluded as keys.
+    """
+    if db is None:
+        db = get_primary_db()
+    # Remove duplicate identifiers
+    content_identifiers = set(content_identifiers)
+    # Query finds content associated to each identifier by joining
+    # the text_content table with a virtual table containing the
+    # input identifiers. The query string is generated programmatically
+    id_str = ', '.join('(:trid%s, :source%s, :text_type%s)' % (i, i, i)
+                       for i in range(len(content_identifiers)))
+    params = {}
+    for i, (trid, source, text_type) in enumerate(content_identifiers):
+        params.update({'trid%s' % i: trid,
+                       'source%i' % i: source,
+                       'text_type%i' % i: text_type})
+    query = """SELECT tc.text_ref_id, tc.source, tc.text_type, content
+               FROM text_content AS tc
+               JOIN (VALUES %s)
+               AS ids (text_ref_id, source, text_type)
+               ON tc.text_ref_id = ids.text_ref_id
+               AND tc.source = ids.source
+               AND tc.text_type = ids.text_type
+            """ % id_str
+    res = db.session.execute(query, params)
+    return {(trid, source, text_type): unpack(content)
+            for trid, source, text_type, content in res}
+
+
 def get_text_content_from_text_refs(text_refs, db=None):
     """Get text_content from an evidence object's text_refs attribute
 

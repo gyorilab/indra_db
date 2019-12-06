@@ -194,6 +194,41 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     return ref_dict, text_dict
 
 
+def get_text_content_from_pmids(pmids, db=None):
+    """Get best available text content for list of pmids
+
+    For each pmid, gets the best piece of text content with the priority
+    fulltext > abstract > title.
+
+    Parameters
+    ----------
+    pmids : list of str
+
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
+    Returns
+    -------
+    ref_dict: dict
+        dict mapping pmids to identifiers for pieces of content.
+        These identifiers are tuples of the form
+        (text_ref_id, source, text_type). Each tuple uniquely specifies
+        a piece of content in the database
+        No entries exist for statements with no associated text content
+        (these typically come from databases)
+
+    content_dict: dict
+        dict mapping content identifiers used as values in the ref_dict
+        to the best available text content.
+    """
+    if db is None:
+        db = get_primary_db()
+    identifiers = get_content_identifiers_from_pmids(pmids)
+    content = get_text_content(identifiers.values())
+    return identifiers, content
+
+
 def get_content_identifiers_from_stmt_ids(stmt_ids, db=None):
     """Get content identifiers for statements from a list of ids
 

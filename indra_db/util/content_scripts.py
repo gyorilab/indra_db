@@ -232,6 +232,7 @@ def get_content_identifiers_from_stmt_ids(stmt_ids, db=None):
               .group_by(db.TextRef.id))
     trid_q = trid_q.subquery('text_ref_ids')
     texts_q = (db.session.query(db.TextContent.source,
+                                db.TextContent.format,
                                 db.TextContent.text_type,
                                 trid_q)
                  .filter(trid_q.c.text_ref_id ==
@@ -241,9 +242,9 @@ def get_content_identifiers_from_stmt_ids(stmt_ids, db=None):
     priority = {'fulltext': 2, 'abstract': 1, 'title': 0}
     seen_text_refs = {}
     ref_dict = {}
-    for source, text_type, stmts, text_ref_id in texts_q.all():
+    for source, format_, text_type, stmts, text_ref_id in texts_q.all():
         # key uniquely identifies each piece of content
-        new_identifier = (text_ref_id, source, text_type)
+        new_identifier = (text_ref_id, source, format_, text_type)
         if text_ref_id not in seen_text_refs:
             seen_text_refs[text_ref_id] = new_identifier
             ref_dict.update({stmt_id: new_identifier for stmt_id in stmts})
@@ -290,18 +291,23 @@ def get_content_identifiers_from_pmids(pmids, db=None):
     if db is None:
         db = get_primary_db()
     pmids = tuple(set(pmids))
-    query = """SELECT tr.pmid, tr.id, tc.source, tc.text_type
-               FROM text_content AS tc
-               JOIN text_ref as tr
-               ON tr.id = tc.text_ref_id
-               WHERE tr.pmid IN :pmids
+    query = """SELECT
+                   tr.pmid, tr.id, tc.source, tc.format, tc.text_type
+               FROM
+                   text_content AS tc
+               JOIN
+                   text_ref as tr
+               ON
+                   tr.id = tc.text_ref_id
+               WHERE
+                   tr.pmid IN :pmids
             """
     res = db.session.execute(text(query), {'pmids': pmids})
     priority = {'fulltext': 2, 'abstract': 1, 'title': 0}
     seen_text_refs = {}
     ref_dict = {}
-    for pmid, text_ref_id, source, text_type in res.fetchall():
-        new_identifier = (text_ref_id, source, text_type)
+    for pmid, text_ref_id, source, format_, text_type in res.fetchall():
+        new_identifier = (text_ref_id, source, format_, text_type)
         if text_ref_id not in seen_text_refs:
             seen_text_refs[text_ref_id] = new_identifier
             ref_dict[pmid] = new_identifier
@@ -345,20 +351,27 @@ def get_text_content(content_identifiers, db=None):
     # Query finds content associated to each identifier by joining
     # the text_content table with a virtual table containing the
     # input identifiers. The query string is generated programmatically
-    id_str = ', '.join('(:trid%s, :source%s, :text_type%s)' % (i, i, i)
+    id_str = ', '.join('(:trid%s, :source%s, :format%s, :text_type%s)' % (i,)*4
                        for i in range(len(content_identifiers)))
     params = {}
-    for i, (trid, source, text_type) in enumerate(content_identifiers):
+    for i, (trid, source,
+            format_, text_type) in enumerate(content_identifiers):
         params.update({'trid%s' % i: trid,
                        'source%i' % i: source,
+                       'format%i' % i: format_,
                        'text_type%i' % i: text_type})
-    query = """SELECT tc.text_ref_id, tc.source, tc.text_type, content
-               FROM text_content AS tc
+    query = """SELECT
+                   tc.text_ref_id, tc.source, tc.format, tc.text_type, content
+               FROM
+                   text_content AS tc
                JOIN (VALUES %s)
-               AS ids (text_ref_id, source, text_type)
-               ON tc.text_ref_id = ids.text_ref_id
-               AND tc.source = ids.source
-               AND tc.text_type = ids.text_type
+               AS
+                  ids (text_ref_id, source, text_type)
+               ON
+                   tc.text_ref_id = ids.text_ref_id
+                   AND tc.source = ids.source
+                   AND tc.format = ids.format
+                   AND tc.text_type = ids.text_type
             """ % id_str
     res = db.session.execute(text(query), params)
     return {(trid, source, text_type): unpack(content)

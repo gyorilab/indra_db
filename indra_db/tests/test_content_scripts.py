@@ -254,11 +254,11 @@ def _make_text_content_input():
 
     text_content_tuples = [(0, 0, 'pubmed', 'abstract', 'text',
                             zip_string(abstract0)),
-                           (1, 0, 'pmc', 'fulltext', 'text',
+                           (1, 0, 'pmc', 'fulltext', 'xml',
                             zip_string(fulltext0)),
                            (2, 1, 'pubmed', 'abstract', 'text',
                             zip_string(abstract1)),
-                           (3, 1, 'pmc', 'fulltext', 'text',
+                           (3, 1, 'pmc', 'fulltext', 'xml',
                             zip_string(fulltext1)),
                            (4, 2, 'pubmed', 'abstract', 'text',
                             zip_string(abstract2))]

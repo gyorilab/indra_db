@@ -63,7 +63,7 @@ def _load_config():
                     for k in parser.options(section)}
 
         # Handle the case for the s3 bucket spec.
-        if section.starswith('aws-'):
+        if section.startswith('aws-'):
             CONFIG[section[4:]] = def_dict
             continue
 
@@ -132,3 +132,6 @@ def get_s3_dump(force_update=False, include_config=True):
         _load(include_config)
 
     return CONFIG['s3_dump']
+
+
+_load(True)

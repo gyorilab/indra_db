@@ -12,7 +12,7 @@ from .indexes import *
 
 logger = logging.getLogger(__name__)
 
-CREATE_ORDER = ['raw_stmt_src', 'pa_stmt_src', 'fast_raw_pa_link',
+CREATE_ORDER = ['raw_stmt_src', 'fast_raw_pa_link', 'pa_stmt_src',
                 'evidence_counts', 'pa_source_lookup', 'pa_meta', 'text_meta',
                 'name_meta']
 CREATE_UNORDERED = {'reading_ref_link'}

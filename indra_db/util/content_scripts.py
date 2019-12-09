@@ -2,7 +2,7 @@ __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
 
 from collections import defaultdict
-
+from sqlalchemy import text
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
 
@@ -135,61 +135,229 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
         User has the option to pass in a database manager. If None
         the primary database is used. Default: None
 
+    Returns
+    -------
+    ref_dict: dict
+        dict mapping statement ids to identifiers for pieces of content.
+        These identifiers take the form `<text_ref_id>/<source>/<text_type>'.
+        No entries exist for statements with no associated text content
+        (these typically come from databases)
+
+
+    text_dict: dict
+        dict mapping content identifiers used as values in the ref_dict
+        to best available text content. The order of preference is
+        fulltext xml > plaintext abstract > title
+    """
+    if db is None:
+        db = get_primary_db()
+    identifiers = get_content_identifiers_from_stmt_ids(stmt_ids)
+    content = _get_text_content(identifiers.values())
+    return identifiers, content
+
+
+def get_text_content_from_pmids(pmids, db=None):
+    """Get best available text content for list of pmids
+
+    For each pmid, gets the best piece of text content with the priority
+    fulltext > abstract > title.
+
+    Parameters
+    ----------
+    pmids : list of str
+
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
+    Returns
+    -------
+    identifiers : dict
+        dict mapping pmids to identifiers for pieces of content.
+        These identifiers are tuples of the form
+        (text_ref_id, source, text_type). Each tuple uniquely specifies
+        a piece of content in the database
+        No entries exist for statements with no associated text content
+        (these typically come from databases)
+
+    content : dict
+        dict mapping content identifiers used as values in the ref_dict
+        to the best available text content.
+    """
+    if db is None:
+        db = get_primary_db()
+    identifiers = get_content_identifiers_from_pmids(pmids)
+    content = _get_text_content(identifiers.values())
+    return identifiers, content
+
+
+def get_content_identifiers_from_stmt_ids(stmt_ids, db=None):
+    """Get content identifiers for statements from a list of ids
+
+    An identifier is a triple containing a text_ref_id, source, and text_type
+    Gets the identifier for best piece of text content with priority
+    fulltext > abstract > title
+
+    Parameters
+    ----------
+    stmt_ids : list of str
+
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
 
     Returns
     -------
     ref_dict: dict
-        dict mapping statement ids to associated text ref ids. Some
-        statement ids will map to None if there is no associated text
-        content.
-
-    text_dict: dict
-        dict mapping text ref ids to best possible text content.
-        fulltext xml from elsevier or pmc if it exists in the database,
-        otherwise an abstract if there is one in the database. Maps text_ref
-        to None if there is no text content available.
+        dict mapping statement ids to identifiers for pieces of content.
+        These identifiers take the form `<text_ref_id>/<source>/<text_type>'.
+        No entries exist for statements with no associated text content
+        (these typically come from databases)
     """
     if db is None:
         db = get_primary_db()
+    stmt_ids = tuple(set(stmt_ids))
+    query = """SELECT
+                   sub.stmt_id, tc.text_ref_id, tc.source,
+                   tc.format, tc.text_type
+               FROM
+                   text_content tc,
+                   (SELECT
+                        stmt_id, text_ref_id
+                    FROM
+                        raw_stmt_ref_link
+                    WHERE
+                        stmt_id IN :stmt_ids) sub
+                WHERE
+                    tc.text_ref_id = sub.text_ref_id
+            """
+    res = db.session.execute(text(query), {'stmt_ids': stmt_ids})
+    return _collect_content_identifiers(res)
 
-    text_refs = db.select_all([db.RawStatements.id, db.TextRef.id],
-                              db.RawStatements.id.in_(stmt_ids),
-                              *db.link(db.RawStatements, db.TextRef))
-    text_refs = dict(text_refs)
-    texts = db.select_all([db.TextContent.text_ref_id,
-                           db.TextContent.content,
-                           db.TextContent.text_type],
-                          db.TextContent.text_ref_id.in_(text_refs.values()))
-    fulltexts = {text_id: unpack(text)
-                 for text_id, text, text_type in texts
-                 if text_type == 'fulltext'}
-    abstracts = {text_id: unpack(text)
-                 for text_id, text, text_type in texts
-                 if text_type == 'abstract'}
+
+def get_content_identifiers_from_pmids(pmids, db=None):
+    """Get content identifiers from list of pmids
+
+    An identifier is a triple containing a text_ref_id, source, and text_type
+    Gets the identifier for best piece of text content with priority
+    fulltext > abstract > title
+
+    Parameters
+    ----------
+    pmids : list of str
+
+    db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary is used. Default: None
+
+    Returns
+    -------
+    ref_dict: dict
+        dict mapping statement ids to identifiers for pieces of content.
+        These identifiers take the form `<text_ref_id>/<source>/<text_type>'.
+        No entries exist for statements with no associated text content
+        (these typically come from databases)
+
+
+    text_dict: dict
+        dict mapping content identifiers used as values in the ref_dict
+        to best available text content. The order of preference is
+        fulltext xml > plaintext abstract > title
+    """
+    if db is None:
+        db = get_primary_db()
+    pmids = tuple(set(pmids))
+    query = """SELECT
+                   tr.pmid, tr.id, tc.source, tc.format, tc.text_type
+               FROM
+                   text_content AS tc
+               JOIN
+                   text_ref as tr
+               ON
+                   tr.id = tc.text_ref_id
+               WHERE
+                   tr.pmid IN :pmids
+            """
+    res = db.session.execute(text(query), {'pmids': pmids})
+    return _collect_content_identifiers(res)
+
+
+def _collect_content_identifiers(res):
+    priority = {'fulltext': 2, 'abstract': 1, 'title': 0}
+    seen_text_refs = {}
     ref_dict = {}
-    text_dict = {}
-    for stmt_id in stmt_ids:
-        # first check if we have text content for this statement
-        try:
-            text_ref = text_refs[stmt_id]
-        except KeyError:
-            # if not, set fulltext to None
-            ref_dict[stmt_id] = None
-            continue
-        ref_dict[stmt_id] = text_ref
-        fulltext = fulltexts.get(text_ref)
-        abstract = abstracts.get(text_ref)
-        # use the fulltext if we have one
-        if fulltext is not None:
-            # if so, the text content is xml and will need to be processed
-            text_dict[text_ref] = fulltext
-        # otherwise use the abstract
-        elif abstract is not None:
-            text_dict[text_ref] = abstract
-        # if we have neither, set result to None
+    for id_, text_ref_id, source, format_, text_type in res.fetchall():
+        new_identifier = (text_ref_id, source, format_, text_type)
+        if (id_, text_ref_id) not in seen_text_refs:
+            seen_text_refs[(id_, text_ref_id)] = new_identifier
+            ref_dict[id_] = new_identifier
         else:
-            text_dict[text_ref] = None
-    return ref_dict, text_dict
+            # update if we find text_type with higher priority for
+            # a given text_ref
+            old_identifier = seen_text_refs[(id_, text_ref_id)]
+            old_text_type = old_identifier[3]
+            if priority[text_type] > priority[old_text_type]:
+                seen_text_refs[(id_, text_ref_id)] = new_identifier
+                ref_dict[id_] = new_identifier
+    return ref_dict
+
+
+def _get_text_content(content_identifiers, db=None):
+    """Return text_content associated to a list of content identifiers
+
+    Parameters
+    ----------
+    content_identifiers : iterable of tuple
+        A content identifier is a triple with three elements, text_ref_id,
+        source, and text_type. These three pieces of information uniquely
+        specify a piece of content in the database. content_identifiers
+        is a list of these triples
+
+     db : Optional[:py:class:`DatabaseManager`]
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
+
+    Returns
+    -------
+    dict
+        A dictionary mapping content identifiers to pieces of
+        text content. content identifiers for which no content
+        exists in the database are excluded as keys.
+    """
+    if db is None:
+        db = get_primary_db()
+    # Remove duplicate identifiers
+    content_identifiers = set(content_identifiers)
+    # Query finds content associated to each identifier by joining
+    # the text_content table with a virtual table containing the
+    # input identifiers. The query string is generated programmatically
+    id_str = ', '.join('(:trid%d, :source%d, :format%d, :text_type%d)'
+                       % (i, i, i, i)
+                       for i in range(len(content_identifiers)))
+    params = {}
+    for i, (trid, source,
+            format_, text_type) in enumerate(content_identifiers):
+        params.update({'trid%s' % i: trid,
+                       'source%i' % i: source,
+                       'format%i' % i: format_,
+                       'text_type%i' % i: text_type})
+    query = """SELECT
+                   tc.text_ref_id, tc.source, tc.format, tc.text_type, content
+               FROM
+                   text_content AS tc
+               JOIN (VALUES %s)
+               AS
+                  ids (text_ref_id, source, format, text_type)
+               ON
+                   tc.text_ref_id = ids.text_ref_id
+                   AND tc.source = ids.source
+                   AND tc.format = ids.format
+                   AND tc.text_type = ids.text_type
+            """ % id_str
+
+    res = db.session.execute(text(query), params)
+    return {(trid, source, format, text_type): unpack(content)
+            for trid, source, format, text_type, content in res}
 
 
 def get_text_content_from_text_refs(text_refs, db=None):

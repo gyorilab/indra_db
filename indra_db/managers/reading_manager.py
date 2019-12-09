@@ -171,7 +171,7 @@ class BulkAwsReadingManager(BulkReadingManager):
         'reach': 1200,
         'sparser': 600,
         'isi': 2400,
-        'trips': 500
+        'trips': 300
     }
 
     ids_per_job = {

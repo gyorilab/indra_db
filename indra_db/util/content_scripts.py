@@ -331,7 +331,8 @@ def get_text_content(content_identifiers, db=None):
     # Query finds content associated to each identifier by joining
     # the text_content table with a virtual table containing the
     # input identifiers. The query string is generated programmatically
-    id_str = ', '.join('(:trid%s, :source%s, :format%s, :text_type%s)' % (i,)*4
+    id_str = ', '.join('(:trid%d, :source%d, :format%d, :text_type%d)'
+                       % (i, i, i, i)
                        for i in range(len(content_identifiers)))
     params = {}
     for i, (trid, source,

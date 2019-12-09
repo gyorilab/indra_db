@@ -347,16 +347,17 @@ def get_text_content(content_identifiers, db=None):
                    text_content AS tc
                JOIN (VALUES %s)
                AS
-                  ids (text_ref_id, source, text_type)
+                  ids (text_ref_id, source, format, text_type)
                ON
                    tc.text_ref_id = ids.text_ref_id
                    AND tc.source = ids.source
                    AND tc.format = ids.format
                    AND tc.text_type = ids.text_type
             """ % id_str
+
     res = db.session.execute(text(query), params)
-    return {(trid, source, text_type): unpack(content)
-            for trid, source, text_type, content in res}
+    return {(trid, source, format, text_type): unpack(content)
+            for trid, source, format, text_type, content in res}
 
 
 def get_text_content_from_text_refs(text_refs, db=None):

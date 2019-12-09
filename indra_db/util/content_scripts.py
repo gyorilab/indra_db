@@ -213,50 +213,26 @@ def get_content_identifiers_from_stmt_ids(stmt_ids, db=None):
         These identifiers take the form `<text_ref_id>/<source>/<text_type>'.
         No entries exist for statements with no associated text content
         (these typically come from databases)
-
-
-    text_dict: dict
-        dict mapping content identifiers used as values in the ref_dict
-        to best available text content. The order of preference is
-        fulltext xml > plaintext abstract > title
     """
     if db is None:
         db = get_primary_db()
-
-    # Query for all text content for which we have statements for its text ref.
-    trid_q = (db.session.query(func.array_agg(db.RawStatements.id)
-                               .label('stmt_ids'),
-                               db.TextRef.id.label('text_ref_id'))
-              .filter(db.RawStatements.id.in_(stmt_ids),
-                      *db.link(db.RawStatements, db.TextRef))
-              .group_by(db.TextRef.id))
-    trid_q = trid_q.subquery('text_ref_ids')
-    texts_q = (db.session.query(db.TextContent.source,
-                                db.TextContent.format,
-                                db.TextContent.text_type,
-                                trid_q)
-                 .filter(trid_q.c.text_ref_id ==
-                         db.TextContent.text_ref_id))
-
-    # Process the results.
-    priority = {'fulltext': 2, 'abstract': 1, 'title': 0}
-    seen_text_refs = {}
-    ref_dict = {}
-    for source, format_, text_type, stmts, text_ref_id in texts_q.all():
-        # key uniquely identifies each piece of content
-        new_identifier = (text_ref_id, source, format_, text_type)
-        if text_ref_id not in seen_text_refs:
-            seen_text_refs[text_ref_id] = new_identifier
-            ref_dict.update({stmt_id: new_identifier for stmt_id in stmts})
-        else:
-            # update if we find text_type with higher priority for
-            # a given text_ref
-            old_identifier = seen_text_refs[text_ref_id]
-            old_text_type = old_identifier[2]
-            if priority[text_type] > priority[old_text_type]:
-                seen_text_refs[text_ref_id] = new_identifier
-                ref_dict.update({stmt_id: new_identifier for stmt_id in stmts})
-    return ref_dict
+    stmt_ids = tuple(set(stmt_ids))
+    query = """SELECT
+                   sub.stmt_id, tc.text_ref_id, tc.source,
+                   tc.format, tc.text_type
+               FROM
+                   text_content tc,
+                   (SELECT
+                        stmt_id, text_ref_id
+                    FROM
+                        raw_stmt_ref_link
+                    WHERE
+                        stmt_id IN :stmt_ids) sub
+                WHERE
+                    tc.text_ref_id = sub.text_ref_id
+            """
+    res = db.session.execute(text(query), {'stmt_ids': stmt_ids})
+    return _collect_content_identifiers(res)
 
 
 def get_content_identifiers_from_pmids(pmids, db=None):
@@ -303,22 +279,26 @@ def get_content_identifiers_from_pmids(pmids, db=None):
                    tr.pmid IN :pmids
             """
     res = db.session.execute(text(query), {'pmids': pmids})
+    return _collect_content_identifiers(res)
+
+
+def _collect_content_identifiers(res):
     priority = {'fulltext': 2, 'abstract': 1, 'title': 0}
     seen_text_refs = {}
     ref_dict = {}
-    for pmid, text_ref_id, source, format_, text_type in res.fetchall():
+    for id_, text_ref_id, source, format_, text_type in res.fetchall():
         new_identifier = (text_ref_id, source, format_, text_type)
-        if text_ref_id not in seen_text_refs:
-            seen_text_refs[text_ref_id] = new_identifier
-            ref_dict[pmid] = new_identifier
+        if (id_, text_ref_id) not in seen_text_refs:
+            seen_text_refs[(id_, text_ref_id)] = new_identifier
+            ref_dict[id_] = new_identifier
         else:
             # update if we find text_type with higher priority for
             # a given text_ref
-            old_identifier = seen_text_refs[text_ref_id]
-            old_text_type = old_identifier[2]
+            old_identifier = seen_text_refs[(id_, text_ref_id)]
+            old_text_type = old_identifier[3]
             if priority[text_type] > priority[old_text_type]:
-                seen_text_refs[text_ref_id] = new_identifier
-                ref_dict[pmid] = new_identifier
+                seen_text_refs[(id_, text_ref_id)] = new_identifier
+                ref_dict[id_] = new_identifier
     return ref_dict
 
 

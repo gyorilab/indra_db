@@ -152,7 +152,7 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
     if db is None:
         db = get_primary_db()
     identifiers = get_content_identifiers_from_stmt_ids(stmt_ids)
-    content = get_text_content(identifiers.values())
+    content = _get_text_content(identifiers.values())
     return identifiers, content
 
 
@@ -187,7 +187,7 @@ def get_text_content_from_pmids(pmids, db=None):
     if db is None:
         db = get_primary_db()
     identifiers = get_content_identifiers_from_pmids(pmids)
-    content = get_text_content(identifiers.values())
+    content = _get_text_content(identifiers.values())
     return identifiers, content
 
 
@@ -302,7 +302,7 @@ def _collect_content_identifiers(res):
     return ref_dict
 
 
-def get_text_content(content_identifiers, db=None):
+def _get_text_content(content_identifiers, db=None):
     """Return text_content associated to a list of content identifiers
 
     Parameters

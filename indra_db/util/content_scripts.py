@@ -2,7 +2,7 @@ __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
 
 from collections import defaultdict
-from sqlalchemy import func, text
+from sqlalchemy import text
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
 

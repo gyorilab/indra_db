@@ -5,6 +5,8 @@ REACH version and path) or loaded from S3 (e.g., the list of PMIDs).
 import json
 import os
 import sys
+from datetime import datetime
+
 import boto3
 import botocore
 import logging
@@ -105,6 +107,15 @@ def get_s3_reader_version_loc(*args, **kwargs):
     return prefix + 'reader_versions.json'
 
 
+def is_trips_datestring(s):
+    """Indicate whether a string has the form of a TRIPS log dir."""
+    try:
+        datetime.strptime(s, '%Y%m%dT%H%M')
+        return True
+    except ValueError:
+        return False
+
+
 def main():
     arg_parser = get_parser()
     args = arg_parser.parse_args()
@@ -162,20 +173,35 @@ def main():
 
     # Preserve the sparser logs
     contents = os.listdir('.')
-    sparser_logs = [fname for fname in contents
-                    if fname.startswith('sparser') and fname.endswith('log')]
-    sparser_log_dir = s3_log_prefix + 'sparser_logs/'
-    for fname in sparser_logs:
-        s3_key = sparser_log_dir + fname
-        logger.info("Saving sparser logs to %s on s3 in %s."
-                    % (s3_key, bucket_name))
-        with open(fname, 'r') as f:
-            s3.put_object(Key=s3_key, Body=f.read(),
-                          Bucket=bucket_name)
+    sparser_logs = []
+    trips_logs = []
+    for fname in contents:
+        # Check if this file is a sparser log
+        if fname.startswith('sparser') and fname.endswith('log'):
+            sparser_logs.append(fname)
+        elif is_trips_datestring(fname):
+            for sub_fname in os.listdir(fname):
+                if sub_fname.endswith('.log') or sub_fname.endswith('.err'):
+                    trips_logs.append(os.path.join(fname, sub_fname))
+
+    _dump_logs_to_s3(s3_log_prefix, 'sparser', sparser_logs)
+    _dump_logs_to_s3(s3_log_prefix, 'trips', trips_logs)
 
     # Create a summary report.
     rep = DbAwsStatReporter(args.job_name, s3_log_prefix, s3, bucket_name)
     rep.report_statistics(workers)
+
+
+def _dump_logs_to_s3(s3_log_prefix, reader, reader_logs):
+    reader_log_dir = s3_log_prefix + '%s_logs/' % reader.lower()
+    for fname in reader_logs:
+        s3_key = reader_log_dir + fname
+        logger.info("Saving %s logs to %s on s3 in %s."
+                    % (reader.lower(), s3_key, bucket_name))
+        with open(fname, 'r') as f:
+            s3.put_object(Key=s3_key, Body=f.read(),
+                          Bucket=bucket_name)
+
 
 
 if __name__ == '__main__':

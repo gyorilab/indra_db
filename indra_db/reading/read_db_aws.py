@@ -184,15 +184,15 @@ def main():
                 if sub_fname.endswith('.log') or sub_fname.endswith('.err'):
                     trips_logs.append(os.path.join(fname, sub_fname))
 
-    _dump_logs_to_s3(s3_log_prefix, 'sparser', sparser_logs)
-    _dump_logs_to_s3(s3_log_prefix, 'trips', trips_logs)
+    _dump_logs_to_s3(s3, s3_log_prefix, 'sparser', sparser_logs)
+    _dump_logs_to_s3(s3, s3_log_prefix, 'trips', trips_logs)
 
     # Create a summary report.
     rep = DbAwsStatReporter(args.job_name, s3_log_prefix, s3, bucket_name)
     rep.report_statistics(workers)
 
 
-def _dump_logs_to_s3(s3_log_prefix, reader, reader_logs):
+def _dump_logs_to_s3(s3, s3_log_prefix, reader, reader_logs):
     reader_log_dir = s3_log_prefix + '%s_logs/' % reader.lower()
     for fname in reader_logs:
         s3_key = reader_log_dir + fname
@@ -201,7 +201,6 @@ def _dump_logs_to_s3(s3_log_prefix, reader, reader_logs):
         with open(fname, 'r') as f:
             s3.put_object(Key=s3_key, Body=f.read(),
                           Bucket=bucket_name)
-
 
 
 if __name__ == '__main__':

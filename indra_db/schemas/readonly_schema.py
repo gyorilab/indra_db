@@ -30,8 +30,8 @@ def get_schema(Base):
 
     The following views must be built in this specific order:
       1. raw_stmt_src
-      2. pa_stmt_src
-      3. fast_raw_pa_link
+      2. fast_raw_pa_link
+      3. pa_stmt_src
       4. evidence_counts
       5. pa_source_lookup
       6. pa_meta
@@ -96,7 +96,8 @@ def get_schema(Base):
                           'raw_unique_links AS link,'
                           'readonly.raw_stmt_src as raw_src '
                           'WHERE link.raw_stmt_id = raw.id '
-                          'AND link.pa_stmt_mk_hash = pa.mk_hash')
+                          'AND link.pa_stmt_mk_hash = pa.mk_hash '
+                          'AND raw_src.sid = raw.id')
         _skip_disp = ['raw_json', 'pa_json']
         _indices = [BtreeIndex('hash_index', 'mk_hash'),
                     BtreeIndex('frp_reading_id_idx', 'reading_id'),
@@ -219,9 +220,8 @@ def get_schema(Base):
         __tablename__ = 'pa_stmt_src'
         __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = ("SELECT * FROM crosstab("
-                              "'SELECT mk_hash, src, count(sid) "
-                              "  FROM readonly.raw_stmt_src "
-                              "   JOIN readonly.fast_raw_pa_link ON sid = id "
+                              "'SELECT mk_hash, src, count(id) "
+                              "  FROM readonly.fast_raw_pa_link "
                               "  GROUP BY (mk_hash, src)', "
                               "$$SELECT unnest('{%s}'::text[])$$"
                               " ) final_result(mk_hash bigint, %s)")

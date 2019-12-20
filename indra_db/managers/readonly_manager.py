@@ -30,8 +30,8 @@ def get_lambda_client():
         new_role_arn = "arn:aws:iam::%s:role/%s" % (ident['Account'], aws_role)
         res = sts.assume_role(RoleArn=new_role_arn,
                               RoleSessionName="AssumeRoleReadonlyDBUpdate")
-        kwargs = {uncamel(k): v for k, v in res['Credentials'].items()
-                  if 'expiration' not in k}
+        kwargs = {'aws_' + uncamel(k): v for k, v in res['Credentials'].items()
+                  if 'expiration' not in k.lower()}
 
     # Get a client to Lambda
     return boto3.client('lambda', **kwargs)

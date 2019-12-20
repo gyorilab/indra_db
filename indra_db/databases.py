@@ -893,12 +893,6 @@ class PrincipalDatabaseManager(DatabaseManager):
                         '|', 'aws', 's3', 'cp', '-', dump_file])
         check_call(cmd, shell=True, env=my_env)
 
-        # This database no longer needs this schema (this only executes if
-        # the check_call does not error).
-        self.session.close()
-        self.grab_session()
-        self.drop_schema('readonly')
-
         return dump_file
 
 

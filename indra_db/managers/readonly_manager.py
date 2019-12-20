@@ -78,6 +78,12 @@ def main():
                 % datetime.now())
     with ReadonlyTransferEnv(principal_db, readonly_db):
         readonly_db.load_dump(dump_file)
+
+    # This database no longer needs this schema (this only executes if
+    # the check_call does not error).
+    principal_db.session.close()
+    principal_db.grab_session()
+    principal_db.drop_schema('readonly')
     return
 
 

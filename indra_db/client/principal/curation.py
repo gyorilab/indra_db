@@ -2,6 +2,7 @@ __all__ = ['submit_curation', 'get_curations', 'get_grounding_curations']
 
 import re
 import logging
+from collections import Counter
 
 from sqlalchemy.exc import IntegrityError
 
@@ -131,3 +132,64 @@ def get_grounding_curations(db=None):
                                                  str(dbids)))
         groundings[txt] = dbids
     return groundings
+
+
+def get_curator_counts(db=None):
+    """Return a Counter of the number of curations submitted by each user.
+
+    Parameters
+    ----------
+    db : Optional[DatabaseManager]
+        A database manager object used to access the database. If not given,
+        the database configured as primary is used.
+
+    Returns
+    -------
+    collections.Counter
+        A Counter of curator users by the number of curations they have
+        submitted.
+    """
+    if db is None:
+        db = get_primary_db()
+    res = db.select_all(db.Curation)
+    curators = [r.curator for r in res]
+    counter = Counter(curators)
+    return counter
+
+
+def plot_curators(curator_counter, topk=10, fname=None):
+    """Plot curation statistics based on curation counts per user.
+
+    Parameters
+    ----------
+    curator_counter : collections.Counter
+        A Counter of curator users by the number of curations they have
+        submitted.
+    topk : Optional[int]
+        Only plot the top k curators, Default: 10
+    fname : Optional[str]
+        If provided, an image of the plot with the given file name is saved.
+        Otherwise the plot is just displayed.
+    """
+    import matplotlib.pyplot as plt
+    # Get today's date
+    today = datetime.datetime.today()
+    today_str = today.strftime('%Y-%m-%d')
+
+    # Just get the top k
+    sorted_curators = curator_counter.most_common(topk)
+    curator_names = [c[0].replace('@', '@\n') if '@' else c[0]
+                     for c in sorted_curators]
+    ticks = range(len(sorted_curators)-1, -1, -1)
+    plt.barh(ticks, [c[1] for c in sorted_curators], color='red')
+    plt.yticks(ticks, curator_names)
+
+    plt.title('Curation statistics as of %s' % today_str)
+    plt.xlabel('Number of curations')
+    plt.subplots_adjust(left=0.21, right=0.97, top=0.91, bottom=0.11)
+    if fname is not None:
+        plt.savefig(fname)
+        return fname
+    else:
+        plt.show()
+    return

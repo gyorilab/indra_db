@@ -13,8 +13,8 @@ from .indexes import *
 logger = logging.getLogger(__name__)
 
 CREATE_ORDER = ['raw_stmt_src', 'fast_raw_pa_link', 'pa_stmt_src',
-                'evidence_counts', 'pa_source_lookup', 'pa_meta', 'text_meta',
-                'name_meta']
+                'evidence_counts', 'pa_source_lookup', 'pa_ref_link',
+                'pa_meta', 'text_meta', 'name_meta']
 CREATE_UNORDERED = {'reading_ref_link'}
 
 
@@ -34,9 +34,10 @@ def get_schema(Base):
       3. pa_stmt_src
       4. evidence_counts
       5. pa_source_lookup
-      6. pa_meta
-      7. text_meta
-      8. name_meta
+      6. pa_ref_link
+      7. pa_meta
+      8. text_meta
+      9. name_meta
     The following can be built at any time and in any order:
       - reading_ref_link
     Note that the order of views below is determined not by the above
@@ -261,6 +262,24 @@ def get_schema(Base):
                         src_dict[k] = v
             return src_dict
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
+
+    class PaRefLink(Base, SpecialColumnTable):
+        __tablename__ = 'pa_ref_link'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('SELECT mk_hash, trid, pmid, pmcid, source, reader '
+                          'FROM readonly.fast_raw_pa_link '
+                          '  JOIN readonly.reading_ref_link '
+                          '  ON reading_id = rid')
+        _indices = [BtreeIndex('pa_ref_link_mk_hash_idx', 'mk_hash'),
+                    BtreeIndex('pa_ref_link_trid_idx', 'trid'),
+                    BtreeIndex('pa_ref_link_pmid_idx', 'pmid')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        trid = Column(Integer, primary_key=True)
+        pmid = Column(String)
+        pmcid = Column(String)
+        source = Column(String)
+        reader = Column(String)
+    read_views[PaRefLink.__tablename__] = PaRefLink
 
     class PaSourceLookup(Base, SpecialColumnTable):
         __tablename__ = 'pa_source_lookup'

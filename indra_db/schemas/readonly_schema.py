@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 CREATE_ORDER = ['raw_stmt_src', 'fast_raw_pa_link', 'pa_stmt_src',
                 'evidence_counts', 'pa_source_lookup', 'pa_ref_link',
-                'pa_meta', 'text_meta', 'name_meta']
+                'pa_meta', 'text_meta', 'name_meta', 'other_meta']
 CREATE_UNORDERED = {'reading_ref_link'}
 
 
@@ -38,6 +38,7 @@ def get_schema(Base):
       7. pa_meta
       8. text_meta
       9. name_meta
+     10. other_meta
     The following can be built at any time and in any order:
       - reading_ref_link
     Note that the order of views below is determined not by the above

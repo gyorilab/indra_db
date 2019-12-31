@@ -2,6 +2,7 @@ __all__ = ['submit_curation', 'get_curations', 'get_grounding_curations']
 
 import re
 import logging
+import datetime
 from collections import Counter
 
 from sqlalchemy.exc import IntegrityError

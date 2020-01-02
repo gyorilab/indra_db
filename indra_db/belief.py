@@ -8,7 +8,8 @@ corpus to be processed locally in RAM, in very little time.
 import pickle
 import logging
 
-from indra_db import get_primary_db
+from indra_db import util as dbu
+from indra_db.util.dump_sif import upload_pickle_to_s3, S3_SUBDIR
 
 logger = logging.getLogger('db_belief')
 
@@ -135,7 +136,7 @@ def calculate_belief(stmts):
 
 def run(db=None):
     if db is None:
-        db = get_primary_db()
+        db = dbu.get_ro('primary-ro')
     stmts = load_mock_statements(db)
     return calculate_belief(stmts)
 

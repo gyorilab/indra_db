@@ -3,8 +3,12 @@ __all__ = ['load_db_content', 'make_dataframe', 'make_ev_strata', 'NS_LIST']
 import pickle
 import logging
 import argparse
+from io import StringIO
+from datetime import datetime
 from itertools import permutations
 from collections import OrderedDict
+
+from indra.util.aws import get_s3_client
 
 try:
     import pandas as pd
@@ -15,6 +19,8 @@ except ImportError:
 from indra_db import util as dbu
 
 logger = logging.getLogger(__name__)
+S3_SIF_BUCKET = 'bigmech'
+S3_SUBDIR = 'indra_db_sif_dump'
 
 NS_PRIORITY_LIST = (
     'FPLX',
@@ -32,6 +38,18 @@ NS_PRIORITY_LIST = (
 # NS_PRIORITY_LIST above
 NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
            'PUBCHEM')
+
+
+def upload_pickle_to_s3(obj, key, bucket=S3_SIF_BUCKET):
+    """Upload a python object as a pickle to s3"""
+    if key.startswith('s3:'):
+        key = key[3:]
+    s3 = get_s3_client(unsigned=False)
+    try:
+        s3.put_object(Body=pickle.dumps(obj=obj), Bucket=bucket, Key=key)
+    except Exception as e:
+        logger.error('Failed to upload to s3')
+        logger.exception(e)
 
 
 def load_db_content(reload, ns_list, pkl_filename=None, ro=None):

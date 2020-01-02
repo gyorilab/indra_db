@@ -68,8 +68,11 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
             results.extend(res)
         results = set(results)
         if pkl_filename:
-            with open(pkl_filename, 'wb') as f:
-                pickle.dump(results, f)
+            if pkl_filename.startswith('s3:'):
+                upload_pickle_to_s3(results, key=pkl_filename)
+            else:
+                with open(pkl_filename, 'wb') as f:
+                    pickle.dump(results, f)
     elif pkl_filename:
         logger.info("Loading database content from %s" % pkl_filename)
         with open(pkl_filename, 'rb') as f:
@@ -95,6 +98,8 @@ def make_ev_strata(pkl_filename=None, ro=None):
                              rd[k] is not None}
 
     if pkl_filename:
+        if pkl_filename.startswith('s3:'):
+            upload_pickle_to_s3(obj=ev, key=pkl_filename)
         with open(pkl_filename, 'wb') as f:
             pickle.dump(ev, f)
     return ev
@@ -249,7 +254,30 @@ if __name__ == '__main__':
         type_counts = filt_df.groupby(by=['agA_ns', 'agA_id', 'agA_name',
                                           'agB_ns', 'agB_id', 'agB_name',
                                           'stmt_type']).sum()
-        type_counts.to_csv(csv_file)
+        # This requires package s3fs under the hood. See:
+        # https://pandas.pydata.org/pandas-docs/stable/whatsnew/v0.20.0.html#s3-file-handling
+        if csv_file.startswith('s3:'):
+            try:
+                type_counts.to_csv(
+                    's3://' + S3_SIF_BUCKET + '/' + csv_file[3:]
+                )
+            except Exception as e:
+                try:
+                    logger.warning('Failed to upload csv to s3 using direct '
+                                   's3 url')
+                    s3 = get_s3_client(unsigned=False)
+                    csv_buf = StringIO()
+                    type_counts.to_csv(csv_buf)
+                    s3.put_object(Bucket=S3_SIF_BUCKET,
+                                  Body=csv_buf.getvalue(),
+                                  Key=csv_file[3:])
+                except Exception as e:
+                    logger.error('Failed to upload csv file with fallback '
+                                 'method')
+                    logger.exception(e)
+        # save locally
+        else:
+            type_counts.to_csv(csv_file)
 
     if args.strat_ev:
         _ = make_ev_strata(args.strat_ev)

@@ -249,12 +249,18 @@ if __name__ == '__main__':
         logger.info('Uploading to %s/%s/%s on s3 instead of saving locally'
                     % (S3_SIF_BUCKET, S3_SUBDIR, ymd_date))
     dump_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.db_dump])\
-        if args.s3 else args.db_dump
+        if args.s3 and args.db_dump else args.db_dump
     df_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.dataframe])\
-        if args.s3 else args.dataframe
+        if args.s3 and args.dataframe else args.dataframe
     csv_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.csv_file])\
-        if args.s3 else args.csv_file
+        if args.s3 and args.csv_file else args.csv_file
     reload = args.reload
+
+    for f in [dump_file, df_file, csv_file]:
+        if f:
+            logger.info('Using file name %s' % f)
+        else:
+            continue
     
     # Get the db content from a new DB dump or from file
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,

@@ -204,6 +204,10 @@ if __name__ == '__main__':
     parser.add_argument('--csv-file',
                         help='Dump a csv file with statistics of the database '
                              'dump')
+    parser.add_argument('--strat-ev',
+                        help='If provided, also run and dump a pickled '
+                             'dictionary of the stratified evidence count '
+                             'per statement')
     args = parser.parse_args()
 
     dump_file = args.db_dump
@@ -228,3 +232,6 @@ if __name__ == '__main__':
                                           'agB_ns', 'agB_id', 'agB_name',
                                           'stmt_type']).sum()
         type_counts.to_csv(csv_file)
+
+    if args.strat_ev:
+        _ = make_ev_strata(args.strat_ev)

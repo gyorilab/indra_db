@@ -42,6 +42,9 @@ NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
 
 def upload_pickle_to_s3(obj, key, bucket=S3_SIF_BUCKET):
     """Upload a python object as a pickle to s3"""
+    logger.info('Uploading %s as pickle object to bucket %s'
+                % (key.split('/')[-1],
+                   bucket + '/'.join(key.split('/')[:-1])))
     if key.startswith('s3:'):
         key = key[3:]
     s3 = get_s3_client(unsigned=False)
@@ -238,10 +241,13 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Upload files to the bigmech s3 bucket instead '
-                             'of saveing them on the local disk.')
+                             'of saving them on the local disk.')
     args = parser.parse_args()
 
     ymd_date = datetime.utcnow().strftime('%Y-%m-%d')
+    if args.s3:
+        logger.info('Uploading to %s/%s/%s on s3 instead of saving locally'
+                    % (S3_SIF_BUCKET, S3_SUBDIR, ymd_date))
     dump_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.db_dump])\
         if args.s3 else args.db_dump
     df_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.dataframe])\

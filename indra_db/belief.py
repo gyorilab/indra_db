@@ -7,6 +7,8 @@ corpus to be processed locally in RAM, in very little time.
 
 import pickle
 import logging
+import argparse
+from datetime import datetime
 
 from indra_db import util as dbu
 from indra_db.util.dump_sif import upload_pickle_to_s3, S3_SUBDIR
@@ -142,6 +144,23 @@ def run(db=None):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='DB Belief Score Dumper',
+        usage='Usage: belief.py ')
+    parser.add_argument('fname',
+                        nargs='?',
+                        type=str,
+                        default='belief_dict.pkl',
+                        help='Filename of the belief dict output')
+    parser.add_argument('-s3',
+                        action='store_true',
+                        default=False,
+                        help='Upload files to the bigmech s3 bucket instead '
+                             'of saveing them on the local disk.')
+    args = parser.parse_args()
+    fname = 's3:' + '/'.join([S3_SUBDIR,
+                              datetime.utcnow().strftime('%Y-%m-%d'),
+                              args.fname]) if args.s3 else args.fname
+
     belief_dict = run()
     with open('belief_dict.pkl', 'wb') as f:
         pickle.dump(belief_dict, f)

@@ -231,12 +231,21 @@ if __name__ == '__main__':
                         help='If provided, also run and dump a pickled '
                              'dictionary of the stratified evidence count '
                              'per statement')
+    parser.add_argument('-s3',
+                        action='store_true',
+                        default=False,
+                        help='Upload files to the bigmech s3 bucket instead '
+                             'of saveing them on the local disk.')
     args = parser.parse_args()
 
-    dump_file = args.db_dump
-    df_file = args.dataframe
+    ymd_date = datetime.utcnow().strftime('%Y-%m-%d')
+    dump_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.db_dump])\
+        if args.s3 else args.db_dump
+    df_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.dataframe])\
+        if args.s3 else args.dataframe
+    csv_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.csv_file])\
+        if args.s3 else args.csv_file
     reload = args.reload
-    csv_file = args.csv_file
     
     # Get the db content from a new DB dump or from file
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,

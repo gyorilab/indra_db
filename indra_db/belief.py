@@ -151,17 +151,21 @@ if __name__ == '__main__':
                         type=str,
                         default='belief_dict.pkl',
                         help='Filename of the belief dict output')
+    parser.add_argument('--primary',
+                        action='store_true',
+                        default=False,
+                        help='Use the primary DB instead of the readonly db')
     parser.add_argument('-s3',
                         action='store_true',
                         default=False,
-                        help='Upload files to the bigmech s3 bucket instead '
-                             'of saveing them on the local disk.')
+                        help='Upload belief dict to the bigmech s3 bucket '
+                             'instead of saving it locallly')
     args = parser.parse_args()
     fname = 's3:' + '/'.join([S3_SUBDIR,
                               datetime.utcnow().strftime('%Y-%m-%d'),
                               args.fname]) if args.s3 else args.fname
-
-    belief_dict = run()
+    db = dbu.get_primary_db() if args.primary else dbu.get_ro('primary-ro')
+    belief_dict = run(db)
     if fname.startswith('s3:'):
         upload_pickle_to_s3(obj=belief_dict, key=fname)
     else:

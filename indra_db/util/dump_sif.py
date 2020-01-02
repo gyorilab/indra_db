@@ -154,9 +154,12 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
                 except KeyError:
                     nkey_errors += 1
                     error_keys.append((hash, num))
-                    if nkey_errors < 10:
+                    if nkey_errors < 11:
                         logger.warning('Missing key in agent name dict: '
                                        '(%s, %s)' % (hash, num))
+                    elif nkey_errors == 11:
+                        logger.warning('Got more than 10 key warnings: '
+                                       'muting further warnings.')
                     continue
 
             # Need at least two agents.

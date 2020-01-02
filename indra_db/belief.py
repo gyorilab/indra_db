@@ -162,5 +162,8 @@ if __name__ == '__main__':
                               args.fname]) if args.s3 else args.fname
 
     belief_dict = run()
-    with open('belief_dict.pkl', 'wb') as f:
-        pickle.dump(belief_dict, f)
+    if fname.startswith('s3:'):
+        upload_pickle_to_s3(obj=belief_dict, key=fname)
+    else:
+        with open(fname, 'wb') as f:
+            pickle.dump(belief_dict, f)

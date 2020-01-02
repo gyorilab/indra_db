@@ -34,19 +34,19 @@ NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
            'PUBCHEM')
 
 
-def load_db_content(reload, ns_list, pkl_filename=None, db=None):
+def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
     # Get the raw data
     if reload:
-        if not db:
-            db = dbu.get_primary_db()
+        if not ro:
+            ro = dbu.get_ro('primary-ro')
         logger.info("Querying the database for statement metadata...")
         results = []
         for ns in ns_list:
             logger.info("Querying for {ns}".format(ns=ns))
-            res = db.select_all([db.PaMeta.mk_hash, db.PaMeta.db_name,
-                                 db.PaMeta.db_id, db.PaMeta.ag_num,
-                                 db.PaMeta.ev_count, db.PaMeta.type],
-                                db.PaMeta.db_name.like(ns))
+            res = ro.select_all([ro.PaMeta.mk_hash, ro.PaMeta.db_name,
+                                 ro.PaMeta.db_id, ro.PaMeta.ag_num,
+                                 ro.PaMeta.ev_count, ro.PaMeta.type],
+                                ro.PaMeta.db_name.like(ns))
             results.extend(res)
         results = set(results)
         if pkl_filename:
@@ -67,7 +67,7 @@ def make_ev_strata(pkl_filename=None, ro=None):
     entry contains a dictionary keyed by the source that support the
     statement where the entries are the evidence count for that source."""
     if not ro:
-        ro = dbu.get_ro('primary')
+        ro = dbu.get_ro('primary-ro')
     res = ro.select_all(ro.PaStmtSrc)
     ev = {}
     for r in res:

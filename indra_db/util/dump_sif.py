@@ -242,14 +242,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DB sif dumper',
         usage='Usage: dump_sif.py <db_dump_pkl> <dataframe_pkl> <csv_file>')
     parser.add_argument('--db-dump',
-                        help='Dump a pickle of the database dump')
+                        help='A pickle of the database dump. If provided '
+                             'with --reload, this is the name of a new '
+                             'db dump pickle, otherwise this is assumed to '
+                             'be a cached pickle that already exists.')
     parser.add_argument('--reload',
-                        help='Reload from the database',
+                        help='Reload the database content from the database.',
                         action='store_true',
                         default=False)
     parser.add_argument('--dataframe',
-                        help='Dump a pickle of the database dump processed '
-                             'into a pandas dataframe with pair interactions')
+                        help='A pickle of the database dump processed '
+                             'into a pandas dataframe with pair '
+                             'interactions. If provided with the --reconvert '
+                             'option, this is the name of a new dataframe '
+                             'pickle, otherwise this is assumed to '
+                             'be a cached pickle that already exists.')
     parser.add_argument('--reconvert',
                         help='Re-run the dataframe processing on the db-dump',
                         action='store_true',
@@ -260,7 +267,7 @@ if __name__ == '__main__':
     parser.add_argument('--strat-ev',
                         help='If provided, also run and dump a pickled '
                              'dictionary of the stratified evidence count '
-                             'per statement')
+                             'per statement from ')
     parser.add_argument('-s3',
                         action='store_true',
                         default=False,
@@ -284,8 +291,18 @@ if __name__ == '__main__':
         if args.s3 and args.dataframe else args.dataframe
     csv_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.csv_file])\
         if args.s3 and args.csv_file else args.csv_file
+
     reload = args.reload
+    if reload:
+        logger.info('Reloading the database content from the database')
+    else:
+        logger.info('Loading cached database content from %s' % dump_file)
+
     reconvert = args.reconvert
+    if reconvert:
+        logger.info('Reconverting database content into pandas dataframe')
+    else:
+        logger.info('Loading cached dataframe from %s' % df_file)
 
     for f in [dump_file, df_file, csv_file]:
         if f:

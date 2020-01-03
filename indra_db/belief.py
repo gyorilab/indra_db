@@ -151,7 +151,7 @@ if __name__ == '__main__':
                         type=str,
                         default='belief_dict.pkl',
                         help='Filename of the belief dict output')
-    parser.add_argument('--primary',
+    parser.add_argument('--principal',
                         action='store_true',
                         default=False,
                         help='Use the primary DB instead of the readonly db')
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     fname = 's3:' + '/'.join([S3_SUBDIR,
                               datetime.utcnow().strftime('%Y-%m-%d'),
                               args.fname]) if args.s3 else args.fname
-    db = dbu.get_primary_db() if args.primary else dbu.get_ro('primary-ro')
+    db = dbu.get_db('primary') if args.principal else dbu.get_ro('primary')
     belief_dict = run(db)
     if fname.startswith('s3:'):
         upload_pickle_to_s3(obj=belief_dict, key=fname)

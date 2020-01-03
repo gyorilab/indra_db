@@ -282,6 +282,10 @@ if __name__ == '__main__':
                              'specifying the date when the file was '
                              'processed. Default: %Y-%m-%d of '
                              'datetime.datetime.utcnow()')
+    parser.add_argument('--principal',
+                        action='store_true',
+                        default=False,
+                        help='Use the principal db instead of the readonly')
     args = parser.parse_args()
 
     ymd_date = args.s3_ymd
@@ -312,10 +316,11 @@ if __name__ == '__main__':
             logger.info('Using file name %s' % f)
         else:
             continue
-    
+
+    db = dbu.get_db('primary') if args.principal else dbu.get_ro('primary')
     # Get the db content from a new DB dump or from file
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
-                                 pkl_filename=dump_file)
+                                 pkl_filename=dump_file, ro=db)
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
                         db_content=db_content)
@@ -346,6 +351,7 @@ if __name__ == '__main__':
                     s3.put_object(Bucket=S3_SIF_BUCKET,
                                   Body=csv_buf.getvalue(),
                                   Key=csv_file[3:])
+                    logger.info('Uploaded CSV file to s3')
                 except Exception as e:
                     logger.error('Failed to upload csv file with fallback '
                                  'method')
@@ -355,4 +361,4 @@ if __name__ == '__main__':
             type_counts.to_csv(csv_file)
 
     if args.strat_ev:
-        _ = make_ev_strata(args.strat_ev)
+        _ = make_ev_strata(args.strat_ev, ro=db)

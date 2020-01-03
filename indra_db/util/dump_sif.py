@@ -92,10 +92,14 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
             else:
                 with open(pkl_filename, 'wb') as f:
                     pickle.dump(results, f)
+    # Get a cached pickle
     elif pkl_filename:
         logger.info("Loading database content from %s" % pkl_filename)
-        with open(pkl_filename, 'rb') as f:
-            results = pickle.load(f)
+        if pkl_filename.startswith('s3:'):
+            results = load_pickle_from_s3(key=pkl_filename)
+        else:
+            with open(pkl_filename, 'rb') as f:
+                results = pickle.load(f)
     logger.info("{len} stmts loaded".format(len=len(results)))
     return results
 
@@ -119,8 +123,9 @@ def make_ev_strata(pkl_filename=None, ro=None):
     if pkl_filename:
         if pkl_filename.startswith('s3:'):
             upload_pickle_to_s3(obj=ev, key=pkl_filename)
-        with open(pkl_filename, 'wb') as f:
-            pickle.dump(ev, f)
+        else:
+            with open(pkl_filename, 'wb') as f:
+                pickle.dump(ev, f)
     return ev
 
 
@@ -225,8 +230,11 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
             logger.error('Have to provide pickle file if not reconverting')
             raise FileExistsError
         else:
-            with open(pkl_filename, 'rb') as f:
-                df = pickle.load(f)
+            if pkl_filename.startswith('s3:'):
+                df = load_pickle_from_s3(pkl_filename)
+            else:
+                with open(pkl_filename, 'rb') as f:
+                    df = pickle.load(f)
     return df
 
 

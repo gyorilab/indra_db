@@ -223,8 +223,11 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
         df = pd.DataFrame.from_dict(rows)
 
         if pkl_filename:
-            with open(pkl_filename, 'wb') as f:
-                pickle.dump(df, f)
+            if pkl_filename.startswith('s3:'):
+                upload_pickle_to_s3(obj=df, key=pkl_filename)
+            else:
+                with open(pkl_filename, 'wb') as f:
+                    pickle.dump(df, f)
     else:
         if not pkl_filename:
             logger.error('Have to provide pickle file if not reconverting')

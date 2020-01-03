@@ -223,14 +223,14 @@ if __name__ == '__main__':
     parser.add_argument('--reload',
                         help='Reload from the database',
                         action='store_true',
-                        default=True)
+                        default=False)
     parser.add_argument('--dataframe',
                         help='Dump a pickle of the database dump processed '
                              'into a pandas dataframe with pair interactions')
     parser.add_argument('--reconvert',
                         help='Re-run the dataframe processing on the db-dump',
                         action='store_true',
-                        default=True)
+                        default=False)
     parser.add_argument('--csv-file',
                         help='Dump a csv file with statistics of the database '
                              'dump')
@@ -243,9 +243,15 @@ if __name__ == '__main__':
                         default=False,
                         help='Upload files to the bigmech s3 bucket instead '
                              'of saving them on the local disk.')
+    parser.add_argument('--s3-ymd',
+                        default=datetime.utcnow().strftime('%Y-%m-%d'),
+                        help='Set the dump sub-directory name on s3 '
+                             'specifying the date when the file was '
+                             'processed. Default: %Y-%m-%d of '
+                             'datetime.datetime.utcnow()')
     args = parser.parse_args()
 
-    ymd_date = datetime.utcnow().strftime('%Y-%m-%d')
+    ymd_date = args.s3_ymd
     if args.s3:
         logger.info('Uploading to %s/%s/%s on s3 instead of saving locally'
                     % (S3_SIF_BUCKET, S3_SUBDIR, ymd_date))
@@ -256,6 +262,7 @@ if __name__ == '__main__':
     csv_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.csv_file])\
         if args.s3 and args.csv_file else args.csv_file
     reload = args.reload
+    reconvert = args.reconvert
 
     for f in [dump_file, df_file, csv_file]:
         if f:
@@ -267,7 +274,7 @@ if __name__ == '__main__':
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
                                  pkl_filename=dump_file)
     # Convert the database query result into a set of pairwise relationships
-    df = make_dataframe(pkl_filename=df_file, reconvert=True,
+    df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
                         db_content=db_content)
 
     if csv_file:

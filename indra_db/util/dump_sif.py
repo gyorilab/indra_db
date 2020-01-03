@@ -56,6 +56,21 @@ def upload_pickle_to_s3(obj, key, bucket=S3_SIF_BUCKET):
         logger.exception(e)
 
 
+def load_pickle_from_s3(key, bucket=S3_SIF_BUCKET):
+    logger.info('Loading pickle %s from s3' % key)
+    if key.startswith('s3:'):
+        key = key[3:]
+    s3 = get_s3_client(unsigned=False)
+    try:
+        res = s3.get_object(Key=key, Bucket=bucket)
+        obj = pickle.loads(res['Body'].read())
+        logger.info('Finished loading %s' % key)
+        return obj
+    except Exception as e:
+        logger.error('Failed to load %s from s3' % key)
+        logger.exception(e)
+
+
 def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
     # Get the raw data
     if reload:

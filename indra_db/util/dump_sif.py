@@ -50,6 +50,7 @@ def upload_pickle_to_s3(obj, key, bucket=S3_SIF_BUCKET):
     s3 = get_s3_client(unsigned=False)
     try:
         s3.put_object(Body=pickle.dumps(obj=obj), Bucket=bucket, Key=key)
+        logger.info('Finished dumping file to s3')
     except Exception as e:
         logger.error('Failed to upload to s3')
         logger.exception(e)

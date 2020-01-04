@@ -292,16 +292,18 @@ if __name__ == '__main__':
                         help='Use the principal db instead of the readonly')
     args = parser.parse_args()
 
-    ymd_date = args.s3_ymd
+    ymd = args.s3_ymd
     if args.s3:
         logger.info('Uploading to %s/%s/%s on s3 instead of saving locally'
-                    % (S3_SIF_BUCKET, S3_SUBDIR, ymd_date))
-    dump_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.db_dump])\
-        if args.s3 and args.db_dump else args.db_dump
-    df_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.dataframe])\
-        if args.s3 and args.dataframe else args.dataframe
-    csv_file = 's3:' + '/'.join([S3_SUBDIR, ymd_date, args.csv_file])\
-        if args.s3 and args.csv_file else args.csv_file
+                    % (S3_SIF_BUCKET, S3_SUBDIR, ymd))
+    dump_file = _pseudo_key(args.db_dump, ymd) if args.s3 and args.db_dump\
+        else args.db_dump
+    df_file = _pseudo_key(args.dataframe, ymd) if args.s3 and args.dataframe\
+        else args.dataframe
+    csv_file = _pseudo_key(args.csv_file, ymd) if args.s3 and args.csv_file\
+        else args.csv_file
+    strat_ev_file = _pseudo_key(args.strat_ev, ymd) if args.s3 and \
+        args.strat_ev else args.strat_ev
 
     reload = args.reload
     if reload:
@@ -315,16 +317,18 @@ if __name__ == '__main__':
     else:
         logger.info('Loading cached dataframe from %s' % df_file)
 
-    for f in [dump_file, df_file, csv_file]:
+    for f in [dump_file, df_file, csv_file, strat_ev_file]:
         if f:
             logger.info('Using file name %s' % f)
         else:
             continue
 
     db = dbu.get_db('primary') if args.principal else dbu.get_ro('primary')
+
     # Get the db content from a new DB dump or from file
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
                                  pkl_filename=dump_file, ro=db)
+
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
                         db_content=db_content)
@@ -365,4 +369,4 @@ if __name__ == '__main__':
             type_counts.to_csv(csv_file)
 
     if args.strat_ev:
-        _ = make_ev_strata(args.strat_ev, ro=db)
+        _ = make_ev_strata(strat_ev_file, ro=db)

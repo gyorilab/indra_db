@@ -40,6 +40,10 @@ NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
            'PUBCHEM')
 
 
+def _pseudo_key(fname, ymd_date):
+    return 's3:' + '/'.join([S3_SUBDIR, ymd_date, fname])
+
+
 def upload_pickle_to_s3(obj, key, bucket=S3_SIF_BUCKET):
     """Upload a python object as a pickle to s3"""
     logger.info('Uploading %s as pickle object to bucket %s'

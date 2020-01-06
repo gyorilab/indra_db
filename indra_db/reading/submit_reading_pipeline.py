@@ -146,6 +146,7 @@ class DbReadingSubmitter(Submitter):
                 if e.response['Error']['Code'] == 'NoSuchKey':
                     logger.info('Could not find reader version json at %s.' %
                                 s3_key)
+                    ret[job_name] = None
                 # If there was some other kind of problem, log an error
                 else:
                     logger.error("Encountered unexpected error accessing "

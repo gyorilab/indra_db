@@ -52,6 +52,11 @@ class ReadingManager(object):
                 if completed:
                     is_read_all = (func.__name__ == 'read_all')
                     reader_version = self.get_version(reader_name)
+                    if reader_version is None:
+                        # This effectively indicates no jobs ran.
+                        logger.info("It appears no %s jobs ran. No update "
+                                    "will be logged." % reader_name)
+                        continue
                     logger.info("Recording this reading in reading_updates: "
                                 "%s version %s running at %s reading content "
                                 "between %s and %s."
@@ -192,7 +197,10 @@ class BulkAwsReadingManager(BulkReadingManager):
             logger.error("Expected to find %s in %s."
                          % (reader_name, self.reader_versions))
             raise ReadingUpdateError("Tried to access reader version before "
-                                     "reading completed.")
+                                     "reading started.")
+        elif self.reader_versions[reader_name] is None:
+            logger.warning("Reader version was never written to s3.")
+            return None
         return self.reader_versions[reader_name]
 
     def _run_reading(self, db, tcids, reader_name):
@@ -222,9 +230,22 @@ class BulkAwsReadingManager(BulkReadingManager):
         # consistancy and record the result (at least one result).
         rv_dict = sub.poll_reader_versions()
         for job_name, rvs in rv_dict.items():
+            # Sometimes the job hasn't started yet, or else the job has crashed
+            # instantly, before the reader version can be written. If the
+            # latter, we shouldn't crash the reading monitor as a result.
+            if rvs is None:
+                logger.warning("Reader version was not yet available.")
+                self.reader_versions[reader_name] = None
+                continue
+
+            # There should only be one reader per job.
             assert len(rvs) == 1 and reader_name in rvs.keys(), \
-                "There should only %s, but got %s." % (reader_name, str(rvs))
+                "There should be only one reader: %s, but got %s." \
+                % (reader_name, str(rvs))
             if reader_name not in self.reader_versions.keys():
+                self.reader_versions[reader_name] = rvs[reader_name]
+            elif self.reader_versions[reader_name] is None:
+                logger.info("Found the reader version.")
                 self.reader_versions[reader_name] = rvs[reader_name]
             elif self.reader_versions[reader_name] != rvs[reader_name]:
                 logger.warning("Different jobs used different reader "

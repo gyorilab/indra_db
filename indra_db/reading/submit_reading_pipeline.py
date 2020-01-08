@@ -85,7 +85,7 @@ class DbReadingSubmitter(Submitter):
         stmt_mode = self.options.get('stmt_mode', 'all')
 
         base = ['python3', '-m', 'indra_db.reading.read_db_aws',
-                self.basename, job_name]
+                self.job_base, job_name, self.s3_prefix]
         base += ['/tmp', read_mode, stmt_mode, '32', str(start_ix),
                  str(end_ix)]
         return base
@@ -138,7 +138,7 @@ class DbReadingSubmitter(Submitter):
         s3 = boto3.client('s3')
         for job_d in self.job_list:
             job_name = job_d['jobName']
-            s3_key = get_s3_reader_version_loc(self.basename, job_name)
+            s3_key = get_s3_reader_version_loc(self.s3_prefix, job_name)
             try:
                 res = s3.get_object(Bucket=bucket_name, Key=s3_key)
             except botocore.exceptions.ClientError as e:

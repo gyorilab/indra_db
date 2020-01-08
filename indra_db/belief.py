@@ -146,7 +146,7 @@ def run(db=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DB Belief Score Dumper',
         usage='Usage: belief.py ')
-    parser.add_argument('fname',
+    parser.add_argument('--fname',
                         nargs='?',
                         type=str,
                         default='belief_dict.pkl',

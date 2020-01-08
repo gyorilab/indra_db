@@ -352,7 +352,7 @@ if __name__ == '__main__':
             except Exception as e:
                 try:
                     logger.warning('Failed to upload csv to s3 using direct '
-                                   's3 url')
+                                   's3 url, trying boto3.')
                     s3 = get_s3_client(unsigned=False)
                     csv_buf = StringIO()
                     type_counts.to_csv(csv_buf)

@@ -219,7 +219,8 @@ class BulkAwsReadingManager(BulkReadingManager):
             f.write('\n'.join(['%s' % tcid for tcid in tcids]))
         logger.info("Submitting jobs...")
         sub = DbReadingSubmitter(basename, [reader_name.lower()],
-                                 self.project_name, group_name=group_name)
+                                 project_name=self.project_name,
+                                 group_name=group_name)
         sub.submit_reading(file_name, 0, None,
                            self.ids_per_job[reader_name.lower()])
 

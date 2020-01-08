@@ -67,7 +67,7 @@ class DbReadingSubmitter(Submitter):
 
     def __init__(self, *args, **kwargs):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
-        self.s3_prefix = get_s3_root(self.basename)
+        self.s3_prefix = get_s3_root(self.s3_base)
         self.time_tag = datetime.now().strftime('%Y%m%d_%H%M')
         self.reporter = Reporter(self.basename + '_summary_%s' % self.time_tag)
         self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
@@ -87,7 +87,7 @@ class DbReadingSubmitter(Submitter):
         stmt_mode = self.options.get('stmt_mode', 'all')
 
         base = ['python3', '-m', 'indra_db.reading.read_db_aws',
-                self.job_base, job_name, self.s3_prefix]
+                self.job_base, job_name, self.s3_base]
         base += ['/tmp', read_mode, stmt_mode, '32', str(start_ix),
                  str(end_ix)]
         return base

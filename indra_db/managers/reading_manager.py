@@ -211,15 +211,16 @@ class BulkAwsReadingManager(BulkReadingManager):
         logger.info("Producing readings on aws for %d text refs with new "
                     "content not read by %s."
                     % (len(tcids), reader_name))
-        job_prefix = ('%s_reading_%s'
-                      % (reader_name.lower(),
-                         self.run_datetime.strftime('%Y%m%d_%H%M%S')))
-        with open(job_prefix + '.txt', 'w') as f:
+        basename = '%s_reading' % reader_name.lower()
+        group_name = self.run_datetime.strftime('%Y%m%d_%H%M%S')
+        file_name = '{group_name}_{basename}.txt'.format(group_name=group_name,
+                                                         basename=basename)
+        with open(file_name, 'w') as f:
             f.write('\n'.join(['%s' % tcid for tcid in tcids]))
         logger.info("Submitting jobs...")
-        sub = DbReadingSubmitter(job_prefix, [reader_name.lower()],
-                                 self.project_name)
-        sub.submit_reading(job_prefix + '.txt', 0, None,
+        sub = DbReadingSubmitter(basename, [reader_name.lower()],
+                                 self.project_name, group_name=group_name)
+        sub.submit_reading(file_name, 0, None,
                            self.ids_per_job[reader_name.lower()])
 
         logger.info("Waiting for complete...")

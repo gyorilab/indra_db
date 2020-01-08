@@ -14,6 +14,7 @@ import random
 from argparse import ArgumentParser
 
 from indra.tools.reading.readers import get_reader_classes
+from indra.tools.reading.util import get_s3_job_prefix
 
 from indra_db.reading.read_db import run_reading, construct_readers
 from indra_db.reading.report_db_aws import DbAwsStatReporter
@@ -87,19 +88,6 @@ def get_parser():
         help="Use the test database."
     )
     return parser
-
-
-def get_s3_root(basename, job_queue="run_db_reading_queue"):
-    return 'reading_results/%s/logs/%s/' % (basename, job_queue)
-
-
-def get_s3_job_prefix(basename, job_name, job_queue="run_db_reading_queue"):
-    s3_root = get_s3_root(basename, job_queue)
-    return s3_root + '%s/' % job_name
-
-
-def get_s3_list_loc(basename):
-    return 'reading_results/%s/id_list' % basename
 
 
 def get_s3_reader_version_loc(*args, **kwargs):

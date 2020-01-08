@@ -31,12 +31,12 @@ from collections import defaultdict
 from indra.util.get_version import get_git_info
 from indra.util.nested_dict import NestedDict
 from indra.util.aws import get_s3_file_tree
+from indra.tools.reading.util import get_s3_root
 from indra.tools.reading.util.reporter import Reporter
 from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
     create_read_parser, Submitter
 
-from indra_db.reading.read_db_aws import get_s3_root, \
-    get_s3_reader_version_loc, bucket_name
+from indra_db.reading.read_db_aws import get_s3_reader_version_loc, bucket_name
 
 logger = logging.getLogger('indra_db_reading')
 

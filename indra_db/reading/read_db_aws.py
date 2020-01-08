@@ -33,11 +33,17 @@ def get_parser():
     )
     parser.add_argument(
         dest='basename',
-        help='The name of this run.'
+        help='The name of this specific group of jobs.'
     )
     parser.add_argument(
         dest='job_name',
         help='The name of this job.'
+    )
+    parser.add_argument(
+        dest='s3_prefix',
+        help='Specify the s3 prefix. This is also used as a prefix for any '
+             'files stored locally.',
+        type=str
     )
     parser.add_argument(
         dest='out_dir',
@@ -109,8 +115,8 @@ def main():
     args = arg_parser.parse_args()
 
     s3 = boto3.client('s3')
-    s3_log_prefix = get_s3_job_prefix(args.basename, args.job_name)
-    id_list_key = get_s3_list_loc(args.basename)
+    s3_log_prefix = args.s3_prefix
+    id_list_key = s3_log_prefix + 'id_list'
     try:
         id_list_obj = s3.get_object(Bucket=bucket_name, Key=id_list_key)
     except botocore.exceptions.ClientError as e:
@@ -130,7 +136,9 @@ def main():
     tcids = [int(line.strip()) for line in id_str_list]
 
     # Get the reader objects
-    kwargs = {'base_dir': args.basename, 'n_proc': args.num_cores}
+    if not os.path.exists(s3_log_prefix):
+        os.makedirs(s3_log_prefix)
+    kwargs = {'base_dir': s3_log_prefix, 'n_proc': args.num_cores}
     readers = construct_readers(args.readers, **kwargs)
 
     # Record the reader versions used in this run.
@@ -138,7 +146,7 @@ def main():
     for reader in readers:
         reader_versions[reader.name] = reader.get_version()
     s3.put_object(Bucket=bucket_name,
-                  Key=get_s3_reader_version_loc(args.basename, args.job_name),
+                  Key=get_s3_reader_version_loc(s3_log_prefix, args.job_name),
                   Body=json.dumps(reader_versions))
 
     # Some combinations of options don't make sense:

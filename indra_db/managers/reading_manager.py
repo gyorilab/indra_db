@@ -45,11 +45,11 @@ class ReadingManager(object):
             all_completed = False
             for reader_name in self.reader_names:
                 self.run_datetime = datetime.utcnow()
-                completed = func(self, db, reader_name, *args, **kwargs)
-                all_completed &= completed
-                logger.info("%s is%s completed" % ('' if completed else ' not',
-                                                   reader_name))
-                if completed:
+                done = func(self, db, reader_name, *args, **kwargs)
+                all_completed &= done
+                logger.info("%s is%s done" % (reader_name,
+                                              '' if done else ' not'))
+                if done:
                     is_read_all = (func.__name__ == 'read_all')
                     reader_version = self.get_version(reader_name)
                     if reader_version is None:

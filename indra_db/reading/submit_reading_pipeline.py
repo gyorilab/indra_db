@@ -53,6 +53,8 @@ class DbReadingSubmitter(Submitter):
         A list of the names of readers to use in this job.
     project_name : str
         Optional. Used for record-keeping on AWS.
+    group_name : Optional[str]
+        Indicate the name of this group of readings.
 
     Other keyword parameters go to the `get_options` method.
     """

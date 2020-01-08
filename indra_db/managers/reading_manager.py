@@ -211,8 +211,8 @@ class BulkAwsReadingManager(BulkReadingManager):
         logger.info("Producing readings on aws for %d text refs with new "
                     "content not read by %s."
                     % (len(tcids), reader_name))
-        basename = '%s_reading' % reader_name.lower()
-        group_name = self.run_datetime.strftime('%Y%m%d_%H%M%S')
+        group_name = '%s_reading' % reader_name.lower()
+        basename = self.run_datetime.strftime('%Y%m%d_%H%M%S')
         file_name = '{group_name}_{basename}.txt'.format(group_name=group_name,
                                                          basename=basename)
         with open(file_name, 'w') as f:

@@ -38,7 +38,7 @@ from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
 
 from indra_db.reading.read_db_aws import get_s3_reader_version_loc, bucket_name
 
-logger = logging.getLogger('indra_db_reading')
+logger = logging.getLogger('indra_db_submitter')
 
 
 class DbReadingSubmitter(Submitter):
@@ -280,14 +280,16 @@ class DbReadingSubmitter(Submitter):
 
     def _report_timing(self, timing_info):
         # Pivot the timing info.
-        idx_patt = re.compile('%s_(\d+)_(\d+)' % self.basename)
+        re_patt_str = '%s_(\d+)_(\d+)' % self.basename
+        idx_patt = re.compile(re_patt_str)
         plot_set = set()
 
         def add_job_to_plot_set(job_name):
             m = idx_patt.match(job_name)
             if m is None:
-                logger.error("Unexpectedly formatted name: %s."
-                             % job_name)
+                logger.error("Unexpectedly formatted job name: %s. Expected "
+                             "something of the form %s"
+                             % (job_name, re_patt_str))
                 return None
             key = tuple([int(n) for n in m.groups()] + [job_name])
             plot_set.add(key)

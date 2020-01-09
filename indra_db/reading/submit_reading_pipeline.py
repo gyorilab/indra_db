@@ -88,7 +88,7 @@ class DbReadingSubmitter(Submitter):
 
         base = ['python3', '-m', 'indra_db.reading.read_db_aws',
                 self.job_base, job_name, self.s3_base]
-        base += ['/tmp', read_mode, stmt_mode, '32', str(start_ix),
+        base += ['/sw/tmp', read_mode, stmt_mode, '32', str(start_ix),
                  str(end_ix)]
         return base
 

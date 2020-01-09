@@ -42,20 +42,38 @@ class ReadingManager(object):
     def _run_all_readers(cls, func):
         @wraps(func)
         def run_and_record_update(self, db, *args, **kwargs):
+            all_completed = False
             for reader_name in self.reader_names:
                 self.run_datetime = datetime.utcnow()
-                completed = func(self, db, reader_name, *args, **kwargs)
-                if completed:
+                done = func(self, db, reader_name, *args, **kwargs)
+                all_completed &= done
+                logger.info("%s is%s done" % (reader_name,
+                                              '' if done else ' not'))
+                if done:
                     is_read_all = (func.__name__ == 'read_all')
-                    reader_version = get_reader_class(reader_name).get_version()
+                    reader_version = self.get_version(reader_name)
+                    if reader_version is None:
+                        # This effectively indicates no jobs ran.
+                        logger.info("It appears no %s jobs ran. No update "
+                                    "will be logged." % reader_name)
+                        continue
+                    logger.info("Recording this reading in reading_updates: "
+                                "%s version %s running at %s reading content "
+                                "between %s and %s."
+                                % (reader_name, reader_version,
+                                   self.run_datetime, self.begin_datetime,
+                                   self.end_datetime))
                     db.insert('reading_updates', complete_read=is_read_all,
                               reader=reader_name,
                               reader_version=reader_version,
                               run_datetime=self.run_datetime,
                               earliest_datetime=self.begin_datetime,
                               latest_datetime=self.end_datetime)
-            return completed
+            return all_completed
         return run_and_record_update
+
+    def get_version(self, reader_name):
+        return get_reader_class(reader_name).get_version()
 
     def _get_latest_updatetime(self, db, reader_name):
         """Get the date of the latest update."""
@@ -90,14 +108,24 @@ class BulkReadingManager(ReadingManager):
 
     This takes exactly the parameters used by :py:class:`ReadingManager`.
     """
-    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_name):
         raise NotImplementedError("_run_reading must be defined in child.")
+
+    def _get_constraints(self, db, reader_name):
+        constrains = []
+        if reader_name.lower() == 'trips':
+            constrains.append(db.TextContent.text_type == "title")
+        return constrains
 
     @ReadingManager._run_all_readers
     def read_all(self, db, reader_name):
         """Read everything available on the database."""
         self.end_datetime = self.run_datetime
-        tcids = {tcid for tcid, in db.select_all(db.TextContent.id)}
+
+        constraints = self._get_constraints(db, reader_name)
+
+        tcids = {tcid for tcid, in db.select_all(db.TextContent.id,
+                                                 *constraints)}
         if not tcids:
             logger.info("Nothing found to read with %s." % reader_name)
             return False
@@ -114,9 +142,13 @@ class BulkReadingManager(ReadingManager):
         else:
             raise ReadingUpdateError("There are no previous updates. "
                                      "Please run_all.")
+
+        constraints = self._get_constraints(db, reader_name)
+
         tcid_q = db.filter_query(
             db.TextContent.id,
-            db.TextContent.insert_date > self.begin_datetime
+            db.TextContent.insert_date > self.begin_datetime,
+            *constraints
             )
         tcids = {tcid for tcid, in tcid_q.all()}
         if not tcids:
@@ -140,32 +172,88 @@ class BulkAwsReadingManager(BulkReadingManager):
         jobs used in reading will be tagged with this project name, for
         accounting purposes.
     """
+    timeouts = {
+        'reach': 1200,
+        'sparser': 600,
+        'isi': 2400,
+        'trips': 300
+    }
+
+    ids_per_job = {
+        'reach': 5000,
+        'sparser': 5000,
+        'isi': 5000,
+        'trips': 500
+    }
+
     def __init__(self, *args, **kwargs):
         self.project_name = kwargs.pop('project_name', None)
         super(BulkAwsReadingManager, self).__init__(*args, **kwargs)
+        self.reader_versions = {}
         return
 
-    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
-        if len(tcids)/ids_per_job >= 1000:
+    def get_version(self, reader_name):
+        if reader_name not in self.reader_versions.keys():
+            logger.error("Expected to find %s in %s."
+                         % (reader_name, self.reader_versions))
+            raise ReadingUpdateError("Tried to access reader version before "
+                                     "reading started.")
+        elif self.reader_versions[reader_name] is None:
+            logger.warning("Reader version was never written to s3.")
+            return None
+        return self.reader_versions[reader_name]
+
+    def _run_reading(self, db, tcids, reader_name):
+        if len(tcids)/self.ids_per_job[reader_name.lower()] >= 1000:
             raise ReadingUpdateError("Too many id's for one submission. "
                                      "Break it up and do it manually.")
 
         logger.info("Producing readings on aws for %d text refs with new "
                     "content not read by %s."
                     % (len(tcids), reader_name))
-        job_prefix = ('%s_reading_%s'
-                      % (reader_name.lower(),
-                         self.run_datetime.strftime('%Y%m%d_%H%M%S')))
-        with open(job_prefix + '.txt', 'w') as f:
+        group_name = '%s_reading' % reader_name.lower()
+        basename = self.run_datetime.strftime('%Y%m%d_%H%M%S')
+        file_name = '{group_name}_{basename}.txt'.format(group_name=group_name,
+                                                         basename=basename)
+        with open(file_name, 'w') as f:
             f.write('\n'.join(['%s' % tcid for tcid in tcids]))
         logger.info("Submitting jobs...")
-        sub = DbReadingSubmitter(job_prefix, [reader_name.lower()],
-                                 self.project_name)
-        sub.submit_reading(job_prefix + '.txt', 0, None, ids_per_job)
+        sub = DbReadingSubmitter(basename, [reader_name.lower()],
+                                 project_name=self.project_name,
+                                 group_name=group_name)
+        sub.submit_reading(file_name, 0, None,
+                           self.ids_per_job[reader_name.lower()])
 
         logger.info("Waiting for complete...")
-        sub.watch_and_wait(idle_log_timeout=1200, kill_on_timeout=True,
-                           stash_log_method='s3')
+        sub.watch_and_wait(idle_log_timeout=self.timeouts[reader_name.lower()],
+                           kill_on_timeout=True, stash_log_method='s3')
+
+        # Get the versions of the reader reader used in all the jobs, check for
+        # consistancy and record the result (at least one result).
+        rv_dict = sub.poll_reader_versions()
+        for job_name, rvs in rv_dict.items():
+            # Sometimes the job hasn't started yet, or else the job has crashed
+            # instantly, before the reader version can be written. If the
+            # latter, we shouldn't crash the reading monitor as a result.
+            if rvs is None:
+                logger.warning("Reader version was not yet available.")
+                self.reader_versions[reader_name] = None
+                continue
+
+            # There should only be one reader per job.
+            assert len(rvs) == 1 and reader_name in rvs.keys(), \
+                "There should be only one reader: %s, but got %s." \
+                % (reader_name, str(rvs))
+            if reader_name not in self.reader_versions.keys():
+                self.reader_versions[reader_name] = rvs[reader_name]
+            elif self.reader_versions[reader_name] is None:
+                logger.info("Found the reader version.")
+                self.reader_versions[reader_name] = rvs[reader_name]
+            elif self.reader_versions[reader_name] != rvs[reader_name]:
+                logger.warning("Different jobs used different reader "
+                               "versions: %s vs. %s"
+                               % (self.reader_versions[reader_name],
+                                  rvs[reader_name]))
         return
 
 
@@ -189,7 +277,8 @@ class BulkLocalReadingManager(BulkReadingManager):
         super(BulkLocalReadingManager, self).__init__(*args, **kwargs)
         return
 
-    def _run_reading(self, db, tcids, reader_name, ids_per_job=5000):
+    def _run_reading(self, db, tcids, reader_name):
+        ids_per_job = 5000
         if len(tcids) > ids_per_job:
             raise ReadingUpdateError("Too many id's to run locally. Try "
                                      "running on batch (use_batch).")
@@ -292,7 +381,7 @@ def main():
     else:
         db = get_db(args.database)
 
-    readers = ['SPARSER', 'REACH', 'ISI']
+    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI']
     if args.method == 'local':
         bulk_manager = BulkLocalReadingManager(readers,
                                                buffer_days=args.buffer,

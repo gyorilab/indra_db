@@ -10,10 +10,9 @@ import boto3
 from nose.plugins.attrib import attr
 
 from indra.util import zip_string
-from indra.tools.reading.readers import SparserReader, EmptyReader
+from indra.tools.reading.readers import SparserReader
 from indra.tools.reading.readers import get_reader_classes
 
-from indra_db import util as dbu
 from indra_db.reading import read_db as rdb
 from indra_db.tests.util import get_db_with_pubmed_content, get_temp_db
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
@@ -89,13 +88,10 @@ def test_reading_content_insert():
         expected_output_len = len(tcids)
         N_new = len(worker.new_readings)
         reading_output.extend(worker.new_readings)
-        if isinstance(worker.reader, EmptyReader):
-            assert N_new == 0, "An empty reader read something..."
-        else:
-            assert N_new == expected_output_len, \
-                ("Not all text content successfully read by %s."
-                 "Expected %d outputs, but got %d."
-                 % (worker.reader.name, expected_output_len, N_new))
+        assert N_new == expected_output_len, \
+            ("Not all text content successfully read by %s."
+             "Expected %d outputs, but got %d."
+             % (worker.reader.name, expected_output_len, N_new))
 
     print("Test reading insert")
     for worker in workers:
@@ -113,8 +109,6 @@ def test_reading_content_insert():
     num_stmts = 0
     for worker in workers:
         worker.get_statements()
-        if not isinstance(worker.reader, EmptyReader):
-            assert worker.statement_outputs, "Did not get statement outputs."
         num_stmts += len(worker.statement_outputs)
 
         worker.dump_statements_to_db()
@@ -308,7 +302,10 @@ def test_multi_batch_run():
 
     # This should catch any repeated readings.
     num_readings = db.filter_query(db.Reading).count()
-    num_expected = len([r for r in readers if not isinstance(r, EmptyReader)])*len(tcids)
+
+    # NOTE: This might need some special consideration given the new TRIPS
+    # reader, which only reads titles
+    num_expected = len(readers)*len(tcids)
     assert num_readings == num_expected, \
         "Expected %d readings, only found %d." % (num_expected, num_readings)
 

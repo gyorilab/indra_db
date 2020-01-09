@@ -17,10 +17,12 @@ bash$ python submit_reading_pipeline.py --help
 In your favorite command line.
 """
 import re
+import json
 import boto3
 import pickle
 import logging
-from numpy import median, arange, array, zeros
+import botocore
+from numpy import median, arange, zeros
 import matplotlib as mpl; mpl.use('Agg')
 from matplotlib import pyplot as plt
 from datetime import datetime, timedelta
@@ -29,13 +31,14 @@ from collections import defaultdict
 from indra.util.get_version import get_git_info
 from indra.util.nested_dict import NestedDict
 from indra.util.aws import get_s3_file_tree
+from indra.tools.reading.util import get_s3_log_prefix
 from indra.tools.reading.util.reporter import Reporter
 from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
     create_read_parser, Submitter
 
-bucket_name = 'bigmech'
+from indra_db.reading.read_db_aws import get_s3_reader_version_loc, bucket_name
 
-logger = logging.getLogger('indra_db_reading')
+logger = logging.getLogger('indra_db_submitter')
 
 
 class DbReadingSubmitter(Submitter):
@@ -50,17 +53,21 @@ class DbReadingSubmitter(Submitter):
         A list of the names of readers to use in this job.
     project_name : str
         Optional. Used for record-keeping on AWS.
+    group_name : Optional[str]
+        Indicate the name of this group of readings.
 
     Other keyword parameters go to the `get_options` method.
     """
     _s3_input_name = 'id_list'
     _purpose = 'db_reading'
     _job_queue = 'run_db_reading_queue'
-    _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser', 'trips'],
-                     'run_db_reading_isi_jobdef': ['isi']}
+    _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser'],
+                     'run_db_reading_isi_jobdef': ['isi'],
+                     'run_db_reading_trips_jobdef': ['trips']}
 
     def __init__(self, *args, **kwargs):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
+        self.s3_prefix = get_s3_log_prefix(self.s3_base)
         self.time_tag = datetime.now().strftime('%Y%m%d_%H%M')
         self.reporter = Reporter(self.basename + '_summary_%s' % self.time_tag)
         self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
@@ -79,10 +86,10 @@ class DbReadingSubmitter(Submitter):
         read_mode = self.options.get('reading_mode', 'unread')
         stmt_mode = self.options.get('stmt_mode', 'all')
 
-        base = ['python', '-m', 'indra_db.reading.read_db_aws',
-                self.basename]
-        base += [job_name]
-        base += ['/tmp', read_mode, stmt_mode, '32', str(start_ix), str(end_ix)]
+        base = ['python3', '-m', 'indra_db.reading.read_db_aws',
+                self.job_base, job_name, self.s3_base]
+        base += ['/sw/tmp', read_mode, stmt_mode, '32', str(start_ix),
+                 str(end_ix)]
         return base
 
     def _get_extensions(self):
@@ -127,6 +134,30 @@ class DbReadingSubmitter(Submitter):
         self.options['max_reach_space_ratio'] = max_reach_space_ratio
         return
 
+    def poll_reader_versions(self):
+        """Look up the self-reported reader versions for all the jobs."""
+        ret = {}
+        s3 = boto3.client('s3')
+        for job_d in self.job_list:
+            job_name = job_d['jobName']
+            s3_key = get_s3_reader_version_loc(self.s3_base, job_name)
+            try:
+                res = s3.get_object(Bucket=bucket_name, Key=s3_key)
+            except botocore.exceptions.ClientError as e:
+                # Handle a missing object gracefully
+                if e.response['Error']['Code'] == 'NoSuchKey':
+                    logger.info('Could not find reader version json at %s.' %
+                                s3_key)
+                    ret[job_name] = None
+                # If there was some other kind of problem, log an error
+                else:
+                    logger.error("Encountered unexpected error accessing "
+                                 "reader version json: " + str(e))
+                continue
+            rv_json = json.loads(res['Body'].read())
+            ret[job_name] = rv_json
+        return ret
+
     def watch_and_wait(self, *args, **kwargs):
         """Watch the logs of the batch jobs and wait for all jobs to complete.
 
@@ -163,7 +194,8 @@ class DbReadingSubmitter(Submitter):
                 self.produce_report()
             except Exception as e:
                 logger.error("Failed to produce report.")
-                logger.info("Run record: %s" % self.run_record)
+                logger.info("Run record:\n%s"
+                            % json.dumps(self.run_record, indent=2))
                 raise e
 
     @staticmethod
@@ -249,14 +281,16 @@ class DbReadingSubmitter(Submitter):
 
     def _report_timing(self, timing_info):
         # Pivot the timing info.
-        idx_patt = re.compile('%s_(\d+)_(\d+)' % self.basename)
+        re_patt_str = '%s_(\d+)_(\d+)' % self.job_base
+        idx_patt = re.compile(re_patt_str)
         plot_set = set()
 
         def add_job_to_plot_set(job_name):
             m = idx_patt.match(job_name)
             if m is None:
-                logger.error("Unexpectedly formatted name: %s."
-                             % job_name)
+                logger.error("Unexpectedly formatted job name: %s. Expected "
+                             "something of the form %s"
+                             % (job_name, re_patt_str))
                 return None
             key = tuple([int(n) for n in m.groups()] + [job_name])
             plot_set.add(key)
@@ -401,7 +435,7 @@ class DbReadingSubmitter(Submitter):
         for spine in ax0.spines.values():
             spine.set_visible(False)
         ax0.set_xlim(0, total_time)
-        ax0.set_ylabel(self.basename + '_ ...')
+        ax0.set_ylabel(self.job_base + '_ ...')
         yticks, ylabels, names = zip(*ytick_pairs)
         if not self.ids_per_job:
             print([yticks[i+1] - yticks[i]
@@ -557,12 +591,10 @@ class DbReadingSubmitter(Submitter):
 
     def produce_report(self):
         """Produce a report of the batch jobs."""
-        s3_prefix = 'reading_results/%s/logs/%s/' % (self.basename,
-                                                     self._job_queue)
         logger.info("Producing batch report for %s, from prefix %s."
-                    % (self.basename, s3_prefix))
+                    % (self.job_base, self.s3_prefix))
         s3 = boto3.client('s3')
-        file_tree = get_s3_file_tree(s3, bucket_name, s3_prefix)
+        file_tree = get_s3_file_tree(s3, bucket_name, self.s3_prefix)
         logger.info("Found %d relevant files." % len(file_tree))
         stat_files = {
             'git_info.txt': (self._handle_git_info, self._report_git_info),
@@ -602,14 +634,13 @@ class DbReadingSubmitter(Submitter):
             self.reporter.add_text('Jobs %s: %d' % (end_type, len(jobs)),
                                    section='Totals')
 
-        s3_prefix = 'reading_results/%s/' % self.basename
         fname = self.reporter.make_report()
         with open(fname, 'rb') as f:
             s3.put_object(Bucket=bucket_name,
-                          Key=s3_prefix + fname,
+                          Key=self.s3_prefix + fname,
                           Body=f.read())
         s3.put_object(Bucket=bucket_name,
-                      Key=s3_prefix + 'stat_aggregates_%s.pkl' % self.time_tag,
+                      Key=self.s3_prefix + 'stat_aggregates_%s.pkl' % self.time_tag,
                       Body=pickle.dumps(stat_aggs))
         return file_tree, stat_aggs
 

@@ -18,7 +18,7 @@ from indra.tools.reading.util.script_tools import get_parser
 from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
 from indra.tools.reading.readers import ReadingData, get_reader, Content,\
-    Reader, EmptyReader, get_reader_class
+    Reader, get_reader_class
 from indra.tools.reading.readers.util import get_dir
 from indra.util import zip_string
 
@@ -257,8 +257,6 @@ class DatabaseReader(object):
         self.reader.reset()
         self.verbose = verbose
         self.reading_mode = reading_mode
-        if isinstance(reader, EmptyReader):
-            self.reading_mode = 'none'
         self.stmt_mode = stmt_mode
         self.batch_size = batch_size
         self.n_proc = n_proc
@@ -329,6 +327,7 @@ class DatabaseReader(object):
         self.starts['new_readings'] = datetime.utcnow()
         # Iterate
         logger.debug("Beginning to iterate.")
+        kwargs['verbose'] = self.verbose
         self.reader.read(self.iter_over_content(), **kwargs)
         if self.reader.results:
             self.new_readings.extend(self.reader.results)

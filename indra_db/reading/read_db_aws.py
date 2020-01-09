@@ -115,8 +115,10 @@ def main():
     args = arg_parser.parse_args()
 
     s3 = boto3.client('s3')
-    s3_log_prefix = get_s3_root(args.s3_prefix) + args.basename + '/'
+    s3_log_prefix = get_s3_root(args.s3_prefix) + args.job_name + '/'
+    logger.info("Using log prefix \"%s\"" % s3_log_prefix)
     id_list_key = args.s3_prefix + 'id_list'
+    logger.info("Looking for id list on s3 at \"%s\"" % id_list_key)
     try:
         id_list_obj = s3.get_object(Bucket=bucket_name, Key=id_list_key)
     except botocore.exceptions.ClientError as e:

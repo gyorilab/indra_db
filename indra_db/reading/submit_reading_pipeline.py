@@ -281,7 +281,7 @@ class DbReadingSubmitter(Submitter):
 
     def _report_timing(self, timing_info):
         # Pivot the timing info.
-        re_patt_str = '%s_(\d+)_(\d+)' % self.basename
+        re_patt_str = '%s_(\d+)_(\d+)' % self.job_base
         idx_patt = re.compile(re_patt_str)
         plot_set = set()
 
@@ -435,7 +435,7 @@ class DbReadingSubmitter(Submitter):
         for spine in ax0.spines.values():
             spine.set_visible(False)
         ax0.set_xlim(0, total_time)
-        ax0.set_ylabel(self.basename + '_ ...')
+        ax0.set_ylabel(self.job_base + '_ ...')
         yticks, ylabels, names = zip(*ytick_pairs)
         if not self.ids_per_job:
             print([yticks[i+1] - yticks[i]
@@ -592,7 +592,7 @@ class DbReadingSubmitter(Submitter):
     def produce_report(self):
         """Produce a report of the batch jobs."""
         logger.info("Producing batch report for %s, from prefix %s."
-                    % (self.basename, self.s3_prefix))
+                    % (self.job_base, self.s3_prefix))
         s3 = boto3.client('s3')
         file_tree = get_s3_file_tree(s3, bucket_name, self.s3_prefix)
         logger.info("Found %d relevant files." % len(file_tree))

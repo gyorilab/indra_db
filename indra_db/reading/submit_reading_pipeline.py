@@ -194,7 +194,8 @@ class DbReadingSubmitter(Submitter):
                 self.produce_report()
             except Exception as e:
                 logger.error("Failed to produce report.")
-                logger.info("Run record: %s" % self.run_record)
+                logger.info("Run record:\n%s"
+                            % json.dumps(self.run_record, indent=2))
                 raise e
 
     @staticmethod

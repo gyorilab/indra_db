@@ -14,7 +14,7 @@ import random
 from argparse import ArgumentParser
 
 from indra.tools.reading.readers import get_reader_classes
-from indra.tools.reading.util import get_s3_job_prefix, get_s3_root
+from indra.tools.reading.util import get_s3_job_log_prefix, get_s3_log_prefix
 
 from indra_db.reading.read_db import run_reading, construct_readers
 from indra_db.reading.report_db_aws import DbAwsStatReporter
@@ -40,7 +40,7 @@ def get_parser():
         help='The name of this job.'
     )
     parser.add_argument(
-        dest='s3_prefix',
+        dest='s3_base',
         help='Specify the s3 prefix. This is also used as a prefix for any '
              'files stored locally.',
         type=str
@@ -96,9 +96,8 @@ def get_parser():
     return parser
 
 
-def get_s3_reader_version_loc(*args, **kwargs):
-    prefix = get_s3_job_prefix(*args, **kwargs)
-    return prefix + 'reader_versions.json'
+def get_s3_reader_version_loc(s3_base, job_name):
+    return get_s3_job_log_prefix(s3_base, job_name) + 'reader_versions.json'
 
 
 def is_trips_datestring(s):
@@ -115,9 +114,9 @@ def main():
     args = arg_parser.parse_args()
 
     s3 = boto3.client('s3')
-    s3_log_prefix = get_s3_root(args.s3_prefix) + args.job_name + '/'
+    s3_log_prefix = get_s3_job_log_prefix(args.s3_base, args.job_name)
     logger.info("Using log prefix \"%s\"" % s3_log_prefix)
-    id_list_key = args.s3_prefix + 'id_list'
+    id_list_key = args.s3_base + 'id_list'
     logger.info("Looking for id list on s3 at \"%s\"" % id_list_key)
     try:
         id_list_obj = s3.get_object(Bucket=bucket_name, Key=id_list_key)
@@ -148,7 +147,7 @@ def main():
     for reader in readers:
         reader_versions[reader.name] = reader.get_version()
     s3.put_object(Bucket=bucket_name,
-                  Key=get_s3_reader_version_loc(s3_log_prefix, args.job_name),
+                  Key=get_s3_reader_version_loc(args.s3_base, args.job_name),
                   Body=json.dumps(reader_versions))
 
     # Some combinations of options don't make sense:

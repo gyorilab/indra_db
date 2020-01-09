@@ -31,7 +31,7 @@ from collections import defaultdict
 from indra.util.get_version import get_git_info
 from indra.util.nested_dict import NestedDict
 from indra.util.aws import get_s3_file_tree
-from indra.tools.reading.util import get_s3_root
+from indra.tools.reading.util import get_s3_log_prefix
 from indra.tools.reading.util.reporter import Reporter
 from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
     create_read_parser, Submitter
@@ -67,7 +67,7 @@ class DbReadingSubmitter(Submitter):
 
     def __init__(self, *args, **kwargs):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
-        self.s3_prefix = get_s3_root(self.s3_base)
+        self.s3_prefix = get_s3_log_prefix(self.s3_base)
         self.time_tag = datetime.now().strftime('%Y%m%d_%H%M')
         self.reporter = Reporter(self.basename + '_summary_%s' % self.time_tag)
         self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
@@ -140,7 +140,7 @@ class DbReadingSubmitter(Submitter):
         s3 = boto3.client('s3')
         for job_d in self.job_list:
             job_name = job_d['jobName']
-            s3_key = get_s3_reader_version_loc(self.s3_prefix, job_name)
+            s3_key = get_s3_reader_version_loc(self.s3_base, job_name)
             try:
                 res = s3.get_object(Bucket=bucket_name, Key=s3_key)
             except botocore.exceptions.ClientError as e:

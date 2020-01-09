@@ -17,6 +17,7 @@ DB_STR_FMT = "{prefix}://{username}{password}{host}{port}/{name}"
 PRINCIPAL_ENV_PREFIX = 'INDRADB'
 READONLY_ENV_PREFIX = 'INDRARO'
 S3_DUMP_ENV_VAR = 'INDRA_DB_S3_PREFIX'
+LAMBDA_NAME_ENV_VAR = 'DB_SERVICE_LAMBDA_NAME'
 
 
 logger = logging.getLogger('db_config')
@@ -100,6 +101,10 @@ def _load_env_config():
     if S3_DUMP_ENV_VAR in environ:
         bucket, prefix = environ[S3_DUMP_ENV_VAR].split(':')
         CONFIG['s3_dump'] = {'bucket': bucket, 'prefix': prefix}
+
+    if LAMBDA_NAME_ENV_VAR in environ:
+        role, function = environ[LAMBDA_NAME_ENV_VAR].split(':')
+        CONFIG['lambda'] = {'role': role, 'function': function}
 
     return
 

@@ -631,14 +631,13 @@ class DbReadingSubmitter(Submitter):
             self.reporter.add_text('Jobs %s: %d' % (end_type, len(jobs)),
                                    section='Totals')
 
-        s3_prefix = 'reading_results/%s/' % self.basename
         fname = self.reporter.make_report()
         with open(fname, 'rb') as f:
             s3.put_object(Bucket=bucket_name,
-                          Key=s3_prefix + fname,
+                          Key=self.s3_prefix + fname,
                           Body=f.read())
         s3.put_object(Bucket=bucket_name,
-                      Key=s3_prefix + 'stat_aggregates_%s.pkl' % self.time_tag,
+                      Key=self.s3_prefix + 'stat_aggregates_%s.pkl' % self.time_tag,
                       Body=pickle.dumps(stat_aggs))
         return file_tree, stat_aggs
 

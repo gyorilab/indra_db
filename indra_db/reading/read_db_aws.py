@@ -14,7 +14,7 @@ import random
 from argparse import ArgumentParser
 
 from indra.tools.reading.readers import get_reader_classes
-from indra.tools.reading.util import get_s3_job_prefix
+from indra.tools.reading.util import get_s3_job_prefix, get_s3_root
 
 from indra_db.reading.read_db import run_reading, construct_readers
 from indra_db.reading.report_db_aws import DbAwsStatReporter
@@ -115,8 +115,8 @@ def main():
     args = arg_parser.parse_args()
 
     s3 = boto3.client('s3')
-    s3_log_prefix = args.s3_prefix
-    id_list_key = s3_log_prefix + 'id_list'
+    s3_log_prefix = get_s3_root(args.s3_prefix) + args.basename + '/'
+    id_list_key = args.s3_prefix + 'id_list'
     try:
         id_list_obj = s3.get_object(Bucket=bucket_name, Key=id_list_key)
     except botocore.exceptions.ClientError as e:
@@ -136,9 +136,9 @@ def main():
     tcids = [int(line.strip()) for line in id_str_list]
 
     # Get the reader objects
-    if not os.path.exists(s3_log_prefix):
-        os.makedirs(s3_log_prefix)
-    kwargs = {'base_dir': s3_log_prefix, 'n_proc': args.num_cores}
+    if not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
+    kwargs = {'base_dir': args.out_dir, 'n_proc': args.num_cores}
     readers = construct_readers(args.readers, **kwargs)
 
     # Record the reader versions used in this run.
@@ -169,6 +169,7 @@ def main():
 
     # Preserve the sparser logs
     contents = os.listdir('.')
+    logger.info("Checking for any log files to cache:\n" + '\n'.join(contents))
     sparser_logs = []
     trips_logs = []
     for fname in contents:

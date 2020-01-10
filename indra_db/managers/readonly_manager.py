@@ -117,16 +117,14 @@ def parse_args():
     )
     parser.add_argument(
         '-a', '--allow_continue',
-        default=False,
-        type=bool,
+        action='store_true',
         help=("Indicate whether you want to job to continue building atop an "
               "existing readonly schema, or if you want it to give up if the "
               "schema already exists.")
     )
     parser.add_argument(
         '-d', '--delete_existing',
-        default=False,
-        type=bool,
+        action='store_true',
         help=("Add this flag to delete an existing schema if it exists. "
               "Selecting this option makes -a/--allow_continue moot.")
     )

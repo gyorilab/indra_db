@@ -68,7 +68,10 @@ def main():
 
     logger.info("%s - Generating readonly schema (est. a long time)"
                 % datetime.now())
-    principal_db.generate_readonly(ro_list=ro_names)
+    if args.delete_existing and 'readonly' in principal_db.get_schemas():
+        principal_db.drop_schema('readonly')
+    principal_db.generate_readonly(ro_list=ro_names,
+                                   allow_continue=args.allow_continue)
 
     logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
                 % datetime.now())
@@ -111,6 +114,21 @@ def parse_args():
         default='all',
         nargs='+',
         help='Specify certain views to create or refresh.'
+    )
+    parser.add_argument(
+        '-a', '--allow_continue',
+        default=False,
+        type=bool,
+        help=("Indicate whether you want to job to continue building atop an "
+              "existing readonly schema, or if you want it to give up if the "
+              "schema already exists.")
+    )
+    parser.add_argument(
+        '-d', '--delete_existing',
+        default=False,
+        type=bool,
+        help=("Add this flag to delete an existing schema if it exists. "
+              "Selecting this option makes -a/--allow_continue moot.")
     )
 
     args = parser.parse_args()

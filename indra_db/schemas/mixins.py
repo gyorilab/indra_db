@@ -21,9 +21,8 @@ class IndraDBTable(object):
         if commit:
             try:
                 cls.execute(db, sql)
-            except DuplicateTable as err:
-                logger.warning("Got error (%s) when building %s. Skipping."
-                               % (err, index.name))
+            except DuplicateTable:
+                logger.info("%s exists, skipping." % index.name)
         return sql
 
     @classmethod

@@ -29,7 +29,7 @@ class IndraDBTable(object):
     @classmethod
     def build_indices(cls, db):
         for index in cls._indices:
-            print("Building index: %s" % index.name)
+            logger.info("Building index: %s" % index.name)
             cls.create_index(db, index)
 
     @staticmethod

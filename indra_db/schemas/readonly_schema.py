@@ -264,7 +264,7 @@ def get_schema(Base):
             return src_dict
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
-    class PaRefLink(Base, SpecialColumnTable):
+    class PaRefLink(Base, ReadonlyTable):
         __tablename__ = 'pa_ref_link'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT mk_hash, trid, pmid, pmcid, source, reader '

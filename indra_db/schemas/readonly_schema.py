@@ -13,9 +13,10 @@ from .indexes import *
 logger = logging.getLogger(__name__)
 
 CREATE_ORDER = ['raw_stmt_src', 'fast_raw_pa_link', 'pa_stmt_src',
-                'evidence_counts', 'pa_source_lookup', 'pa_ref_link',
-                'pa_meta', 'text_meta', 'name_meta', 'other_meta']
-CREATE_UNORDERED = {'reading_ref_link'}
+                'evidence_counts', 'pa_source_lookup', 'reading_ref_link',
+                'pa_ref_link', 'pa_meta', 'text_meta', 'name_meta',
+                'other_meta']
+CREATE_UNORDERED = {}
 
 
 def get_schema(Base):
@@ -34,13 +35,14 @@ def get_schema(Base):
       3. pa_stmt_src
       4. evidence_counts
       5. pa_source_lookup
-      6. pa_ref_link
-      7. pa_meta
-      8. text_meta
-      9. name_meta
-     10. other_meta
+      6. reading_ref_link
+      7. pa_ref_link
+      8. pa_meta
+      9. text_meta
+     10. name_meta
+     11. other_meta
     The following can be built at any time and in any order:
-      - reading_ref_link
+        (None currently)
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
     '''

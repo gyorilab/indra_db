@@ -52,8 +52,15 @@ class ReadonlyTransferEnv(object):
     def __enter__(self):
         self._set_lambda_env({'INDRAROOVERRIDE': str(self.principal.url)})
 
-    def __exit__(self):
-        self._set_lambda_env({})
+    def __exit__(self, exc_type, value, traceback):
+        # Check for exceptions. Only change back over if there were no
+        # exceptions.
+        if exc_type is None:
+            self._set_lambda_env({})
+        else:
+            logger.warning("An error %s occurred. Assuming the database is "
+                           "not usable, and not transfering the service back "
+                           "to Readonly." % exc_type)
 
 
 def main():

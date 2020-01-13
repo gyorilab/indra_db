@@ -63,30 +63,38 @@ def main():
     else:
         ro_names = args.m_views
 
+    # Generate and dump the readonly schema
     principal_db = get_db(args.database)
-    readonly_db = get_ro(args.readonly)
+    if not args.load_only:
 
-    logger.info("%s - Generating readonly schema (est. a long time)"
-                % datetime.now())
-    if args.delete_existing and 'readonly' in principal_db.get_schemas():
+        logger.info("%s - Generating readonly schema (est. a long time)"
+                    % datetime.now())
+        if args.delete_existing and 'readonly' in principal_db.get_schemas():
+            principal_db.drop_schema('readonly')
+        principal_db.generate_readonly(ro_list=ro_names,
+                                       allow_continue=args.allow_continue)
+
+        logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
+                    % datetime.now())
+        dump_file = principal_db.dump_readonly()
+    else:
+        dump_file = principal_db.get_latest_dump_file()
+
+    # Load the database into the readonly database
+    if not args.dump_only:
+        readonly_db = get_ro(args.readonly)
+        logger.info("%s - Beginning upload of content (est. ~30 minutes)"
+                    % datetime.now())
+        with ReadonlyTransferEnv(principal_db, readonly_db):
+            readonly_db.load_dump(dump_file)
+
+    # Do some cleanup
+    if not args.load_only:
+        # This database no longer needs this schema (this only executes if
+        # the check_call does not error).
+        principal_db.session.close()
+        principal_db.grab_session()
         principal_db.drop_schema('readonly')
-    principal_db.generate_readonly(ro_list=ro_names,
-                                   allow_continue=args.allow_continue)
-
-    logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
-                % datetime.now())
-    dump_file = principal_db.dump_readonly()
-
-    logger.info("%s - Beginning upload of content (est. ~30 minutes)"
-                % datetime.now())
-    with ReadonlyTransferEnv(principal_db, readonly_db):
-        readonly_db.load_dump(dump_file)
-
-    # This database no longer needs this schema (this only executes if
-    # the check_call does not error).
-    principal_db.session.close()
-    principal_db.grab_session()
-    principal_db.drop_schema('readonly')
     return
 
 
@@ -127,6 +135,18 @@ def parse_args():
         action='store_true',
         help=("Add this flag to delete an existing schema if it exists. "
               "Selecting this option makes -a/--allow_continue moot.")
+    )
+    parser.add_argument(
+        '-l', '--load_only',
+        action='store_true',
+        help=('Use this flag to only load the latest s3 file onto the '
+              'readonly database.')
+    )
+    parser.add_argument(
+        '-u', '--dump_only',
+        action='store_true',
+        help=('Use this flag to only generate and dump the readonly database '
+              'image to s3.')
     )
 
     args = parser.parse_args()

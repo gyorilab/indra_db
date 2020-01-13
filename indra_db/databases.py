@@ -1,3 +1,5 @@
+from subprocess import STDOUT
+
 __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
            'sql_expressions', 'readers', 'reader_versions',
            'PrincipalDatabaseManager', 'ReadonlyDatabaseManager']
@@ -330,6 +332,7 @@ class DatabaseManager(object):
     def drop_schema(self, schema_name, cascade=True):
         """Drop a schema (rather forcefully by default)"""
         with self.engine.connect() as con:
+            logger.info("Dropping schema %s." % schema_name)
             con.execute('DROP SCHEMA IF EXISTS %s %s;'
                         % (schema_name, 'CASCADE' if cascade else ''))
         return
@@ -999,7 +1002,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
         check_call(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
                              'pg_restore', *self._form_pg_args(),
                              '--no-owner']),
-                   env=my_env, shell=True)
+                   env=my_env, shell=True, stdout=STDOUT)
 
         self.session.close()
         self.grab_session()

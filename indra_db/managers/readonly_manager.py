@@ -90,6 +90,7 @@ def main():
     # Load the database into the readonly database
     if not args.dump_only:
         readonly_db = get_ro(args.readonly)
+        logger.info("Using dump_file = \"%s\"." % dump_file)
         logger.info("%s - Beginning upload of content (est. ~30 minutes)"
                     % datetime.now())
         with ReadonlyTransferEnv(principal_db, readonly_db):

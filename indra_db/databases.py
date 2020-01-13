@@ -901,6 +901,59 @@ class PrincipalDatabaseManager(DatabaseManager):
 
         return dump_file
 
+    def get_latest_dump_file(self):
+        import boto3
+        from indra.util.aws import iter_s3_keys
+        from indra_db.config import get_s3_dump
+
+        s3 = boto3.client('s3')
+        s3_params = get_s3_dump()
+        bucket = s3_params['bucket']
+        prefix = s3_params['prefix']
+
+        logger.debug("Looking for the latest dump file on s3 in bucket "
+                     "%s with prefix %s." % (bucket, prefix))
+
+        # Get the most recent file from s3.
+        max_date_str = None
+        max_lm_date = None
+        latest_key = None
+        for key, lm_date in iter_s3_keys(s3, bucket, prefix, with_dt=True):
+
+            # Get the date string from the name, ignoring non-standard files.
+            suffix = key.split('/')[-1]
+            m = re.match('readonly-(\S+).dump', suffix)
+            if m is None:
+                logger.debug("{key} is not a standard key, will not be "
+                             "considered.".format(key=key))
+                continue
+            date_str, = m.groups()
+
+            # Compare the the current maxes. If the date_str and the last
+            # -modified date don't agree, raise an error.
+            if not max_lm_date \
+                    or date_str > max_date_str and lm_date > max_lm_date:
+                max_date_str = date_str
+                max_lm_date = lm_date
+                latest_key = key
+            elif max_lm_date \
+                    and (date_str > max_date_str or lm_date > max_lm_date):
+                raise S3DumpTimeAmbiguityError(key, date_str > max_date_str,
+                                               lm_date > max_lm_date)
+        logger.debug("Latest dump file from s3 with bucket %s and prefix %s "
+                     "was found to be %s." % (bucket, prefix, latest_key))
+        return 's3://{bucket}/{key}'.format(bucket=bucket, key=latest_key)
+
+
+class S3DumpTimeAmbiguityError(Exception):
+    def __init__(self, key, is_latest_str, is_last_modified):
+        msg = ('%s is ' % key) + ('' if is_latest_str else 'not ') \
+              + 'the largest date string but is ' \
+              + ('' if is_last_modified else 'not ')\
+              + 'the latest time stamp.'
+        super().__init__(msg)
+        return
+
 
 class ReadonlyDatabaseManager(DatabaseManager):
     """This class represents the readonly database."""

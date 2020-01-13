@@ -44,7 +44,7 @@ class ReadonlyTransferEnv(object):
 
     def _set_lambda_env(self, env_dict):
         lambda_client = get_lambda_client()
-        lambda_client.update_function_configureation(
+        lambda_client.update_function_configuration(
             FunctionName=aws_lambda_function,
             Environment={"Variables": env_dict}
         )

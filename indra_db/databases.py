@@ -991,7 +991,6 @@ class ReadonlyDatabaseManager(DatabaseManager):
             if force_clear:
                 # For some reason, dropping tables does not work.
                 self.drop_schema('readonly')
-                self.create_schema('readonly')
             else:
                 raise IndraDbException("Tables already exist and force_clear "
                                        "is False.")

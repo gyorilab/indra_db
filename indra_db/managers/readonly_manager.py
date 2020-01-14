@@ -50,12 +50,15 @@ class ReadonlyTransferEnv(object):
         )
 
     def __enter__(self):
+        logger.info("Redirecting the service to %s." % self.principal.url)
         self._set_lambda_env({'INDRAROOVERRIDE': str(self.principal.url)})
 
     def __exit__(self, exc_type, value, traceback):
         # Check for exceptions. Only change back over if there were no
         # exceptions.
         if exc_type is None:
+            logger.info("Directing the service back to %s."
+                        % self.readonly.url)
             self._set_lambda_env({})
         else:
             logger.warning("An error %s occurred. Assuming the database is "

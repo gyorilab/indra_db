@@ -1,5 +1,3 @@
-from subprocess import STDOUT
-
 __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
            'sql_expressions', 'readers', 'reader_versions',
            'PrincipalDatabaseManager', 'ReadonlyDatabaseManager']
@@ -979,7 +977,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
-        from subprocess import check_call
+        from subprocess import run
         from os import environ
 
         self.session.close()
@@ -999,10 +997,9 @@ class ReadonlyDatabaseManager(DatabaseManager):
                                        "is False.")
 
         # Pipe the database dump from s3 through this machine into the database
-        check_call(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
-                             'pg_restore', *self._form_pg_args(),
-                             '--no-owner']),
-                   env=my_env, shell=True, stdout=STDOUT)
+        run(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
+                      'pg_restore', *self._form_pg_args(), '--no-owner']),
+            env=my_env, shell=True, check=True)
 
         self.session.close()
         self.grab_session()

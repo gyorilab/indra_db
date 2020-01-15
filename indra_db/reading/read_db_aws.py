@@ -184,10 +184,7 @@ def main():
 
     _dump_logs_to_s3(s3, s3_log_prefix, 'sparser', sparser_logs)
     _dump_logs_to_s3(s3, s3_log_prefix, 'trips', trips_logs)
-
-    # Create a summary report.
-    rep = DbAwsStatReporter(args.job_name, s3_log_prefix, s3, bucket_name)
-    rep.report_statistics(workers)
+    return
 
 
 def _dump_logs_to_s3(s3, s3_log_prefix, reader, reader_logs):

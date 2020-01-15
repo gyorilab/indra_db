@@ -5,16 +5,13 @@ from datetime import datetime, timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from indra.tools.reading.readers import get_reader_class
-from indra_db.managers.core import DataGatherer, DGContext
+
 from indra_db.reading import read_db as rdb
 from indra_db.util import get_primary_db, get_db
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
 
 logger = logging.getLogger(__name__)
 THIS_DIR = path.dirname(path.abspath(__file__))
-
-
-gatherer = DataGatherer('reading', ['readings', 'stmts'])
 
 
 class ReadingUpdateError(Exception):
@@ -48,7 +45,6 @@ class ReadingManager(object):
         def run_and_record_update(self, db, *args, **kwargs):
             all_completed = False
             for reader_name in self.reader_names:
-                gatherer.set_sub_label(reader_name)
                 self.run_datetime = datetime.utcnow()
                 done = func(self, db, reader_name, *args, **kwargs)
                 all_completed &= done
@@ -123,7 +119,6 @@ class BulkReadingManager(ReadingManager):
         return constrains
 
     @ReadingManager._run_all_readers
-    @DGContext.wrap(gatherer)
     def read_all(self, db, reader_name):
         """Read everything available on the database."""
         self.end_datetime = self.run_datetime
@@ -139,7 +134,6 @@ class BulkReadingManager(ReadingManager):
         return True
 
     @ReadingManager._run_all_readers
-    @DGContext.wrap(gatherer)
     def read_new(self, db, reader_name):
         """Update the readings and raw statements in the database."""
         self.end_datetime = self.run_datetime

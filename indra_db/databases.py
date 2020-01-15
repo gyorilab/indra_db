@@ -9,6 +9,8 @@ from io import BytesIO
 from numbers import Number
 from datetime import datetime
 
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+
 from sqlalchemy.sql import expression as sql_expressions
 from sqlalchemy.schema import DropTable
 from sqlalchemy.sql.expression import Delete, Update
@@ -806,9 +808,9 @@ class DatabaseManager(object):
 
     def vacuum(self, analyze=True):
         conn = self.engine.raw_connection()
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = conn.cursor()
-        cursor.execute('vacuum' + (' analyze;' if analyze else ''))
-        conn.commit()
+        cursor.execute('VACUUM' + (' ANALYZE;' if analyze else ''))
         return
 
 

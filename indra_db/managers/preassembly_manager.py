@@ -17,6 +17,7 @@ from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
 
+from indra_db.managers.core import DataGatherer, DGContext
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
     extract_agent_data, insert_pa_agents
 
@@ -26,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 HERE = path.dirname(path.abspath(__file__))
 ipa_logger.setLevel(logging.INFO)
+
+
+gatherer = DataGatherer('preassembly', ['stmts', 'evidence', 'links'])
 
 
 def _handle_update_table(func):
@@ -183,6 +187,7 @@ class PreassemblyManager(object):
         return new_unique_stmts, evidence_links, agent_tuples
 
     @_handle_update_table
+    @DGContext.wrap(gatherer)
     def create_corpus(self, db, continuing=False):
         """Initialize the table of preassembled statements.
 
@@ -487,6 +492,7 @@ class PreassemblyManager(object):
         return
 
     @_handle_update_table
+    @DGContext.wrap(gatherer)
     def supplement_corpus(self, db, continuing=False):
         """Update the table of preassembled statements.
 

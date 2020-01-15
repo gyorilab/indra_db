@@ -159,7 +159,7 @@ class PreassemblyManager(object):
                              skip=['agents'])  # This will commit
 
         self._log("Added %d new pa statements into the database."
-                   % len(new_mk_set))
+                  % len(new_mk_set))
         return new_mk_set
 
     @clockit

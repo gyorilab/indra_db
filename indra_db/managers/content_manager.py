@@ -22,11 +22,11 @@ from indra.util import zip_string
 from indra.literature import pubmed_client
 from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
-from indra_db.managers.core import DataGatherer, DGContext
 
 from indra_db.util import get_primary_db, get_db
 from indra_db.databases import texttypes, formats
 from indra_db.databases import sql_expressions as sql_exp
+from indra_db.managers.core import DataGatherer, DGContext
 
 
 try:

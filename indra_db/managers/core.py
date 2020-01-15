@@ -42,6 +42,7 @@ class DataGatherer(object):
         self._sub_label = None
         self._counts_fields = counts_fields
         self._timing = self._counts = self._error = None
+        self._in_context = False
         return
 
     def set_sub_label(self, sub_label):
@@ -55,12 +56,17 @@ class DataGatherer(object):
             'dur': None
         }
         self._counts = dict.fromkeys(self._counts_fields, 0)
+        self._in_context = True
         return
 
     def add(self, field, num=1):
         if field not in self._counts:
             raise ValueError('Unexpected field: %s. Should be one of: %s.'
                              % (field, self._counts_fields))
+
+        if not self._in_context:
+            raise RuntimeError('Attempted to update value %s out of context.'
+                               % field)
         self._counts[field] += num
         return
 
@@ -86,14 +92,15 @@ class DataGatherer(object):
         key += '.json'
 
         # Get the stats from the manager
-        stats = {'timing': self.make_timing_json(),
+        stats = {'timing': self._make_timing_json(),
                  'counts': self._counts,
                  'error': self._error}
         s3.put_object(Bucket=S3_DATA_LOC['bucket'], Key=key,
                       Body=json.dumps(stats))
+        self._in_context = False
         return
 
-    def make_timing_json(self):
+    def _make_timing_json(self):
         timing_res = {}
         for name, value in self._timing.items():
             if isinstance(value, datetime):

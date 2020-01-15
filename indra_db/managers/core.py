@@ -24,10 +24,12 @@ class DGContext(object):
         self.gatherer.dump(exc_type, exc_val, exc_tb)
 
     @classmethod
-    def wrap(cls, gatherer):
+    def wrap(cls, gatherer, sub_label=None):
         def sub_wrap(func):
             @functools.wraps(func)
             def decorated(*args, **kwargs):
+                if sub_label:
+                    gatherer.set_sub_label(sub_label)
                 with cls(gatherer):
                     return func(*args, **kwargs)
             return decorated

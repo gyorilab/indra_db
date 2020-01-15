@@ -22,6 +22,7 @@ from indra.util import zip_string
 from indra.literature import pubmed_client
 from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
+from indra_db.managers.core import DataGatherer, DGContext
 
 from indra_db.util import get_primary_db, get_db
 from indra_db.databases import texttypes, formats
@@ -39,6 +40,9 @@ logger = logging.getLogger(__name__)
 
 ftp_blocksize = 33554432  # Chunk size recommended by NCBI
 THIS_DIR = path.dirname(path.abspath(__file__))
+
+
+gatherer = DataGatherer('content', ['refs', 'content'])
 
 
 class UploadError(Exception):
@@ -830,6 +834,7 @@ class Pubmed(_NihManager):
         return ret
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'pubmed')
     def populate(self, db, n_procs=1, continuing=False):
         """Perform the initial input of the pubmed content into the database.
 
@@ -849,6 +854,7 @@ class Pubmed(_NihManager):
                                                continuing, False)
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'pubmed')
     def update(self, db, n_procs=1):
         """Update the contents of the database with the latest articles."""
         did_base = self.load_files_and_annotations(db, 'baseline', n_procs,
@@ -1220,6 +1226,7 @@ class PmcManager(_NihManager):
         return
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer)
     def populate(self, db, n_procs=1, continuing=False):
         """Perform the initial population of the pmc content into the database.
 
@@ -1242,6 +1249,7 @@ class PmcManager(_NihManager):
             for some reason, often because the upload was already completed
             at some earlier time.
         """
+        gatherer.set_sub_label(self.my_source)
         archives = set(self.get_file_list())
 
         if continuing:
@@ -1274,6 +1282,7 @@ class PmcOA(PmcManager):
         return k.startswith('articles') and k.endswith('.xml.tar.gz')
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'pmc_oa')
     def update(self, db, n_procs=1):
         min_datetime = self._get_latest_update(db)
 
@@ -1335,6 +1344,7 @@ class Manuscripts(PmcManager):
         return
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'manuscripts')
     def update(self, db, n_procs=1):
         """Add any new content found in the archives.
 

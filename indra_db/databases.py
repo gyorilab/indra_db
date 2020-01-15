@@ -804,6 +804,13 @@ class DatabaseManager(object):
                 '-w',  # Don't prompt for a password, forces use of env.
                 '-d', self.url.database]
 
+    def vacuum(self):
+        conn = self.engine.raw_connection()
+        cursor = conn.cursor()
+        cursor.execute('vacuum')
+        conn.commit()
+        return
+
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
@@ -997,12 +1004,17 @@ class ReadonlyDatabaseManager(DatabaseManager):
                                        "is False.")
 
         # Pipe the database dump from s3 through this machine into the database
+        logger.info("Dumping into the database.")
         run(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
                       'pg_restore', *self._form_pg_args(), '--no-owner']),
             env=my_env, shell=True, check=True)
-
         self.session.close()
         self.grab_session()
+
+        # Run Vacuuming
+        logger.info("Running vacuuming.")
+        self.vacuum()
+
         return
 
 

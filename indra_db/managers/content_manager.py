@@ -640,6 +640,7 @@ class Pubmed(_NihManager):
         # Remove the pmids from any data entries that failed to copy.
         vile_data = self.copy_into_db(db, 'text_ref', text_ref_records,
                                       self.tr_cols)
+        gatherer.add('refs', len(text_ref_records) - len(vile_data))
         if vile_data is not None:
             valid_pmids -= {d[self.tr_cols.index('pmid')] for d in vile_data}
         return valid_pmids
@@ -699,6 +700,7 @@ class Pubmed(_NihManager):
             cols=('text_ref_id', 'source', 'format', 'text_type',
                   'content')
             )
+        gatherer.add('content', len(text_content_records))
         return
 
     def upload_article(self, db, article_info, carefully=False):
@@ -1000,6 +1002,7 @@ class PmcManager(_NihManager):
             filtered_tr_records,
             self.tr_cols
             )
+        gatherer.add('refs', len(filtered_tr_records))
 
         # Process the text content data
         filtered_tc_records = self.filter_text_content(db, mod_tc_data)
@@ -1013,6 +1016,8 @@ class PmcManager(_NihManager):
             filtered_tc_records,
             self.tc_cols
             )
+        gatherer.add('content', len(filtered_tr_records))
+        return
 
     def get_data_from_xml_str(self, xml_str, filename):
         "Get the data out of the xml string."

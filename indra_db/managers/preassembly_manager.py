@@ -149,9 +149,14 @@ class PreassemblyManager(object):
             self._log("Insert new statements into database...")
             insert_pa_stmts(db, new_unique_stmts, ignore_agents=True,
                             commit=False)
+            gatherer.add('stmts', len(new_unique_stmts))
+
             self._log("Insert new raw_unique links into the database...")
-            db.copy('raw_unique_links', flatten_evidence_dict(evidence_links),
+            ev_links = flatten_evidence_dict(evidence_links)
+            db.copy('raw_unique_links', ev_links,
                     ('pa_stmt_mk_hash', 'raw_stmt_id'), commit=False)
+            gatherer.add('evidence', len(ev_links))
+
             db.copy('pa_agents', agent_tuples,
                     ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
                     lazy=True, commit=False)
@@ -298,6 +303,7 @@ class PreassemblyManager(object):
                           % len(support_links))
                 db.copy('pa_support_links', support_links,
                         ('supported_mk_hash', 'supporting_mk_hash'))
+                gatherer.add('links', len(support_links))
                 existing_links |= support_links
                 support_links = set()
 
@@ -307,6 +313,7 @@ class PreassemblyManager(object):
                       % len(support_links))
             db.copy('pa_support_links', support_links,
                     ('supported_mk_hash', 'supporting_mk_hash'))
+            gatherer.add('links', len(support_links))
 
         # Delete the pickle cache
         if path.exists(sid_cache_fname):
@@ -488,6 +495,7 @@ class PreassemblyManager(object):
                       % len(new_support_links))
             db.copy('pa_support_links', new_support_links,
                     ('supported_mk_hash', 'supporting_mk_hash'))
+            gatherer.add('links', len(new_support_links))
         self.__tag = 'Unpurposed'
         return
 

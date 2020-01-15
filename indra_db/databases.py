@@ -804,10 +804,10 @@ class DatabaseManager(object):
                 '-w',  # Don't prompt for a password, forces use of env.
                 '-d', self.url.database]
 
-    def vacuum(self):
+    def vacuum(self, analyze=True):
         conn = self.engine.raw_connection()
         cursor = conn.cursor()
-        cursor.execute('vacuum')
+        cursor.execute('vacuum' + (' analyze;' if analyze else ''))
         conn.commit()
         return
 

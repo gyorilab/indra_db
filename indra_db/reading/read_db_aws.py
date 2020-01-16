@@ -14,10 +14,9 @@ import random
 from argparse import ArgumentParser
 
 from indra.tools.reading.readers import get_reader_classes
-from indra.tools.reading.util import get_s3_job_log_prefix, get_s3_log_prefix
+from indra.tools.reading.util import get_s3_job_log_prefix
 
 from indra_db.reading.read_db import run_reading, construct_readers
-from indra_db.reading.report_db_aws import DbAwsStatReporter
 
 
 logger = logging.getLogger('read_db_aws')

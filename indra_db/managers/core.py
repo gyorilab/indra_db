@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 # TODO: Make this a config var
 S3_DATA_LOC = {'bucket': 'bigmech', 'prefix': 'indra-db/managers/'}
-DATE_FMT = '%Y%m%d_%H%M%S'
+DAY_FMT = '%Y%m%d'
+TIME_FMT = '%H%M%S'
 
 
 class DGContext(object):
@@ -86,9 +87,11 @@ class DataGatherer(object):
         self._timing['dur'] = self._timing['end'] - self._timing['start']
 
         # Get the s3 key from the manager
-        key = S3_DATA_LOC['prefix'] + self._label
+        key = S3_DATA_LOC['prefix'] + self._timing['start'].strftime(DAY_FMT)
+        key += '/' + self._label
         if self._sub_label:
             key += '/' + self._sub_label
+        key += '_' + self._timing['start'].strftime(TIME_FMT)
         key += '.json'
 
         # Get the stats from the manager

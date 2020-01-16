@@ -30,7 +30,7 @@ def _apply_limits(db, mk_hashes_q, best_first, max_stmts, offset,
 
         for src in censured_sources:
             mk_hashes_q = (mk_hashes_q
-                           .filter(db.PaSourceLookup.only_src.notlike(src)))
+                     .filter(db.PaSourceLookup.only_src.is_distinct_from(src)))
     if max_stmts is not None:
         mk_hashes_q = mk_hashes_q.limit(max_stmts)
     if offset is not None:

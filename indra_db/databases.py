@@ -9,6 +9,8 @@ from io import BytesIO
 from numbers import Number
 from datetime import datetime
 
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+
 from sqlalchemy.sql import expression as sql_expressions
 from sqlalchemy.schema import DropTable
 from sqlalchemy.sql.expression import Delete, Update
@@ -330,6 +332,7 @@ class DatabaseManager(object):
     def drop_schema(self, schema_name, cascade=True):
         """Drop a schema (rather forcefully by default)"""
         with self.engine.connect() as con:
+            logger.info("Dropping schema %s." % schema_name)
             con.execute('DROP SCHEMA IF EXISTS %s %s;'
                         % (schema_name, 'CASCADE' if cascade else ''))
         return
@@ -803,6 +806,13 @@ class DatabaseManager(object):
                 '-w',  # Don't prompt for a password, forces use of env.
                 '-d', self.url.database]
 
+    def vacuum(self, analyze=True):
+        conn = self.engine.raw_connection()
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = conn.cursor()
+        cursor.execute('VACUUM' + (' ANALYZE;' if analyze else ''))
+        return
+
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
@@ -828,7 +838,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__PaStmtSrc
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def generate_readonly(self, ro_list=None, force=False):
+    def generate_readonly(self, ro_list=None, allow_continue=True):
         """Manage the materialized views.
 
         Parameters
@@ -836,15 +846,21 @@ class PrincipalDatabaseManager(DatabaseManager):
         ro_list : list or None
             Default None. A list of readonly table names or None. If None,
             all defined readonly tables will be build.
-        force : bool
-            Force the readonly tables to be built even if they already exist.
+        allow_continue : bool
+            If True (default), continue to build the schema if it already
+            exists. If False, give up if the schema already exists.
         """
-        if 'readonly' in self.get_schemas() and not force:
-            logger.info("Schema already exists.")
-            return
-
-        # Make sure the schema exists
-        self.create_schema('readonly')
+        if 'readonly' in self.get_schemas():
+            if allow_continue:
+                logger.warning("Schema already exists. State could be "
+                               "outdated. Will proceed (allow_continue=True),")
+            else:
+                logger.error("Schema already exists, will not proceed (allow_"
+                             "continue=False).")
+                return
+        else:
+            logger.info("Creating the schema.")
+            self.create_schema('readonly')
 
         # Create each of the readonly view tables (in order, where necessary).
         def iter_names():
@@ -893,13 +909,60 @@ class PrincipalDatabaseManager(DatabaseManager):
                         '|', 'aws', 's3', 'cp', '-', dump_file])
         check_call(cmd, shell=True, env=my_env)
 
-        # This database no longer needs this schema (this only executes if
-        # the check_call does not error).
-        self.session.close()
-        self.grab_session()
-        self.drop_schema('readonly')
-
         return dump_file
+
+    def get_latest_dump_file(self):
+        import boto3
+        from indra.util.aws import iter_s3_keys
+        from indra_db.config import get_s3_dump
+
+        s3 = boto3.client('s3')
+        s3_params = get_s3_dump()
+        bucket = s3_params['bucket']
+        prefix = s3_params['prefix']
+
+        logger.debug("Looking for the latest dump file on s3 in bucket "
+                     "%s with prefix %s." % (bucket, prefix))
+
+        # Get the most recent file from s3.
+        max_date_str = None
+        max_lm_date = None
+        latest_key = None
+        for key, lm_date in iter_s3_keys(s3, bucket, prefix, with_dt=True):
+
+            # Get the date string from the name, ignoring non-standard files.
+            suffix = key.split('/')[-1]
+            m = re.match('readonly-(\S+).dump', suffix)
+            if m is None:
+                logger.debug("{key} is not a standard key, will not be "
+                             "considered.".format(key=key))
+                continue
+            date_str, = m.groups()
+
+            # Compare the the current maxes. If the date_str and the last
+            # -modified date don't agree, raise an error.
+            if not max_lm_date \
+                    or date_str > max_date_str and lm_date > max_lm_date:
+                max_date_str = date_str
+                max_lm_date = lm_date
+                latest_key = key
+            elif max_lm_date \
+                    and (date_str > max_date_str or lm_date > max_lm_date):
+                raise S3DumpTimeAmbiguityError(key, date_str > max_date_str,
+                                               lm_date > max_lm_date)
+        logger.debug("Latest dump file from s3 with bucket %s and prefix %s "
+                     "was found to be %s." % (bucket, prefix, latest_key))
+        return 's3://{bucket}/{key}'.format(bucket=bucket, key=latest_key)
+
+
+class S3DumpTimeAmbiguityError(Exception):
+    def __init__(self, key, is_latest_str, is_last_modified):
+        msg = ('%s is ' % key) + ('' if is_latest_str else 'not ') \
+              + 'the largest date string but is ' \
+              + ('' if is_last_modified else 'not ')\
+              + 'the latest time stamp.'
+        super().__init__(msg)
+        return
 
 
 class ReadonlyDatabaseManager(DatabaseManager):
@@ -923,7 +986,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
-        from subprocess import check_call
+        from subprocess import run
         from os import environ
 
         self.session.close()
@@ -938,19 +1001,22 @@ class ReadonlyDatabaseManager(DatabaseManager):
             if force_clear:
                 # For some reason, dropping tables does not work.
                 self.drop_schema('readonly')
-                self.create_schema('readonly')
             else:
                 raise IndraDbException("Tables already exist and force_clear "
                                        "is False.")
 
         # Pipe the database dump from s3 through this machine into the database
-        check_call(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
-                             'pg_restore', *self._form_pg_args(),
-                             '--no-owner']),
-                   env=my_env, shell=True)
-
+        logger.info("Dumping into the database.")
+        run(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
+                      'pg_restore', *self._form_pg_args(), '--no-owner']),
+            env=my_env, shell=True, check=True)
         self.session.close()
         self.grab_session()
+
+        # Run Vacuuming
+        logger.info("Running vacuuming.")
+        self.vacuum()
+
         return
 
 

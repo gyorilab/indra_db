@@ -12,10 +12,11 @@ from .indexes import *
 
 logger = logging.getLogger(__name__)
 
-CREATE_ORDER = ['raw_stmt_src', 'pa_stmt_src', 'fast_raw_pa_link',
-                'evidence_counts', 'pa_source_lookup', 'pa_meta', 'text_meta',
-                'name_meta']
-CREATE_UNORDERED = {'reading_ref_link'}
+CREATE_ORDER = ['raw_stmt_src', 'fast_raw_pa_link', 'pa_stmt_src',
+                'evidence_counts', 'pa_source_lookup', 'reading_ref_link',
+                'pa_ref_link', 'pa_meta', 'text_meta', 'name_meta',
+                'other_meta']
+CREATE_UNORDERED = {}
 
 
 def get_schema(Base):
@@ -30,15 +31,18 @@ def get_schema(Base):
 
     The following views must be built in this specific order:
       1. raw_stmt_src
-      2. pa_stmt_src
-      3. fast_raw_pa_link
+      2. fast_raw_pa_link
+      3. pa_stmt_src
       4. evidence_counts
       5. pa_source_lookup
-      6. pa_meta
-      7. text_meta
-      8. name_meta
+      6. reading_ref_link
+      7. pa_ref_link
+      8. pa_meta
+      9. text_meta
+     10. name_meta
+     11. other_meta
     The following can be built at any time and in any order:
-      - reading_ref_link
+        (None currently)
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
     '''
@@ -96,7 +100,8 @@ def get_schema(Base):
                           'raw_unique_links AS link,'
                           'readonly.raw_stmt_src as raw_src '
                           'WHERE link.raw_stmt_id = raw.id '
-                          'AND link.pa_stmt_mk_hash = pa.mk_hash')
+                          'AND link.pa_stmt_mk_hash = pa.mk_hash '
+                          'AND raw_src.sid = raw.id')
         _skip_disp = ['raw_json', 'pa_json']
         _indices = [BtreeIndex('hash_index', 'mk_hash'),
                     BtreeIndex('frp_reading_id_idx', 'reading_id'),
@@ -219,9 +224,8 @@ def get_schema(Base):
         __tablename__ = 'pa_stmt_src'
         __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = ("SELECT * FROM crosstab("
-                              "'SELECT mk_hash, src, count(sid) "
-                              "  FROM readonly.raw_stmt_src "
-                              "   JOIN readonly.fast_raw_pa_link ON sid = id "
+                              "'SELECT mk_hash, src, count(id) "
+                              "  FROM readonly.fast_raw_pa_link "
                               "  GROUP BY (mk_hash, src)', "
                               "$$SELECT unnest('{%s}'::text[])$$"
                               " ) final_result(mk_hash bigint, %s)")
@@ -261,6 +265,24 @@ def get_schema(Base):
                         src_dict[k] = v
             return src_dict
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
+
+    class PaRefLink(Base, ReadonlyTable):
+        __tablename__ = 'pa_ref_link'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('SELECT mk_hash, trid, pmid, pmcid, source, reader '
+                          'FROM readonly.fast_raw_pa_link '
+                          '  JOIN readonly.reading_ref_link '
+                          '  ON reading_id = rid')
+        _indices = [BtreeIndex('pa_ref_link_mk_hash_idx', 'mk_hash'),
+                    BtreeIndex('pa_ref_link_trid_idx', 'trid'),
+                    BtreeIndex('pa_ref_link_pmid_idx', 'pmid')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        trid = Column(Integer, primary_key=True)
+        pmid = Column(String)
+        pmcid = Column(String)
+        source = Column(String)
+        reader = Column(String)
+    read_views[PaRefLink.__tablename__] = PaRefLink
 
     class PaSourceLookup(Base, SpecialColumnTable):
         __tablename__ = 'pa_source_lookup'

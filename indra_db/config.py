@@ -17,6 +17,7 @@ DB_STR_FMT = "{prefix}://{username}{password}{host}{port}/{name}"
 PRINCIPAL_ENV_PREFIX = 'INDRADB'
 READONLY_ENV_PREFIX = 'INDRARO'
 S3_DUMP_ENV_VAR = 'INDRA_DB_S3_PREFIX'
+LAMBDA_NAME_ENV_VAR = 'DB_SERVICE_LAMBDA_NAME'
 
 
 logger = logging.getLogger('db_config')
@@ -63,8 +64,8 @@ def _load_config():
                     for k in parser.options(section)}
 
         # Handle the case for the s3 bucket spec.
-        if section == 'aws-s3':
-            CONFIG['s3_dump'] = def_dict
+        if section.startswith('aws-'):
+            CONFIG[section[4:]] = def_dict
             continue
 
         # Extract all the database connection data
@@ -101,6 +102,10 @@ def _load_env_config():
         bucket, prefix = environ[S3_DUMP_ENV_VAR].split(':')
         CONFIG['s3_dump'] = {'bucket': bucket, 'prefix': prefix}
 
+    if LAMBDA_NAME_ENV_VAR in environ:
+        role, function = environ[LAMBDA_NAME_ENV_VAR].split(':')
+        CONFIG['lambda'] = {'role': role, 'function': function}
+
     return
 
 
@@ -132,3 +137,6 @@ def get_s3_dump(force_update=False, include_config=True):
         _load(include_config)
 
     return CONFIG['s3_dump']
+
+
+_load(True)

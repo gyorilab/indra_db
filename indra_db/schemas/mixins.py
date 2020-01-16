@@ -21,15 +21,14 @@ class IndraDBTable(object):
         if commit:
             try:
                 cls.execute(db, sql)
-            except DuplicateTable as err:
-                logger.warning("Got error (%s) when building %s. Skipping."
-                               % (err, index.name))
+            except DuplicateTable:
+                logger.info("%s exists, skipping." % index.name)
         return sql
 
     @classmethod
     def build_indices(cls, db):
         for index in cls._indices:
-            print("Building index: %s" % index.name)
+            logger.info("Building index: %s" % index.name)
             cls.create_index(db, index)
 
     @staticmethod

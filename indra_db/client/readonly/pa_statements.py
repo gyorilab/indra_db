@@ -194,7 +194,7 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
     if censured_sources is not None:
         cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
         for src in censured_sources:
-            cont_q = cont_q.filter(ro.RawStmtSrc.src.notlike(src))
+            cont_q = cont_q.filter(ro.RawStmtSrc.src.is_distinct_from(src))
 
     if ev_limit is not None:
         cont_q = cont_q.limit(ev_limit)

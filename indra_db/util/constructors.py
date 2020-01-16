@@ -78,6 +78,9 @@ def get_db(db_label):
 def get_ro(ro_label):
     """Get a readonly database instance, based on its name/"""
     defaults = get_readonly_databases()
+    if ro_label == 'primary' and 'override' in defaults:
+        logger.info("Found an override database: using in place of primary.")
+        ro_label = 'override'
     db_url = defaults[ro_label]
     ro = ReadonlyDatabaseManager(db_url, label=ro_label)
     ro.grab_session()

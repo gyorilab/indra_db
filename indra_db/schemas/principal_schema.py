@@ -292,6 +292,8 @@ def get_schema(Base):
         __tablename__ = 'pa_statements'
         _skip_disp = ['json']
         _always_disp = ['mk_hash', 'type']
+        _default_order_by = 'create_date'
+
         mk_hash = Column(BigInteger, primary_key=True)
         matches_key = Column(String, unique=True, nullable=False)
         uuid = Column(String(40), unique=True, nullable=False)

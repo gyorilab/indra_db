@@ -10,6 +10,7 @@ class IndraDBTable(object):
     _indices = []
     _skip_disp = []
     _always_disp = ['id']
+    _default_insert_order_by = 'id'
 
     @classmethod
     def create_index(cls, db, index, commit=True):
@@ -108,6 +109,10 @@ class ReadonlyTable(IndraDBTable):
     __definition__ = NotImplemented
     __table_args__ = NotImplemented
     __create_table_fmt__ = "CREATE TABLE IF NOT EXISTS %s AS %s;"
+
+    # These tables are created all at once, so there isn't really an "order" to
+    # which entries were inserted. They were inserted all at once.
+    _default_insert_order_by = NotImplemented
 
     @classmethod
     def create(cls, db, commit=True):

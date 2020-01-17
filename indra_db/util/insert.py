@@ -116,9 +116,9 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
         print()
 
     if 'agents' not in skip:
-        db.copy('pa_agents', ref_data,
-                ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
-                lazy=True, commit=False)
+        db.lazy_copy('pa_agents', ref_data,
+                     ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
+                     commit=False)
     if 'mods' not in skip:
         db.copy('pa_mods', mod_data,
                 ('stmt_mk_hash', 'ag_num', 'type', 'position', 'residue',
@@ -267,8 +267,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
         # TODO: Make it possible to not commit this immediately. That would
         # require developing a more sophisticated copy procedure for raw
         # statements and agents.
-        db.copy('raw_statements', stmt_data, cols, lazy=lazy,
-                push_conflict=lazy)
+        db.push_copy('raw_statements', stmt_data, cols)
     except Exception as e:
         with open('stmt_data_dump.pkl', 'wb') as f:
             pickle.dump(stmt_data, f)

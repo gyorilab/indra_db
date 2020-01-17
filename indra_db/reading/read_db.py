@@ -393,10 +393,11 @@ class DatabaseReader(object):
         logger.info("Adding %d/%d reading entries to the database." %
                     (len(upload_list), len(self.new_readings)))
         if upload_list:
-            is_all = self.reading_mode == 'all'
-            db.copy('reading', upload_list,
-                    DatabaseReadingData.get_cols(), lazy=is_all,
-                    push_conflict=is_all)
+            args = ('reading', upload_list, DatabaseReadingData.get_cols())
+            if self.reading_mode == 'all':
+                db.push_copy(*args)
+            else:
+                db.copy(*args)
             gatherer.add('readings', len(upload_list))
 
         self.stops['dump_readings_db'] = datetime.utcnow()
@@ -457,11 +458,10 @@ class DatabaseReader(object):
                 stmts.append(sd.statement)
 
         # Dump the good statements into the raw statements table.
-        self._db.copy('raw_statements', stmt_tuples.values(),
-                      DatabaseStatementData.get_cols(), lazy=True,
-                      push_conflict=True,
-                      constraint='reading_raw_statement_uniqueness',
-                      commit=False)
+        self._db.push_copy('raw_statements', stmt_tuples.values(),
+                           DatabaseStatementData.get_cols(),
+                           constraint='reading_raw_statement_uniqueness',
+                           commit=False)
         gatherer.add('stmts', len(stmt_tuples))
 
         # Dump the duplicates into a separate to all for debugging.

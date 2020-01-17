@@ -157,9 +157,10 @@ class PreassemblyManager(object):
                     ('pa_stmt_mk_hash', 'raw_stmt_id'), commit=False)
             gatherer.add('evidence', len(ev_links))
 
-            db.copy('pa_agents', agent_tuples,
-                    ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
-                    lazy=True, commit=False)
+            db.lazy_copy('pa_agents', agent_tuples,
+                         ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id',
+                          'role'),
+                         commit=False)
             insert_pa_agents(db, new_unique_stmts, verbose=True,
                              skip=['agents'])  # This will commit
 

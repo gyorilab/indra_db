@@ -508,11 +508,11 @@ class DatabaseManager(object):
         """
         return random.randint(-2**30, 2**30)
 
-    def copy(self, tbl_name, data, cols=None, lazy=False, push_conflict=False,
-             constraint=None, commit=True):
-        "Use pg_copy to copy over a large amount of data."
-        logger.info("Received request to copy %d entries into %s." %
-                    (len(data), tbl_name))
+    def _prep_copy(self, tbl_name, data, cols):
+        if CAN_COPY:
+            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
+                               "available.")
+
         if len(data) is 0:
             return  # Nothing to do....
 
@@ -522,103 +522,166 @@ class DatabaseManager(object):
             cols = self.get_column_names(tbl_name)
         else:
             db_cols = self.get_column_names(tbl_name)
-            assert all([col in db_cols for col in cols]),\
+            assert all([col in db_cols for col in cols]), \
                 "Do not recognize one of the columns in %s for table %s." % \
                 (cols, tbl_name)
 
-        # Do the copy. Use pgcopy if available.
-        if CAN_COPY:
-            # Check for automatic timestamps which won't be applied by the
-            # database when using copy, and manually insert them.
-            auto_timestamp_type = type(func.now())
-            for col in self.get_column_objects(tbl_name):
-                if col.default is not None:
-                    if isinstance(col.default.arg, auto_timestamp_type) \
-                       and col.name not in cols:
-                        logger.info("Applying timestamps to %s." % col.name)
-                        now = datetime.utcnow()
-                        cols += (col.name,)
-                        data = [datum + (now,) for datum in data]
+        # Check for automatic timestamps which won't be applied by the
+        # database when using copy, and manually insert them.
+        auto_timestamp_type = type(func.now())
+        for col in self.get_column_objects(tbl_name):
+            if col.default is not None:
+                if isinstance(col.default.arg, auto_timestamp_type) \
+                        and col.name not in cols:
+                    logger.info("Applying timestamps to %s." % col.name)
+                    now = datetime.utcnow()
+                    cols += (col.name,)
+                    data = [datum + (now,) for datum in data]
 
-            # Format the data for the copy.
-            data_bts = []
-            for entry in data:
-                new_entry = []
-                for element in entry:
-                    if isinstance(element, str):
-                        new_entry.append(element.encode('utf8'))
-                    elif (isinstance(element, bytes)
-                          or element is None
-                          or isinstance(element, Number)
-                          or isinstance(element, datetime)):
-                        new_entry.append(element)
-                    else:
-                        raise IndraDbException(
-                            "Don't know what to do with element of type %s."
-                            "Should be str, bytes, datetime, None, or a "
-                            "number." % type(element)
-                            )
-                data_bts.append(tuple(new_entry))
+        # Format the data for the copy.
+        data_bts = []
+        for entry in data:
+            new_entry = []
+            for element in entry:
+                if isinstance(element, str):
+                    new_entry.append(element.encode('utf8'))
+                elif (isinstance(element, bytes)
+                      or element is None
+                      or isinstance(element, Number)
+                      or isinstance(element, datetime)):
+                    new_entry.append(element)
+                else:
+                    raise IndraDbException(
+                        "Don't know what to do with element of type %s."
+                        "Should be str, bytes, datetime, None, or a "
+                        "number." % type(element)
+                    )
+            data_bts.append(tuple(new_entry))
 
-            # Actually do the copy.
-            if self._conn is None:
-                self._conn = self.engine.raw_connection()
-                self._conn.rollback()
+        # Prep the connection.
+        if self._conn is None:
+            self._conn = self.engine.raw_connection()
+            self._conn.rollback()
 
-            if lazy:
-                # We need a constraint for if we are going to update on-
-                # conflict, so if we didn't get a constraint, we can try to
-                # guess it.
-                if push_conflict and constraint is None:
-                    tbl = self.tables[tbl_name]
+        return cols, data_bts
 
-                    # Look for table arguments that are constraints, and
-                    # moreover that involve a subset of the columns being
-                    # copied. If the column isn't in the input data, it can't
-                    # possibly violate a constraint. It is also because of this
-                    # line of code that constraints MUST be named. This process
-                    # will not catch foreign key constraints, which may not
-                    # even apply.
-                    constraints = [c.name for c in tbl.__table_args__
-                                   if isinstance(c, UniqueConstraint)
-                                   and set(c.columns.keys()) < set(cols)]
+    def report_lazy_copy(self, tbl_name, data, cols=None, commit=True,
+                         return_cols=None, order_by=None):
+        """Copy lazily, and report what rows were skipped."""
+        logger.info("Received request to lazy copy and report on skipped for "
+                    "%d entries into %s." % (len(data), tbl_name))
+        digest = self._prep_copy(tbl_name, data, cols)
+        if not digest:
+            return
+        cols, data_bts = digest
 
-                    # Include the primary key in the list, if applicable.
-                    if inspect(tbl).primary_key[0].name in cols:
-                        constraints.append(tbl_name + '_pkey')
+        if not order_by:
+            order_by = getattr(self.tables[tbl_name], 'order_by')
+            if not order_by:
+                raise ValueError("%s does not have an `order_by` attribute, "
+                                 "and no `order_by` was specified." % tbl_name)
 
-                    # Hopefully at this point there is
-                    if len(constraints) > 1:
-                        raise ValueError("Cannot infer constraint. Only "
-                                         "one constraint is allowed, and "
-                                         "there are multiple "
-                                         "possibilities. Please specify a "
-                                         "single constraint.")
-                    elif len(constraints) == 1:
-                        constraint = constraints[0]
-                    else:
-                        raise ValueError("Could not infer a relevant "
-                                         "constraint. If no columns have "
-                                         "constraints on them, the lazy "
-                                         "option is unnecessary. Note that I "
-                                         "cannot guess a foreign key "
-                                         "constraint.")
+        mngr = LazyCopyManager(self._conn, tbl_name, cols, get_skipped=True,
+                               order_by='', return_cols=return_cols)
+        skipped_rows = mngr.copy(data_bts, BytesIO)
 
-                mngr = LazyCopyManager(self._conn, tbl_name, cols,
-                                       push_conflict=push_conflict,
-                                       constraint=constraint)
-                mngr.copy(data_bts, BytesIO)
+        if commit:
+            self._conn.commit()
+            self._conn = None
+
+        return skipped_rows
+
+    def lazy_copy(self, tbl_name, data, cols=None, commit=True):
+        "Copy lazily, skip any rows that violate constraints."
+        logger.info("Received request to lazily copy %d entries into %s."
+                    % (len(data), tbl_name))
+        digest = self._prep_copy(tbl_name, data, cols)
+        if not digest:
+            return
+        cols, data_bts = digest
+
+        mngr = LazyCopyManager(self._conn, tbl_name, cols)
+        mngr.copy(data_bts, BytesIO)
+
+        if commit:
+            self._conn.commit()
+            self._conn = None
+        return
+
+    def push_copy(self, tbl_name, data, cols=None, commit=True,
+                  constraint=None):
+        "Copy, pushing any changes to constraint violating rows."
+        logger.info("Received request to push and copy %d entries into %s."
+                    % (len(data), tbl_name))
+        digest = self._prep_copy(tbl_name, data, cols)
+        if not digest:
+            return
+        cols, data_bts = digest
+
+        # We need a constraint for if we are going to update on-
+        # conflict, so if we didn't get a constraint, we can try to
+        # guess it.
+        if constraint is None:
+            tbl = self.tables[tbl_name]
+
+            # Look for table arguments that are constraints, and
+            # moreover that involve a subset of the columns being
+            # copied. If the column isn't in the input data, it can't
+            # possibly violate a constraint. It is also because of this
+            # line of code that constraints MUST be named. This process
+            # will not catch foreign key constraints, which may not
+            # even apply.
+            constraints = [c.name for c in tbl.__table_args__
+                           if isinstance(c, UniqueConstraint)
+                           and set(c.columns.keys()) < set(cols)]
+
+            # Include the primary key in the list, if applicable.
+            if inspect(tbl).primary_key[0].name in cols:
+                constraints.append(tbl_name + '_pkey')
+
+            # Hopefully at this point there is
+            if len(constraints) > 1:
+                raise ValueError("Cannot infer constraint. Only "
+                                 "one constraint is allowed, and "
+                                 "there are multiple "
+                                 "possibilities. Please specify a "
+                                 "single constraint.")
+            elif len(constraints) == 1:
+                constraint = constraints[0]
             else:
-                mngr = CopyManager(self._conn, tbl_name, cols)
-                mngr.copy(data_bts, BytesIO)
-            if commit:
-                self._conn.commit()
-                self._conn = None
-        else:
-            # TODO: use bulk insert mappings?
-            logger.warning("You are not using postgresql or do not have "
-                           "pgcopy, so this will likely be very slow.")
-            self.insert_many(tbl_name, [dict(zip(cols, ro)) for ro in data])
+                raise ValueError("Could not infer a relevant "
+                                 "constraint. If no columns have "
+                                 "constraints on them, the lazy "
+                                 "option is unnecessary. Note that I "
+                                 "cannot guess a foreign key "
+                                 "constraint.")
+
+        # Do the copy
+        mngr = LazyCopyManager(self._conn, tbl_name, cols,
+                               push_conflict=True,
+                               constraint=constraint)
+        mngr.copy(data_bts, BytesIO)
+
+        if commit:
+            self._conn.commit()
+            self._conn = None
+        return
+
+    def copy(self, tbl_name, data, cols=None, commit=True):
+        "Use pg_copy to copy over a large amount of data."
+        logger.info("Received request to copy %d entries into %s."
+                    % (len(data), tbl_name))
+        digest = self._prep_copy(tbl_name, data, cols)
+        if not digest:
+            return
+        cols, data_bts = digest
+        mngr = CopyManager(self._conn, tbl_name, cols)
+        mngr.copy(data_bts, BytesIO)
+
+        if commit:
+            self._conn.commit()
+            self._conn = None
+
         return
 
     def filter_query(self, tbls, *args):
@@ -1024,7 +1087,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
 class LazyCopyManager(CopyManager):
     """A copy manager that ignores entries which violate constraints."""
     def __init__(self, conn, table, cols, push_conflict=False,
-                 constraint=None, get_skipped=False, order_by=None):
+                 constraint=None, get_skipped=False, order_by=None,
+                 return_cols=None):
         super(LazyCopyManager, self).__init__(conn, table, cols)
         if push_conflict and constraint is None:
             raise ValueError("A constraint is required if you are updating "
@@ -1033,6 +1097,7 @@ class LazyCopyManager(CopyManager):
         self.constraint = constraint
         self.get_skipped = get_skipped
         self.order_by = order_by
+        self.return_cols = return_cols
         return
 
     def copy(self, data, fobject_factory=tempfile.TemporaryFile):
@@ -1042,6 +1107,9 @@ class LazyCopyManager(CopyManager):
         res = self.copystream(datastream, num=len(data))
         datastream.close()
         return res
+
+    def stringify_cols(self, cols):
+        return '", "'.join(self.cols)
 
     def copystream(self, datastream, num=None):
         # Format the basic query.
@@ -1070,7 +1138,7 @@ class LazyCopyManager(CopyManager):
             cmd_fmt += 'DO NOTHING;\n'
 
         # Fill in the format.
-        columns = '", "'.join(self.cols)
+        columns = self.stringify_cols(self.cols)
         sql = cmd_fmt.format(schema=self.schema,
                              table=self.table,
                              cols=columns)
@@ -1082,15 +1150,19 @@ class LazyCopyManager(CopyManager):
 
             # Handle the row-skip clause
             if self.get_skipped:
+                if self.return_cols:
+                    ret_cols = self.stringify_cols(self.return_cols)
+                else:
+                    ret_cols = columns
                 diff_sql = (
-                    'SELECT "{cols}" FROM\n'
+                    'SELECT "{ret_cols}" FROM\n'
                     '"tmp_{table}"\n'
                     'EXCEPT\n'
                     '(SELECT "{cols}"\n'
                     ' FROM "{table}"\n'
                     ' ORDER BY "{order_by}" DESC\n'
                     ' LIMIT {num});'
-                ).format(cols=columns, table=self.table,
+                ).format(cols=columns, table=self.table, ret_cols=ret_cols,
                          order_by=self.order_by, num=num)
                 print(diff_sql)
                 cursor.execute(diff_sql)

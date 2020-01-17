@@ -505,7 +505,7 @@ def test_db_lazy_insert():
 
     # Try adding more text refs lazily. Overlap is guaranteed.
     start = datetime.now()
-    db.copy('text_ref', fake_pmids_b, ('id', 'pmid'), lazy=True)
+    db.lazy_copy('text_ref', fake_pmids_b, ('id', 'pmid'))
     print("Lazy copy:", datetime.now() - start)
 
     refs = db.select_all([db.TextRef.id, db.TextRef.pmid])
@@ -555,7 +555,7 @@ def test_lazy_copier_unique_constraints():
         pass
 
     start = datetime.now()
-    db.copy('text_ref', fake_mids_b, ('manuscript_id',), lazy=True)
+    db.lazy_copy('text_ref', fake_mids_b, ('manuscript_id',))
     print("Lazy copy:", datetime.now() - start)
 
     mid_results = [mid for mid, in db.select_all(db.TextRef.manuscript_id)]
@@ -592,8 +592,7 @@ def test_lazy_copier_update():
 
     # Try adding more text refs lazily. Overlap is guaranteed.
     start = datetime.now()
-    db.copy('text_ref', fake_pmids_b, ('id', 'pmid'), lazy=True,
-            push_conflict=True)
+    db.push_copy('text_ref', fake_pmids_b, ('id', 'pmid'))
     print("Lazy copy:", datetime.now() - start)
 
     refs = db.select_all([db.TextRef.id, db.TextRef.pmid])

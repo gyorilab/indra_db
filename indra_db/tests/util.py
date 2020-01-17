@@ -197,9 +197,8 @@ class DatabaseEnv(object):
         logger.debug("Loading %d/%d statements."
                      % (len(new_input_dict), len(input_tuples)))
 
-        self.test_db.copy('raw_statements', new_input_dict.values(), cols,
-                          lazy=True, push_conflict=True,
-                          constraint='reading_raw_statement_uniqueness')
+        self.test_db.push_copy('raw_statements', new_input_dict.values(), cols,
+                               constraint='reading_raw_statement_uniqueness')
 
         print("Inserting agents...")
         for batch_id in batch_id_set:

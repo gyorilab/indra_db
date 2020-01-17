@@ -5,6 +5,7 @@ __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
 import re
 import random
 import logging
+import tempfile
 from io import BytesIO
 from numbers import Number
 from datetime import datetime
@@ -1023,16 +1024,27 @@ class ReadonlyDatabaseManager(DatabaseManager):
 class LazyCopyManager(CopyManager):
     """A copy manager that ignores entries which violate constraints."""
     def __init__(self, conn, table, cols, push_conflict=False,
-                 constraint=None):
+                 constraint=None, get_skipped=False, order_by=None):
         super(LazyCopyManager, self).__init__(conn, table, cols)
         if push_conflict and constraint is None:
             raise ValueError("A constraint is required if you are updating "
                              "on-conflict.")
         self.push_conflict = push_conflict
         self.constraint = constraint
+        self.get_skipped = get_skipped
+        self.order_by = order_by
         return
 
-    def copystream(self, datastream):
+    def copy(self, data, fobject_factory=tempfile.TemporaryFile):
+        datastream = fobject_factory()
+        self.writestream(data, datastream)
+        datastream.seek(0)
+        res = self.copystream(datastream, num=len(data))
+        datastream.close()
+        return res
+
+    def copystream(self, datastream, num=None):
+        # Format the basic query.
         cmd_fmt = ('CREATE TEMP TABLE "tmp_{table}" '
                    'ON COMMIT DROP '
                    'AS SELECT "{cols}" FROM "{schema}"."{table}" '
@@ -1044,25 +1056,48 @@ class LazyCopyManager(CopyManager):
                    'INSERT INTO "{schema}"."{table}" ("{cols}") '
                    'SELECT "{cols}" '
                    'FROM "tmp_{table}" ')
+
+        # Handle ON CONFLICT clause.
         cmd_fmt += 'ON CONFLICT '
         if self.push_conflict:
             update = ', '.join('{0} = EXCLUDED.{0}'.format(c)
                                for c in self.cols)
-            cmd_fmt += 'ON CONSTRAINT "%s" DO UPDATE SET %s;' \
+            cmd_fmt += 'ON CONSTRAINT "%s" DO UPDATE SET %s;\n' \
                        % (self.constraint, update)
         else:
             if self.constraint:
                 cmd_fmt += 'ON CONSTRAINT "%s" ' % self.constraint
-            cmd_fmt += 'DO NOTHING;'
+            cmd_fmt += 'DO NOTHING;\n'
+
+        # Fill in the format.
         columns = '", "'.join(self.cols)
         sql = cmd_fmt.format(schema=self.schema,
                              table=self.table,
                              cols=columns)
         print(sql)
         cursor = self.conn.cursor()
+        res = None
         try:
             cursor.copy_expert(sql, datastream)
+
+            # Handle the row-skip clause
+            if self.get_skipped:
+                diff_sql = (
+                    'SELECT "{cols}" FROM\n'
+                    '"tmp_{table}"\n'
+                    'EXCEPT\n'
+                    '(SELECT "{cols}"\n'
+                    ' FROM "{table}"\n'
+                    ' ORDER BY "{order_by}" DESC\n'
+                    ' LIMIT {num});'
+                ).format(cols=columns, table=self.table,
+                         order_by=self.order_by, num=num)
+                print(diff_sql)
+                cursor.execute(diff_sql)
+                res = cursor.fetchall()
         except Exception as e:
             templ = "error doing lazy binary copy into {0}.{1}:\n{2}"
             e.message = templ.format(self.schema, self.table, e)
             raise e
+        return res
+

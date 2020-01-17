@@ -20,7 +20,7 @@ class LazyCopyManager(CopyManager):
                     'FROM "tmp_{table}" ON CONFLICT')
 
     def __init__(self, conn, table, cols, constraint=None):
-        super(LazyCopyManager, self).__init__(conn, table, cols)
+        super().__init__(conn, table, cols)
         self.constraint = constraint
         return
 
@@ -48,7 +48,7 @@ class LazyCopyManager(CopyManager):
     def _get_skipped(self, num, order_by, return_cols=None):
         cursor = self.conn.cursor()
         inp_cols = self._stringify_cols(self.cols)
-        if self.return_cols:
+        if return_cols:
             ret_cols = self._stringify_cols(return_cols)
         else:
             ret_cols = inp_cols

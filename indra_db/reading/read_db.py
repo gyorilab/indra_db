@@ -395,7 +395,7 @@ class DatabaseReader(object):
         if upload_list:
             args = ('reading', upload_list, DatabaseReadingData.get_cols())
             if self.reading_mode == 'all':
-                db.push_copy(*args)
+                db.copy_push(*args)
             else:
                 db.copy(*args)
             gatherer.add('readings', len(upload_list))
@@ -458,7 +458,7 @@ class DatabaseReader(object):
                 stmts.append(sd.statement)
 
         # Dump the good statements into the raw statements table.
-        self._db.push_copy('raw_statements', stmt_tuples.values(),
+        self._db.copy_push('raw_statements', stmt_tuples.values(),
                            DatabaseStatementData.get_cols(),
                            constraint='reading_raw_statement_uniqueness',
                            commit=False)

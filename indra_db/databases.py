@@ -67,10 +67,10 @@ def compile_delete(element, compiler, **kw):
 
 
 try:
-    from indra_db.util.copy import *
+    from indra_db.copy import *
     CAN_COPY = True
-except ImportError:
-    logger.warning("Copy utilities unavailable.")
+except ImportError as e:
+    logger.warning("Copy utilities unavailable: %s" % str(e))
     CAN_COPY = False
 
 
@@ -558,7 +558,7 @@ class DatabaseManager(object):
 
         return cols, data_bts
 
-    def report_lazy_copy(self, tbl_name, data, cols=None, commit=True,
+    def copy_report_lazy(self, tbl_name, data, cols=None, commit=True,
                          constraint=None, return_cols=None, order_by=None):
         """Copy lazily, and report what rows were skipped."""
         logger.info("Received request to lazy copy and report on skipped for "
@@ -585,7 +585,7 @@ class DatabaseManager(object):
 
         return skipped_rows
 
-    def lazy_copy(self, tbl_name, data, cols=None, commit=True,
+    def copy_lazy(self, tbl_name, data, cols=None, commit=True,
                   constraint=None):
         "Copy lazily, skip any rows that violate constraints."
         logger.info("Received request to lazily copy %d entries into %s."
@@ -642,7 +642,7 @@ class DatabaseManager(object):
                              "constraint.")
         return constraint
 
-    def push_copy(self, tbl_name, data, cols=None, commit=True,
+    def copy_push(self, tbl_name, data, cols=None, commit=True,
                   constraint=None):
         "Copy, pushing any changes to constraint violating rows."
         logger.info("Received request to push and copy %d entries into %s."
@@ -664,7 +664,7 @@ class DatabaseManager(object):
             self._conn = None
         return
 
-    def report_push_copy(self, tbl_name, data, cols=None, commit=True,
+    def copy_report_push(self, tbl_name, data, cols=None, commit=True,
                          constraint=None, return_cols=None, order_by=None):
         """Report on the rows skipped when pushing and copying."""
         logger.info("Received request to push and copy %d entries into %s, "

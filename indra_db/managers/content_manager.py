@@ -200,7 +200,7 @@ class ContentManager(object):
 
     def copy_into_db(self, db, tbl_name, data, cols=None):
         "Wrapper around the db.copy feature, pickels args upon exception."
-        return db.report_lazy_copy(tbl_name, data, cols)
+        return db.copy_report_lazy(tbl_name, data, cols)
 
     def make_text_ref_str(self, tr):
         """Make a string from a text ref using tr_cols."""

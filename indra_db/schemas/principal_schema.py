@@ -41,6 +41,7 @@ def get_schema(Base):
 
         __table_args__ = (
             UniqueConstraint('pmid', 'doi', name='pmid-doi'),
+            UniqueConstraint('pmid', 'pmcid', name='pmid-pmcid'),
             UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
         )
 

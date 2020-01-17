@@ -57,11 +57,11 @@ class LazyCopyManager(CopyManager):
             '"tmp_{table}"\n'
             'EXCEPT\n'
             '(SELECT "{cols}"\n'
-            ' FROM "{table}"\n'
+            ' FROM "{schema}"."{table}"\n'
             ' ORDER BY "{order_by}" DESC\n'
             ' LIMIT {num});'
-        ).format(cols=inp_cols, table=self.table, ret_cols=ret_cols,
-                 order_by=order_by, num=num)
+        ).format(cols=inp_cols, table=self.table, schema=self.schema,
+                 ret_cols=ret_cols, order_by=order_by, num=num)
         print(diff_sql)
         cursor.execute(diff_sql)
         res = cursor.fetchall()

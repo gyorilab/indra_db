@@ -25,14 +25,14 @@ class LazyCopyManager(CopyManager):
         return
 
     def report_copy(self, data, order_by=None, return_cols=None,
-                    fobject_factory=tempfile.TemporaryFile):
+                    compare_cols=None, fobject_factory=tempfile.TemporaryFile):
         datastream = fobject_factory()
         self.writestream(data, datastream)
         datastream.seek(0)
         self.copystream(datastream)
         datastream.close()
 
-        res = self._get_skipped(len(data), order_by, return_cols)
+        res = self._get_skipped(len(data), order_by, return_cols, compare_cols)
         return res
 
     def _stringify_cols(self, cols):
@@ -45,7 +45,7 @@ class LazyCopyManager(CopyManager):
         cmd_fmt += 'DO NOTHING;\n'
         return cmd_fmt
 
-    def _get_skipped(self, num, order_by, return_cols=None):
+    def _get_skipped(self, num, order_by, return_cols=None, compare_cols=None):
         cursor = self.conn.cursor()
         inp_cols = self._stringify_cols(self.cols)
         if return_cols:
@@ -101,3 +101,18 @@ class PushCopyManager(LazyCopyManager):
         cmd_fmt += 'ON CONSTRAINT "%s" DO UPDATE SET %s;\n' \
                    % (self.constraint, update)
         return cmd_fmt
+
+    def _get_skipped(self, num, order_by, return_cols=None, compare_cols=None):
+        if not compare_cols:
+            raise ValueError("")
+        #TODO: Get the compare columns automatically at this point?
+        # Query to get constraint info:
+        # SELECT con.*
+        #        FROM pg_catalog.pg_constraint con
+        #             INNER JOIN pg_catalog.pg_class rel
+        #                        ON rel.oid = con.conrelid
+        #             INNER JOIN pg_catalog.pg_namespace nsp
+        #                        ON nsp.oid = connamespace
+        #        WHERE nsp.nspname = '<schema name>'
+        #              AND rel.relname = '<table name>';
+        pass

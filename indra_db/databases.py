@@ -565,7 +565,7 @@ class DatabaseManager(object):
                     "%d entries into %s." % (len(data), tbl_name))
         digest = self._prep_copy(tbl_name, data, cols)
         if not digest:
-            return
+            return []
         cols, data_bts = digest
 
         if not order_by:
@@ -672,7 +672,7 @@ class DatabaseManager(object):
                     % (len(data), tbl_name))
         digest = self._prep_copy(tbl_name, data, cols)
         if not digest:
-            return
+            return []
         cols, data_bts = digest
 
         if constraint is None:

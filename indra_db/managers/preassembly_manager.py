@@ -88,17 +88,19 @@ class PreassemblyManager(object):
             return stmt
 
         i = 0
+        skip_sids = {sid for sid, in db.select_all(db.DiscardedStatements.id)}
         for stmt_id_batch in batch_iter(id_set, self.batch_size):
             subres = (db.filter_query([db.RawStatements.id,
-                                      db.RawStatements.json,
-                                      db.TextRef],
-                                     db.RawStatements.id.in_(stmt_id_batch))
+                                       db.RawStatements.json,
+                                       db.TextRef],
+                                      db.RawStatements.id.in_(stmt_id_batch))
                         .outerjoin(db.Reading)
                         .outerjoin(db.TextContent)
                         .outerjoin(db.TextRef)
                         .yield_per(self.batch_size//10))
             data = [(sid, _fixed_raw_stmt_from_json(s_json, tr))
-                    for sid, s_json, tr in subres]
+                    for sid, s_json, tr in subres
+                    if sid not in skip_sids]
             if do_enumerate:
                 yield i, data
                 i += 1

@@ -502,12 +502,6 @@ class DatabaseManager(object):
         return random.randint(-2**30, 2**30)
 
     def _prep_copy(self, tbl_name, data, cols):
-        if CAN_COPY:
-            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
-                               "available.")
-
-        if len(data) is 0:
-            return  # Nothing to do....
 
         # If cols is not specified, use all the cols in the table, else check
         # to make sure the names are valid.
@@ -563,10 +557,13 @@ class DatabaseManager(object):
         """Copy lazily, and report what rows were skipped."""
         logger.info("Received request to lazy copy and report on skipped for "
                     "%d entries into %s." % (len(data), tbl_name))
-        digest = self._prep_copy(tbl_name, data, cols)
-        if not digest:
-            return []
-        cols, data_bts = digest
+        if CAN_COPY:
+            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
+                               "available.")
+        if len(data) is 0:
+            return []  # Nothing to do....
+
+        cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         if not order_by:
             order_by = getattr(self.tables[tbl_name], 'order_by')
@@ -590,10 +587,13 @@ class DatabaseManager(object):
         "Copy lazily, skip any rows that violate constraints."
         logger.info("Received request to lazily copy %d entries into %s."
                     % (len(data), tbl_name))
-        digest = self._prep_copy(tbl_name, data, cols)
-        if not digest:
-            return
-        cols, data_bts = digest
+        if CAN_COPY:
+            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
+                               "available.")
+        if len(data) is 0:
+            return  # Nothing to do....
+
+        cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         mngr = LazyCopyManager(self._conn, tbl_name, cols,
                                constraint=constraint)
@@ -647,10 +647,13 @@ class DatabaseManager(object):
         "Copy, pushing any changes to constraint violating rows."
         logger.info("Received request to push and copy %d entries into %s."
                     % (len(data), tbl_name))
-        digest = self._prep_copy(tbl_name, data, cols)
-        if not digest:
-            return
-        cols, data_bts = digest
+        if CAN_COPY:
+            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
+                               "available.")
+        if len(data) is 0:
+            return  # Nothing to do....
+
+        cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         if constraint is None:
             constraint = self._infer_constraint(tbl_name, cols)
@@ -670,10 +673,13 @@ class DatabaseManager(object):
         logger.info("Received request to push and copy %d entries into %s, "
                     "and report on the conflicting rows."
                     % (len(data), tbl_name))
-        digest = self._prep_copy(tbl_name, data, cols)
-        if not digest:
-            return []
-        cols, data_bts = digest
+        if CAN_COPY:
+            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
+                               "available.")
+        if len(data) is 0:
+            return []  # Nothing to do....
+
+        cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         if constraint is None:
             constraint = self._infer_constraint(tbl_name, cols)

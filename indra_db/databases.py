@@ -79,7 +79,7 @@ def _copy_method(get_null_return=lambda: None):
         @wraps(meth)
         def wrapper(obj, tbl_name, data, cols=None, commit=True, *args, **kwargs):
             logger.info("Received request to %s %d entries into %s."
-                        % (meth.__func__.__name__, len(data), tbl_name))
+                        % (meth.__name__, len(data), tbl_name))
             if not CAN_COPY:
                 raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
                                    "available.")
@@ -89,12 +89,11 @@ def _copy_method(get_null_return=lambda: None):
             res = meth(obj, tbl_name, data, cols, commit, *args, **kwargs)
 
             if commit:
-                obj.commit_copy()
+                obj.commit_copy('Failed to commit %s.' % meth.__name__)
 
             return res
         return wrapper
     return super_wrapper
-
 
 
 def _isiterable(obj):
@@ -582,7 +581,8 @@ class DatabaseManager(object):
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         if not order_by:
-            order_by = getattr(self.tables[tbl_name], 'order_by')
+            order_by = getattr(self.tables[tbl_name],
+                               '_default_insert_order_by')
             if not order_by:
                 raise ValueError("%s does not have an `order_by` attribute, "
                                  "and no `order_by` was specified." % tbl_name)

@@ -17,7 +17,7 @@ class LazyCopyManager(CopyManager):
                     '\n'
                     'INSERT INTO "{schema}"."{table}" ("{cols}") '
                     'SELECT "{cols}" '
-                    'FROM "tmp_{table}" ON CONFLICT')
+                    'FROM "tmp_{table}" ON CONFLICT ')
 
     def __init__(self, conn, table, cols, constraint=None):
         super().__init__(conn, table, cols)

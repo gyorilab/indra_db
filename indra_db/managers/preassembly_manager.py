@@ -129,7 +129,12 @@ class PreassemblyManager(object):
                 stmts.append(stmt)
 
             # Map groundings and sequences.
-            cleaned_stmts = self._clean_statements(stmts)
+            cleaned_stmts, eliminated_uuids = self._clean_statements(stmts)
+            discarded_stmts = [(uuid_sid_dict[uuid], reason)
+                               for reason, uuid_set in eliminated_uuids.items()
+                               for uuid in uuid_set]
+            db.copy('discarded_statements', discarded_stmts,
+                    ('stmt_id', 'reason'), commit=False)
 
             # Use the shallow hash to condense unique statements.
             new_unique_stmts, evidence_links, agent_tuples = \
@@ -501,11 +506,18 @@ class PreassemblyManager(object):
         tuples of the form (uuid, matches_key) which represent the links between
         raw (evidence) statements and their unique/preassembled counterparts.
         """
+        eliminated_uuids = {}
+        all_uuids = {s.uuid for s in stmts}
         self._log("Map grounding...")
         stmts = ac.map_grounding(stmts)
+        grounded_uuids = {s.uuid for s in stmts}
+        eliminated_uuids['grounding'] = all_uuids - grounded_uuids
         self._log("Map sequences...")
         stmts = ac.map_sequence(stmts, use_cache=True)
-        return stmts
+        seqmapped_and_grounded_uuids = {s.uuid for s in stmts}
+        eliminated_uuids['sequence mapping'] = \
+            grounded_uuids - seqmapped_and_grounded_uuids
+        return stmts, eliminated_uuids
 
     @clockit
     def _get_support_links(self, unique_stmts, split_idx=None):

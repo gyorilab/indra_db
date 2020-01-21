@@ -211,8 +211,9 @@ def get_schema(Base):
         __tablename__ = 'discarded_statements'
         _always_disp = ['stmt_id', 'reason']
         id = Column(Integer, primary_key=True)
-        stmt_id = Column(Integer)
-        reason = Column(String)
+        stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
+                         nullable=False)
+        reason = Column(String, nullable=False)
         insert_date = Column(DateTime, default=func.now())
     table_dict[DiscardedStatements.__tablename__] = DiscardedStatements
 

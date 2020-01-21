@@ -88,7 +88,6 @@ class PreassemblyManager(object):
             return stmt
 
         i = 0
-        skip_sids = {sid for sid, in db.select_all(db.DiscardedStatements.id)}
         for stmt_id_batch in batch_iter(id_set, self.batch_size):
             subres = (db.filter_query([db.RawStatements.id,
                                        db.RawStatements.json,
@@ -99,8 +98,7 @@ class PreassemblyManager(object):
                         .outerjoin(db.TextRef)
                         .yield_per(self.batch_size//10))
             data = [(sid, _fixed_raw_stmt_from_json(s_json, tr))
-                    for sid, s_json, tr in subres
-                    if sid not in skip_sids]
+                    for sid, s_json, tr in subres]
             if do_enumerate:
                 yield i, data
                 i += 1
@@ -198,6 +196,11 @@ class PreassemblyManager(object):
         For more detail on preassembly, see indra/preassembler/__init__.py
         """
         self.__tag = 'create'
+
+        if not continuing:
+            # Make sure the discarded statements table is cleared.
+            db.drop_tables([db.DiscardedStatements])
+            db.create_tables([db.DiscardedStatements])
 
         # Get filtered statement ID's.
         sid_cache_fname = path.join(HERE, 'stmt_id_cache.pkl')
@@ -343,7 +346,11 @@ class PreassemblyManager(object):
             with open(dist_stash, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
-        new_stmt_ids = new_ids & stmt_ids
+        # Get discarded statements
+        skip_ids = {i for i, in db.select_all(db.DiscardedStatements.stmt_id)}
+
+        # Select only the good new statement ids.
+        new_stmt_ids = new_ids & stmt_ids - skip_ids
 
         # Get the set of new unique statements and link to any new evidence.
         old_mk_set = {mk for mk, in db.select_all(db.PAStatements.mk_hash)}

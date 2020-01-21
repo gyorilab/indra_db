@@ -7,6 +7,7 @@ import random
 import logging
 from io import BytesIO
 from numbers import Number
+from functools import wraps
 from datetime import datetime
 
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
@@ -65,13 +66,35 @@ def compile_delete(element, compiler, **kw):
                 )
     return text
 
-
 try:
     from indra_db.copy import *
     CAN_COPY = True
 except ImportError as e:
     logger.warning("Copy utilities unavailable: %s" % str(e))
     CAN_COPY = False
+
+
+def _copy_method(get_null_return=lambda: None):
+    def super_wrapper(meth):
+        @wraps(meth)
+        def wrapper(obj, tbl_name, data, cols=None, commit=True, *args, **kwargs):
+            logger.info("Received request to %s %d entries into %s."
+                        % (meth.__func__.__name__, len(data), tbl_name))
+            if not CAN_COPY:
+                raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
+                                   "available.")
+            if len(data) is 0:
+                return get_null_return()  # Nothing to do....
+
+            res = meth(obj, tbl_name, data, cols, commit, *args, **kwargs)
+
+            if commit:
+                obj.commit_copy()
+
+            return res
+        return wrapper
+    return super_wrapper
+
 
 
 def _isiterable(obj):
@@ -552,17 +575,10 @@ class DatabaseManager(object):
 
         return cols, data_bts
 
+    @_copy_method(list)
     def copy_report_lazy(self, tbl_name, data, cols=None, commit=True,
                          constraint=None, return_cols=None, order_by=None):
         """Copy lazily, and report what rows were skipped."""
-        logger.info("Received request to lazy copy and report on skipped for "
-                    "%d entries into %s." % (len(data), tbl_name))
-        if CAN_COPY:
-            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
-                               "available.")
-        if len(data) is 0:
-            return []  # Nothing to do....
-
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         if not order_by:
@@ -573,35 +589,17 @@ class DatabaseManager(object):
 
         mngr = LazyCopyManager(self._conn, tbl_name, cols,
                                constraint=constraint)
-        skipped_rows = mngr.report_copy(data_bts, order_by, return_cols,
-                                        BytesIO)
+        return mngr.report_copy(data_bts, order_by, return_cols, BytesIO)
 
-        if commit:
-            self._conn.commit()
-            self._conn = None
-
-        return skipped_rows
-
+    @_copy_method()
     def copy_lazy(self, tbl_name, data, cols=None, commit=True,
                   constraint=None):
         "Copy lazily, skip any rows that violate constraints."
-        logger.info("Received request to lazily copy %d entries into %s."
-                    % (len(data), tbl_name))
-        if CAN_COPY:
-            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
-                               "available.")
-        if len(data) is 0:
-            return  # Nothing to do....
-
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         mngr = LazyCopyManager(self._conn, tbl_name, cols,
                                constraint=constraint)
         mngr.copy(data_bts, BytesIO)
-
-        if commit:
-            self._conn.commit()
-            self._conn = None
         return
 
     def _infer_constraint(self, tbl_name, cols):
@@ -642,17 +640,10 @@ class DatabaseManager(object):
                              "constraint.")
         return constraint
 
+    @_copy_method()
     def copy_push(self, tbl_name, data, cols=None, commit=True,
                   constraint=None):
         "Copy, pushing any changes to constraint violating rows."
-        logger.info("Received request to push and copy %d entries into %s."
-                    % (len(data), tbl_name))
-        if CAN_COPY:
-            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
-                               "available.")
-        if len(data) is 0:
-            return  # Nothing to do....
-
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         if constraint is None:
@@ -661,24 +652,12 @@ class DatabaseManager(object):
         mngr = PushCopyManager(self._conn, tbl_name, cols,
                                constraint=constraint)
         mngr.copy(data_bts, BytesIO)
-
-        if commit:
-            self._conn.commit()
-            self._conn = None
         return
 
+    @_copy_method(list)
     def copy_report_push(self, tbl_name, data, cols=None, commit=True,
                          constraint=None, return_cols=None, order_by=None):
         """Report on the rows skipped when pushing and copying."""
-        logger.info("Received request to push and copy %d entries into %s, "
-                    "and report on the conflicting rows."
-                    % (len(data), tbl_name))
-        if CAN_COPY:
-            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
-                               "available.")
-        if len(data) is 0:
-            return []  # Nothing to do....
-
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         if constraint is None:
@@ -693,28 +672,14 @@ class DatabaseManager(object):
 
         mngr = PushCopyManager(self._conn, tbl_name, cols,
                                constraint=constraint)
-        skipped = mngr.report_copy(data_bts, order_by, return_cols, BytesIO)
+        return mngr.report_copy(data_bts, order_by, return_cols, BytesIO)
 
-        if commit:
-            self._conn.commit()
-            self._conn = None
-        return skipped
-
+    @_copy_method()
     def copy(self, tbl_name, data, cols=None, commit=True):
         "Use pg_copy to copy over a large amount of data."
-        logger.info("Received request to copy %d entries into %s."
-                    % (len(data), tbl_name))
-        digest = self._prep_copy(tbl_name, data, cols)
-        if not digest:
-            return
-        cols, data_bts = digest
+        cols, data_bts = self._prep_copy(tbl_name, data, cols)
         mngr = CopyManager(self._conn, tbl_name, cols)
         mngr.copy(data_bts, BytesIO)
-
-        if commit:
-            self._conn.commit()
-            self._conn = None
-
         return
 
     def filter_query(self, tbls, *args):

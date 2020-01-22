@@ -1,8 +1,12 @@
 __all__ = ['CopyManager', 'LazyCopyManager', 'PushCopyManager']
 
+import logging
 import tempfile
 
 from pgcopy import CopyManager
+
+
+logger = logging.getLogger(__name__)
 
 
 class LazyCopyManager(CopyManager):
@@ -62,7 +66,7 @@ class LazyCopyManager(CopyManager):
             ' LIMIT {num});'
         ).format(cols=inp_cols, table=self.table, schema=self.schema,
                  ret_cols=ret_cols, order_by=order_by, num=num)
-        print(diff_sql)
+        logger.debug(diff_sql)
         cursor.execute(diff_sql)
         res = cursor.fetchall()
         return res
@@ -75,7 +79,7 @@ class LazyCopyManager(CopyManager):
         sql = cmd_fmt.format(schema=self.schema,
                              table=self.table,
                              cols=columns)
-        print(sql)
+        logger.debug(sql)
         cursor = self.conn.cursor()
         res = None
         try:
@@ -105,7 +109,7 @@ class PushCopyManager(LazyCopyManager):
     def _get_skipped(self, num, order_by, return_cols=None, compare_cols=None):
         if not compare_cols:
             raise ValueError("")
-        #TODO: Get the compare columns automatically at this point?
+        # TODO: Get the compare columns automatically at this point?
         # Query to get constraint info:
         # SELECT con.*
         #        FROM pg_catalog.pg_constraint con

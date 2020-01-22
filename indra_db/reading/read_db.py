@@ -219,7 +219,7 @@ def make_statements(reading_data_list, num_proc=1):
     return stmt_data_list
 
 
-gatherer = DataGatherer('reading', ['readings', 'stmts'])
+gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts'])
 
 
 class DatabaseReader(object):
@@ -458,11 +458,16 @@ class DatabaseReader(object):
                 stmts.append(sd.statement)
 
         # Dump the good statements into the raw statements table.
-        self._db.copy_push('raw_statements', stmt_tuples.values(),
-                           DatabaseStatementData.get_cols(),
-                           constraint='reading_raw_statement_uniqueness',
-                           commit=False)
-        gatherer.add('stmts', len(stmt_tuples))
+        updated = self._db.copy_report_push(
+            'raw_statements',
+            stmt_tuples.values(),
+            DatabaseStatementData.get_cols(),
+            constraint='reading_raw_statement_uniqueness',
+            commit=False,
+            return_cols='uuid'
+        )
+        gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
+        gatherer.add('upd_stmts', len(updated))
 
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in dups.values()

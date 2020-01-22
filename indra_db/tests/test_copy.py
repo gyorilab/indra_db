@@ -48,3 +48,21 @@ def test_lazy_report_copy():
     left_out = db.copy_report_lazy('text_ref', inps_2, COLS)
     _assert_set_equal(inps_1 | inps_2, _ref_set(db))
     _assert_set_equal(inps_1 & inps_2, {t[:2] for t in left_out})
+
+
+def test_push_copy():
+    db = get_temp_db(True)
+    inps_1 = {('a', '1'), ('b', '2')}
+    inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
+
+    db.copy('text_ref', inps_1, COLS)
+    _assert_set_equal(inps_1, _ref_set(db))
+    original_date = db.select_one(db.TextRef.create_date,
+                                  db.TextRef.pmid == 'b')
+
+    db.copy_push('text_ref', inps_2, COLS)
+    _assert_set_equal(inps_1 | inps_2, _ref_set(db))
+    new_date = db.select_one(db.TextRef.create_date,
+                             db.TextRef.pmid == 'b')
+    assert new_date != original_date, "PMID b was not updated."
+

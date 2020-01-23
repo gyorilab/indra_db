@@ -296,6 +296,8 @@ def get_pa_loaded_db(num_stmts, split=None, pam=None):
     else:
         dts.add_statements(split, pam=pam)
         dts.add_statements()
+    dts.test_db.session.close()
+    dts.test_db.grab_session()
     return dts.test_db
 
 

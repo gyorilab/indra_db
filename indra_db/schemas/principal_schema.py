@@ -207,6 +207,16 @@ def get_schema(Base):
         create_date = Column(DateTime, default=func.now())
     table_dict[RejectedStatements.__tablename__] = RejectedStatements
 
+    class DiscardedStatements(Base, IndraDBTable):
+        __tablename__ = 'discarded_statements'
+        _always_disp = ['stmt_id', 'reason']
+        id = Column(Integer, primary_key=True)
+        stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
+                         nullable=False)
+        reason = Column(String, nullable=False)
+        insert_date = Column(DateTime, default=func.now())
+    table_dict[DiscardedStatements.__tablename__] = DiscardedStatements
+
     class RawAgents(Base, IndraDBTable):
         __tablename__ = 'raw_agents'
         _always_disp = ['stmt_id', 'db_name', 'db_id', 'ag_num']

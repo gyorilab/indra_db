@@ -90,9 +90,9 @@ class PreassemblyManager(object):
         i = 0
         for stmt_id_batch in batch_iter(id_set, self.batch_size):
             subres = (db.filter_query([db.RawStatements.id,
-                                      db.RawStatements.json,
-                                      db.TextRef],
-                                     db.RawStatements.id.in_(stmt_id_batch))
+                                       db.RawStatements.json,
+                                       db.TextRef],
+                                      db.RawStatements.id.in_(stmt_id_batch))
                         .outerjoin(db.Reading)
                         .outerjoin(db.TextContent)
                         .outerjoin(db.TextRef)
@@ -129,7 +129,12 @@ class PreassemblyManager(object):
                 stmts.append(stmt)
 
             # Map groundings and sequences.
-            cleaned_stmts = self._clean_statements(stmts)
+            cleaned_stmts, eliminated_uuids = self._clean_statements(stmts)
+            discarded_stmts = [(uuid_sid_dict[uuid], reason)
+                               for reason, uuid_set in eliminated_uuids.items()
+                               for uuid in uuid_set]
+            db.copy('discarded_statements', discarded_stmts,
+                    ('stmt_id', 'reason'), commit=False)
 
             # Use the shallow hash to condense unique statements.
             new_unique_stmts, evidence_links, agent_tuples = \
@@ -191,6 +196,13 @@ class PreassemblyManager(object):
         For more detail on preassembly, see indra/preassembler/__init__.py
         """
         self.__tag = 'create'
+
+        if not continuing:
+            # Make sure the discarded statements table is cleared.
+            db.drop_tables([db.DiscardedStatements])
+            db.create_tables([db.DiscardedStatements])
+            db.session.close()
+            db.grab_session()
 
         # Get filtered statement ID's.
         sid_cache_fname = path.join(HERE, 'stmt_id_cache.pkl')
@@ -336,7 +348,11 @@ class PreassemblyManager(object):
             with open(dist_stash, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
-        new_stmt_ids = new_ids & stmt_ids
+        # Get discarded statements
+        skip_ids = {i for i, in db.select_all(db.DiscardedStatements.stmt_id)}
+
+        # Select only the good new statement ids.
+        new_stmt_ids = new_ids & stmt_ids - skip_ids
 
         # Get the set of new unique statements and link to any new evidence.
         old_mk_set = {mk for mk, in db.select_all(db.PAStatements.mk_hash)}
@@ -501,11 +517,18 @@ class PreassemblyManager(object):
         tuples of the form (uuid, matches_key) which represent the links between
         raw (evidence) statements and their unique/preassembled counterparts.
         """
+        eliminated_uuids = {}
+        all_uuids = {s.uuid for s in stmts}
         self._log("Map grounding...")
         stmts = ac.map_grounding(stmts)
+        grounded_uuids = {s.uuid for s in stmts}
+        eliminated_uuids['grounding'] = all_uuids - grounded_uuids
         self._log("Map sequences...")
         stmts = ac.map_sequence(stmts, use_cache=True)
-        return stmts
+        seqmapped_and_grounded_uuids = {s.uuid for s in stmts}
+        eliminated_uuids['sequence mapping'] = \
+            grounded_uuids - seqmapped_and_grounded_uuids
+        return stmts, eliminated_uuids
 
     @clockit
     def _get_support_links(self, unique_stmts, split_idx=None):

@@ -429,7 +429,7 @@ def _get_text_content_from_trid(text_ref_id, db=None):
     return None
 
 
-@lru_cache(100)
+@lru_cache(10000)
 def _cached_get_text_content_from_trid(text_ref_id):
     return _get_text_content_from_trid(text_ref_id)
 

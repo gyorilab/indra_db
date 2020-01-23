@@ -142,6 +142,8 @@ def digest_s3_files():
     bucket = S3_DATA_LOC['bucket']
     prefix = S3_DATA_LOC['prefix']
 
+    patt = re.compile(prefix + '([0-9]+)/(\w*?)/?(\w+)_([0-9]+).json')
+
     # Get a list of the prefixes for each day.
     res = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter='/')
     day_prefixes = [p for d in res['CommonPrefixes'] for p in d.values()]
@@ -150,7 +152,7 @@ def digest_s3_files():
     runtime_data = []
     stage_data = StageData()
     for day_prefix in day_prefixes:
-        print(day_prefix)
+        logger.info("Processing: %s" % day_prefix)
         day_res = s3.list_objects_v2(Bucket=bucket, Prefix=day_prefix)
         day_keys = [d['Key'] for d in day_res['Contents']]
 
@@ -162,9 +164,9 @@ def digest_s3_files():
             data = file_res['Body'].read()
 
             # Get metadata
-            m = re.match('%s/([0-9]+)/(\w*?)/?(\w+)_([0-9]+).json' % prefix,
-                         key)
+            m = patt.match(key)
             if not m:
+                logger.warning("No match for %s." % key)
                 continue
             data = json.loads(data)
             day, stage, flavor, time = m.groups()

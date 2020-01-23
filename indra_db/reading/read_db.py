@@ -24,7 +24,7 @@ from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
 from indra_db.databases import readers, reader_versions
-from indra_db.managers.core import DataGatherer, DGContext
+from indra_db.util.data_gatherer import DataGatherer, DGContext
 from indra_db.util import insert_raw_agents, unpack
 
 logger = logging.getLogger(__name__)

@@ -17,7 +17,7 @@ from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
 from indra.preassembler.hierarchy_manager import hierarchies
 
-from indra_db.managers.core import DataGatherer, DGContext
+from indra_db.util.data_gatherer import DataGatherer, DGContext
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
     extract_agent_data, insert_pa_agents
 

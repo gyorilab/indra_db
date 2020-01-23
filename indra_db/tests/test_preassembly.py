@@ -166,7 +166,8 @@ def _str_large_set(s, max_num):
 
 
 def _do_old_fashioned_preassembly(stmts):
-    grounded_stmts = ac.map_grounding(stmts)
+    grounded_stmts = ac.map_grounding(stmts, use_adeft=True,
+                                      gilda_mode='local')
     ms_stmts = ac.map_sequence(grounded_stmts, use_cache=True)
     opa_stmts = ac.run_preassembly(ms_stmts, return_toplevel=False)
     return opa_stmts

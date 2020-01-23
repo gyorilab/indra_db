@@ -137,10 +137,16 @@ class StageData(object):
         return json.loads(json.dumps(self._dict))
 
 
-def digest_s3_files(bucket, prefix):
+def digest_s3_files():
     s3 = boto3.client('s3')
+    bucket = S3_DATA_LOC['bucket']
+    prefix = S3_DATA_LOC['prefix']
+
+    # Get a list of the prefixes for each day.
     res = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter='/')
     day_prefixes = [p for d in res['CommonPrefixes'] for p in d.values()]
+
+    # Build up our data files.
     runtime_data = []
     stage_data = StageData()
     for day_prefix in day_prefixes:

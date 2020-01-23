@@ -1,8 +1,9 @@
 __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
-
-from collections import defaultdict
 from sqlalchemy import text
+from functools import lru_cache
+from collections import defaultdict
+
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
 
@@ -360,7 +361,7 @@ def _get_text_content(content_identifiers, db=None):
             for trid, source, format, text_type, content in res}
 
 
-def get_text_content_from_text_refs(text_refs, db=None):
+def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
     """Get text_content from an evidence object's text_refs attribute
 
 
@@ -375,6 +376,10 @@ def get_text_content_from_text_refs(text_refs, db=None):
         User has the option to pass in a database manager. If None
         the primary database is used. Default: None
 
+    use_cache : Optional[bool]
+        Whether or not to use cached results. Only relevant when
+        querying the primary database
+
     Returns
     -------
     text : str
@@ -382,9 +387,10 @@ def get_text_content_from_text_refs(text_refs, db=None):
         database, otherwise the abstract. Returns None if no content
         exists for the text_refs in the database
     """
+    primary = False
     if db is None:
         db = get_primary_db()
-
+        primary = True
     text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:
@@ -398,6 +404,17 @@ def get_text_content_from_text_refs(text_refs, db=None):
             pass
     if text_ref_id is None:
         return None
+    # If using the primary db, we use a cached function to
+    # get the content from text_ref_id
+    if primary and use_cache:
+        return _cached_get_text_content_from_trid(text_ref_id)
+    else:
+        return _get_text_content_from_trid(text_ref_id, db=db)
+
+
+def _get_text_content_from_trid(text_ref_id, db=None):
+    if db is None:
+        db = get_primary_db()
     texts = db.select_all([db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id == text_ref_id)
@@ -410,6 +427,11 @@ def get_text_content_from_text_refs(text_refs, db=None):
     if abstract:
         return abstract[0]
     return None
+
+
+@lru_cache(100)
+def _cached_get_text_content_from_trid(text_ref_id):
+    return _get_text_content_from_trid(text_ref_id)
 
 
 def _extract_db_refs(stmt_json):

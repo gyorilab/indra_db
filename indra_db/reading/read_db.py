@@ -464,7 +464,7 @@ class DatabaseReader(object):
             DatabaseStatementData.get_cols(),
             constraint='reading_raw_statement_uniqueness',
             commit=False,
-            return_cols='uuid'
+            return_cols=('uuid',)
         )
         gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
         gatherer.add('upd_stmts', len(updated))

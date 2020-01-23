@@ -33,6 +33,8 @@ class LazyCopyManager(CopyManager):
         return self._get_skipped(len(data), order_by, return_cols)
 
     def _stringify_cols(self, cols):
+        if not isinstance(cols, list) and not isinstance(cols, tuple):
+            raise ValueError("Argument `cols` must be a list or tuple.")
         return '", "'.join(cols)
 
     def _get_sql(self):

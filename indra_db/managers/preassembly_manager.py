@@ -201,6 +201,8 @@ class PreassemblyManager(object):
             # Make sure the discarded statements table is cleared.
             db.drop_tables([db.DiscardedStatements])
             db.create_tables([db.DiscardedStatements])
+            db.session.close()
+            db.grab_session()
 
         # Get filtered statement ID's.
         sid_cache_fname = path.join(HERE, 'stmt_id_cache.pkl')

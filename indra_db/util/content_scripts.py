@@ -378,7 +378,10 @@ def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
 
     use_cache : Optional[bool]
         Whether or not to use cached results. Only relevant when
-        querying the primary database
+        querying the primary database. Will not work if primary
+        database is passed in with keyword argument. Only if
+        keyword db argument is absent or set to None.
+        Default: True
 
     Returns
     -------
@@ -391,6 +394,31 @@ def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
     if db is None:
         db = get_primary_db()
         primary = True
+    if primary and use_cache:
+        frozen_text_refs = frozenset(text_refs.items())
+        result = _get_text_content_from_text_refs_cached(frozen_text_refs)
+    else:
+        text_ref_id = _get_text_ref_id_from_text_refs(text_refs, db)
+        if text_ref_id is None:
+            result = None
+        else:
+            result = _get_text_content_from_trid(text_ref_id, db)
+    return result
+
+
+@lru_cache(10000)
+def _get_text_content_from_text_refs_cached(frozen_text_refs):
+    db = get_primary_db()
+    text_refs = dict(frozen_text_refs)
+    text_ref_id = _get_text_ref_id_from_text_refs(text_refs, db)
+    if text_ref_id is None:
+        result = None
+    else:
+        result = _get_text_content_from_trid(text_ref_id, db)
+    return result
+
+
+def _get_text_ref_id_from_text_refs(text_refs, db):
     text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:
@@ -402,19 +430,10 @@ def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
                 break
         except KeyError:
             pass
-    if text_ref_id is None:
-        return None
-    # If using the primary db, we use a cached function to
-    # get the content from text_ref_id
-    if primary and use_cache:
-        return _cached_get_text_content_from_trid(text_ref_id)
-    else:
-        return _get_text_content_from_trid(text_ref_id, db=db)
+    return text_ref_id
 
 
-def _get_text_content_from_trid(text_ref_id, db=None):
-    if db is None:
-        db = get_primary_db()
+def _get_text_content_from_trid(text_ref_id, db):
     texts = db.select_all([db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id == text_ref_id)
@@ -427,11 +446,6 @@ def _get_text_content_from_trid(text_ref_id, db=None):
     if abstract:
         return abstract[0]
     return None
-
-
-@lru_cache(10000)
-def _cached_get_text_content_from_trid(text_ref_id):
-    return _get_text_content_from_trid(text_ref_id)
 
 
 def _extract_db_refs(stmt_json):

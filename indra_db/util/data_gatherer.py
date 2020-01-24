@@ -157,7 +157,10 @@ def digest_s3_files():
         day_keys = [d['Key'] for d in day_res['Contents']]
 
         day = day_prefix.split('/')[-2]
-        day_runtimes = {'day': day, 'times': []}
+        day_obj = datetime.strptime(day, '%Y%m%d')
+        day_ts = day_obj.timestamp()*1000
+        day_runtimes = {'day': day_ts,
+                        'times': dd(lambda: dd(list))}
 
         for key in day_keys:
             file_res = s3.get_object(Bucket=bucket, Key=key)
@@ -175,9 +178,12 @@ def digest_s3_files():
                 flavor = None
 
             # Update runtime
-            day_runtimes['times'].append({'stage': stage, 'type': flavor,
-                                          'times': [data['timing']['start'],
-                                                    data['timing']['end']]})
+            div_factor = 3600*1000
+            time_pair = [(data['timing']['start'] - day_ts)/div_factor + 5,
+                         (data['timing']['end'] - day_ts)/div_factor + 5]
+            if flavor:
+                day_runtimes['times'][stage][flavor].append(time_pair)
+            day_runtimes['times'][stage]['all'].append(time_pair)
 
             # Handle stages
             stage_data.add(stage, flavor, day, data['counts'])

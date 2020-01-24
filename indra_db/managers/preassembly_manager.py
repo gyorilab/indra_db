@@ -520,7 +520,7 @@ class PreassemblyManager(object):
         eliminated_uuids = {}
         all_uuids = {s.uuid for s in stmts}
         self._log("Map grounding...")
-        stmts = ac.map_grounding(stmts)
+        stmts = ac.map_grounding(stmts, use_adeft=True, gilda_mode='local')
         grounded_uuids = {s.uuid for s in stmts}
         eliminated_uuids['grounding'] = all_uuids - grounded_uuids
         self._log("Map sequences...")

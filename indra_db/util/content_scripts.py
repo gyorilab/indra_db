@@ -1,8 +1,9 @@
 __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
-
-from collections import defaultdict
 from sqlalchemy import text
+from functools import lru_cache
+from collections import defaultdict
+
 from .constructors import get_primary_db
 from .helpers import unpack, _get_trids
 
@@ -360,7 +361,7 @@ def _get_text_content(content_identifiers, db=None):
             for trid, source, format, text_type, content in res}
 
 
-def get_text_content_from_text_refs(text_refs, db=None):
+def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
     """Get text_content from an evidence object's text_refs attribute
 
 
@@ -375,6 +376,13 @@ def get_text_content_from_text_refs(text_refs, db=None):
         User has the option to pass in a database manager. If None
         the primary database is used. Default: None
 
+    use_cache : Optional[bool]
+        Whether or not to use cached results. Only relevant when
+        querying the primary database. Will not work if primary
+        database is passed in with keyword argument. Only if
+        keyword db argument is absent or set to None.
+        Default: True
+
     Returns
     -------
     text : str
@@ -382,9 +390,35 @@ def get_text_content_from_text_refs(text_refs, db=None):
         database, otherwise the abstract. Returns None if no content
         exists for the text_refs in the database
     """
+    primary = False
     if db is None:
         db = get_primary_db()
+        primary = True
+    if primary and use_cache:
+        frozen_text_refs = frozenset(text_refs.items())
+        result = _get_text_content_from_text_refs_cached(frozen_text_refs)
+    else:
+        text_ref_id = _get_text_ref_id_from_text_refs(text_refs, db)
+        if text_ref_id is None:
+            result = None
+        else:
+            result = _get_text_content_from_trid(text_ref_id, db)
+    return result
 
+
+@lru_cache(10000)
+def _get_text_content_from_text_refs_cached(frozen_text_refs):
+    db = get_primary_db()
+    text_refs = dict(frozen_text_refs)
+    text_ref_id = _get_text_ref_id_from_text_refs(text_refs, db)
+    if text_ref_id is None:
+        result = None
+    else:
+        result = _get_text_content_from_trid(text_ref_id, db)
+    return result
+
+
+def _get_text_ref_id_from_text_refs(text_refs, db):
     text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:
@@ -396,8 +430,10 @@ def get_text_content_from_text_refs(text_refs, db=None):
                 break
         except KeyError:
             pass
-    if text_ref_id is None:
-        return None
+    return text_ref_id
+
+
+def _get_text_content_from_trid(text_ref_id, db):
     texts = db.select_all([db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id == text_ref_id)

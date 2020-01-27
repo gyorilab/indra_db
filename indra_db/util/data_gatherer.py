@@ -125,8 +125,8 @@ class StageData(object):
 
     def _update_dict(self, stage, flavor, key, day, value):
         if flavor:
-            self._dict[stage][flavor][key][day] += value
-        self._dict[stage]['total'][key][day] += value
+            self._dict[stage][key][flavor][day] += value
+        self._dict[stage][key]['total'][day] += value
 
     def add(self, stage, flavor, day, counts):
         for key, value in counts.items():
@@ -159,7 +159,8 @@ def digest_s3_files():
         day = day_prefix.split('/')[-2]
         day_obj = datetime.strptime(day, '%Y%m%d')
         day_ts = day_obj.timestamp()*1000
-        day_runtimes = {'day': day_ts,
+        day_runtimes = {'day_str': day_obj.strftime('%b %d %Y'),
+                        'day_ts': day_ts,
                         'times': dd(lambda: dd(list))}
 
         for key in day_keys:
@@ -186,7 +187,7 @@ def digest_s3_files():
             day_runtimes['times'][stage]['all'].append(time_pair)
 
             # Handle stages
-            stage_data.add(stage, flavor, day, data['counts'])
+            stage_data.add(stage, flavor, day_ts, data['counts'])
 
         runtime_data.append(day_runtimes)
     return runtime_data, stage_data.get_json()

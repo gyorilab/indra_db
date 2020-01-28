@@ -134,7 +134,16 @@ class StageData(object):
         self._update_dict(stage, flavor, 'jobs', day, 1)
 
     def get_json(self):
-        return json.loads(json.dumps(self._dict))
+        ret = {}
+        for stage, stage_data in self._dict.items():
+            ret[stage] = {}
+            for key, key_data in stage_data.items():
+                ret[stage][key] = {}
+                for flavor, flavor_data in key_data.items():
+                    ret[stage][key][flavor] = []
+                    for day, value in flavor_data.items():
+                        ret[stage][key][flavor].append([day, value])
+        return ret
 
 
 def digest_s3_files():

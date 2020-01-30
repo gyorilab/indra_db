@@ -5,11 +5,15 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
+    "watch": "vue-cli-service build --watch",
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
     "core-js": "^3.4.4",
-    "vue": "^2.6.10"
+    "display": "file:../../../../Dump/test_app/static/display",
+    "indralab-vue": "file:../../../indralab-vue",
+    "vue": "^2.6.10",
+    "vuesax": "^3.11.11"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "^4.1.0",

@@ -16,7 +16,6 @@ from jinja2 import Environment, ChoiceLoader
 from indra.assemblers.html import HtmlAssembler
 from indra.assemblers.html.assembler import loader as indra_loader
 from indra.statements import make_statement_camel, stmts_from_json
-from indra.util import batch_iter
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -356,6 +355,17 @@ def _parse_source_str(source_relation):
 @app.route('/', methods=['GET'])
 def iamalive():
     return redirect('statements', code=302)
+
+
+@app.route('/data-vis/<path:file_path>')
+def serve_data_vis(file_path):
+    full_path = path.join(HERE, 'data-vis/dist', file_path)
+    logger.info('data-vis: ' + full_path)
+    if not path.exists(full_path):
+        abort(404)
+        return
+    with open(full_path, 'rb') as f:
+        return f.read()
 
 
 @app.route('/statements', methods=['GET'])

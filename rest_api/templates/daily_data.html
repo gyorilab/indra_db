@@ -10,8 +10,7 @@
   {{ super() }}
 
   <div id="app">
-    <time-view></time-view>
-    <amount-view></amount-view>
+    <hello-world></hello-world>
   </div>
   <script>
     Vue.prototype.$time_view_url = "{{ url_for('serve_stages', stage='') }}";

@@ -1,8 +1,8 @@
 import * as dispComponents from './components'
 
 const install = (Vue) => {
-  Object.values(dispComponents).forEach(dispComponent => {
-    Vue.use(dispComponent);
+  Object.values(dispComponents).forEach(comp => {
+    Vue.use(comp);
   })
 };
 

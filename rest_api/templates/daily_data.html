@@ -1,0 +1,21 @@
+{% extends "idbr_template.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+  <script src="{{ url_for('serve_data_vis', file_path='data-vis.umd.js') }}"></script>
+{% endblock %}
+
+{% block body %}
+  {{ super() }}
+
+  <div id="app">
+    <time-view></time-view>
+    <amount-view></amount-view>
+  </div>
+  <script>
+    Vue.prototype.$time_view_url = "{{ url_for('serve_stages', stage='') }}";
+    Vue.prototype.$amount_view_url = "{{ url_for('serve_runtime') }}";
+    var app = new Vue({el: '#app'});
+  </script>
+{% endblock %}

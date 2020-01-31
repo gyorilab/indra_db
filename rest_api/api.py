@@ -1,5 +1,6 @@
 import sys
 import json
+import boto3
 import logging
 from os import path
 from functools import wraps
@@ -188,6 +189,32 @@ def serve_data_vis(file_path):
         return
     with open(full_path, 'rb') as f:
         return f.read()
+
+
+@app.route('/monitor')
+def get_data_explorer():
+    return render_my_template('daily_data.html', 'Monitor')
+
+
+@app.route('/monitor/data/runtime')
+def serve_runtime():
+    from indra_db.util.data_gatherer import S3_DATA_LOC
+
+    s3 = boto3.client('s3')
+    res = s3.get_object(Bucket=S3_DATA_LOC['bucket'],
+                        Key=S3_DATA_LOC['prefix']+'runtimes.json')
+    return jsonify(res['Body'].read())
+
+
+@app.route('/monitor/data/<stage>')
+def serve_stages(stage):
+    from indra_db.util.data_gatherer import S3_DATA_LOC
+
+    s3 = boto3.client('s3')
+    res = s3.get_object(Bucket=S3_DATA_LOC['bucket'],
+                        Key=S3_DATA_LOC['prefix'] + stage + '.json')
+
+    return jsonify(res['Body'].read())
 
 
 @app.route('/statements', methods=['GET'])

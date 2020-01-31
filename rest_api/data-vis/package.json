@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build --target lib --name data-vis src/index.js",
+    "build": "vue-cli-service build --target lib --name DataVis src/index.js",
     "watch": "npm run build -- --watch",
     "test": "npm run watch -- --mode development",
     "lint": "vue-cli-service lint"

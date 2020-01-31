@@ -1,7 +1,7 @@
 <template>
   <div class="monitor">
-    <time-view></time-view>
-    <amount-view></amount-view>
+    <TimeView></TimeView>
+    <AmountView></AmountView>
   </div>
 </template>
 

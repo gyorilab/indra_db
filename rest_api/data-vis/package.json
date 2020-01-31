@@ -4,13 +4,13 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build",
-    "watch": "vue-cli-service build --watch",
+    "build": "vue-cli-service build --target lib --name data-vis src/index.js",
+    "watch": "npm run build -- --watch",
+    "test": "npm run watch -- --mode development",
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
     "core-js": "^3.4.4",
-    "display": "file:../../../../Dump/test_app/static/display",
     "indralab-vue": "file:../../../indralab-vue",
     "vue": "^2.6.10",
     "vuesax": "^3.11.11"

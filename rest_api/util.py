@@ -20,7 +20,7 @@ class DbAPIError(Exception):
 # ==============================================
 
 
-def __process_agent(agent_param):
+def process_agent(agent_param):
     """Get the agent id and namespace from an input param."""
 
     if not agent_param.endswith('@TEXT'):

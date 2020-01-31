@@ -20,10 +20,10 @@ from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
 from indra_db.exceptions import BadHashError
 from indra_db.client import get_statement_jsons_from_hashes, \
-    get_statement_jsons_from_papers, submit_curation,\
+    get_statement_jsons_from_papers, submit_curation, \
     get_interaction_jsons_from_agents
-from rest_api.util import __process_agent, _answer_binary_query, DbAPIError, \
-    LogTracker, sec_since, get_source
+from .util import process_agent, _answer_binary_query, DbAPIError, LogTracker, \
+    sec_since, get_source
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
@@ -236,13 +236,13 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
         ev_limit = 10
     try:
         # Get the agents without specified locations (subject or object).
-        free_agents = [__process_agent(ag)
+        free_agents = [process_agent(ag)
                        for ag in query_dict.poplist('agent')]
         ofaks = {k for k in query_dict.keys() if k.startswith('agent')}
-        free_agents += [__process_agent(query_dict.pop(k)) for k in ofaks]
+        free_agents += [process_agent(query_dict.pop(k)) for k in ofaks]
 
         # Get the agents with specified roles.
-        roled_agents = {role: __process_agent(query_dict.pop(role))
+        roled_agents = {role: process_agent(query_dict.pop(role))
                         for role in ['subject', 'object']
                         if query_dict.get(role) is not None}
     except DbAPIError as e:
@@ -393,13 +393,13 @@ def get_metadata(level):
     logger.info("Getting query details.")
     try:
         # Get the agents without specified locations (subject or object).
-        agents = [(None,) + __process_agent(ag)
+        agents = [(None,) + process_agent(ag)
                   for ag in query.poplist('agent')]
         ofaks = {k for k in query.keys() if k.startswith('agent')}
-        agents += [(None,) + __process_agent(query.pop(k)) for k in ofaks]
+        agents += [(None,) + process_agent(query.pop(k)) for k in ofaks]
 
         # Get the agents with specified roles.
-        agents += [(role,) +__process_agent(query.pop(role))
+        agents += [(role,) + process_agent(query.pop(role))
                    for role in ['subject', 'object']
                    if query.get(role) is not None]
     except DbAPIError as e:

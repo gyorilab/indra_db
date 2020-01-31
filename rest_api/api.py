@@ -203,7 +203,7 @@ def serve_runtime():
     s3 = boto3.client('s3')
     res = s3.get_object(Bucket=S3_DATA_LOC['bucket'],
                         Key=S3_DATA_LOC['prefix']+'runtimes.json')
-    return jsonify(res['Body'].read())
+    return jsonify(json.loads(res['Body'].read()))
 
 
 @app.route('/monitor/data/<stage>')
@@ -214,7 +214,7 @@ def serve_stages(stage):
     res = s3.get_object(Bucket=S3_DATA_LOC['bucket'],
                         Key=S3_DATA_LOC['prefix'] + stage + '.json')
 
-    return jsonify(res['Body'].read())
+    return jsonify(json.loads(res['Body'].read()))
 
 
 @app.route('/statements', methods=['GET'])

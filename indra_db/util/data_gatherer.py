@@ -199,5 +199,12 @@ def digest_s3_files():
             stage_data.add(stage, flavor, day_ts, data['counts'])
 
         runtime_data.append(day_runtimes)
-    return runtime_data, stage_data.get_json()
+
+    # Dump the digests on s3.
+    s3.put_object(Bucket=bucket, Key=prefix + 'runtimes.json',
+                  Body=json.dumps(runtime_data))
+    for stage, data in stage_data.get_json().items():
+        s3.put_object(Bucket=bucket, Key=prefix + stage + '.json',
+                      Body=json.dumps(data))
+    return
 

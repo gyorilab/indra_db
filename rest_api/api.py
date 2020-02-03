@@ -206,6 +206,22 @@ def serve_runtime():
     return jsonify(json.loads(res['Body'].read()))
 
 
+@app.route('/monitor/data/liststages')
+def list_stages():
+    from indra_db.util.data_gatherer import S3_DATA_LOC
+
+    s3 = boto3.client('s3')
+    res = s3.list_objects_v2(Bucket=S3_DATA_LOC['bucket'],
+                             Prefix=S3_DATA_LOC['prefix'],
+                             Delimiter='/')
+
+    ret = [k[:-len('.json')] for k in (e['Key'][len(S3_DATA_LOC['prefix']):]
+                                       for e in res['Contents'])
+           if k.endswith('.json') and not k.startswith('runtimes')]
+    print(ret)
+    return jsonify(ret)
+
+
 @app.route('/monitor/data/<stage>')
 def serve_stages(stage):
     from indra_db.util.data_gatherer import S3_DATA_LOC

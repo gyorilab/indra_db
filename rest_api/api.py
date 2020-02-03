@@ -187,8 +187,16 @@ def serve_data_vis(file_path):
     if not path.exists(full_path):
         abort(404)
         return
+    ext = full_path.split('.')[-1]
+    if ext == 'js':
+        ct = 'application/javascript'
+    elif ext == 'css':
+        ct = 'text/css'
+    else:
+        ct = None
     with open(full_path, 'rb') as f:
-        return f.read()
+        return Response(f.read(),
+                        content_type=ct)
 
 
 @app.route('/monitor')

@@ -8,15 +8,15 @@
   <title>The INDRA Database: Monitor</title>
 
   <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-  <script src="https://bigmech.s3.amazonaws.com/indra-db/IndralabVue.umd.min.js"></script>
-  <link href="https://bigmech.s3.amazonaws.com/indra-db/IndralabVue.css"
-        rel="stylesheet">
 </head>
 </body>
 <div id="app">
   <time-view></time-view>
   <amount-view></amount-view>
 </div>
+<script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
+<link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}"
+      rel="stylesheet">
 <script>
   Vue.prototype.$time_view_url = "{{ url_for('serve_runtime') }}";
   Vue.prototype.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";

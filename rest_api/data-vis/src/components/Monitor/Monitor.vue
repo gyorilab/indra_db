@@ -1,20 +1,12 @@
 <template>
   <div class="monitor">
-    <TimeView></TimeView>
-    <AmountView></AmountView>
+    <button>Hello</button>
   </div>
 </template>
 
 <script>
-  import TimeView from 'indralab-vue'
-  import AmountView from 'indralab-vue'
-
   export default {
     name: "Monitor",
-    components: {
-      TimeView,
-      AmountView
-    },
   }
 </script>
 

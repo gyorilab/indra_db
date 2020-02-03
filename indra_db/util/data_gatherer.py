@@ -146,6 +146,35 @@ class StageData(object):
         return ret
 
 
+class DayStack(object):
+    def __init__(self):
+        self._data = {}
+
+    def __str__(self):
+        s = ''
+        for k, v in self._data.items():
+            s += '%s: %s\n' % (k, v)
+        return s
+
+    def __repr__(self):
+        return 'DayStack(' + repr(self._data) + ')'
+
+    def add(self, num, datum):
+        if not isinstance(num, int):
+            raise ValueError("`num` must be of type `int`.")
+        if num not in self._data:
+            self._data[num] = []
+        self._data[num].append(datum)
+
+    def pop(self):
+        if 0 not in self._data:
+            ret = []
+        else:
+            ret = self._data[0]
+        self._data = {k-1: v for k, v in self._data.items() if k > 0}
+        return ret
+
+
 def digest_s3_files():
     s3 = boto3.client('s3')
     bucket = S3_DATA_LOC['bucket']
@@ -159,6 +188,7 @@ def digest_s3_files():
 
     # Build up our data files.
     runtime_data = []
+    day_stack = DayStack()
     stage_data = StageData()
     for day_prefix in day_prefixes:
         logger.info("Processing: %s" % day_prefix)
@@ -172,6 +202,13 @@ def digest_s3_files():
                         'day_ts': day_ts,
                         'times': dd(lambda: dd(list))}
 
+        # Pick up any wrap-arounds.
+        for stage, flavor, time_pair in day_stack.pop():
+            if flavor:
+                day_runtimes['times'][stage][flavor].append(time_pair)
+            day_runtimes['times'][stage]['all'].append(time_pair)
+
+        # Get the datetime data for "today".
         for key in day_keys:
             file_res = s3.get_object(Bucket=bucket, Key=key)
             data = file_res['Body'].read()
@@ -189,8 +226,20 @@ def digest_s3_files():
 
             # Update runtime
             div_factor = 3600*1000
-            time_pair = [(data['timing']['start'] - day_ts)/div_factor + 5,
-                         (data['timing']['end'] - day_ts)/div_factor + 5]
+            start = (data['timing']['start'] - day_ts)/div_factor + 5
+            end = (data['timing']['end'] - day_ts)/div_factor + 5
+
+            # Check to see if this time wraps around, update day_stack if so.
+            n_days_future = int(end // 24)
+            for days_future in range(n_days_future - 1):
+                day_stack.add(days_future, (stage, flavor, [0., 24.]))
+            if n_days_future and end % 24:
+                day_stack.add(n_days_future - 1, (stage, flavor, [0., end % 24]))
+            if n_days_future:
+                end = 24.
+
+            # Add this runtime pair.
+            time_pair = [start, end]
             if flavor:
                 day_runtimes['times'][stage][flavor].append(time_pair)
             day_runtimes['times'][stage]['all'].append(time_pair)

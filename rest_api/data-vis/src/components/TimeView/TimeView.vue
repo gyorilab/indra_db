@@ -36,7 +36,7 @@
           xaxis: {
             type: 'datetime',
             min: 0,
-            max: 28
+            max: 24
           },
           legend: {
             position: 'top',

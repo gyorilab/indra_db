@@ -42,7 +42,7 @@
           },
           colors: [
             function({seriesIndex, w}) {
-              const [stage, flavor] = w.config.series[seriesIndex].name.split('-')
+              const [stage, flavor] = w.config.series[seriesIndex].name.split('-');
               switch (stage) {
                 case 'content':
                   switch (flavor) {
@@ -63,7 +63,7 @@
                     case 'ISI':
                       return '#9999ff';
                     case 'TRIPS':
-                      return '';
+                      return '#0080ff';
                   }
                   break;
                 case 'preassembly':

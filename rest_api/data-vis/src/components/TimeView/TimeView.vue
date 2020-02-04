@@ -13,6 +13,11 @@
 
 <script>
   import VueApexCharts from 'vue-apexcharts'
+
+  function getTime(hours) {
+    return Math.floor(hours) + ':' + Math.round((hours % 1) * 60)
+  }
+
   export default {
     name: "TimeView",
     components: {
@@ -59,6 +64,26 @@
               return '#808080';
             },
           ],
+          tooltip: {
+            custom: function({ seriesIndex, dataPointIndex, w }) {
+              let dp = w.config.series[seriesIndex].data[dataPointIndex];
+              return '<div class="apexcharts-tooltip-rangebar">' +
+                '<div>' +
+                  '<span class="series-name">' +
+                    w.config.series[seriesIndex].name +
+                  '</span>' +
+                '</div>' +
+                '<div>' +
+                  '<span class="category">' +
+                    dp.x + ' ' +
+                  '</span>' +
+                  '<span class="value">' +
+                    getTime(dp.y[0]) + '-' + getTime(dp.y[1]) +
+                  '</span>' +
+                '</div>' +
+                '</div>';
+            }
+          },
           plotOptions: {
             bar: {
               horizontal: true,

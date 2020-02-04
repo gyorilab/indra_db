@@ -10,109 +10,63 @@
         Next
       </button>
     </div>
-    <apexchart
-        type="rangeBar"
-        height=600
-        :options="chartOptions"
-        :series="series">
-    </apexchart>
+
+    <div v-for="day_bundle in bars" :key="day_bundle.day">
+      <hr>
+      <div class="row">
+        <div class="col-1">
+          {{ day_bundle.day }}
+        </div>
+        <div class="col-11">
+          <figure>
+            <svg :height="day_bundle.bars.length * 5"
+                 width="100%"
+                 role="img"
+                 class="chart">
+              <g v-for="(bar, index) in day_bundle.bars"
+                 :key="bar.key"
+                 class="bar">
+                <rect :x="bar.start + '%'"
+                      :width="bar.width + '%'"
+                      :y="index * 5"
+                      height="4"
+                      :fill="bar.color"></rect>
+              </g>
+            </svg>
+          </figure>
+        </div>
+      </div>
+
+    </div>
   </div>
 </template>
 
 <script>
-  import VueApexCharts from 'vue-apexcharts'
-
-  function getTime(hours) {
-    let minutes = Math.round((hours % 1) * 60);
-    let min_str = '';
-    if (minutes < 10)
-      min_str = '0' + minutes;
-    else
-      min_str = minutes.toString();
-    return Math.floor(hours) + ':' + min_str;
-  }
-
   const color_pallett = {
-    content: {
-      pubmed: '#006600',
-      pmc_oa: '#669900',
-      manuscripts: '#666633',
-      default: '#609060'
-    },
-    reading: {
-      REACH: '#00cc99',
-      SPARSER: '#003399',
-      ISI: '#9999ff',
-      TRIPS: '#0080ff',
-      default: '#606090'
-    },
-    preassembly: {
-      default: '#cc5050'
-    },
-  };
+      content: {
+        pubmed: '#006600',
+        pmc_oa: '#669900',
+        manuscripts: '#666633',
+        all: '#609060'
+      },
+      reading: {
+        REACH: '#00cc99',
+        SPARSER: '#003399',
+        ISI: '#9999ff',
+        TRIPS: '#0080ff',
+        all: '#606090'
+      },
+      preassembly: {
+        all: '#cc5050'
+      },
+    };
 
   export default {
     name: "TimeView",
-    components: {
-      apexchart: VueApexCharts
-    },
     data: function() {
       return {
         lo: 0,
         date_data: [],
-        chartOptions: {
-          chart: {
-            height: 450,
-            type: 'rangeBar'
-          },
-          colors: [
-            function({seriesIndex, w}) {
-              const [stage, flavor] = w.config.series[seriesIndex].name.split('-');
-              let stage_colors = color_pallett[stage];
-              if (!stage_colors)
-                return '#808080';
-
-              if (!(flavor in stage_colors) )
-                return stage_colors.default;
-
-              return stage_colors[flavor];
-            },
-          ],
-          tooltip: {
-            custom: function({ seriesIndex, dataPointIndex, w }) {
-              let dp = w.config.series[seriesIndex].data[dataPointIndex];
-              return '<div class="apexcharts-tooltip-rangebar">' +
-                '<div>' +
-                  '<span class="series-name">' +
-                    w.config.series[seriesIndex].name +
-                  '</span>' +
-                '</div>' +
-                '<div>' +
-                  '<span class="category">' +
-                    dp.x + ' ' +
-                  '</span>' +
-                  '<span class="value">' +
-                    getTime(dp.y[0]) + '-' + getTime(dp.y[1]) +
-                  '</span>' +
-                '</div>' +
-                '</div>';
-            }
-          },
-          plotOptions: {
-            bar: {
-              horizontal: true,
-              barHeight: '80%',
-            }
-          },
-          xaxis: {
-            type: 'datetime',
-            min: 0,
-            max: 24
-          },
-          legend: {
-            show: false
-          }
-        },
       }
     },
     methods: {
@@ -145,7 +99,7 @@
         return Math.min(this.lo + 3, this.date_data.length);
       },
 
-      series: function() {
+      days: function() {
         /**
          * Generate the series data.
          *
@@ -157,48 +111,34 @@
          */
         if (!this.date_data.length)
           return [];
+        return this.date_data.slice(this.lo, this.hi);
+      },
 
-        // Declare a variable for the loop.
-        let final_stage_name;
-
-        // Build up a dictionary keyed by stage names.
-        let ret = {};
-        let count;
-        for (let day_obj of this.date_data.slice(this.lo, this.hi) ) {
-          for (let [stage_name, stage_data] of Object.entries(day_obj['times'])) {
+      bars: function() {
+        const ret = [];
+        let day_bundle;
+        for (let day of this.days) {
+          day_bundle = {day: day.day_str, bars: []};
+          for (let [stage_name, stage_data] of Object.entries(day.times)) {
             for (let [flavor_name, times] of Object.entries(stage_data)) {
-              count = 0;
+              if (Object.keys(stage_data).length > 1 && flavor_name === 'all')
+                continue;
 
-              // Build the stage name depending on what "flavors" are available
-              if (Object.keys(stage_data).length > 1)
-                // If there are multiple flavors within the stage, skip "all"
-                // and otherwise append the flavor name.
-                if (flavor_name === 'all')
-                  continue;
-                else
-                  final_stage_name = stage_name  + '-' + flavor_name;
-              else
-                // Otherwise just use the stage name ("all" should in this case
-                // be the ONLY flavor).
-                final_stage_name = stage_name;
-
-              // Add all the times to the data for this stage.
               for (let timespan of times) {
-                let key = final_stage_name + '-' + count;
-                if (!(key in ret))
-                  ret[key] = {name: final_stage_name, data: []};
-                ret[key].data.push({
-                    x: day_obj['day_str'],
-                    y: timespan
-                  });
-                count ++;
+                day_bundle.bars.push({
+                  key: stage_name + flavor_name + timespan[0] + '-' + timespan[1],
+                  stage: stage_name,
+                  flavor: flavor_name,
+                  start: Math.max(0, timespan[0]/24 * 100),
+                  width: Math.max(0, (timespan[1] - timespan[0])/24 * 100),
+                  color: color_pallett[stage_name][flavor_name]
+                })
               }
             }
           }
+          ret.push(day_bundle);
         }
-
-        // Return an array of objects.
-        return Object.values(ret);
+        return ret;
       }
     }
   }
@@ -207,5 +147,8 @@
 <style scoped>
   button {
     margin: 2px;
+  }
+  .bar {
+    height: 21px;
   }
 </style>

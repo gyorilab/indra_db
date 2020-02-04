@@ -27,6 +27,38 @@
             height: 450,
             type: 'rangeBar'
           },
+          colors: [
+            function({seriesIndex, w}) {
+              const [stage, flavor] = w.config.series[seriesIndex].name.split('-')
+              switch (stage) {
+                case 'content':
+                  switch (flavor) {
+                    case 'pubmed':
+                      return '#006600';
+                    case 'pmc_oa':
+                      return '#669900';
+                    case 'manuscripts':
+                      return '#666633';
+                  }
+                  break;
+                case 'reading':
+                  switch (flavor) {
+                    case 'REACH':
+                      return '#00cc99';
+                    case 'SPARSER':
+                      return '#003399';
+                    case 'ISI':
+                      return '#9999ff';
+                    case 'TRIPS':
+                      return '';
+                  }
+                  break;
+                case 'preassembly':
+                  return '#cc0000';
+              }
+              return '#808080';
+            },
+          ],
           plotOptions: {
             bar: {
               horizontal: true,

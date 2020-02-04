@@ -115,8 +115,8 @@
         if (!this.date_data.length)
           return;
 
-        if ((delta > 0 && this.hi + delta < this.date_data.length)
-            || (delta < 0 && this.lo + delta > 0))
+        if ((delta > 0 && this.hi + delta <= this.date_data.length)
+            || (delta < 0 && this.lo + delta >= 0))
           this.lo += delta;
       },
     },

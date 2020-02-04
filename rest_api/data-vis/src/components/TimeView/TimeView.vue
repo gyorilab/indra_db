@@ -23,7 +23,13 @@
   import VueApexCharts from 'vue-apexcharts'
 
   function getTime(hours) {
-    return Math.floor(hours) + ':' + Math.round((hours % 1) * 60)
+    let minutes = Math.round((hours % 1) * 60);
+    let min_str = '';
+    if (minutes < 10)
+      min_str = '0' + minutes;
+    else
+      min_str = minutes.toString();
+    return Math.floor(hours) + ':' + min_str;
   }
 
   export default {

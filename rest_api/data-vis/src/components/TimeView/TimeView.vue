@@ -1,7 +1,15 @@
 <template>
   <div class="time-view">
-    <button v-on:click="changeDay(-1)">Previous</button>
-    <button v-on:click="changeDay(1)">Next</button>
+    <div align="center">
+      <button class="btn btn-outline-dark"
+              v-on:click="changeDay(-1)">
+        Previous
+      </button>
+      <button class="btn btn-outline-dark"
+              v-on:click="changeDay(1)">
+        Next
+      </button>
+    </div>
     <apexchart
         type="rangeBar"
         height=300
@@ -189,4 +197,7 @@
 </script>
 
 <style scoped>
+  button {
+    margin: 2px;
+  }
 </style>

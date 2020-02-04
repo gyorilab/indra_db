@@ -8,7 +8,10 @@
 {% block body %}
   {{ super() }}
   <div id="app">
+    <h3>Batch Job Runtimes</h3>
     <time-view></time-view>
+
+    <h3>Output Measurements</h3>
     <amount-view></amount-view>
   </div>
   <script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>

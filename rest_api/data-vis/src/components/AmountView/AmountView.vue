@@ -15,26 +15,22 @@
                      placeholder="Select measure"></multiselect>
       </div>
     </div>
-    <div v-for="measure in selected_measures"
-         :key="measure">
-      <h3>{{ measure }}</h3>
-      <apexchart type="line"
-                 height=300
-                 :options="chartOptions"
-                 :series="series[measure]">
-      </apexchart>
-    </div>
+    <linechart v-for="measure in selected_measures"
+               :name="measure"
+               :key="measure"
+               :data="series[measure]">
+    </linechart>
   </div>
 </template>
 
 <script>
-  import VueApexCharts from 'vue-apexcharts'
+  import LineChart from './LineChart'
   import Multiselect from 'vue-multiselect'
 
   export default {
     name: "AmountView",
     components: {
-      apexchart: VueApexCharts,
+      linechart: LineChart,
       multiselect: Multiselect,
     },
     data: function() {
@@ -51,32 +47,6 @@
         amount_data: null,
         dates: null,
 
-        // Plot options.
-        chartOptions: {
-          dataLabels: {
-            enabled: false
-          },
-          stroke: {
-            curve: 'straight',
-          },
-          grid: {
-            padding: {
-              right: 30,
-              left: 20
-            }
-          },
-          xaxis: {
-            type: 'datetime',
-            title: {
-              text: 'Day',
-            },
-          },
-          yaxis: {
-            title: {
-              text: 'Count'
-            }
-          }
-        },
       }
     },
     methods: {
@@ -127,7 +97,7 @@
           {method: 'GET'}
           );
         this.stages = await resp.json()
-      }
+      },
     },
     created: function() {
       this.getStageOptions();

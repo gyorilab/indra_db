@@ -123,6 +123,7 @@
          */
         const resp = await fetch(this.$time_view_url, {method: 'GET'});
         this.date_data = await resp.json();
+        this.lo = this.date_data.length - 3;
       },
 
       changeDay: function(delta) {

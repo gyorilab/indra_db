@@ -12,7 +12,7 @@
     </div>
     <apexchart
         type="rangeBar"
-        height=300
+        height=600
         :options="chartOptions"
         :series="series">
     </apexchart>
@@ -32,6 +32,25 @@
     return Math.floor(hours) + ':' + min_str;
   }
 
+  const color_pallett = {
+    content: {
+      pubmed: '#006600',
+      pmc_oa: '#669900',
+      manuscripts: '#666633',
+      default: '#609060'
+    },
+    reading: {
+      REACH: '#00cc99',
+      SPARSER: '#003399',
+      ISI: '#9999ff',
+      TRIPS: '#0080ff',
+      default: '#606090'
+    },
+    preassembly: {
+      default: '#cc5050'
+    },
+  };
+
   export default {
     name: "TimeView",
     components: {
@@ -49,33 +68,14 @@
           colors: [
             function({seriesIndex, w}) {
               const [stage, flavor] = w.config.series[seriesIndex].name.split('-');
-              switch (stage) {
-                case 'content':
-                  switch (flavor) {
-                    case 'pubmed':
-                      return '#006600';
-                    case 'pmc_oa':
-                      return '#669900';
-                    case 'manuscripts':
-                      return '#666633';
-                  }
-                  break;
-                case 'reading':
-                  switch (flavor) {
-                    case 'REACH':
-                      return '#00cc99';
-                    case 'SPARSER':
-                      return '#003399';
-                    case 'ISI':
-                      return '#9999ff';
-                    case 'TRIPS':
-                      return '#0080ff';
-                  }
-                  break;
-                case 'preassembly':
-                  return '#cc0000';
-              }
-              return '#808080';
+              let stage_colors = color_pallett[stage];
+              if (!stage_colors)
+                return '#808080';
+
+              if (!(flavor in stage_colors) )
+                return stage_colors.default;
+
+              return stage_colors[flavor];
             },
           ],
           tooltip: {
@@ -110,8 +110,7 @@
             max: 24
           },
           legend: {
-            position: 'top',
-            horizontalAlign: 'left'
+            show: false
           }
         },
       }
@@ -164,9 +163,11 @@
 
         // Build up a dictionary keyed by stage names.
         let ret = {};
+        let count;
         for (let day_obj of this.date_data.slice(this.lo, this.hi) ) {
           for (let [stage_name, stage_data] of Object.entries(day_obj['times'])) {
             for (let [flavor_name, times] of Object.entries(stage_data)) {
+              count = 0;
 
               // Build the stage name depending on what "flavors" are available
               if (Object.keys(stage_data).length > 1)
@@ -181,16 +182,16 @@
                 // be the ONLY flavor).
                 final_stage_name = stage_name;
 
-              // Check to see if this key is new.
-              if ( !(final_stage_name in ret) )
-                ret[final_stage_name] = {name: final_stage_name, data: []};
-
               // Add all the times to the data for this stage.
               for (let timespan of times) {
-                ret[final_stage_name].data.push({
-                  x: day_obj['day_str'],
-                  y: timespan
-                })
+                let key = final_stage_name + '-' + count;
+                if (!(key in ret))
+                  ret[key] = {name: final_stage_name, data: []};
+                ret[key].data.push({
+                    x: day_obj['day_str'],
+                    y: timespan
+                  });
+                count ++;
               }
             }
           }

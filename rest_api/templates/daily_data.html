@@ -1,26 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+{% extends "idbr_template.html" %}
 
-  <title>The INDRA Database: Monitor</title>
-
+{% block scripts %}
+  {{ super() }}
   <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-</head>
-</body>
-<div id="app">
-  <time-view></time-view>
-  <amount-view></amount-view>
-</div>
-<script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
-<link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}"
-      rel="stylesheet">
-<script>
-  Vue.prototype.$time_view_url = "{{ url_for('serve_runtime') }}";
-  Vue.prototype.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
-  var app = new Vue({el: '#app'});
-</script>
-</body>
-</html>
+{% endblock %}
+
+{% block body %}
+  {{ super() }}
+  <div id="app">
+    <time-view></time-view>
+    <amount-view></amount-view>
+  </div>
+  <script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
+  <link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}"
+        rel="stylesheet">
+  <script>
+    Vue.prototype.$time_view_url = "{{ url_for('serve_runtime') }}";
+    Vue.prototype.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
+    var app = new Vue({el: '#app'});
+  </script>
+{% endblock %}

@@ -30,33 +30,6 @@
     data: function() {
       return {
         scale: 'Linear',
-
-        // Plot options.
-        chartOptions: {
-          dataLabels: {
-            enabled: false
-          },
-          stroke: {
-            curve: 'straight',
-          },
-          grid: {
-            padding: {
-              right: 30,
-              left: 20
-            }
-          },
-          xaxis: {
-            type: 'datetime',
-            title: {
-              text: 'Day',
-            },
-          },
-          yaxis: {
-            title: {
-              text: 'Count'
-            },
-          }
-        },
       }
     },
     methods: {
@@ -65,6 +38,12 @@
       },
       otherScale: function(scale) {
         return (scale === 'Linear') ? 'Log' : 'Linear';
+      },
+      formatYLabel: function(value) {
+        // If the value has been log-scaled, it will be a decimal.
+        if (this.scale === 'Log')
+          return Math.pow(10, value).toFixed(0);
+        return value.toFixed(0);
       },
     },
     computed: {
@@ -86,6 +65,36 @@
         }
         return series
       },
+      chartOptions: function() {
+        return {
+          dataLabels: {
+            enabled: false
+          },
+          stroke: {
+            curve: 'straight',
+          },
+          grid: {
+            padding: {
+              right: 30,
+              left: 20
+            }
+          },
+          xaxis: {
+            type: 'datetime',
+            title: {
+              text: 'Day',
+            },
+          },
+          yaxis: {
+            title: {
+              text: (this.scale === 'Linear') ? 'Count' : 'Log Count'
+            },
+            labels: {
+              formatter: this.formatYLabel
+            }
+          }
+        }
+      }
     }
   }
 </script>

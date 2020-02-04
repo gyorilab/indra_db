@@ -11,6 +11,28 @@
       </button>
     </div>
 
+    <div>
+      <span v-for="(flavors, stage) in color_pallett" :key="stage">
+        <b>{{ stage }}</b>:
+        <span v-for="(color, flavor) in flavors" :key="flavor">
+          <span v-if="Object.keys(flavors).length > 1">
+            <span v-if="flavor !== 'all'">
+              {{ flavor.toLowerCase() }}
+              <svg height="10" width="10">
+                <circle cy="5" cx="5" r="5" :fill="color"></circle>
+              </svg>
+            </span>
+          </span>
+          <span v-else>
+            <svg height="10" width="10">
+              <circle cy="5" cx="5" r="5" :fill="color"></circle>
+            </svg>
+          </span>
+        </span>
+        &nbsp;&nbsp;
+      </span>
+    </div>
+
     <div v-for="day_bundle in bars" :key="day_bundle.day">
       <hr>
       <div class="row">
@@ -42,30 +64,29 @@
 </template>
 
 <script>
-  const color_pallett = {
-      content: {
-        pubmed: '#006600',
-        pmc_oa: '#669900',
-        manuscripts: '#666633',
-        all: '#609060'
-      },
-      reading: {
-        REACH: '#00cc99',
-        SPARSER: '#003399',
-        ISI: '#9999ff',
-        TRIPS: '#0080ff',
-        all: '#606090'
-      },
-      preassembly: {
-        all: '#cc5050'
-      },
-    };
-
   export default {
     name: "TimeView",
     data: function() {
       return {
         lo: 0,
+        color_pallett: {
+          content: {
+            pubmed: '#006600',
+            pmc_oa: '#669900',
+            manuscripts: '#666633',
+            all: '#609060'
+          },
+          reading: {
+            REACH: '#00cc99',
+            SPARSER: '#003399',
+            ISI: '#9999ff',
+            TRIPS: '#0080ff',
+            all: '#606090'
+          },
+          preassembly: {
+            all: '#cc5050'
+          },
+        },
         date_data: [],
       }
     },
@@ -131,7 +152,7 @@
                   flavor: flavor_name,
                   start: Math.max(0, timespan[0]/24 * 100),
                   width: Math.max(0, (timespan[1] - timespan[0])/24 * 100),
-                  color: color_pallett[stage_name][flavor_name]
+                  color: this.color_pallett[stage_name][flavor_name]
                 })
               }
             }

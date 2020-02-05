@@ -203,6 +203,11 @@ class PreassemblyManager(object):
             db.create_tables([db.DiscardedStatements])
             db.session.close()
             db.grab_session()
+        else:
+            # Get discarded statements
+            skip_ids = {i for i, in db.select_all(db.DiscardedStatements.stmt_id)}
+            self._log("Found %d discarded statements from earlier run."
+                      % len(skip_ids))
 
         # Get filtered statement ID's.
         sid_cache_fname = path.join(HERE, 'stmt_id_cache.pkl')
@@ -226,6 +231,11 @@ class PreassemblyManager(object):
                     zip(*db.select_all([db.RawUniqueLinks.raw_stmt_id,
                                         db.RawUniqueLinks.pa_stmt_mk_hash]))
                 stmt_ids -= set(checked_raw_stmt_ids)
+                self._log("Found %d raw statements without links to unique."
+                          % len(stmt_ids))
+                stmt_ids -= skip_ids
+                self._log("Found %d raw statements that still need to be "
+                          "processed." % len(stmt_ids))
                 done_pa_ids = set(pa_stmt_hashes)
                 self._log("Found %d preassembled statements already done."
                           % len(done_pa_ids))

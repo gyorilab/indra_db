@@ -2,10 +2,12 @@
   <div class="time-view">
     <div align="center">
       <button class="btn btn-outline-dark"
+              :disabled="!canDelta(-1)"
               v-on:click="changeDay(-1)">
         Previous
       </button>
       <button class="btn btn-outline-dark"
+              :disabled="!canDelta(1)"
               v-on:click="changeDay(1)">
         Next
       </button>
@@ -92,12 +94,16 @@
         this.lo = this.date_data.length - 3;
       },
 
+      canDelta: function(delta) {
+        return ((delta > 0 && this.hi + delta <= this.date_data.length)
+            || (delta < 0 && this.lo + delta >= 0))
+      },
+
       changeDay: function(delta) {
         if (!this.date_data.length)
           return;
 
-        if ((delta > 0 && this.hi + delta <= this.date_data.length)
-            || (delta < 0 && this.lo + delta >= 0))
+        if (this.canDelta(delta))
           this.lo += delta;
       },
     },

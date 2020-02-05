@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from indra.tools.reading.readers import get_reader_class
+
 from indra_db.reading import read_db as rdb
 from indra_db.util import get_primary_db, get_db
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter

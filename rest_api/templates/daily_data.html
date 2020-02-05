@@ -1,0 +1,25 @@
+{% extends "idbr_template.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+{% endblock %}
+
+{% block body %}
+  {{ super() }}
+  <div id="app">
+    <h3>Batch Job Runtimes</h3>
+    <time-view></time-view>
+
+    <h3>Output Measurements</h3>
+    <amount-view></amount-view>
+  </div>
+  <script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
+  <link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}"
+        rel="stylesheet">
+  <script>
+    Vue.prototype.$time_view_url = "{{ url_for('serve_runtime') }}";
+    Vue.prototype.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
+    var app = new Vue({el: '#app'});
+  </script>
+{% endblock %}

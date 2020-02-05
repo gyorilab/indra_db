@@ -26,6 +26,7 @@ from indra.util import UnicodeXMLTreeBuilder as UTB
 from indra_db.util import get_primary_db, get_db
 from indra_db.databases import texttypes, formats
 from indra_db.databases import sql_expressions as sql_exp
+from indra_db.util.data_gatherer import DataGatherer, DGContext
 
 
 try:
@@ -39,6 +40,9 @@ logger = logging.getLogger(__name__)
 
 ftp_blocksize = 33554432  # Chunk size recommended by NCBI
 THIS_DIR = path.dirname(path.abspath(__file__))
+
+
+gatherer = DataGatherer('content', ['refs', 'content'])
 
 
 class UploadError(Exception):
@@ -194,78 +198,9 @@ class ContentManager(object):
         self.review_fname = None
         return
 
-    def copy_into_db(self, db, tbl_name, data, cols=None, retry=True):
+    def copy_into_db(self, db, tbl_name, data, cols=None):
         "Wrapper around the db.copy feature, pickels args upon exception."
-        vile_data = None
-        try:
-            db.copy(tbl_name, data, cols=cols)
-        except DatabaseError as err:
-            db.grab_session()
-            db.session.rollback()
-            logger.warning('Failed in a copy.')
-
-            # Try to extract the failed record and try again.
-            m = self.err_patt.match(err.args[0])
-            if m is not None and retry:
-                constraint, id_types, ids = m.groups()
-                logger.info('Constraint %s was violated by (%s)=(%s).'
-                            % (constraint, id_types, ids))
-                id_dict = dict(zip(id_types.split(', '), ids.split(', ')))
-
-                # Primary keys are returned from the database as integers.
-                for id_type, id_val in id_dict.copy().items():
-                    if id_type in ['text_ref_id', 'text_content_id']:
-                        id_dict[id_type] = int(id_val)
-
-                # Now look for matches and remove offending entries.
-                new_data = set()
-                vile_data = set()
-                for datum in data:
-                    # Determine if this record is a match using best available
-                    # means.
-                    if cols is not None:
-                        is_match = all([
-                            datum[cols.index(id_type)] == id_val
-                            for id_type, id_val in id_dict.items()
-                            ])
-                    else:
-                        is_match = all([
-                            id_val in datum for id_val in id_dict.values()
-                            ])
-
-                    # Now decide to ad to the new data or log the error.
-                    if is_match:
-                        logger.debug("Found offending data: %s." % str(datum))
-                        self.add_to_review('conflict in copy',
-                                           'Entry violated \"%s\": %s'
-                                           % (constraint, str(datum)))
-                        vile_data.add(datum)
-                    else:
-                        new_data.add(datum)
-
-                if not len(vile_data):
-                    logger.error("Failed to find erroneous data.")
-                    raise err
-
-                logger.info('Resubmitting copy without the offending ids.')
-                more_vile_data = self.copy_into_db(db, tbl_name, new_data,
-                                                   cols=cols, retry=True)
-
-                if more_vile_data is not None:
-                    vile_data = vile_data.union(more_vile_data)
-            else:
-                pkl_file_fmt = "copy_failure_%d.pkl"
-                i = 0
-                while path.exists(pkl_file_fmt % i):
-                    i += 1
-                with open(pkl_file_fmt % i, 'wb') as f:
-                    pickle.dump((err, tbl_name, data, cols), f, protocol=3)
-                logger.error('Could not resubmit, not a handled error. '
-                             'Pickling the data in %s.' % (pkl_file_fmt % i))
-                logger.exception(err)
-                raise err
-        logger.debug('Finished copying.')
-        return vile_data
+        return db.copy_report_lazy(tbl_name, data, cols)
 
     def make_text_ref_str(self, tr):
         """Make a string from a text ref using tr_cols."""
@@ -636,7 +571,8 @@ class Pubmed(_NihManager):
         # Remove the pmids from any data entries that failed to copy.
         vile_data = self.copy_into_db(db, 'text_ref', text_ref_records,
                                       self.tr_cols)
-        if vile_data is not None:
+        gatherer.add('refs', len(text_ref_records) - len(vile_data))
+        if not vile_data:
             valid_pmids -= {d[self.tr_cols.index('pmid')] for d in vile_data}
         return valid_pmids
 
@@ -695,6 +631,7 @@ class Pubmed(_NihManager):
             cols=('text_ref_id', 'source', 'format', 'text_type',
                   'content')
             )
+        gatherer.add('content', len(text_content_records))
         return
 
     def upload_article(self, db, article_info, carefully=False):
@@ -830,6 +767,7 @@ class Pubmed(_NihManager):
         return ret
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'pubmed')
     def populate(self, db, n_procs=1, continuing=False):
         """Perform the initial input of the pubmed content into the database.
 
@@ -849,6 +787,7 @@ class Pubmed(_NihManager):
                                                continuing, False)
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'pubmed')
     def update(self, db, n_procs=1):
         """Update the contents of the database with the latest articles."""
         did_base = self.load_files_and_annotations(db, 'baseline', n_procs,
@@ -994,6 +933,7 @@ class PmcManager(_NihManager):
             filtered_tr_records,
             self.tr_cols
             )
+        gatherer.add('refs', len(filtered_tr_records))
 
         # Process the text content data
         filtered_tc_records = self.filter_text_content(db, mod_tc_data)
@@ -1007,6 +947,8 @@ class PmcManager(_NihManager):
             filtered_tc_records,
             self.tc_cols
             )
+        gatherer.add('content', len(filtered_tr_records))
+        return
 
     def get_data_from_xml_str(self, xml_str, filename):
         "Get the data out of the xml string."
@@ -1220,6 +1162,7 @@ class PmcManager(_NihManager):
         return
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer)
     def populate(self, db, n_procs=1, continuing=False):
         """Perform the initial population of the pmc content into the database.
 
@@ -1242,6 +1185,7 @@ class PmcManager(_NihManager):
             for some reason, often because the upload was already completed
             at some earlier time.
         """
+        gatherer.set_sub_label(self.my_source)
         archives = set(self.get_file_list())
 
         if continuing:
@@ -1274,6 +1218,7 @@ class PmcOA(PmcManager):
         return k.startswith('articles') and k.endswith('.xml.tar.gz')
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'pmc_oa')
     def update(self, db, n_procs=1):
         min_datetime = self._get_latest_update(db)
 
@@ -1335,6 +1280,7 @@ class Manuscripts(PmcManager):
         return
 
     @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, 'manuscripts')
     def update(self, db, n_procs=1):
         """Add any new content found in the archives.
 

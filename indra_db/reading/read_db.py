@@ -24,6 +24,7 @@ from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
 from indra_db.databases import readers, reader_versions
+from indra_db.util.data_gatherer import DataGatherer, DGContext
 from indra_db.util import insert_raw_agents, unpack
 
 logger = logging.getLogger(__name__)
@@ -218,6 +219,9 @@ def make_statements(reading_data_list, num_proc=1):
     return stmt_data_list
 
 
+gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts'])
+
+
 class DatabaseReader(object):
     """An class to run readings utilizing the database.
 
@@ -389,10 +393,12 @@ class DatabaseReader(object):
         logger.info("Adding %d/%d reading entries to the database." %
                     (len(upload_list), len(self.new_readings)))
         if upload_list:
-            is_all = self.reading_mode == 'all'
-            db.copy('reading', upload_list,
-                    DatabaseReadingData.get_cols(), lazy=is_all,
-                    push_conflict=is_all)
+            args = ('reading', upload_list, DatabaseReadingData.get_cols())
+            if self.reading_mode == 'all':
+                db.copy_push(*args)
+            else:
+                db.copy(*args)
+            gatherer.add('readings', len(upload_list))
 
         self.stops['dump_readings_db'] = datetime.utcnow()
         return
@@ -452,11 +458,16 @@ class DatabaseReader(object):
                 stmts.append(sd.statement)
 
         # Dump the good statements into the raw statements table.
-        self._db.copy('raw_statements', stmt_tuples.values(),
-                      DatabaseStatementData.get_cols(), lazy=True,
-                      push_conflict=True,
-                      constraint='reading_raw_statement_uniqueness',
-                      commit=False)
+        updated = self._db.copy_report_push(
+            'raw_statements',
+            stmt_tuples.values(),
+            DatabaseStatementData.get_cols(),
+            constraint='reading_raw_statement_uniqueness',
+            commit=False,
+            return_cols=('uuid',)
+        )
+        gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
+        gatherer.add('upd_stmts', len(updated))
 
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in dups.values()
@@ -533,6 +544,27 @@ def construct_readers(reader_names, **kwargs):
     return readers
 
 
+@DGContext.wrap(gatherer)
+def read(db_reader, stmt_mode, reading_pickle, stmts_pickle, upload_readings,
+         upload_stmts):
+    """Read for a single reader"""
+    gatherer.set_sub_label(db_reader.reader.name)
+    db_reader.get_readings()
+    if upload_readings:
+        db_reader.dump_readings_to_db()
+    if reading_pickle:
+        db_reader.dump_readings_to_pickle(reading_pickle)
+
+    if stmt_mode != 'none':
+        db_reader.get_statements()
+        if upload_stmts:
+            db_reader.dump_statements_to_db()
+        if stmts_pickle:
+            db_reader.dump_statements_to_pickle(db_reader.reader.name + '_'
+                                                + stmts_pickle)
+    return
+
+
 def run_reading(readers, tcids, verbose=True, reading_mode='unread',
                 stmt_mode='all', batch_size=1000, reading_pickle=None,
                 stmts_pickle=None, upload_readings=True, upload_stmts=True,
@@ -545,19 +577,8 @@ def run_reading(readers, tcids, verbose=True, reading_mode='unread',
                                    reading_mode=reading_mode, db=db,
                                    batch_size=batch_size)
         workers.append(db_reader)
-        db_reader.get_readings()
-        if upload_readings:
-            db_reader.dump_readings_to_db()
-        if reading_pickle:
-            db_reader.dump_readings_to_pickle(reading_pickle)
-
-        if stmt_mode != 'none':
-            db_reader.get_statements()
-            if upload_stmts:
-                db_reader.dump_statements_to_db()
-            if stmts_pickle:
-                db_reader.dump_statements_to_pickle(reader.name + '_'
-                                                    + stmts_pickle)
+        read(db_reader, stmt_mode, reading_pickle, stmts_pickle,
+             upload_readings, upload_stmts)
     return workers
 
 

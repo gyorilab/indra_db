@@ -15,18 +15,10 @@
       <span v-for="(flavors, stage) in color_pallett" :key="stage">
         <b>{{ stage }}</b>:
         <span v-for="(color, flavor) in flavors" :key="flavor">
-          <span v-if="Object.keys(flavors).length > 1">
-            <span v-if="flavor !== 'all'">
+          <span v-if="Object.keys(flavors).length <= 1 || flavor !== 'all'">
+              <span class="legend-dot"
+                    :style="`background-color: ${color};`"></span>
               {{ flavor.toLowerCase() }}
-              <svg height="10" width="10">
-                <circle cy="5" cx="5" r="5" :fill="color"></circle>
-              </svg>
-            </span>
-          </span>
-          <span v-else>
-            <svg height="10" width="10">
-              <circle cy="5" cx="5" r="5" :fill="color"></circle>
-            </svg>
           </span>
         </span>
         &nbsp;&nbsp;
@@ -171,5 +163,14 @@
   }
   .bar {
     height: 21px;
+    cursor: pointer;
+  }
+  .legend-dot {
+    display: inline-block;
+    cursor: pointer;
+    position: relative;
+    width:12px;
+    height:12px;
+    border-radius:12px;
   }
 </style>

@@ -15,7 +15,6 @@
     "vue": "^2.6.10",
     "vue-apexcharts": "^1.5.2",
     "vue-multiselect": "^2.1.6",
-    "vuesax": "^3.11.11"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "^4.1.0",

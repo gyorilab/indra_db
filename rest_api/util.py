@@ -15,6 +15,13 @@ logger = logging.getLogger('db rest api - util')
 class DbAPIError(Exception):
     pass
 
+
+def get_s3_client():
+    import boto3
+    from botocore import config
+    return boto3.client('s3', boto3.session.Session().region_name,
+                        config=config.Config(s3={'addressing_style': 'path'}))
+
 # ==============================================
 # Define some utilities used to resolve queries.
 # ==============================================

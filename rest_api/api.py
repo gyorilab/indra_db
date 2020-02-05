@@ -1,6 +1,5 @@
 import sys
 import json
-import boto3
 import logging
 from os import path
 from functools import wraps
@@ -23,7 +22,7 @@ from indra_db.client import get_statement_jsons_from_hashes, \
     get_statement_jsons_from_papers, submit_curation, \
     get_interaction_jsons_from_agents
 from .util import process_agent, _answer_binary_query, DbAPIError, LogTracker, \
-    sec_since, get_source
+    sec_since, get_source, get_s3_client
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
@@ -208,7 +207,7 @@ def get_data_explorer():
 def serve_runtime():
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
-    s3 = boto3.client('s3')
+    s3 = get_s3_client()
     res = s3.get_object(Bucket=S3_DATA_LOC['bucket'],
                         Key=S3_DATA_LOC['prefix']+'runtimes.json')
     return jsonify(json.loads(res['Body'].read()))
@@ -218,7 +217,7 @@ def serve_runtime():
 def list_stages():
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
-    s3 = boto3.client('s3')
+    s3 = get_s3_client()
     res = s3.list_objects_v2(Bucket=S3_DATA_LOC['bucket'],
                              Prefix=S3_DATA_LOC['prefix'],
                              Delimiter='/')
@@ -234,7 +233,7 @@ def list_stages():
 def serve_stages(stage):
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
-    s3 = boto3.client('s3')
+    s3 = get_s3_client()
     res = s3.get_object(Bucket=S3_DATA_LOC['bucket'],
                         Key=S3_DATA_LOC['prefix'] + stage + '.json')
 

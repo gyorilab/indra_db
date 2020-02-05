@@ -46,19 +46,39 @@
                       :width="bar.width + '%'"
                       :y="index * 5"
                       height="4"
+                      @mouseover="showTooltip($event, bar)"
+                      @mouseleave="tooltip_on = false"
                       :fill="bar.color"></rect>
               </g>
             </svg>
           </figure>
         </div>
       </div>
-
     </div>
+    <div class="tooltip"
+         :style="`opacity:${tooltip_on ? 1 : 0};
+                  z-index:${tooltip_on ? 10 : -10};
+                  left: ${tooltip.position.left}px;
+                  top: ${tooltip.position.top}px`">
+      <div><b>{{ tooltip.flavor }}</b></div>
+      <div><span class="stage-label">{{ tooltip.stage }}</span>  {{ tooltip.start }} - {{ tooltip.stop }}</div>
+    </div>
+
   </div>
 </template>
 
 <script>
-  export default {
+   function getTime(hours) {
+     let minutes = Math.round((hours % 1) * 60);
+     let min_str = '';
+     if (minutes < 10)
+       min_str = '0' + minutes;
+     else
+       min_str = minutes.toString();
+     return Math.floor(hours) + ':' + min_str;
+   }
+
+   export default {
     name: "TimeView",
     data: function() {
       return {
@@ -82,6 +102,14 @@
           },
         },
         date_data: [],
+        tooltip_on: false,
+        tooltip: {
+          stage: '',
+          flavor: '',
+          start: '',
+          stop: '',
+          position: {left: 0, right: 0}
+        }
       }
     },
     methods: {
@@ -105,6 +133,15 @@
 
         if (this.canDelta(delta))
           this.lo += delta;
+      },
+
+      showTooltip: function(event, bar) {
+        this.tooltip_on = true;
+        this.tooltip.stage = bar.stage;
+        this.tooltip.flavor = bar.flavor.toLowerCase();
+        this.tooltip.start = bar.start_time;
+        this.tooltip.stop = bar.stop_time;
+        this.tooltip.position = {left: event.pageX, top: event.pageY}
       },
     },
     created: function() {
@@ -150,7 +187,9 @@
                   flavor: flavor_name,
                   start: Math.max(0, timespan[0]/24 * 100),
                   width: Math.max(0, (timespan[1] - timespan[0])/24 * 100),
-                  color: this.color_pallett[stage_name][flavor_name]
+                  color: this.color_pallett[stage_name][flavor_name],
+                  start_time: getTime(timespan[0]),
+                  stop_time: getTime(timespan[1])
                 })
               }
             }
@@ -178,5 +217,17 @@
     width:12px;
     height:12px;
     border-radius:12px;
+  }
+  .tooltip {
+    position: absolute;
+    border-radius: 5px;
+    background-color: white;
+    padding: 5px;
+    border: 1px solid #e3e3e3;
+    transition: 0.2s ease all;
+  }
+  .stage-label {
+    color: grey;
+    font-weight: bold;
   }
 </style>

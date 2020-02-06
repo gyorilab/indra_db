@@ -179,6 +179,14 @@ def iamalive():
     return redirect('statements', code=302)
 
 
+@app.route('/ground', methods=['GET'])
+def ground():
+    import requests
+    ag = request.args['agent']
+    res = requests.post('http://grounding.indra.bio/ground', json={'text': ag})
+    return jsonify(res.json())
+
+
 @app.route('/data-vis/<path:file_path>')
 def serve_data_vis(file_path):
     full_path = path.join(HERE, 'data-vis/dist', file_path)

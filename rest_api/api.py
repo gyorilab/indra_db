@@ -187,6 +187,11 @@ def ground():
     return jsonify(res.json())
 
 
+@app.route('/search', methods=['GET'])
+def search():
+    return render_my_template('search.html', 'Search')
+
+
 @app.route('/data-vis/<path:file_path>')
 def serve_data_vis(file_path):
     full_path = path.join(HERE, 'data-vis/dist', file_path)

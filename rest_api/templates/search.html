@@ -1,0 +1,22 @@
+{% extends "idbr_template.html" %}
+
+{% block scripts %}
+{{ super() }}
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="{{ url_for('static', filename='form.js' }}"></script>
+<script src="../Workspace/indralab-vue/dist/IndralabVue.umd.js"></script>
+<link href="../Workspace/indralab-vue/dist/IndralabVue.css" rel="stylesheet">
+
+{% endblock %}
+
+{% block body %}
+  {{ super() }}
+  <div id="app">
+    <stmt-search></stmt-search>
+  </div>
+  <script>
+    Vue.prototype.ground_url = "{{ url_for('ground') }}";
+    var app = new Vue({el: '#app'});
+  </script>
+{% endblock %}

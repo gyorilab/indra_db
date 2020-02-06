@@ -1,6 +1,6 @@
-import dispComponent from './TimeView'
+import datavisComp from './TimeView'
 
 export default Vue => {
-    Vue.component(dispComponent.name, dispComponent);
+    Vue.component(datavisComp.name, datavisComp);
 }
 

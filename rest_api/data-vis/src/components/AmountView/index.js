@@ -1,6 +1,6 @@
-import dispComponent from './AmountView'
+import datavisComp from './AmountView'
 
 export default Vue => {
-    Vue.component(dispComponent.name, dispComponent);
+    Vue.component(datavisComp.name, datavisComp);
 }
 

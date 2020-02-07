@@ -1,8 +1,9 @@
 Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
-      <input v-model="agent" @input="typing = true" placeholder="Enter agent here">
-      <span v-show='searching'>Searching {{ num }}...</span>
+      <input v-model="agent" placeholder="Enter agent here">
+      <button @click='lookupOptions'>Ground</button>
+      <span v-show='searching'>Searching...</span>
     </div>
   `,
   data: function() {
@@ -10,25 +11,14 @@ Vue.component('stmt-search', {
       agent: null,
       searching: false,
       options: null,
-      typing: false,
-      num: 0
     }
   },
   methods: {
     lookupOptions: async function() {
+      this.searching = true;
       const resp = await fetch(`${this.$ground_url}/${this.agent}`, {method: 'GET'})
-      return await resp.json();
+      this.options = await resp.json();
+      this.searching = false;
     },
   },
-  watch: {
-    agent: function() {
-      if (this.typing)
-        return;
-      this.num ++;
-      this.searching = true;
-      this.options = this.lookupOptions();
-      this.searching = false;
-      return;
-    },
-  }
 });

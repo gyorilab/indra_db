@@ -81,11 +81,22 @@ Vue.component('agent-select', {
 Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
-      <agent-select v-model='agent'></agent-select>
+      <div v-for="(agent, agent_idx) in agents" :key='agent_idx'>
+        <agent-select v-model='agent.grounding'></agent-select>
+      </div>
+      <button @click='addAgent'>Add Agent</button>
     </div>`,
   data: function() {
     return {
-      agent: null,
+      agents: [],
     }
   },
+  methods: {
+    addAgent: function() {
+      this.agents.push({grounding: null})
+    }
+  },
+  created: function() {
+    this.addAgent();
+  }
 });

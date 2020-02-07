@@ -26,9 +26,8 @@ Vue.component('agent-select', {
         <button @click='resetOptions'>Cancel</button>
       </div>
       <div v-else>
-        <select :value='selected_option_idx'
-                @input="$emit('input', options[selected_option_idx])">
-          <option value='' selected disabled hidden>Select grounding option...</option>
+        <select v-model='selected_option_idx'>
+          <option :value='-1' selected disabled hidden>Select grounding option...</option>
           <option v-for='(option, option_idx) in options'
                   :key='option_idx'
                   :value='option_idx'>
@@ -44,7 +43,7 @@ Vue.component('agent-select', {
       agent_str: '',
       searching: false,
       options: null,
-      selected_option: null
+      selected_option_idx: -1, 
     }
   },
   methods: {
@@ -55,12 +54,11 @@ Vue.component('agent-select', {
       this.searching = false;
 
       if (this.options.length == 1)
-        this.$emit('input', this.options[0])
+        this.selected_option_idx = 0;
     },
     resetOptions: function() {
       this.options = null;
-      this.selected_option = null;
-      this.$emit('input', null);
+      this.selected_option_idx = -1;
     }
   },
   computed: {
@@ -70,6 +68,14 @@ Vue.component('agent-select', {
       return this.options.length == 0
     }
   },
+  watch: {
+    selected_option_idx: function(selected_option_idx) {
+      if (selected_option_idx < 0)
+        this.$emit('input', null);
+      else
+        this.$emit('input', this.options[selected_option_idx]);
+    }
+  }
 });
 
 Vue.component('stmt-search', {
@@ -79,7 +85,7 @@ Vue.component('stmt-search', {
     </div>`,
   data: function() {
     return {
-      agent: '',
+      agent: null,
     }
   },
 });

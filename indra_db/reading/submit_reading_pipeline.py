@@ -22,9 +22,8 @@ import logging
 import botocore
 from datetime import datetime
 
-from indra.tools.reading.util import get_s3_log_prefix
-from indra.tools.reading.util.reporter import Reporter
-from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
+from indra_reading.util import get_s3_log_prefix
+from indra_reading.scripts.submit_reading_pipeline import create_submit_parser,\
     create_read_parser, Submitter
 
 from indra_db.reading.read_db_aws import get_s3_reader_version_loc, bucket_name
@@ -60,9 +59,6 @@ class DbReadingSubmitter(Submitter):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
         self.s3_prefix = get_s3_log_prefix(self.s3_base)
         self.time_tag = datetime.now().strftime('%Y%m%d_%H%M')
-        self.reporter = Reporter(self.basename + '_summary_%s' % self.time_tag)
-        self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
-        self.reporter.set_section_order(['Git', 'Totals', 'Plots'])
         self.run_record = {}
         self.start_time = None
         self.end_time = None

@@ -14,12 +14,12 @@ from multiprocessing.pool import Pool
 
 from indra.statements import make_hash
 
-from indra.tools.reading.util.script_tools import get_parser
+from indra_reading.util.script_tools import get_parser
 from indra.util.get_version import get_version as get_indra_version
 from indra.literature.elsevier_client import extract_text as process_elsevier
-from indra.tools.reading.readers import ReadingData, get_reader, Content,\
+from indra_reading.readers import ReadingData, get_reader, Content,\
     Reader, get_reader_class
-from indra.tools.reading.readers.util import get_dir
+from indra_reading.readers.util import get_dir
 from indra.util import zip_string
 
 from indra_db import get_primary_db, formats
@@ -46,7 +46,7 @@ class DatabaseReadingData(ReadingData):
         The unique text content id provided by the database.
     reader_class : Type[Reader]
         The class of the reader, a child of
-        `indra.tools.reading.readers.core.Reader`.
+        `indra_reading.readers.core.Reader`.
     reader_version : str
         A string identifying the version of the underlying nlp reader.
     reading_format : str

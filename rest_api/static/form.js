@@ -16,7 +16,7 @@ Vue.component('stmt-search', {
   methods: {
     lookupOptions: async function() {
       this.searching = true;
-      const resp = await fetch(`${this.$ground_url}/${this.agent}`, {method: 'GET'})
+      const resp = await fetch(`${this.$ground_url}?agent=${this.agent}`, {method: 'GET'})
       this.options = await resp.json();
       this.searching = false;
     },

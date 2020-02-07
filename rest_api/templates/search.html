@@ -16,7 +16,7 @@
   </div>
   <script src="{{ url_for('static', filename='form.js') }}"></script>
   <script>
-    Vue.prototype.ground_url = "{{ url_for('ground') }}";
+    Vue.prototype.$ground_url = "{{ url_for('ground') }}";
     var app = new Vue({el: '#app'});
   </script>
 {% endblock %}

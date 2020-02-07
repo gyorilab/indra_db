@@ -10,6 +10,7 @@ Vue.component('stmt-search', {
       agent: null,
       searching: false,
       options: null,
+      typing: false,
       num: 0
     }
   },
@@ -20,11 +21,14 @@ Vue.component('stmt-search', {
     },
   },
   watch: {
-    message: function() {
-        this.num ++;
-        this.searching = true;
-        this.options = this.lookupOptions();
-        this.searching = false;
+    agent: function() {
+      if (this.typing)
+        return;
+      this.num ++;
+      this.searching = true;
+      this.options = this.lookupOptions();
+      this.searching = false;
+      return;
     },
   }
 });

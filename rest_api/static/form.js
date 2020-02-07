@@ -10,11 +10,11 @@ Vue.component('grounding-option', {
 });
 
 
-Vue.component('stmt-search', {
+Vue.component('agent-select', {
   template: `
-    <div class='stmt_search'>
+    <div class='agent-select'>
       <div v-if="!options || options_empty">
-        <input v-model="agent" placeholder="Enter agent here">
+        <input v-model="agent_str" placeholder="Enter agent here">
         <button @click='lookupOptions'>Ground</button>
         <span v-show='searching'>Searching...</span>
         <span v-show='options_empty'>No groundings found...</span>
@@ -26,7 +26,8 @@ Vue.component('stmt-search', {
         <button @click='resetOptions'>Cancel</button>
       </div>
       <div v-else>
-        <select v-model='selected_option'>
+        <select :value='selected_option_idx'
+                @input="$emit('input', options[selected_option_idx])">
           <option value='' selected disabled hidden>Select grounding option...</option>
           <option v-for='(option, option_idx) in options'
                   :key='option_idx'
@@ -36,11 +37,11 @@ Vue.component('stmt-search', {
         </select>
         <button @click='resetOptions'>Cancel</button>
       </div>
-    </div>
-  `,
+    </div>`,
+  props: ['value'],
   data: function() {
     return {
-      agent: null,
+      agent_str: '',
       searching: false,
       options: null,
       selected_option: null
@@ -49,13 +50,17 @@ Vue.component('stmt-search', {
   methods: {
     lookupOptions: async function() {
       this.searching = true;
-      const resp = await fetch(`${this.$ground_url}?agent=${this.agent}`, {method: 'GET'})
+      const resp = await fetch(`${this.$ground_url}?agent=${this.agent_str}`, {method: 'GET'})
       this.options = await resp.json();
       this.searching = false;
+
+      if (this.options.length == 1)
+        this.$emit('input', this.options[0])
     },
     resetOptions: function() {
       this.options = null;
       this.selected_option = null;
+      this.$emit('input', null);
     }
   },
   computed: {
@@ -63,6 +68,18 @@ Vue.component('stmt-search', {
       if (!this.options)
         return false
       return this.options.length == 0
+    }
+  },
+});
+
+Vue.component('stmt-search', {
+  template: `
+    <div class='stmt_search'>
+      <agent-select v-model='agent'></agent-select>
+    </div>`,
+  data: function() {
+    return {
+      agent: '',
     }
   },
 });

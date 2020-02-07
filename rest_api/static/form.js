@@ -10,7 +10,7 @@ Vue.component('stmt-search', {
         Gilda Options:
         <div v-for="(option, option_idx) in options" :key="option_idx">
           <hr>
-          {{ option.term.entry_name }} ({{ option.score }}, {{ option.term.status }} from {{ option.term.source }}
+          {{ option.term.entry_name }} (score: {{ option.score.toFixed(2) }}, {{ option.term.status }} from {{ option.term.source }})
         </div>
       </div>
     </div>

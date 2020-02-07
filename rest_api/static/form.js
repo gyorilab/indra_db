@@ -13,11 +13,11 @@ Vue.component('grounding-option', {
 Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
-      <div v-if="!options || options.length == 0">
+      <div v-if="!options || options_empty">
         <input v-model="agent" placeholder="Enter agent here">
         <button @click='lookupOptions'>Ground</button>
         <span v-show='searching'>Searching...</span>
-        <span v-show='options.length == 0'>No groundings found...</span>
+        <span v-show='options_empty'>No groundings found...</span>
       </div>
       <div v-else-if="options.length == 1">
         <span class='frozen-box'>
@@ -56,6 +56,13 @@ Vue.component('stmt-search', {
     resetOptions: function() {
       this.options = null;
       this.selected_option = null;
+    }
+  },
+  computed: {
+    options_empty: function() {
+      if (!this.options)
+        return false
+      return this.options.length == 0
     }
   },
 });

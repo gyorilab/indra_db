@@ -12,20 +12,20 @@ Vue.component('grounding-option', {
 
 Vue.component('agent-select', {
   template: `
-    <div class='agent-select'>
-      <div v-if="!options || options_empty">
+    <span class='agent-select'>
+      <span v-if="!options || options_empty">
         <input v-model="agent_str" placeholder="Enter agent here">
         <button @click='lookupOptions'>Ground</button>
         <span v-show='searching'>Searching...</span>
         <span v-show='options_empty'>No groundings found...</span>
-      </div>
-      <div v-else-if="options.length == 1">
+      </span>
+      <span v-else-if="options.length == 1">
         <span class='frozen-box'>
           <grounding-option v-bind="options[0]"></grounding-option>
         </span>
         <button @click='resetOptions'>Cancel</button>
-      </div>
-      <div v-else>
+      </span>
+      <span v-else>
         <select v-model='selected_option_idx'>
           <option :value='-1' selected disabled hidden>Select grounding option...</option>
           <option v-for='(option, option_idx) in options'
@@ -35,8 +35,8 @@ Vue.component('agent-select', {
           </option>
         </select>
         <button @click='resetOptions'>Cancel</button>
-      </div>
-    </div>`,
+      </span>
+    </span>`,
   props: ['value'],
   data: function() {
     return {
@@ -81,7 +81,15 @@ Vue.component('agent-select', {
 Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
-      <div v-for="(agent, agent_idx) in agents" :key='agent_idx'>
+      <div v-for="(agent, agent_idx) in agents"
+           :key='agent_idx'>
+        <select v-model='agent.role'>
+          <option v-for='role in role_options'
+                  :key='role'
+                  :value='role'>
+            {{ role }}
+          </option>
+        </select>
         <agent-select v-model='agent.grounding'></agent-select>
       </div>
       <button @click='addAgent'>Add Agent</button>
@@ -89,11 +97,16 @@ Vue.component('stmt-search', {
   data: function() {
     return {
       agents: [],
+      role_options: [
+        'subject',
+        'object',
+        'none',
+      ],
     }
   },
   methods: {
     addAgent: function() {
-      this.agents.push({grounding: null})
+      this.agents.push({grounding: null, role: 'none'})
     }
   },
   created: function() {

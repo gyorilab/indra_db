@@ -1,9 +1,22 @@
 Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
-      <input v-model="agent" placeholder="Enter agent here">
-      <button @click='lookupOptions'>Ground</button>
-      <span v-show='searching'>Searching...</span>
+      <div>
+        <input v-model="agent" placeholder="Enter agent here">
+        <button @click='lookupOptions'>Ground</button>
+        <span v-show='searching'>Searching...</span>
+      </div>
+      <div v-if="options">
+        Gilda Options:
+        <div v-for="(option, option_idx) in options" :key="option_idx">
+          <div>
+            {{ option.term.source }} - {{ option.term.norm_text }}
+          </div>
+            {{ option.term.status }} for {{ option.term.entity_name }}
+          <div>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   data: function() {

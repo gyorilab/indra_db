@@ -15,6 +15,7 @@ Vue.component('stmt-search', {
             <b>{{ option.term.entry_name }}</b> (score: {{ option.score.toFixed(2) }}, {{ option.term.status }} from {{ option.term.source }})
           </option>
         </select>
+        <button @click='resetOptions'>Cancel</button>
       </div>
     </div>
   `,
@@ -23,6 +24,7 @@ Vue.component('stmt-search', {
       agent: null,
       searching: false,
       options: null,
+      selected_option: null
     }
   },
   methods: {
@@ -32,5 +34,9 @@ Vue.component('stmt-search', {
       this.options = await resp.json();
       this.searching = false;
     },
+    resetOptions: function() {
+      this.options = null;
+      this.selected_option = null;
+    }
   },
 });

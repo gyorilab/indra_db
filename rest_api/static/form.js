@@ -83,6 +83,7 @@ Vue.component('stmt-search', {
     <div class='stmt_search'>
       <div v-for="(agent, agent_idx) in agents"
            :key='agent_idx'>
+        <button @click='removeAgent(agent_idx)'>x</button>
         <select v-model='agent.role'>
           <option v-for='role in role_options'
                   :key='role'
@@ -107,6 +108,15 @@ Vue.component('stmt-search', {
   methods: {
     addAgent: function() {
       this.agents.push({grounding: null, role: 'none'})
+    },
+    removeAgent: function(agent_idx) {
+      const new_agents = [];
+      this.agents.forEach( (entry, idx) => {
+        if (idx == agent_idx)
+          return;
+        new_agents.push(entry);
+      });
+      this.agents = new_agents;
     }
   },
   created: function() {

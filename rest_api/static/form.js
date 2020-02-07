@@ -8,10 +8,11 @@ Vue.component('stmt-search', {
       </div>
       <div v-else>
         <select v-model='selected_option'>
-          <option value='' selected disabled hidden>Select grounding option...</option>
+          <option v-if="options.length > 1" value='' selected disabled hidden>Select grounding option...</option>
           <option v-for='(option, option_idx) in options'
                   :key='option_idx'
-                  :value='option_idx'>
+                  :value='option_idx'
+                  :selected="options.length > 1">
             <b>{{ option.term.entry_name }}</b> (score: {{ option.score.toFixed(2) }}, {{ option.term.status }} from {{ option.term.source }})
           </option>
         </select>

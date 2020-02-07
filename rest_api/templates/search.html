@@ -4,7 +4,6 @@
 {{ super() }}
 
 <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-<script src="{{ url_for('static', filename='form.js') }}"></script>
 <script src="https://bigmech.s3.amazonaws.com/indra-db/IndralabVue.umd.js"></script>
 <link href="https://bigmech.s3.amazonaws.com/indra-db/IndralabVue.css" rel="stylesheet">
 
@@ -15,6 +14,7 @@
   <div id="app">
     <stmt-search></stmt-search>
   </div>
+  <script src="{{ url_for('static', filename='form.js') }}"></script>
   <script>
     Vue.prototype.ground_url = "{{ url_for('ground') }}";
     var app = new Vue({el: '#app'});

@@ -2,14 +2,15 @@ Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
       <input v-model="agent" @input="typing = true" placeholder="Enter agent here">
-      <span v-show='searching'>Searching...</span>
+      <span v-show='searching'>Searching {{ num }}...</span>
     </div>
   `,
   data: function() {
     return {
       agent: null,
       searching: false,
-      options: null
+      options: null,
+      num: 0
     }
   },
   methods: {
@@ -19,10 +20,11 @@ Vue.component('stmt-search', {
     },
   },
   watch: {
-    message: _.debounce(function() {
+    message: function() {
+        this.num ++;
         this.searching = true;
         this.options = this.lookupOptions();
         this.searching = false;
-    }, 1000),
+    },
   }
 });

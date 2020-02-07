@@ -11,7 +11,7 @@ Vue.component('stmt-search', {
         <div v-for="(option, option_idx) in options" :key="option_idx">
           <hr>
           <div>
-            {{ option.term.source }} - {{ option.term.norm_text }}
+            {{ option.term.source }} - {{ option.term.norm_text }}: {{ option.score }}
           </div>
             {{ option.term.status }} for {{ option.term.entry_name }}
           <div>

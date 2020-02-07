@@ -9,10 +9,11 @@ Vue.component('stmt-search', {
       <div v-if="options">
         Gilda Options:
         <div v-for="(option, option_idx) in options" :key="option_idx">
+          <hr>
           <div>
             {{ option.term.source }} - {{ option.term.norm_text }}
           </div>
-            {{ option.term.status }} for {{ option.term.entity_name }}
+            {{ option.term.status }} for {{ option.term.entry_name }}
           <div>
           </div>
         </div>

@@ -81,6 +81,7 @@ Vue.component('agent-select', {
 Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
+      <h3>Select Agents</h3>
       <div v-for="(agent, agent_idx) in agents"
            :key='agent_idx'>
         <button @click='removeAgent(agent_idx)'>x</button>
@@ -94,10 +95,17 @@ Vue.component('stmt-search', {
         <agent-select v-model='agent.grounding'></agent-select>
       </div>
       <button @click='addAgent'>Add Agent</button>
+
+      <h3>Select Type</h3>
+      <input v-model='stmt_type'>
+
+      <h3>Search</h3>
+      <button @click='search'>Search</button>
     </div>`,
   data: function() {
     return {
       agents: [],
+      stmt_type: null,
       role_options: [
         'subject',
         'object',
@@ -109,6 +117,7 @@ Vue.component('stmt-search', {
     addAgent: function() {
       this.agents.push({grounding: null, role: 'none'})
     },
+
     removeAgent: function(agent_idx) {
       const new_agents = [];
       this.agents.forEach( (entry, idx) => {
@@ -117,6 +126,10 @@ Vue.component('stmt-search', {
         new_agents.push(entry);
       });
       this.agents = new_agents;
+    },
+
+    search: function() {
+      return;
     }
   },
   created: function() {

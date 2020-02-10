@@ -111,6 +111,7 @@ Vue.component('stmt-search', {
         'object',
         'none',
       ],
+      stmts: [],
     }
   },
   methods: {
@@ -128,7 +129,35 @@ Vue.component('stmt-search', {
       this.agents = new_agents;
     },
 
-    search: function() {
+    search: async function() {
+      let query_str = '';
+
+      // Format the agents into the query.
+      let tagged_ag, term, role;
+      for (let idx in this.agents) {
+        term = this.agents[idx].grounding.term;
+        role = this.agents[idx].role
+        if (idx !== 0)
+          query_str += '&'
+      
+        tagged_ag = term.id + '@' + term.db;
+        if (role === 'none')
+          query_str += `agent${idx}=${tagged_ag}`;
+        else
+          query_str += `${role}=${tagged_ag}`;
+      }
+
+      // Format the statement type into the query.
+      if (this.stmt_type)
+        if (query_str)
+          query_str += '&'
+        query_str += `stmt_type=${this.stmt_type}`
+
+      // Make the query
+      let url = `${this.$search_url}?limit=10&${query_str}`
+      window.console.log(url);
+      const resp = await fetch(url);
+      this.stmts = await resp.json();
       return;
     }
   },

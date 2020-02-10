@@ -13,6 +13,7 @@ from jinja2 import Environment, ChoiceLoader
 
 from indra.assemblers.html.assembler import loader as indra_loader, \
     stmts_from_json, HtmlAssembler
+from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
@@ -20,7 +21,7 @@ from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indra_db.exceptions import BadHashError
 from indra_db.client import get_statement_jsons_from_hashes, \
     get_statement_jsons_from_papers, submit_curation, \
-    get_interaction_jsons_from_agents
+    get_interaction_jsons_from_agents, stmt_from_interaction
 from .util import process_agent, _answer_binary_query, DbAPIError, LogTracker, \
     sec_since, get_source, get_s3_client
 
@@ -468,6 +469,9 @@ def get_metadata(level):
             if entry['source_counts']:
                 censored_res.append(entry)
         res = censored_res
+
+    for entry in res:
+        entry['english'] = EnglishAssembler([stmt_from_interaction(entry)]).make_model()
 
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Returning with %s results after %.2f seconds."

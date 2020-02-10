@@ -26,6 +26,7 @@
   <script src="{{ url_for('static', filename='form.js') }}"></script>
   <script>
     Vue.prototype.$ground_url = "{{ url_for('ground') }}";
+    Vue.prototype.$search_url = "{{ url_for('get_metadata', level='relations') }}"
     var app = new Vue({el: '#app'});
   </script>
 {% endblock %}

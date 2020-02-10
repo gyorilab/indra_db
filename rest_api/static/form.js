@@ -81,26 +81,39 @@ Vue.component('agent-select', {
 Vue.component('stmt-search', {
   template: `
     <div class='stmt_search'>
-      <h3>Select Agents</h3>
-      <div v-for="(agent, agent_idx) in agents"
-           :key='agent_idx'>
-        <button @click='removeAgent(agent_idx)'>x</button>
-        <select v-model='agent.role'>
-          <option v-for='role in role_options'
-                  :key='role'
-                  :value='role'>
-            {{ role }}
-          </option>
-        </select>
-        <agent-select v-model='agent.grounding'></agent-select>
+      <div id='seach-box' v-if='show_search'>
+          <h3>Select Agents</h3>
+          <div v-for="(agent, agent_idx) in agents"
+               :key='agent_idx'>
+            <button @click='removeAgent(agent_idx)'>x</button>
+            <select v-model='agent.role'>
+              <option v-for='role in role_options'
+                      :key='role'
+                      :value='role'>
+                {{ role }}
+              </option>
+            </select>
+            <agent-select v-model='agent.grounding'></agent-select>
+          </div>
+          <button @click='addAgent'>Add Agent</button>
+
+          <h3>Select Type</h3>
+          <input v-model='stmt_type'>
+
+          <h3>Search</h3>
+          <button @click='search'>Search</button>
       </div>
-      <button @click='addAgent'>Add Agent</button>
-
-      <h3>Select Type</h3>
-      <input v-model='stmt_type'>
-
-      <h3>Search</h3>
-      <button @click='search'>Search</button>
+      <div v-else>
+        <span id='search-reopen' @click='show_search=true'>Search...</span>
+      </div>
+      
+      <div id='result-box' v-show='relations !== null'>
+        <h3>Results</h3>
+        <h2 v-show='empty_relations'>Nothing found.</h2>
+        <div v-for='rel in relations' :key='rel.id'>
+          <h2>{{ rel.english }}</h2>
+        </div>
+      </div>
     </div>`,
   data: function() {
     return {
@@ -111,7 +124,8 @@ Vue.component('stmt-search', {
         'object',
         'none',
       ],
-      stmts: [],
+      relations: null,
+      show_search: true,
     }
   },
   methods: {
@@ -157,8 +171,22 @@ Vue.component('stmt-search', {
       let url = `${this.$search_url}?limit=10&${query_str}`
       window.console.log(url);
       const resp = await fetch(url);
-      this.stmts = await resp.json();
+      this.relations = await resp.json();
+      
+      // Decide whether to close the search box or not.
+      if (this.relations.length > 0)
+        this.show_search = false
+
       return;
+    }
+  },
+  computed: {
+    empty_relations: function() {
+      if (this.relations === null)
+        return false
+      if (this.relations.length === 0)
+        return true
+      return false
     }
   },
   created: function() {

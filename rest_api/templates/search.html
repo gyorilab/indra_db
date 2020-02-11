@@ -4,8 +4,8 @@
 {{ super() }}
 
 <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
-<script src="https://bigmech.s3.amazonaws.com/indra-db/IndralabVue.umd.js"></script>
-<link href="https://bigmech.s3.amazonaws.com/indra-db/IndralabVue.css" rel="stylesheet">
+<script src="{{ url_for('serve_indralab_vue', file='IndralabVue.umd.js') }}"></script>
+<link href="{{  url_for('serve_indralab_vue', file='IndralabVue.css') }}" rel="stylesheet">
 
 <style>
   .frozen-box {
@@ -25,9 +25,8 @@
 {% block body %}
   {{ super() }}
   <div id="app">
-    <stmt-search></stmt-search>
+    <relation-search></relation-search>
   </div>
-  <script src="{{ url_for('static', filename='form.js') }}"></script>
   <script>
     Vue.prototype.$ground_url = "{{ url_for('ground') }}";
     Vue.prototype.$search_url = "{{ url_for('get_metadata', level='relations') }}"

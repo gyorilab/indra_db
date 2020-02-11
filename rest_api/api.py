@@ -473,8 +473,8 @@ def get_metadata(level):
     stmt_type = None if stmt_type is None else make_statement_camel(stmt_type)
     res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
                                             stmt_type=stmt_type,
-                                            max_relations=pop('limit'),
-                                            offset=pop('offset'),
+                                            max_relations=int(pop('limit')),
+                                            offset=int(pop('offset')),
                                             best_first=pop('best_first', True))
 
     dt = (datetime.utcnow() - start).total_seconds()
@@ -484,21 +484,21 @@ def get_metadata(level):
     # that is entirely dependent on medscan.
     if not has['medscan']:
         censored_res = []
-        for entry in res:
+        for entry in res['relations']:
             entry['total_count'] -= entry['source_counts'].pop('medscan', 0)
             if entry['source_counts']:
                 censored_res.append(entry)
-        res = censored_res
+        res['relations'] = censored_res
 
-    for entry in res:
-        entry['english'] = EnglishAssembler([stmt_from_interaction(entry)]).make_model()
+    for entry in res['relations']:
+        entry['english'] = \
+            EnglishAssembler([stmt_from_interaction(entry)]).make_model()
 
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Returning with %s results after %.2f seconds."
                 % (len(res), dt))
 
-    resp = Response(json.dumps(sorted(res, key=lambda e: e['total_count'],
-                                      reverse=True)),
+    resp = Response(json.dumps(res),
                     mimetype='application/json')
 
     dt = (datetime.utcnow() - start).total_seconds()

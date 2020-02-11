@@ -109,7 +109,18 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, ro=None,
                 entry['types'] = dict(entry['types'])
             result.append(entry)
 
-    return sorted(result, key=lambda data: data['total_count'], reverse=True)
+    # Get the next offset.
+    if len(meta_dict) < max_relations:
+        new_offset = None
+    else:
+        new_offset = (0 if offset is None else offset) + len(meta_dict)
+
+    # Format the results
+    ret = {'relations': sorted(result, key=lambda data: data['total_count'],
+                               reverse=True),
+           'next_offset': new_offset}
+
+    return ret
 
 
 def stmt_from_interaction(interaction):
@@ -127,7 +138,7 @@ def stmt_from_interaction(interaction):
                   for i in range(len(StmtClass._agent_order))]
         stmt = StmtClass(*agents)
     return stmt
-    
+
 
 def get_interaction_statements_from_agents(*args, **kwargs):
     """Get high-level statements for interactions apparent in db metadata.
@@ -135,11 +146,13 @@ def get_interaction_statements_from_agents(*args, **kwargs):
     This function is a fairly thin wrapper around
     `get_interaction_jsons_from_agents`
     """
-    meta_dicts = get_interaction_jsons_from_agents(*args, **kwargs)
+    result = get_interaction_jsons_from_agents(*args, **kwargs)
+    meta_dicts = result.pop('relations')
     stmts = []
     for meta in meta_dicts:
-        stmt = stmt_from_interactions(meta)
+        stmt = stmt_from_interaction(meta)
         if stmt is None:
             continue
         stmts.append(stmt)
-    return stmts
+    result['stmts'] = stmts
+    return result

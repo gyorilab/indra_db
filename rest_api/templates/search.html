@@ -8,6 +8,22 @@
 <link href="{{  url_for('serve_indralab_vue', file='IndralabVue.css') }}" rel="stylesheet">
 
 <style>
+  {% for category, data in source_colors %}
+    {% for source, font_color in data['sources'].items() %}
+      .source-{{ source }} {
+        background-color: {{ font_color }};
+        color: {{ data['color'] }};
+      }
+    {% endfor %}
+  {% endfor %}
+
+  .badge-source {
+    font-size: 8pt;
+    margin: 0;
+    padding-left: 5px;
+    cursor: pointer;
+  }
+
   .frozen-box {
     background-color: #f0f0f0;
     border: 1px solid #a0a0a0;
@@ -30,6 +46,15 @@
   <script>
     Vue.prototype.$ground_url = "{{ url_for('ground') }}";
     Vue.prototype.$search_url = "{{ url_for('get_metadata', level='relations') }}"
+    Vue.prototype.$sources = {
+      {% for category, data in source_colors %}
+      {{ category }}: [
+        {%  for source in data['sources'].keys() %}
+          '{{ source }}',
+        {% endfor %}
+      ],
+      {% endfor %}
+    };
     var app = new Vue({el: '#app'});
   </script>
 {% endblock %}

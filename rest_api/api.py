@@ -12,7 +12,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_optional
 from jinja2 import Environment, ChoiceLoader
 
 from indra.assemblers.html.assembler import loader as indra_loader, \
-    stmts_from_json, HtmlAssembler
+    stmts_from_json, HtmlAssembler, SOURCE_COLORS
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 
@@ -190,7 +190,8 @@ def ground():
 
 @app.route('/search', methods=['GET'])
 def search():
-    return render_my_template('search.html', 'Search')
+    return render_my_template('search.html', 'Search',
+                              source_colors=SOURCE_COLORS)
 
 
 @app.route('/data-vis/<path:file_path>')

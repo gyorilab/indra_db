@@ -52,6 +52,8 @@
     Vue.prototype.$ground_url = "{{ url_for('ground') }}";
     Vue.prototype.$relation_url = "{{ url_for('get_metadata', level='relations') }}";
     Vue.prototype.$stmt_url = "{{ url_for('get_statements') }}";
+    Vue.prototype.$curation_url = "{{ url_for('submit_curation_endpoint', hash_val='') }}";
+    Vue.prototype.$curation_list_url = "{{ url_for('list_curations', stmt_hash='', src_hash='') }}".slice(0, -2);
     Vue.prototype.$sources = {
       {% for category, data in source_colors %}
       {{ category }}: [

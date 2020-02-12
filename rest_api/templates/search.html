@@ -34,6 +34,11 @@
   #search-reopen {
     cursor: pointer;
   }
+
+  .nvm {
+    padding-left: 0;
+    padding-right: 0;
+  }
 </style>
 
 {% endblock %}
@@ -45,7 +50,8 @@
   </div>
   <script>
     Vue.prototype.$ground_url = "{{ url_for('ground') }}";
-    Vue.prototype.$search_url = "{{ url_for('get_metadata', level='relations') }}"
+    Vue.prototype.$relation_url = "{{ url_for('get_metadata', level='relations') }}";
+    Vue.prototype.$stmt_url = "{{ url_for('get_statements') }}";
     Vue.prototype.$sources = {
       {% for category, data in source_colors %}
       {{ category }}: [

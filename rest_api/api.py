@@ -77,12 +77,11 @@ def _query_wrapper(f):
         query = request.args.copy()
         offs = query.pop('offset', None)
         ev_lim = query.pop('ev_limit', None)
-        best_first_str = query.pop('best_first', 'true')
-        best_first = True if best_first_str.lower() == 'true' \
-                             or best_first_str else False
+        best_first = query.pop('best_first', 'true').lower() == 'true'
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
+        w_english = query.pop('with_english', 'false').lower() == 'true'
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -112,8 +111,15 @@ def _query_wrapper(f):
         stmts_json = result.pop('statements')
         elsevier_redactions = 0
         source_counts = result['source_counts']
-        if not has['elsevier'] or fmt == 'json-js':
+        if not has['elsevier'] or fmt == 'json-js' or w_english:
             for h, stmt_json in stmts_json.copy().items():
+                if w_english:
+                    stmts = stmts_from_json([stmt_json])
+                    stmt_json['english'] = EnglishAssembler(stmts).make_model()
+
+                if has['elsevier'] and fmt != 'json-js':
+                    continue
+
                 for ev_json in stmt_json['evidence'][:]:
                     if fmt == 'json-js':
                         ev_json['source_hash'] = str(ev_json['source_hash'])

@@ -74,7 +74,7 @@ class DatabaseReadingData(ReadingData):
         As returned by SQL Alchemy.
         """
         if db_reading.bytes:
-            if db_reading.format == 'json':
+            if db_reading.format == formats.JSON:
                 reading = json.loads(unpack(db_reading.bytes))
             else:
                 reading = unpack(db_reading.bytes)
@@ -98,10 +98,8 @@ class DatabaseReadingData(ReadingData):
 
         if self.format == formats.JSON:
             ret = zip_string(json.dumps(self.reading))
-        elif self.format == formats.TEXT or self.format == formats.EKB:
-            ret = zip_string(self.reading)
         else:
-            raise Exception('Do not know how to zip format %s.' % self.format)
+            ret = zip_string(self.reading)
         return ret
 
     def make_tuple(self, batch_id):

@@ -491,8 +491,11 @@ def get_metadata(level):
         res['relations'] = censored_res
 
     for entry in res['relations']:
-        entry['english'] = \
-            EnglishAssembler([stmt_from_interaction(entry)]).make_model()
+        if entry['type'] == 'ActiveForm':
+            entry['english'] = entry['Agents'][0] + ' has active form.'
+        else:
+            entry['english'] = \
+                EnglishAssembler([stmt_from_interaction(entry)]).make_model()
 
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Returning with %s results after %.2f seconds."

@@ -21,7 +21,7 @@ from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indra_db.exceptions import BadHashError
 from indra_db.client import get_statement_jsons_from_hashes, \
     get_statement_jsons_from_papers, submit_curation, \
-    get_interaction_jsons_from_agents, stmt_from_interaction
+    get_interaction_jsons_from_agents, stmt_from_interaction, get_curations
 from .util import process_agent, _answer_binary_query, DbAPIError, LogTracker, \
     sec_since, get_source, get_s3_client
 
@@ -440,6 +440,13 @@ def submit_curation_endpoint(hash_val, **kwargs):
         res = {'result': 'test passed', 'ref': None}
     logger.info("Got result: %s" % str(res))
     return jsonify(res)
+
+
+@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
+def list_curations(stmt_hash, src_hash):
+    curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
+    curation_json = [cur.to_json() for cur in curations]
+    return jsonify(curation_json)
 
 
 @app.route('/metadata/<level>/from_agents', methods=['GET'])

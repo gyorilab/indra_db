@@ -112,12 +112,15 @@ def _query_wrapper(f):
         stmts_json = result.pop('statements')
         elsevier_redactions = 0
         source_counts = result['source_counts']
-        if not has['elsevier']:
+        if not has['elsevier'] or fmt == 'json-js':
             for h, stmt_json in stmts_json.copy().items():
                 for ev_json in stmt_json['evidence'][:]:
+                    if fmt == 'json-js':
+                        ev_json['source_hash'] = str(ev_json['source_hash'])
 
                     # Check for elsevier and redact if necessary
-                    if get_source(ev_json) == 'elsevier':
+                    if not has['elsevier'] and \
+                            get_source(ev_json) == 'elsevier':
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE

@@ -101,7 +101,7 @@ class LogTracker(object):
 
 
 def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
-                         ev_limit, best_first, censured_sources):
+                         ev_limit, best_first, strict, censured_sources):
     # Fix the case, if we got a statement type.
     act = None if act_raw is None else make_statement_camel(act_raw)
 
@@ -125,7 +125,7 @@ def _answer_binary_query(act_raw, roled_agents, free_agents, offs, max_stmts,
     result = \
         get_statement_jsons_from_agents(agent_iter, stmt_type=act, offset=offs,
                                         max_stmts=max_stmts, ev_limit=ev_limit,
-                                        best_first=best_first,
+                                        best_first=best_first, strict=strict,
                                         censured_sources=censured_sources)
     return result
 

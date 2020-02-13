@@ -319,6 +319,9 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
 
+    # Get whether the user wants a strict match
+    strict = query_dict.pop('strict', 'false').lower() == 'true'
+
     # If there was something else in the query, there shouldn't be, so
     # someone's probably confused.
     if query_dict:
@@ -327,7 +330,7 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
         return
 
     return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
-                                max_stmts, ev_limit, best_first,
+                                max_stmts, ev_limit, best_first, strict,
                                 censured_sources)
 
 

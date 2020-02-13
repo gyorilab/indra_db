@@ -114,8 +114,6 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, ro=None,
         # Iterate over all the statements.
         old_L = len(ret['statements'])
         for h, stmt_json in ret['statements'].copy().items():
-            match = True
-
             # Get the agent order from the Statement class, if we don't have it.
             if stmt_json['type'] not in type_agent_order_dict:
                 type_agent_order_dict[stmt_json['type']] = \
@@ -144,7 +142,6 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, ro=None,
                     break
             else:
                 # If it doesn't match, remove it.
-                print(this_dict, compare_dict)
                 match = this_dict == compare_dict
 
             if not match:

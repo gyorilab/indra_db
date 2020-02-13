@@ -508,7 +508,7 @@ def get_metadata(level):
 
     for entry in res['relations']:
         if entry['type'] == 'ActiveForm':
-            entry['english'] = entry['Agents'][0] + ' has active form.'
+            entry['english'] = entry['agents'][0] + ' has active form.'
         else:
             entry['english'] = \
                 EnglishAssembler([stmt_from_interaction(entry)]).make_model()

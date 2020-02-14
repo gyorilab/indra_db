@@ -23,7 +23,7 @@ from indra_db.client import get_statement_jsons_from_hashes, \
     get_statement_jsons_from_papers, submit_curation, \
     get_interaction_jsons_from_agents, stmt_from_interaction, get_curations
 from .util import process_agent, _answer_binary_query, DbAPIError, LogTracker, \
-    sec_since, get_source, get_s3_client
+    sec_since, get_source, get_s3_client, gilda_ground
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
@@ -194,10 +194,9 @@ def iamalive():
 
 @app.route('/ground', methods=['GET'])
 def ground():
-    import requests
     ag = request.args['agent']
-    res = requests.post('http://grounding.indra.bio/ground', json={'text': ag})
-    return jsonify(res.json())
+    res_json = gilda_ground(ag)
+    return jsonify(res_json)
 
 
 @app.route('/search', methods=['GET'])

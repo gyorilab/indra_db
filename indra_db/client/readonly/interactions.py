@@ -67,8 +67,6 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, ro=None,
         # Re-aggregate the statements.
         condensed = {}
         for h, data in meta_dict.items():
-            print(h)
-
             # Make the agent key
             ag_dict = data['agents']
 

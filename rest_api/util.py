@@ -47,7 +47,22 @@ def process_agent(agent_param):
         ns = 'NAME'
 
     logger.info("Resolved %s to ag=%s, ns=%s" % (agent_param, ag, ns))
+    if ns == 'AUTO':
+        res = gilda_ground(ag)
+        ns = res[0]['term']['db']
+        ag = res[0]['term']['id']
+        logger.info("Auto-mapped grounding with gilda to ag=%s, ns=%s with "
+                    "score=%s out of %d options"
+                    % (ag, ns, res[0]['score'], len(res)))
+
     return ag, ns
+
+
+def gilda_ground(agent_text):
+    import requests
+    res = requests.post('http://grounding.indra.bio/ground',
+                        json={'text': agent_text})
+    return res.json()
 
 
 def get_source(ev_json):

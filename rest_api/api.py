@@ -504,6 +504,8 @@ def get_metadata(level):
             return query.pop(k, str(default).lower()) == 'true'
         return query.pop(k, default)
 
+    w_curations = pop('with_cur_counts', False)
+
     stmt_type = pop('type')
     stmt_type = None if stmt_type is None else make_statement_camel(stmt_type)
     res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
@@ -532,6 +534,23 @@ def get_metadata(level):
             entry['english'] = \
                 EnglishAssembler([stmt_from_interaction(entry)]).make_model()
 
+    # Look up curations, if result with_curations was set.
+    if w_curations:
+        rel_hash_lookup = {}
+        if level == 'hashes':
+            for rel in res['relations']:
+                rel['cur_count'] = 0
+                rel_hash_lookup[rel['hash']] = rel
+        else:
+            for rel in res['relations']:
+                for h in rel['hashes']:
+                    rel['cur_count'] = 0
+                    rel_hash_lookup[h] = rel
+        curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
+        for cur in curations:
+            rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
+
+    # Finish up the query.
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Returning with %s results after %.2f seconds."
                 % (len(res), dt))

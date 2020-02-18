@@ -22,9 +22,8 @@ import logging
 import botocore
 from datetime import datetime
 
-from indra.tools.reading.util import get_s3_log_prefix
-from indra.tools.reading.util.reporter import Reporter
-from indra.tools.reading.submit_reading_pipeline import create_submit_parser, \
+from indra_reading.util import get_s3_log_prefix
+from indra_reading.scripts.submit_reading_pipeline import create_submit_parser,\
     create_read_parser, Submitter
 
 from indra_db.reading.read_db_aws import get_s3_reader_version_loc, bucket_name
@@ -51,7 +50,8 @@ class DbReadingSubmitter(Submitter):
     """
     _s3_input_name = 'id_list'
     _purpose = 'db_reading'
-    _job_queue = 'run_db_reading_queue'
+    _job_queue_dict = {'run_db_reading_queue': ['reach', 'sparser', 'isi'],
+                       'run_db_trips_queue': ['trips']}
     _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser'],
                      'run_db_reading_isi_jobdef': ['isi'],
                      'run_db_reading_trips_jobdef': ['trips']}
@@ -60,9 +60,6 @@ class DbReadingSubmitter(Submitter):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
         self.s3_prefix = get_s3_log_prefix(self.s3_base)
         self.time_tag = datetime.now().strftime('%Y%m%d_%H%M')
-        self.reporter = Reporter(self.basename + '_summary_%s' % self.time_tag)
-        self.reporter.sections = {'Plots': [], 'Totals': [], 'Git': []}
-        self.reporter.set_section_order(['Git', 'Totals', 'Plots'])
         self.run_record = {}
         self.start_time = None
         self.end_time = None
@@ -129,24 +126,25 @@ class DbReadingSubmitter(Submitter):
         """Look up the self-reported reader versions for all the jobs."""
         ret = {}
         s3 = boto3.client('s3')
-        for job_d in self.job_list:
-            job_name = job_d['jobName']
-            s3_key = get_s3_reader_version_loc(self.s3_base, job_name)
-            try:
-                res = s3.get_object(Bucket=bucket_name, Key=s3_key)
-            except botocore.exceptions.ClientError as e:
-                # Handle a missing object gracefully
-                if e.response['Error']['Code'] == 'NoSuchKey':
-                    logger.info('Could not find reader version json at %s.' %
-                                s3_key)
-                    ret[job_name] = None
-                # If there was some other kind of problem, log an error
-                else:
-                    logger.error("Encountered unexpected error accessing "
-                                 "reader version json: " + str(e))
-                continue
-            rv_json = json.loads(res['Body'].read())
-            ret[job_name] = rv_json
+        for job_list in self.job_lists.values():
+            for job_d in job_list:
+                job_name = job_d['jobName']
+                s3_key = get_s3_reader_version_loc(self.s3_base, job_name)
+                try:
+                    res = s3.get_object(Bucket=bucket_name, Key=s3_key)
+                except botocore.exceptions.ClientError as e:
+                    # Handle a missing object gracefully
+                    if e.response['Error']['Code'] == 'NoSuchKey':
+                        logger.info('Could not find reader version json at %s.' %
+                                    s3_key)
+                        ret[job_name] = None
+                    # If there was some other kind of problem, log an error
+                    else:
+                        logger.error("Encountered unexpected error accessing "
+                                     "reader version json: " + str(e))
+                    continue
+                rv_json = json.loads(res['Body'].read())
+                ret[job_name] = rv_json
         return ret
 
     def watch_and_wait(self, *args, **kwargs):

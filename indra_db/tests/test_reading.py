@@ -10,8 +10,8 @@ import boto3
 from nose.plugins.attrib import attr
 
 from indra.util import zip_string
-from indra.tools.reading.readers import SparserReader
-from indra.tools.reading.readers import get_reader_classes
+from indra_reading.readers import SparserReader
+from indra_reading.readers import get_reader_classes
 
 from indra_db.reading import read_db as rdb
 from indra_db.tests.util import get_db_with_pubmed_content, get_temp_db

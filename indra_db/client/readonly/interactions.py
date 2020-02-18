@@ -1,5 +1,6 @@
 __all__ = ['get_interaction_jsons_from_agents',
-           'get_interaction_statements_from_agents']
+           'get_interaction_statements_from_agents',
+           'stmt_from_interaction']
 
 from collections import defaultdict
 
@@ -38,12 +39,12 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, ro=None,
                                 offset, mk_hashes_alias=mk_hashes_al)
 
     mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
-    names = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
-                              ro.NameMeta.ag_num, ro.NameMeta.type,
-                              ro.PaStmtSrc)
-             .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
-                     ro.PaStmtSrc.mk_hash == mk_hashes_sq.c.mk_hash)
-             .all())
+    q = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
+                          ro.NameMeta.ag_num, ro.NameMeta.type,
+                          ro.PaStmtSrc)
+         .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
+                 ro.PaStmtSrc.mk_hash == mk_hashes_sq.c.mk_hash))
+    names = q.all()
 
     # Group the agents together.
     meta_dict = {}
@@ -71,7 +72,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, ro=None,
 
             num_agents = max(ag_dict.keys()) + 1  # Could be trailing Nones...
             ordered_agents = [ag_dict.get(n) for n in range(num_agents)]
-            agent_key = '(' + ', '.join(ordered_agents) + ')'
+            agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
             # Make the overall key
             if detail_level == 'relations':
@@ -106,7 +107,35 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, ro=None,
                 entry['types'] = dict(entry['types'])
             result.append(entry)
 
-    return sorted(result, key=lambda data: data['total_count'], reverse=True)
+    # Get the next offset.
+    if len(meta_dict) < max_relations:
+        new_offset = None
+    else:
+        new_offset = (0 if offset is None else offset) + len(meta_dict)
+
+    # Format the results
+    ret = {'relations': sorted(result, key=lambda data: data['total_count'],
+                               reverse=True),
+           'next_offset': new_offset}
+
+    return ret
+
+
+def stmt_from_interaction(interaction):
+    """Get a shell statement from an interaction."""
+    StmtClass = get_statement_by_name(interaction['type'])
+    if issubclass(StmtClass, ActiveForm):
+        return None
+    if interaction['type'] == 'Complex':
+        agents = [Agent(name) for name in interaction['agents'].values()]
+        stmt = StmtClass(agents)
+    else:
+        agents = [Agent(interaction['agents'][i])
+                  if interaction['agents'].get(i)
+                  else None
+                  for i in range(len(StmtClass._agent_order))]
+        stmt = StmtClass(*agents)
+    return stmt
 
 
 def get_interaction_statements_from_agents(*args, **kwargs):
@@ -115,22 +144,13 @@ def get_interaction_statements_from_agents(*args, **kwargs):
     This function is a fairly thin wrapper around
     `get_interaction_jsons_from_agents`
     """
-    meta_dict = get_interaction_jsons_from_agents(*args, **kwargs)
-
+    result = get_interaction_jsons_from_agents(*args, **kwargs)
+    meta_dicts = result.pop('relations')
     stmts = []
-    for h, meta in meta_dict.items():
-        StmtClass = get_statement_by_name(meta['type'])
-        if issubclass(StmtClass, ActiveForm):
+    for meta in meta_dicts:
+        stmt = stmt_from_interaction(meta)
+        if stmt is None:
             continue
-        if meta['type'] == 'Complex':
-            agents = [Agent(name) for name in meta['agents'].values()]
-            stmt = StmtClass(agents)
-        else:
-            agents = [Agent(meta['agents'][i])
-                      if meta['agents'].get(i)
-                      else None
-                      for i in range(len(StmtClass._agent_order))]
-            stmt = StmtClass(*agents)
         stmts.append(stmt)
-
-    return stmts
+    result['stmts'] = stmts
+    return result

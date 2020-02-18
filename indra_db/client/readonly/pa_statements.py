@@ -7,7 +7,7 @@ import logging
 from collections import OrderedDict
 
 from indra.util import clockit
-from indra.statements import get_statement_by_name
+from indra.statements import get_statement_by_name, stmts_from_json
 
 from sqlalchemy import intersect_all, true, select, or_
 
@@ -21,9 +21,13 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
+snowflakes = ['Complex', 'Translocation', 'ActiveForm', 'Conversion',
+              'Autophosphorylation']
+
+
 @clockit
 def get_statement_jsons_from_agents(agents=None, stmt_type=None, ro=None,
-                                    **kwargs):
+                                    strict=False, **kwargs):
     """Get json's for statements given agent refs and Statement type.
 
     Parameters
@@ -47,6 +51,12 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, ro=None,
     ro : :py:class:`ReadonlyDatabaseManager`
         Optionally specify a database manager that attaches to something
         besides the primary database, for example a local database instance.
+    strict: bool
+        Indicate whether you want to strictly match your search, e.g. if you
+        query for statements with object ERK of type Phosphorylation, if strict
+        is False, you would, among other things, get MEK phosphorylates ERK, but
+        if strict is True, you would only get statements where the subject is
+        None.
 
     Some keyword arguments are passed directly to a lower level function:
 
@@ -81,9 +91,89 @@ def get_statement_jsons_from_agents(agents=None, stmt_type=None, ro=None,
 
     mk_hashes_q, mk_hashes_al = _make_mk_hashes_query(ro, agents, stmt_type)
 
-    return _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q,
-                                                mk_hashes_alias=mk_hashes_al,
-                                                **kwargs)
+    ret = _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q,
+                                               mk_hashes_alias=mk_hashes_al,
+                                               **kwargs)
+
+    # This is all a bit of a hack. I should figure out a way to work this
+    # into the SQL query.
+    if strict:
+
+        # This is the dict we're comparing to, representing type and number of
+        # agents.
+        compare_dict = {tpl: agents.count(tpl) for tpl in agents}
+
+        # We also need to know overall what grounding entities are present in
+        # the original query, so we know which things to pick up.
+        entity_group = {tpl[1:] for tpl in agents}
+
+        # This will be a cache of the agent orders, which we look up from
+        # Statement objects.
+        type_agent_order_dict = {}
+
+        # Iterate over all the statements.
+        old_L = len(ret['statements'])
+        for h, stmt_json in ret['statements'].copy().items():
+            # Get the agent order from the Statement class, if we don't have it.
+            if stmt_json['type'] not in type_agent_order_dict:
+                type_agent_order_dict[stmt_json['type']] = \
+                    get_statement_by_name(stmt_json['type'])._agent_order
+            agent_order = type_agent_order_dict[stmt_json['type']]
+
+            # Build up the dict for this statement to be compared.
+            this_dict = {}
+            for role, ag_obj in _iter_agents(stmt_json, agent_order):
+                name_key = (role, ag_obj['name'], 'NAME')
+                if name_key[1:] in entity_group:
+                    if name_key not in this_dict:
+                        this_dict[name_key] = 0
+                    this_dict[name_key] += 1
+                    continue
+
+                for ag_tpl in ag_obj['db_refs'].items():
+                    if ag_tpl in entity_group:
+                        key = (role,) + ag_tpl
+                        if key not in this_dict:
+                            this_dict[key] = 0
+                        this_dict[(role,) + ag_tpl] += 1
+                        break
+                else:
+                    match = False
+                    break
+            else:
+                # If it doesn't match, remove it.
+                match = this_dict == compare_dict
+
+            if not match:
+                ret['total_evidence'] -= ret['evidence_totals'][h]
+                ret['evidence_returned'] -= len(stmt_json['evidence'])
+                del ret['statements'][h]
+                del ret['evidence_totals'][h]
+                del ret['source_counts'][h]
+
+        logger.info("Removed %d statements for not matching, based on strict"
+                    % (old_L - len(ret['statements'])))
+
+    return ret
+
+
+def _iter_agents(stmt_json, agent_order):
+    for i, ag_key in enumerate(agent_order):
+        ag = stmt_json.get(ag_key)
+        if ag is None:
+            continue
+        if isinstance(ag, list):
+            # Like a complex
+            for ag_obj in ag:
+                if stmt_json['type'] in snowflakes:
+                    yield None, ag_obj
+                else:
+                    yield ['subject', 'object'][i], ag_obj
+        else:
+            if stmt_json['type'] in snowflakes:
+                yield None, ag
+            else:
+                yield ['subject', 'object'][i], ag
 
 
 @clockit

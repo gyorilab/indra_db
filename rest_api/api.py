@@ -12,7 +12,8 @@ from flask_jwt_extended import get_jwt_identity, jwt_optional
 from jinja2 import Environment, ChoiceLoader
 
 from indra.assemblers.html.assembler import loader as indra_loader, \
-    stmts_from_json, HtmlAssembler
+    stmts_from_json, HtmlAssembler, SOURCE_COLORS
+from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
@@ -20,9 +21,9 @@ from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indra_db.exceptions import BadHashError
 from indra_db.client import get_statement_jsons_from_hashes, \
     get_statement_jsons_from_papers, submit_curation, \
-    get_interaction_jsons_from_agents
+    get_interaction_jsons_from_agents, stmt_from_interaction, get_curations
 from .util import process_agent, _answer_binary_query, DbAPIError, LogTracker, \
-    sec_since, get_source, get_s3_client
+    sec_since, get_source, get_s3_client, gilda_ground
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
@@ -76,12 +77,11 @@ def _query_wrapper(f):
         query = request.args.copy()
         offs = query.pop('offset', None)
         ev_lim = query.pop('ev_limit', None)
-        best_first_str = query.pop('best_first', 'true')
-        best_first = True if best_first_str.lower() == 'true' \
-                             or best_first_str else False
+        best_first = query.pop('best_first', 'true').lower() == 'true'
         max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
+        w_english = query.pop('with_english', 'false').lower() == 'true'
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -111,12 +111,25 @@ def _query_wrapper(f):
         stmts_json = result.pop('statements')
         elsevier_redactions = 0
         source_counts = result['source_counts']
-        if not has['elsevier']:
+        if not all(has.values()) or fmt == 'json-js' or w_english:
             for h, stmt_json in stmts_json.copy().items():
+                if w_english:
+                    stmts = stmts_from_json([stmt_json])
+                    stmt_json['english'] = EnglishAssembler(stmts).make_model()
+
+                if not has['medscan']:
+                    source_counts[h].pop('medscan', None)
+
+                if has['elsevier'] and fmt != 'json-js':
+                    continue
+
                 for ev_json in stmt_json['evidence'][:]:
+                    if fmt == 'json-js':
+                        ev_json['source_hash'] = str(ev_json['source_hash'])
 
                     # Check for elsevier and redact if necessary
-                    if get_source(ev_json) == 'elsevier':
+                    if not has['elsevier'] and \
+                            get_source(ev_json) == 'elsevier':
                         text = ev_json['text']
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
@@ -179,10 +192,42 @@ def iamalive():
     return redirect('statements', code=302)
 
 
+@app.route('/ground', methods=['GET'])
+def ground():
+    ag = request.args['agent']
+    res_json = gilda_ground(ag)
+    return jsonify(res_json)
+
+
+@app.route('/search', methods=['GET'])
+def search():
+    return render_my_template('search.html', 'Search',
+                              source_colors=SOURCE_COLORS)
+
+
 @app.route('/data-vis/<path:file_path>')
 def serve_data_vis(file_path):
     full_path = path.join(HERE, 'data-vis/dist', file_path)
     logger.info('data-vis: ' + full_path)
+    if not path.exists(full_path):
+        abort(404)
+        return
+    ext = full_path.split('.')[-1]
+    if ext == 'js':
+        ct = 'application/javascript'
+    elif ext == 'css':
+        ct = 'text/css'
+    else:
+        ct = None
+    with open(full_path, 'rb') as f:
+        return Response(f.read(),
+                        content_type=ct)
+
+
+@app.route('/indralab-vue/<file>')
+def serve_indralab_vue(file):
+    full_path = path.join(HERE, '..', '..', 'indralab-vue/dist', file)
+    logger.info('indralab-vue: ' + full_path)
     if not path.exists(full_path):
         abort(404)
         return
@@ -276,6 +321,9 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
 
+    # Get whether the user wants a strict match
+    strict = query_dict.pop('strict', 'false').lower() == 'true'
+
     # If there was something else in the query, there shouldn't be, so
     # someone's probably confused.
     if query_dict:
@@ -284,7 +332,7 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
         return
 
     return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
-                                max_stmts, ev_limit, best_first,
+                                max_stmts, ev_limit, best_first, strict,
                                 censured_sources)
 
 
@@ -399,6 +447,13 @@ def submit_curation_endpoint(hash_val, **kwargs):
     return jsonify(res)
 
 
+@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
+def list_curations(stmt_hash, src_hash):
+    curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
+    curation_json = [cur.to_json() for cur in curations]
+    return jsonify(curation_json)
+
+
 @app.route('/metadata/<level>/from_agents', methods=['GET'])
 @jwt_optional
 def get_metadata(level):
@@ -439,8 +494,8 @@ def get_metadata(level):
     stmt_type = None if stmt_type is None else make_statement_camel(stmt_type)
     res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
                                             stmt_type=stmt_type,
-                                            max_relations=pop('limit'),
-                                            offset=pop('offset'),
+                                            max_relations=int(pop('limit')),
+                                            offset=int(pop('offset')),
                                             best_first=pop('best_first', True))
 
     dt = (datetime.utcnow() - start).total_seconds()
@@ -450,18 +505,24 @@ def get_metadata(level):
     # that is entirely dependent on medscan.
     if not has['medscan']:
         censored_res = []
-        for entry in res:
+        for entry in res['relations']:
             entry['total_count'] -= entry['source_counts'].pop('medscan', 0)
             if entry['source_counts']:
                 censored_res.append(entry)
-        res = censored_res
+        res['relations'] = censored_res
+
+    for entry in res['relations']:
+        if entry['type'] == 'ActiveForm':
+            entry['english'] = entry['agents'][0] + ' has active form.'
+        else:
+            entry['english'] = \
+                EnglishAssembler([stmt_from_interaction(entry)]).make_model()
 
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Returning with %s results after %.2f seconds."
                 % (len(res), dt))
 
-    resp = Response(json.dumps(sorted(res, key=lambda e: e['total_count'],
-                                      reverse=True)),
+    resp = Response(json.dumps(res),
                     mimetype='application/json')
 
     dt = (datetime.utcnow() - start).total_seconds()

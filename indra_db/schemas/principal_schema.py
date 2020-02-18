@@ -378,6 +378,12 @@ def get_schema(Base):
         source = Column(String)
         ip = Column(INET)
         date = Column(DateTime, default=func.now())
+
+        def to_json(self):
+            return {attr: getattr(self, attr)
+                    for attr in ['id', 'pa_hash', 'source_hash', 'tag', 'text',
+                                 'date']}
+
     table_dict[Curation.__tablename__] = Curation
 
     return table_dict

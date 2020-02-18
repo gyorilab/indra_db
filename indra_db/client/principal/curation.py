@@ -76,8 +76,9 @@ def get_curations(db=None, **params):
     for key, val in params.items():
         if key == 'hash_val':
             key = 'pa_hash'
-        if key == 'ev_hash':
+        elif key == 'ev_hash':
             key = 'source_hash'
+
         if isinstance(val, list) or isinstance(val, set) \
            or isinstance(val, tuple):
             constraints.append(getattr(cur, key).in_(val))

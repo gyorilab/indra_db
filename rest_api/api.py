@@ -83,6 +83,7 @@ def _query_wrapper(f):
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
         w_english = query.pop('with_english', 'false').lower() == 'true'
+        w_cur_counts = query.pop('with_cur_counts', 'false').lower() == 'true'
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -142,6 +143,17 @@ def _query_wrapper(f):
 
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
+
+        # Get counts of the curations for the resulting statements.
+        if w_cur_counts:
+            curations = get_curations(pa_hash=set(stmts_json.keys()))
+            logger.info("Found %d curations" % len(curations))
+            cur_counts = {}
+            for curation in curations:
+                if curation.pa_hash not in cur_counts:
+                    cur_counts[curation.pa_hash] = 0
+                cur_counts[curation.pa_hash] += 1
+            result['num_curations'] = cur_counts
 
         # Add derived values to the result.
         result['offset'] = offs

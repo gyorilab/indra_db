@@ -111,11 +111,14 @@ def _query_wrapper(f):
         stmts_json = result.pop('statements')
         elsevier_redactions = 0
         source_counts = result['source_counts']
-        if not has['elsevier'] or fmt == 'json-js' or w_english:
+        if not all(has.values()) or fmt == 'json-js' or w_english:
             for h, stmt_json in stmts_json.copy().items():
                 if w_english:
                     stmts = stmts_from_json([stmt_json])
                     stmt_json['english'] = EnglishAssembler(stmts).make_model()
+
+                if not has['medscan']:
+                    source_counts[h].pop('medscan', None)
 
                 if has['elsevier'] and fmt != 'json-js':
                     continue

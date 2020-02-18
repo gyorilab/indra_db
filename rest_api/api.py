@@ -12,7 +12,8 @@ from flask_jwt_extended import get_jwt_identity, jwt_optional
 from jinja2 import Environment, ChoiceLoader
 
 from indra.assemblers.html.assembler import loader as indra_loader, \
-    stmts_from_json, HtmlAssembler, SOURCE_COLORS
+    stmts_from_json, HtmlAssembler, SOURCE_COLORS, _format_evidence_text, \
+    _format_stmt_text
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 
@@ -114,13 +115,14 @@ def _query_wrapper(f):
         if not all(has.values()) or fmt == 'json-js' or w_english:
             for h, stmt_json in stmts_json.copy().items():
                 if w_english:
-                    stmts = stmts_from_json([stmt_json])
-                    stmt_json['english'] = EnglishAssembler(stmts).make_model()
+                    stmt = stmts_from_json([stmt_json])[0]
+                    stmt_json['english'] = _format_stmt_text(stmt)
+                    stmt_json['evidence'] = _format_evidence_text(stmt)
 
                 if not has['medscan']:
                     source_counts[h].pop('medscan', None)
 
-                if has['elsevier'] and fmt != 'json-js':
+                if has['elsevier'] and fmt != 'json-js' and not w_english:
                     continue
 
                 for ev_json in stmt_json['evidence'][:]:

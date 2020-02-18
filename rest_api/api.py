@@ -150,9 +150,17 @@ def _query_wrapper(f):
             logger.info("Found %d curations" % len(curations))
             cur_counts = {}
             for curation in curations:
+                # Update the overall counts.
                 if curation.pa_hash not in cur_counts:
                     cur_counts[curation.pa_hash] = 0
                 cur_counts[curation.pa_hash] += 1
+
+                # Work these counts into the evidence dict structure.
+                for ev_json in stmts_json[curation.pa_hash]['evidence']:
+                    if str(ev_json['source_hash']) == str(curation.source_hash):
+                        ev_json['num_curations'] = \
+                            ev_json.get('num_curations', 0) + 1
+                        break
             result['num_curations'] = cur_counts
 
         # Add derived values to the result.

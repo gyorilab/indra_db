@@ -12,7 +12,8 @@ from flask_jwt_extended import get_jwt_identity, jwt_optional
 from jinja2 import Environment, ChoiceLoader
 
 from indra.assemblers.html.assembler import loader as indra_loader, \
-    stmts_from_json, HtmlAssembler, SOURCE_COLORS
+    stmts_from_json, HtmlAssembler, SOURCE_COLORS, _format_evidence_text, \
+    _format_stmt_text
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 
@@ -82,6 +83,7 @@ def _query_wrapper(f):
                         MAX_STATEMENTS)
         fmt = query.pop('format', 'json')
         w_english = query.pop('with_english', 'false').lower() == 'true'
+        w_cur_counts = query.pop('with_cur_counts', 'false').lower() == 'true'
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -114,13 +116,14 @@ def _query_wrapper(f):
         if not all(has.values()) or fmt == 'json-js' or w_english:
             for h, stmt_json in stmts_json.copy().items():
                 if w_english:
-                    stmts = stmts_from_json([stmt_json])
-                    stmt_json['english'] = EnglishAssembler(stmts).make_model()
+                    stmt = stmts_from_json([stmt_json])[0]
+                    stmt_json['english'] = _format_stmt_text(stmt)
+                    stmt_json['evidence'] = _format_evidence_text(stmt)
 
                 if not has['medscan']:
                     source_counts[h].pop('medscan', None)
 
-                if has['elsevier'] and fmt != 'json-js':
+                if has['elsevier'] and fmt != 'json-js' and not w_english:
                     continue
 
                 for ev_json in stmt_json['evidence'][:]:
@@ -140,6 +143,25 @@ def _query_wrapper(f):
 
         logger.info("Finished redacting evidence for %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
+
+        # Get counts of the curations for the resulting statements.
+        if w_cur_counts:
+            curations = get_curations(pa_hash=set(stmts_json.keys()))
+            logger.info("Found %d curations" % len(curations))
+            cur_counts = {}
+            for curation in curations:
+                # Update the overall counts.
+                if curation.pa_hash not in cur_counts:
+                    cur_counts[curation.pa_hash] = 0
+                cur_counts[curation.pa_hash] += 1
+
+                # Work these counts into the evidence dict structure.
+                for ev_json in stmts_json[curation.pa_hash]['evidence']:
+                    if str(ev_json['source_hash']) == str(curation.source_hash):
+                        ev_json['num_curations'] = \
+                            ev_json.get('num_curations', 0) + 1
+                        break
+            result['num_curations'] = cur_counts
 
         # Add derived values to the result.
         result['offset'] = offs
@@ -490,6 +512,8 @@ def get_metadata(level):
             return query.pop(k, str(default).lower()) == 'true'
         return query.pop(k, default)
 
+    w_curations = pop('with_cur_counts', False)
+
     stmt_type = pop('type')
     stmt_type = None if stmt_type is None else make_statement_camel(stmt_type)
     res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
@@ -518,6 +542,23 @@ def get_metadata(level):
             entry['english'] = \
                 EnglishAssembler([stmt_from_interaction(entry)]).make_model()
 
+    # Look up curations, if result with_curations was set.
+    if w_curations:
+        rel_hash_lookup = {}
+        if level == 'hashes':
+            for rel in res['relations']:
+                rel['cur_count'] = 0
+                rel_hash_lookup[rel['hash']] = rel
+        else:
+            for rel in res['relations']:
+                for h in rel['hashes']:
+                    rel['cur_count'] = 0
+                    rel_hash_lookup[h] = rel
+        curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
+        for cur in curations:
+            rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
+
+    # Finish up the query.
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Returning with %s results after %.2f seconds."
                 % (len(res), dt))

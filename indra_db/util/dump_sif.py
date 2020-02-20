@@ -104,6 +104,8 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
         else:
             with open(pkl_filename, 'rb') as f:
                 results = pickle.load(f)
+    else:
+        raise ValueError("If `reload` is False a `pkl_filename` must be given.")
     logger.info("{len} stmts loaded".format(len=len(results)))
     return results
 

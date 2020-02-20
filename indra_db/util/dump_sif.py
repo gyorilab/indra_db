@@ -79,7 +79,7 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
     # Get the raw data
     if reload:
         if not ro:
-            ro = dbu.get_ro('primary-ro')
+            ro = dbu.get_ro('primary')
         logger.info("Querying the database for statement metadata...")
         results = []
         for ns in ns_list:
@@ -245,9 +245,9 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
     return df
 
 
-if __name__ == '__main__':
+def get_parser():
     parser = argparse.ArgumentParser(description='DB sif dumper',
-        usage='Usage: dump_sif.py <db_dump_pkl> <dataframe_pkl> <csv_file>')
+                                     usage='Usage: dump_sif.py <db_dump_pkl> <dataframe_pkl> <csv_file>')
     parser.add_argument('--db-dump',
                         help='A pickle of the database dump. If provided '
                              'with --reload, this is the name of a new '
@@ -290,7 +290,11 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Use the principal db instead of the readonly')
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = get_parser().parse_args()
 
     ymd = args.s3_ymd
     if args.s3:
@@ -370,3 +374,7 @@ if __name__ == '__main__':
 
     if args.strat_ev:
         _ = make_ev_strata(strat_ev_file, ro=db)
+
+
+if __name__ == '__main__':
+    main()

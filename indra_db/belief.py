@@ -24,7 +24,8 @@ class LoadError(Exception):
 
 class MockStatement(object):
     """A class to imitate real INDRA Statements for calculating belief."""
-    def __init__(self, mk_hash, evidence=None, supports=None, supported_by=None):
+    def __init__(self, mk_hash, evidence=None, supports=None,
+                 supported_by=None):
         if isinstance(evidence, list):
             self.evidence = evidence
         elif evidence is None:
@@ -144,8 +145,7 @@ def run(db=None):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='DB Belief Score Dumper',
-        usage='Usage: belief.py ')
+    parser = argparse.ArgumentParser(description='DB Belief Score Dumper')
     parser.add_argument('--fname',
                         nargs='?',
                         type=str,

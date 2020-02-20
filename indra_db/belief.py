@@ -139,7 +139,7 @@ def calculate_belief(stmts):
 
 def run(db=None):
     if db is None:
-        db = dbu.get_ro('primary-ro')
+        db = dbu.get_db('primary')
     stmts = load_mock_statements(db)
     return calculate_belief(stmts)
 
@@ -151,21 +151,16 @@ if __name__ == '__main__':
                         type=str,
                         default='belief_dict.pkl',
                         help='Filename of the belief dict output')
-    parser.add_argument('--principal',
-                        action='store_true',
-                        default=False,
-                        help='Use the primary DB instead of the readonly db')
     parser.add_argument('-s3',
                         action='store_true',
                         default=False,
                         help='Upload belief dict to the bigmech s3 bucket '
-                             'instead of saving it locallly')
+                             'instead of saving it locally')
     args = parser.parse_args()
     fname = 's3:' + '/'.join([S3_SUBDIR,
                               datetime.utcnow().strftime('%Y-%m-%d'),
                               args.fname]) if args.s3 else args.fname
-    db = dbu.get_db('primary') if args.principal else dbu.get_ro('primary')
-    belief_dict = run(db)
+    belief_dict = run()
     if fname.startswith('s3:'):
         upload_pickle_to_s3(obj=belief_dict, key=fname)
     else:

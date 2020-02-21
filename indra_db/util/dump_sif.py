@@ -249,7 +249,8 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
 
 def get_parser():
     parser = argparse.ArgumentParser(description='DB sif dumper',
-                                     usage='Usage: dump_sif.py <db_dump_pkl> <dataframe_pkl> <csv_file>')
+                                     usage=('Usage: dump_sif.py <db_dump_pkl> '
+                                            '<dataframe_pkl> <csv_file>'))
     parser.add_argument('--db-dump',
                         help='A pickle of the database dump. If provided '
                              'with --reload, this is the name of a new '
@@ -358,7 +359,7 @@ def main():
             except Exception as e:
                 try:
                     logger.warning('Failed to upload csv to s3 using direct '
-                                   's3 url, trying boto3.')
+                                   's3 url, trying boto3: %s.' % e)
                     s3 = get_s3_client(unsigned=False)
                     csv_buf = StringIO()
                     type_counts.to_csv(csv_buf)
@@ -366,10 +367,10 @@ def main():
                                   Body=csv_buf.getvalue(),
                                   Key=csv_file[3:])
                     logger.info('Uploaded CSV file to s3')
-                except Exception as e:
+                except Exception as second_e:
                     logger.error('Failed to upload csv file with fallback '
                                  'method')
-                    logger.exception(e)
+                    logger.exception(second_e)
         # save locally
         else:
             type_counts.to_csv(csv_file)

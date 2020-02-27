@@ -66,7 +66,7 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
         if 'text_refs' not in ev.keys():
             ev['text_refs'] = {}
         for idt in ['trid', 'pmid', 'pmcid', 'doi']:
-            ev['text_refs'][idt] = _get_id_col(tr, idt)
+            ev['text_refs'][idt.upper()] = _get_id_col(tr, idt)
 
         # Add this to the results.
         result_dict[id_val].append(rjson)

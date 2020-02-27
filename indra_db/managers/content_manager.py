@@ -947,7 +947,7 @@ class PmcManager(_NihManager):
             filtered_tc_records,
             self.tc_cols
             )
-        gatherer.add('content', len(filtered_tr_records))
+        gatherer.add('content', len(filtered_tc_records))
         return
 
     def get_data_from_xml_str(self, xml_str, filename):

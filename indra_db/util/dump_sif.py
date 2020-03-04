@@ -296,45 +296,14 @@ def get_parser():
     return parser
 
 
-def main():
-    args = get_parser().parse_args()
-
-    ymd = args.s3_ymd
-    if args.s3:
-        logger.info('Uploading to %s/%s/%s on s3 instead of saving locally'
-                    % (S3_SIF_BUCKET, S3_SUBDIR, ymd))
-    dump_file = _pseudo_key(args.db_dump, ymd) if args.s3 and args.db_dump\
-        else args.db_dump
-    df_file = _pseudo_key(args.dataframe, ymd) if args.s3 and args.dataframe\
-        else args.dataframe
-    csv_file = _pseudo_key(args.csv_file, ymd) if args.s3 and args.csv_file\
-        else args.csv_file
-    strat_ev_file = _pseudo_key(args.strat_ev, ymd) if args.s3 and \
-        args.strat_ev else args.strat_ev
-
-    reload = args.reload
-    if reload:
-        logger.info('Reloading the database content from the database')
-    else:
-        logger.info('Loading cached database content from %s' % dump_file)
-
-    reconvert = args.reconvert
-    if reconvert:
-        logger.info('Reconverting database content into pandas dataframe')
-    else:
-        logger.info('Loading cached dataframe from %s' % df_file)
-
-    for f in [dump_file, df_file, csv_file, strat_ev_file]:
-        if f:
-            logger.info('Using file name %s' % f)
-        else:
-            continue
-
-    db = dbu.get_db('primary') if args.principal else dbu.get_ro('primary')
+def dump_sif(dump_file, df_file=None, csv_file=None, strat_ev_file=None,
+             reload=False, reconvert=False, ro=None):
+    if ro is None:
+        ro = dbu.get_db('primary')
 
     # Get the db content from a new DB dump or from file
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
-                                 pkl_filename=dump_file, ro=db)
+                                 pkl_filename=dump_file, ro=ro)
 
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
@@ -375,8 +344,46 @@ def main():
         else:
             type_counts.to_csv(csv_file)
 
-    if args.strat_ev:
-        _ = make_ev_strata(strat_ev_file, ro=db)
+    if strat_ev_file:
+        _ = make_ev_strata(strat_ev_file, ro=ro)
+    return
+
+
+def main():
+    args = get_parser().parse_args()
+
+    ymd = args.s3_ymd
+    if args.s3:
+        logger.info('Uploading to %s/%s/%s on s3 instead of saving locally'
+                    % (S3_SIF_BUCKET, S3_SUBDIR, ymd))
+    dump_file = _pseudo_key(args.db_dump, ymd) if args.s3 and args.db_dump\
+        else args.db_dump
+    df_file = _pseudo_key(args.dataframe, ymd) if args.s3 and args.dataframe\
+        else args.dataframe
+    csv_file = _pseudo_key(args.csv_file, ymd) if args.s3 and args.csv_file\
+        else args.csv_file
+    strat_ev_file = _pseudo_key(args.strat_ev, ymd) if args.s3 and \
+        args.strat_ev else args.strat_ev
+
+    reload = args.reload
+    if reload:
+        logger.info('Reloading the database content from the database')
+    else:
+        logger.info('Loading cached database content from %s' % dump_file)
+
+    reconvert = args.reconvert
+    if reconvert:
+        logger.info('Reconverting database content into pandas dataframe')
+    else:
+        logger.info('Loading cached dataframe from %s' % df_file)
+
+    for f in [dump_file, df_file, csv_file, strat_ev_file]:
+        if f:
+            logger.info('Using file name %s' % f)
+        else:
+            continue
+    ro = dbu.get_db('primary') if args.principal else dbu.get_ro('primary')
+    dump_sif(dump_file, df_file, csv_file, strat_ev_file, reload, reconvert, ro)
 
 
 if __name__ == '__main__':

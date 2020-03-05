@@ -74,8 +74,8 @@ class DbReadingSubmitter(Submitter):
         return
 
     def _get_base(self, job_name, start_ix, end_ix):
-        read_mode = self.options.get('reading_mode', 'unread')
-        stmt_mode = self.options.get('stmt_mode', 'all')
+        read_mode = self.options.pop('read_mode', 'unread')
+        stmt_mode = self.options.pop('stmt_mode', 'all')
 
         base = ['python3', '-m', 'indra_db.reading.read_db_aws',
                 self.job_base, job_name, self.s3_base]

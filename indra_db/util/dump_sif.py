@@ -1,4 +1,5 @@
-__all__ = ['load_db_content', 'make_dataframe', 'make_ev_strata', 'NS_LIST']
+__all__ = ['load_db_content', 'make_dataframe', 'get_source_counts', 'NS_LIST',
+           'dump_sif']
 
 import pickle
 import logging
@@ -110,7 +111,7 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
     return results
 
 
-def make_ev_strata(pkl_filename=None, ro=None):
+def get_source_counts(pkl_filename=None, ro=None):
     """Returns a dict of dicts with evidence count per source, per statement
 
     The dictionary is at the top level keyed by statement hash and each
@@ -274,11 +275,12 @@ def get_parser():
     parser.add_argument('--csv-file',
                         help='Dump a csv file with statistics of the database '
                              'dump')
-    parser.add_argument('--strat-ev',
+    parser.add_argument('--src-counts',
                         help='If provided, also run and dump a pickled '
                              'dictionary of the stratified evidence count '
-                             'per statement from ')
-    parser.add_argument('-s3',
+                             'per statement from each of the different '
+                             'sources.')
+    parser.add_argument('--s3',
                         action='store_true',
                         default=False,
                         help='Upload files to the bigmech s3 bucket instead '
@@ -296,14 +298,14 @@ def get_parser():
     return parser
 
 
-def dump_sif(dump_file, df_file=None, csv_file=None, strat_ev_file=None,
+def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
              reload=False, reconvert=False, ro=None):
     if ro is None:
         ro = dbu.get_db('primary')
 
     # Get the db content from a new DB dump or from file
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
-                                 pkl_filename=dump_file, ro=ro)
+                                 pkl_filename=db_res_file, ro=ro)
 
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
@@ -344,8 +346,8 @@ def dump_sif(dump_file, df_file=None, csv_file=None, strat_ev_file=None,
         else:
             type_counts.to_csv(csv_file)
 
-    if strat_ev_file:
-        _ = make_ev_strata(strat_ev_file, ro=ro)
+    if src_count_file:
+        _ = get_source_counts(src_count_file, ro=ro)
     return
 
 
@@ -356,20 +358,20 @@ def main():
     if args.s3:
         logger.info('Uploading to %s/%s/%s on s3 instead of saving locally'
                     % (S3_SIF_BUCKET, S3_SUBDIR, ymd))
-    dump_file = _pseudo_key(args.db_dump, ymd) if args.s3 and args.db_dump\
+    db_res_file = _pseudo_key(args.db_dump, ymd) if args.s3 and args.db_dump\
         else args.db_dump
     df_file = _pseudo_key(args.dataframe, ymd) if args.s3 and args.dataframe\
         else args.dataframe
     csv_file = _pseudo_key(args.csv_file, ymd) if args.s3 and args.csv_file\
         else args.csv_file
-    strat_ev_file = _pseudo_key(args.strat_ev, ymd) if args.s3 and \
-        args.strat_ev else args.strat_ev
+    src_count_file = _pseudo_key(args.src_counts, ymd) if args.s3 and \
+        args.src_counts else args.src_counts
 
     reload = args.reload
     if reload:
         logger.info('Reloading the database content from the database')
     else:
-        logger.info('Loading cached database content from %s' % dump_file)
+        logger.info('Loading cached database content from %s' % db_res_file)
 
     reconvert = args.reconvert
     if reconvert:
@@ -377,13 +379,14 @@ def main():
     else:
         logger.info('Loading cached dataframe from %s' % df_file)
 
-    for f in [dump_file, df_file, csv_file, strat_ev_file]:
+    for f in [db_res_file, df_file, csv_file, src_count_file]:
         if f:
             logger.info('Using file name %s' % f)
         else:
             continue
-    ro = dbu.get_db('primary') if args.principal else dbu.get_ro('primary')
-    dump_sif(dump_file, df_file, csv_file, strat_ev_file, reload, reconvert, ro)
+
+    dump_sif(df_file, db_res_file, csv_file, src_count_file, reload, reconvert,
+             dbu.get_db('primary') if args.principal else dbu.get_ro('primary'))
 
 
 if __name__ == '__main__':

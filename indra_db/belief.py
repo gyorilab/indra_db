@@ -137,7 +137,7 @@ def calculate_belief(stmts):
     return {s.matches_key(): s.belief for s in stmts}
 
 
-def run(db=None):
+def get_belief(db=None):
     if db is None:
         db = dbu.get_db('primary')
     stmts = load_mock_statements(db)
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     fname = 's3:' + '/'.join([S3_SUBDIR,
                               datetime.utcnow().strftime('%Y-%m-%d'),
                               args.fname]) if args.s3 else args.fname
-    belief_dict = run()
+    belief_dict = get_belief()
     if fname.startswith('s3:'):
         upload_pickle_to_s3(obj=belief_dict, key=fname)
     else:

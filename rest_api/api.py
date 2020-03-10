@@ -507,20 +507,26 @@ def get_metadata(level):
         abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
         return
 
-    def pop(k, default=None):
+    def pop(k, default=None, type_cast=None):
         if isinstance(default, bool):
-            return query.pop(k, str(default).lower()) == 'true'
-        return query.pop(k, default)
+            val = query.pop(k, str(default).lower()) == 'true'
+        else:
+            val = query.pop(k, default)
+
+        if type_cast is not None and val is not None:
+            return type_cast(val)
+        return val
 
     w_curations = pop('with_cur_counts', False)
-
-    stmt_type = pop('type')
-    stmt_type = None if stmt_type is None else make_statement_camel(stmt_type)
+    stmt_type = pop('type', type_cast=make_statement_camel)
+    max_relations = pop('limit', type_cast=int)
+    offset = pop('offset', type_cast=int)
+    best_first = pop('best_first', True)
     res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
                                             stmt_type=stmt_type,
-                                            max_relations=int(pop('limit')),
-                                            offset=int(pop('offset')),
-                                            best_first=pop('best_first', True))
+                                            max_relations=max_relations,
+                                            offset=offset,
+                                            best_first=best_first)
 
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Got %s results after %.2f." % (len(res), dt))

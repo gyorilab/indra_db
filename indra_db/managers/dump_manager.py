@@ -40,7 +40,7 @@ class Dumper(object):
     def _gen_s3_name(cls):
         s3_config = get_s3_dump()
         dt_ts = datetime.now().strftime('%Y-%m-%d')
-        key = s3_config['prefix'] + '%s-%s.%s' % (cls.name, dt_ts, cls.fmt)
+        key = s3_config['prefix'] + '%s/%s.%s' % (dt_ts, cls.name, cls.fmt)
         return s3_config['bucket'], key
 
     def dump(self, continuing=False):

@@ -75,6 +75,8 @@ class Belief(Dumper):
 
 
 class Readonly(Dumper):
+    name = 'readonly'
+
     def dump(self, continuing=False):
         principal_db = get_db(self.db_label)
 

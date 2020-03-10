@@ -108,7 +108,7 @@ def get_interaction_jsons_from_agents(agents=None, stmt_type=None, ro=None,
             result.append(entry)
 
     # Get the next offset.
-    if len(meta_dict) < max_relations:
+    if max_relations is None or len(meta_dict) < max_relations:
         new_offset = None
     else:
         new_offset = (0 if offset is None else offset) + len(meta_dict)

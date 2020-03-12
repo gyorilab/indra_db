@@ -17,11 +17,10 @@ bash$ python submit_reading_pipeline.py --help
 In your favorite command line.
 """
 import json
-from asyncio import sleep
-
 import boto3
 import logging
 import botocore
+from time import sleep
 from datetime import datetime
 from functools import partial
 

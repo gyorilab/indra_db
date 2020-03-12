@@ -20,7 +20,9 @@ import json
 import boto3
 import logging
 import botocore
+from time import sleep
 from datetime import datetime
+from functools import partial
 
 from indra_reading.util import get_s3_log_prefix
 from indra_reading.scripts.submit_reading_pipeline import create_submit_parser,\
@@ -71,8 +73,8 @@ class DbReadingSubmitter(Submitter):
         return
 
     def _get_base(self, job_name, start_ix, end_ix):
-        read_mode = self.options.get('reading_mode', 'unread')
-        stmt_mode = self.options.get('stmt_mode', 'all')
+        read_mode = self.options.pop('read_mode', 'unread')
+        stmt_mode = self.options.pop('stmt_mode', 'all')
 
         base = ['python3', '-m', 'indra_db.reading.read_db_aws',
                 self.job_base, job_name, self.s3_base]
@@ -240,11 +242,26 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
+    logger.info("Reading for %s" % args.readers)
     sub = DbReadingSubmitter(args.basename, args.readers, args.project)
     sub.set_options(args.stmt_mode, args.read_mode,
                     args.max_reach_input_len, args.max_reach_space_ratio)
-    sub.submit_reading(args.input_file, args.start_ix, args.end_ix,
-                       args.ids_per_job)
+
+    submit = partial(sub.submit_reading, args.input_file, args.start_ix,
+                     args.end_ix, args.ids_per_job, stagger=args.stagger)
+    if args.stagger > 0:
+        from threading import Thread
+        th = Thread(target=submit)
+        th.start()
+        while not sub.monitors:
+            sleep(1)
+            logger.info("Waiting for monitors...")
+    else:
+        submit()
+
     if not args.no_wait:
         sub.watch_and_wait(idle_log_timeout=args.idle_log_timeout,
                            kill_on_timeout=not args.no_kill_on_timeout)
+
+    if args.stagger > 0:
+        th.join()

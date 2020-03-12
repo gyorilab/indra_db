@@ -172,12 +172,6 @@ def parse_args():
               '"primary" database.')
     )
     parser.add_argument(
-        '-m', '--m_views',
-        default='all',
-        nargs='+',
-        help='Specify certain views to create or refresh.'
-    )
-    parser.add_argument(
         '-a', '--allow_continue',
         action='store_true',
         help=("Indicate whether you want to job to continue building atop an "
@@ -191,16 +185,16 @@ def parse_args():
               "Selecting this option makes -a/--allow_continue moot.")
     )
     parser.add_argument(
-        '-l', '--load_only',
-        action='store_true',
-        help=('Use this flag to only load the latest s3 file onto the '
-              'readonly database.')
-    )
-    parser.add_argument(
         '-u', '--dump_only',
         action='store_true',
         help=('Use this flag to only generate and dump the readonly database '
               'image to s3.')
+    )
+    parser.add_argument(
+        '-l', '--load_only',
+        action='store_true',
+        help=('Use this flag to only load the latest s3 file onto the '
+              'readonly database.')
     )
 
     args = parser.parse_args()

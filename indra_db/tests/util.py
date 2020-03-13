@@ -303,16 +303,14 @@ def get_pa_loaded_db(num_stmts, split=None, pam=None):
 def get_filled_ro(num_stmts):
     db = get_prepped_db(num_stmts, with_pa=True, with_agents=True)
     db.generate_readonly()
-    s3_dict = get_s3_dump()
-    assert s3_dict, "No s3 config available for db dumps."
-    fname = 's3://{bucket}/{prefix}-test'.format(**s3_dict)
-    if not fname.endswith('/'):
-        fname += '/'
+    s3_base = get_s3_dump()
+    assert s3_base, "No s3 config available for db dumps."
+    s3_path = dbu.S3Path.from_string(s3_base.to_string() + '-test')
     now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
-    fname += 'readonly-%s.dump' % now_str
-    db.dump_readonly(fname)
+    s3_path.get_element_path('readonly-%s.dump' % now_str)
+    db.dump_readonly(s3_path)
     ro = get_temp_ro()
-    ro.load_dump(fname)
+    ro.load_dump(s3_path)
     return ro
 
 

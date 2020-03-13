@@ -17,7 +17,7 @@ except ImportError:
     print("Pandas not available.")
     pd = None
 
-from indra_db import util as dbu
+from indra_db.util.constructors import get_ro, get_db
 
 logger = logging.getLogger(__name__)
 S3_SIF_BUCKET = 'bigmech'
@@ -80,7 +80,7 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
     # Get the raw data
     if reload:
         if not ro:
-            ro = dbu.get_ro('primary')
+            ro = get_ro('primary')
         logger.info("Querying the database for statement metadata...")
         results = []
         for ns in ns_list:
@@ -118,7 +118,7 @@ def get_source_counts(pkl_filename=None, ro=None):
     entry contains a dictionary keyed by the source that support the
     statement where the entries are the evidence count for that source."""
     if not ro:
-        ro = dbu.get_ro('primary-ro')
+        ro = get_ro('primary-ro')
     res = ro.select_all(ro.PaStmtSrc)
     ev = {}
     for r in res:
@@ -301,7 +301,7 @@ def get_parser():
 def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
              reload=False, reconvert=False, ro=None):
     if ro is None:
-        ro = dbu.get_db('primary')
+        ro = get_db('primary')
 
     # Get the db content from a new DB dump or from file
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
@@ -386,7 +386,7 @@ def main():
             continue
 
     dump_sif(df_file, db_res_file, csv_file, src_count_file, reload, reconvert,
-             dbu.get_db('primary') if args.principal else dbu.get_ro('primary'))
+             get_db('primary') if args.principal else get_ro('primary'))
 
 
 if __name__ == '__main__':

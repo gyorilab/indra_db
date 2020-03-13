@@ -42,41 +42,38 @@ NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
 
 
 def _pseudo_key(fname, ymd_date):
-    return 's3:' + '/'.join([S3_SUBDIR, ymd_date, fname])
+    return S3Path.from_key_parts(S3_SIF_BUCKET, S3_SUBDIR, ymd_date, fname)
 
 
-def upload_pickle_to_s3(obj, key, bucket=S3_SIF_BUCKET):
+def upload_pickle_to_s3(obj, s3_path):
     """Upload a python object as a pickle to s3"""
     logger.info('Uploading %s as pickle object to bucket %s'
-                % (key.split('/')[-1],
-                   bucket + '/'.join(key.split('/')[:-1])))
-    if key.startswith('s3:'):
-        key = key[3:]
+                % (s3_path.key.split('/')[-1], s3_path.bucket))
     s3 = get_s3_client(unsigned=False)
     try:
-        s3.put_object(Body=pickle.dumps(obj=obj), Bucket=bucket, Key=key)
+        s3.put_object(Body=pickle.dumps(obj=obj), *s3_path.kw())
         logger.info('Finished dumping file to s3')
     except Exception as e:
         logger.error('Failed to upload to s3')
         logger.exception(e)
 
 
-def load_pickle_from_s3(key, bucket=S3_SIF_BUCKET):
-    logger.info('Loading pickle %s from s3' % key)
-    if key.startswith('s3:'):
-        key = key[3:]
+def load_pickle_from_s3(s3_path):
+    logger.info('Loading pickle %s.' % s3_path)
     s3 = get_s3_client(unsigned=False)
     try:
-        res = s3.get_object(Key=key, Bucket=bucket)
+        res = s3.get_object(*s3_path.kw())
         obj = pickle.loads(res['Body'].read())
-        logger.info('Finished loading %s' % key)
+        logger.info('Finished loading %s.' % s3_path)
         return obj
     except Exception as e:
-        logger.error('Failed to load %s from s3' % key)
+        logger.error('Failed to load %s.' % s3_path)
         logger.exception(e)
 
 
 def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
+    if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
+        pkl_filename = S3Path.from_string(pkl_filename)
     # Get the raw data
     if reload:
         if not ro:
@@ -92,8 +89,8 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
             results.extend(res)
         results = set(results)
         if pkl_filename:
-            if pkl_filename.startswith('s3:'):
-                upload_pickle_to_s3(results, key=pkl_filename)
+            if isinstance(pkl_filename, S3Path):
+                upload_pickle_to_s3(results, pkl_filename)
             else:
                 with open(pkl_filename, 'wb') as f:
                     pickle.dump(results, f)
@@ -101,7 +98,7 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
     elif pkl_filename:
         logger.info("Loading database content from %s" % pkl_filename)
         if pkl_filename.startswith('s3:'):
-            results = load_pickle_from_s3(key=pkl_filename)
+            results = load_pickle_from_s3(pkl_filename)
         else:
             with open(pkl_filename, 'rb') as f:
                 results = pickle.load(f)
@@ -117,6 +114,8 @@ def get_source_counts(pkl_filename=None, ro=None):
     The dictionary is at the top level keyed by statement hash and each
     entry contains a dictionary keyed by the source that support the
     statement where the entries are the evidence count for that source."""
+    if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
+        pkl_filename = S3Path.from_string(pkl_filename)
     if not ro:
         ro = get_ro('primary-ro')
     res = ro.select_all(ro.PaStmtSrc)
@@ -128,8 +127,8 @@ def get_source_counts(pkl_filename=None, ro=None):
                              rd[k] is not None}
 
     if pkl_filename:
-        if pkl_filename.startswith('s3:'):
-            upload_pickle_to_s3(obj=ev, key=pkl_filename)
+        if isinstance(pkl_filename, S3Path):
+            upload_pickle_to_s3(obj=ev, s3_path=pkl_filename)
         else:
             with open(pkl_filename, 'wb') as f:
                 pickle.dump(ev, f)
@@ -137,6 +136,8 @@ def get_source_counts(pkl_filename=None, ro=None):
 
 
 def make_dataframe(reconvert, db_content, pkl_filename=None):
+    if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
+        pkl_filename = S3Path.from_string(pkl_filename)
     if reconvert:
         # Organize by statement
         logger.info("Organizing by statement...")
@@ -230,8 +231,8 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
         df = pd.DataFrame.from_dict(rows)
 
         if pkl_filename:
-            if pkl_filename.startswith('s3:'):
-                upload_pickle_to_s3(obj=df, key=pkl_filename)
+            if isinstance(pkl_filename, S3Path):
+                upload_pickle_to_s3(obj=df, s3_path=pkl_filename)
             else:
                 with open(pkl_filename, 'wb') as f:
                     pickle.dump(df, f)
@@ -240,7 +241,7 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
             logger.error('Have to provide pickle file if not reconverting')
             raise FileExistsError
         else:
-            if pkl_filename.startswith('s3:'):
+            if isinstance(pkl_filename, S3Path):
                 df = load_pickle_from_s3(pkl_filename)
             else:
                 with open(pkl_filename, 'rb') as f:
@@ -312,6 +313,8 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
                         db_content=db_content)
 
     if csv_file:
+        if isinstance(csv_file, str) and csv_file.startswith('s3:'):
+            csv_file = S3Path.from_string(csv_file)
         # Aggregate rows by genes and stmt type
         logger.info("Saving to CSV...")
         filt_df = df.filter(items=['agA_ns', 'agA_id', 'agA_name',
@@ -322,11 +325,9 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
                                           'stmt_type']).sum()
         # This requires package s3fs under the hood. See:
         # https://pandas.pydata.org/pandas-docs/stable/whatsnew/v0.20.0.html#s3-file-handling
-        if csv_file.startswith('s3:'):
+        if isinstance(csv_file, S3Path):
             try:
-                type_counts.to_csv(
-                    's3://' + S3_SIF_BUCKET + '/' + csv_file[3:]
-                )
+                type_counts.to_csv(csv_file.to_string())
             except Exception as e:
                 try:
                     logger.warning('Failed to upload csv to s3 using direct '
@@ -334,9 +335,7 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
                     s3 = get_s3_client(unsigned=False)
                     csv_buf = StringIO()
                     type_counts.to_csv(csv_buf)
-                    s3.put_object(Bucket=S3_SIF_BUCKET,
-                                  Body=csv_buf.getvalue(),
-                                  Key=csv_file[3:])
+                    s3.put_object(Body=csv_buf.getvalue(), **csv_file.kw())
                     logger.info('Uploaded CSV file to s3')
                 except Exception as second_e:
                     logger.error('Failed to upload csv file with fallback '

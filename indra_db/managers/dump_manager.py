@@ -33,8 +33,7 @@ class Dumper(object):
 
     def get_s3_path(self):
         if self.s3_dump_path is None:
-            bucket, key = self._gen_s3_name()
-            self.s3_dump_path = S3Path(bucket, key)
+            self.s3_dump_path= self._gen_s3_name()
         return self.s3_dump_path
 
     @classmethod

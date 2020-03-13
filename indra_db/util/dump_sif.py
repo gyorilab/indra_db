@@ -17,6 +17,7 @@ except ImportError:
     print("Pandas not available.")
     pd = None
 
+from indra_db.util.s3_path import S3Path
 from indra_db.util.constructors import get_ro, get_db
 
 logger = logging.getLogger(__name__)

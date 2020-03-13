@@ -72,11 +72,11 @@ def load_pickle_from_s3(s3_path):
         logger.exception(e)
 
 
-def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
+def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     # Get the raw data
-    if reload:
+    if reload or not pkl_filename:
         if not ro:
             ro = get_ro('primary')
         logger.info("Querying the database for statement metadata...")
@@ -96,15 +96,13 @@ def load_db_content(reload, ns_list, pkl_filename=None, ro=None):
                 with open(pkl_filename, 'wb') as f:
                     pickle.dump(results, f)
     # Get a cached pickle
-    elif pkl_filename:
+    else:
         logger.info("Loading database content from %s" % pkl_filename)
         if pkl_filename.startswith('s3:'):
             results = load_pickle_from_s3(pkl_filename)
         else:
             with open(pkl_filename, 'rb') as f:
                 results = pickle.load(f)
-    else:
-        raise ValueError("If `reload` is False a `pkl_filename` must be given.")
     logger.info("{len} stmts loaded".format(len=len(results)))
     return results
 

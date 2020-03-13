@@ -21,8 +21,8 @@ class S3Path(object):
             ret['Key'] = self.key
         return ret
 
-    def get_element_path(self, subkey):
-        return self.from_key_parts(self.bucket, self.key, subkey)
+    def get_element_path(self, *subkeys):
+        return self.from_key_parts(self.bucket, self.key, path.join(*subkeys))
 
     @classmethod
     def from_key_parts(cls, bucket, *key_elements):

@@ -23,7 +23,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
-
+from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
 from indra_db.schemas.readonly_schema import CREATE_ORDER, CREATE_UNORDERED
@@ -944,6 +944,13 @@ class PrincipalDatabaseManager(DatabaseManager):
 
     def dump_readonly(self, dump_file=None):
         """Dump the readonly schema to s3."""
+        if isinstance(dump_file, str):
+            dump_file = S3Path.from_string(dump_file)
+        elif dump_file is not None and not isinstance(dump_file, S3Path):
+            raise ValueError("Argument `dump_file` must be appropriately "
+                             "formatted string or S3Path object, not %s."
+                             % type(dump_file))
+
         from subprocess import check_call
         from indra_db.config import get_s3_dump
         from os import environ
@@ -958,39 +965,35 @@ class PrincipalDatabaseManager(DatabaseManager):
 
         # Form the name of the s3 file, if not given.
         if dump_file is None:
-            dump_file = 's3://{bucket}/{prefix}'.format(**get_s3_dump())
-            if not dump_file.endswith('/'):
-                dump_file += '/'
             now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
-            dump_file += 'readonly-%s.dump' % now_str
+            dump_loc = get_s3_dump()
+            dump_file = dump_loc.get_element_path('readonly-%s.dump' % now_str)
 
         # Dump the database onto s3, piping through this machine (errors if
         # anything went wrong).
         cmd = ' '.join(["pg_dump", *self._form_pg_args(),
                         '-n', 'readonly', '-Fc',
-                        '|', 'aws', 's3', 'cp', '-', dump_file])
+                        '|', 'aws', 's3', 'cp', '-', dump_file.to_string()])
         check_call(cmd, shell=True, env=my_env)
 
         return dump_file
 
-    def get_latest_dump_file(self):
+    @staticmethod
+    def get_latest_dump_file():
         import boto3
         from indra.util.aws import iter_s3_keys
         from indra_db.config import get_s3_dump
 
         s3 = boto3.client('s3')
-        s3_params = get_s3_dump()
-        bucket = s3_params['bucket']
-        prefix = s3_params['prefix']
+        s3_path = get_s3_dump()
 
-        logger.debug("Looking for the latest dump file on s3 in bucket "
-                     "%s with prefix %s." % (bucket, prefix))
+        logger.debug("Looking for the latest dump file on s3 to %s." % s3_path)
 
         # Get the most recent file from s3.
         max_date_str = None
         max_lm_date = None
         latest_key = None
-        for key, lm_date in iter_s3_keys(s3, bucket, prefix, with_dt=True):
+        for key, lm_date in iter_s3_keys(s3, with_dt=True, **s3_path.kw()):
 
             # Get the date string from the name, ignoring non-standard files.
             suffix = key.split('/')[-1]
@@ -1012,9 +1015,10 @@ class PrincipalDatabaseManager(DatabaseManager):
                     and (date_str > max_date_str or lm_date > max_lm_date):
                 raise S3DumpTimeAmbiguityError(key, date_str > max_date_str,
                                                lm_date > max_lm_date)
-        logger.debug("Latest dump file from s3 with bucket %s and prefix %s "
-                     "was found to be %s." % (bucket, prefix, latest_key))
-        return 's3://{bucket}/{key}'.format(bucket=bucket, key=latest_key)
+        logger.debug("Latest dump file from %s was found to be %s."
+                     % (s3_path, latest_key))
+
+        return S3Path(s3_path.bucket, latest_key)
 
 
 class S3DumpTimeAmbiguityError(Exception):
@@ -1048,6 +1052,13 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
+        if isinstance(dump_file, str):
+            dump_file = S3Path.from_string(dump_file)
+        elif dump_file is not None and not isinstance(dump_file, S3Path):
+            raise ValueError("Argument `dump_file` must be appropriately "
+                             "formatted string or S3Path object, not %s."
+                             % type(dump_file))
+
         from subprocess import run
         from os import environ
 
@@ -1069,7 +1080,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
         # Pipe the database dump from s3 through this machine into the database
         logger.info("Dumping into the database.")
-        run(' '.join(['aws', 's3', 'cp', dump_file, '-', '|',
+        run(' '.join(['aws', 's3', 'cp', dump_file.to_string(), '-', '|',
                       'pg_restore', *self._form_pg_args(), '--no-owner']),
             env=my_env, shell=True, check=True)
         self.session.close()

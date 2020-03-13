@@ -139,7 +139,10 @@ def get_s3_dump(force_update=False, include_config=True):
     if not CONFIG or force_update:
         _load(include_config)
 
-    return S3Path(**CONFIG['s3_dump'])
+    if 's3_dump' not in CONFIG:
+        return None
+
+    return S3Path(CONFIG['s3_dump']['bucket'], CONFIG['s3_dump'].get('prefix'))
 
 
 _load(True)

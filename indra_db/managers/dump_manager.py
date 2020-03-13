@@ -210,13 +210,13 @@ def main():
     if not args.load_only:
         logger.info("Generating readonly schema (est. a long time)")
         ro_dumper = Readonly()
-        ro_dumper.dump()
+        ro_dumper.dump(continuing=args.allow_continue)
 
         logger.info("Dumping sif from the readonly schema on principal.")
-        Sif(use_principal=True).dump()
+        Sif(use_principal=True).dump(continuing=args.allow_continue)
 
         logger.info("Dumping belief.")
-        Belief().dump()
+        Belief().dump(continuing=args.allow_continue)
         dump_file = ro_dumper.get_s3_name()
     else:
         dump_file = principal_db.get_latest_dump_file()

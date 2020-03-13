@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 from indra_db.belief import get_belief
 from indra_db.config import CONFIG
 from indra_db.config import get_s3_dump
-from indra_db.util import get_db, get_ro
+from indra_db.util import get_db, get_ro, S3Path
 from indra_db.util.dump_sif import dump_sif
 
 
@@ -29,19 +29,20 @@ class Dumper(object):
 
     def __init__(self, db_label='primary'):
         self.db_label = db_label
-        self.s3_dump_name = None
+        self.s3_dump_path = None
 
-    def get_s3_name(self):
-        if self.s3_dump_name is None:
-            self.s3_dump_name = self._gen_s3_name()
-        return self.s3_dump_name
+    def get_s3_path(self):
+        if self.s3_dump_path is None:
+            bucket, key = self._gen_s3_name()
+            self.s3_dump_path = S3Path(bucket, key)
+        return self.s3_dump_path
 
     @classmethod
     def _gen_s3_name(cls):
-        s3_config = get_s3_dump()
+        s3_base = get_s3_dump()
         dt_ts = datetime.now().strftime('%Y-%m-%d')
-        key = s3_config['prefix'] + '%s/%s.%s' % (dt_ts, cls.name, cls.fmt)
-        return s3_config['bucket'], key
+        s3_path = s3_base.get_element_path(dt_ts, '%s.%s' % (cls.name, cls.fmt))
+        return s3_path
 
     def dump(self, continuing=False):
         raise NotImplementedError()
@@ -59,8 +60,8 @@ class Sif(Dumper):
             ro = get_db(self.db_label)
         else:
             ro = get_ro(self.db_label)
-        bucket, key = self.get_s3_name()
-        dump_sif('s3:' + bucket + '/' + key, ro=ro)
+        s3_path = self.get_s3_path()
+        dump_sif(s3_path, ro=ro)
 
 
 class Belief(Dumper):
@@ -68,10 +69,9 @@ class Belief(Dumper):
 
     def dump(self, continuing=False):
         db = get_db(self.db_label)
-        bucket, key = self.get_s3_name()
         belief_dict = get_belief(db)
         s3 = boto3.client('s3')
-        s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(belief_dict))
+        s3.put_object(Body=json.dumps(belief_dict), **self.get_s3_path().kw())
 
 
 class Readonly(Dumper):
@@ -86,8 +86,7 @@ class Readonly(Dumper):
 
         logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
                     % datetime.now())
-        principal_db.dump_readonly(self.get_s3_name())
-
+        principal_db.dump_readonly(self.get_s3_path())
         return
 
 
@@ -217,7 +216,7 @@ def main():
 
         logger.info("Dumping belief.")
         Belief().dump(continuing=args.allow_continue)
-        dump_file = ro_dumper.get_s3_name()
+        dump_file = ro_dumper.get_s3_path()
     else:
         dump_file = principal_db.get_latest_dump_file()
 

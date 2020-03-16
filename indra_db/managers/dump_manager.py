@@ -49,6 +49,7 @@ class Dumper(object):
 
 class Sif(Dumper):
     name = 'sif'
+    fmt = 'pkl'
 
     def __init__(self, db_label='primary', use_principal=False):
         self.use_principal = use_principal
@@ -65,6 +66,7 @@ class Sif(Dumper):
 
 class Belief(Dumper):
     name = 'belief'
+    fmt = 'pkl'
 
     def dump(self, continuing=False):
         db = get_db(self.db_label)
@@ -75,6 +77,7 @@ class Belief(Dumper):
 
 class Readonly(Dumper):
     name = 'readonly'
+    fmt = 'dump'
 
     def dump(self, continuing=False):
         principal_db = get_db(self.db_label)

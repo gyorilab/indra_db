@@ -52,7 +52,7 @@ def upload_pickle_to_s3(obj, s3_path):
                 % (s3_path.key.split('/')[-1], s3_path.bucket))
     s3 = get_s3_client(unsigned=False)
     try:
-        s3.put_object(Body=pickle.dumps(obj=obj), *s3_path.kw())
+        s3.put_object(Body=pickle.dumps(obj=obj), **s3_path.kw())
         logger.info('Finished dumping file to s3')
     except Exception as e:
         logger.error('Failed to upload to s3')
@@ -63,7 +63,7 @@ def load_pickle_from_s3(s3_path):
     logger.info('Loading pickle %s.' % s3_path)
     s3 = get_s3_client(unsigned=False)
     try:
-        res = s3.get_object(*s3_path.kw())
+        res = s3.get_object(**s3_path.kw())
         obj = pickle.loads(res['Body'].read())
         logger.info('Finished loading %s.' % s3_path)
         return obj

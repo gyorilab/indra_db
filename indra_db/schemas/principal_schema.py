@@ -335,6 +335,18 @@ def get_schema(Base):
         insert_date = Column(DateTime, default=func.now())
     table_dict[DiscardedStatements.__tablename__] = DiscardedStatements
 
+    class RawActivity(Base, IndraDBTable):
+        __tablename__ = 'raw_activity'
+        _always_disp = ['stmt_id', 'activity', 'is_active']
+        id = Column(Integer, primary_key=True)
+        stmt_id = Column(Integer,
+                         ForeignKey('raw_statements.id'),
+                         nullable=False)
+        statements = relationship(RawStatements)
+        activity = Column(String)
+        is_active = Column(Boolean)
+    table_dict[RawActivity.__tablename__] = RawActivity
+
     class RawAgents(Base, IndraDBTable):
         __tablename__ = 'raw_agents'
         _always_disp = ['stmt_id', 'db_name', 'db_id', 'ag_num']
@@ -415,6 +427,18 @@ def get_schema(Base):
         json = Column(BYTEA, nullable=False)
         create_date = Column(DateTime, default=func.now())
     table_dict[PAStatements.__tablename__] = PAStatements
+
+    class PAActivity(Base, IndraDBTable):
+        __tablename__ = 'pa_activity'
+        __always_disp__ = ['stmt_mk_hash', 'activity', 'is_active']
+        id = Column(Integer, primary_key=True)
+        stmt_mk_hash = Column(BigInteger,
+                              ForeignKey('pa_statements.mk_hash'),
+                              nullable=False)
+        statements = relationship(PAStatements)
+        activity = Column(String)
+        is_active = Column(Boolean)
+    table_dict[PAActivity.__tablename__] = PAActivity
 
     class PAAgents(Base, IndraDBTable):
         __tablename__ = 'pa_agents'

@@ -147,6 +147,16 @@ def get_schema(Base):
         ev_count = Column(Integer)
     read_views[PaMeta.__tablename__] = PaMeta
 
+    class PAAgentCounts(Base, ReadonlyTable):
+        __tablename__ = 'pa_agent_counts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ("SELECT count(distinct ag_num) as num_ag, mk_hash\n"
+                          "FROM readonly.pa_meta GROUP BY mk_hash")
+        _indices = [BtreeIndex('pa_agent_counts_mk_hash_idx', 'mk_hash')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        num_ag = Column(Integer)
+    read_views[PAAgentCounts.__tablename__] = PAAgentCounts
+
     class TextMeta(Base, NamespaceLookup):
         __tablename__ = 'text_meta'
         __table_args__ = {'schema': 'readonly'}

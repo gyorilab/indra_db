@@ -125,12 +125,15 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __definition__ = (
             'SELECT pa_agents.db_name, pa_agents.db_id, '
-            'pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,'
-            'pa_statements.type, pa_statements.mk_hash, '
-            'readonly.evidence_counts.ev_count '
-            'FROM pa_agents, pa_statements, readonly.evidence_counts '
-            'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash '
-            'AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash'
+            '       pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,'
+            '       pa_statements.type, pa_statements.mk_hash, '
+            '       readonly.evidence_counts.ev_count, activity, is_active\n'
+            'FROM pa_agents, pa_statements, '
+            '  readonly.evidence_counts'
+            '  LEFT JOIN pa_activity'
+            '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
+            'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
+            'AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
         )
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),

@@ -347,10 +347,6 @@ def get_schema(Base):
         db_id = Column(String, nullable=False)
         ag_num = Column(Integer, nullable=False)
         role = Column(String(20), nullable=False)
-        __table_args = (
-            UniqueConstraint('stmt_id', 'db_name', 'db_id', 'role',
-                             name='raw-agents-uniqueness'),
-        )
     table_dict[RawAgents.__tablename__] = RawAgents
 
     class RawMods(Base, IndraDBTable):
@@ -432,10 +428,7 @@ def get_schema(Base):
         db_id = Column(String, nullable=False)
         role = Column(String(20), nullable=False)
         ag_num = Column(Integer, nullable=False)
-        __table_args__ = (
-            UniqueConstraint('stmt_mk_hash', 'db_name', 'db_id', 'role',
-                             name='pa-agent-uniqueness'),
-        )
+        agent_ref_hash = Column(BigInteger, unique=True, nullable=False)
     table_dict[PAAgents.__tablename__] = PAAgents
 
     class PAMods(Base, IndraDBTable):

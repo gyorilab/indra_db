@@ -202,6 +202,23 @@ def get_schema(Base):
         ev_count = Column(Integer)
     read_views[OtherMeta.__tablename__] = OtherMeta
 
+    class MeshMeta(Base, ReadonlyTable):
+        __tablename__ = 'mesh_meta'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ("SELECT count(distinct trid) AS tr_count,\n"
+                          "       count(distinct sid) AS ev_count,\n"
+                          "       mk_hash,\n"
+                          "       mesh_num\n"
+                          "FROM readonly.mesh_ref_lookup\n"
+                          "GROUP BY mk_hash, mesh_num")
+        _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
+                    BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        mesh_num = Column(Integer, primary_key=True)
+        tr_count = Column(Integer)
+        ev_count = Column(Integer)
+    read_views[MeshMeta.__tablename__] = MeshMeta
+
     class RawStmtSrc(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_src'
         __table_args__ = {'schema': 'readonly'}

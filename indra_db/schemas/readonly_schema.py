@@ -276,8 +276,8 @@ def get_schema(Base):
         mk_hash = Column(BigInteger)
     read_views[MeshRefLookup.__tablename__] = MeshRefLookup
 
-    class PaSourceLookup(Base, SpecialColumnTable):
-        __tablename__ = 'pa_source_lookup'
+    class SourceMeta(Base, SpecialColumnTable):
+        __tablename__ = 'pa_source_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = (
             'WITH jsonified AS (\n'
@@ -287,7 +287,10 @@ def get_schema(Base):
             '    FROM readonly.pa_stmt_src\n'
             ')\n'
             'SELECT readonly.pa_stmt_src.*, \n'
-            '       readonly.evidence_counts.ev_count, \n'
+            '       readonly.pa_meta.ev_count, \n'
+            '       readonly.pa_meta.activity, \n'
+            '       readonly.pa_meta.is_active,\n'
+            '       readonly.pa_meta.agent_count,\n'
             '       diversity.num_srcs, \n'
             '       jsonified.src_json, \n'
             '       CASE WHEN diversity.num_srcs = 1 \n'
@@ -317,8 +320,8 @@ def get_schema(Base):
             '  ON jsonified.mk_hash = diversity.mk_hash\n'
             'JOIN readonly.pa_stmt_src \n'
             '  ON diversity.mk_hash = readonly.pa_stmt_src.mk_hash\n'
-            'JOIN readonly.evidence_counts \n'
-            '  ON diversity.mk_hash = readonly.evidence_counts.mk_hash'
+            'JOIN readonly.pa_meta \n'
+            '  ON diversity.mk_hash = readonly.pa_meta.mk_hash'
         )
         _indices = [BtreeIndex('pa_source_lookup_mk_hash_idx', 'mk_hash'),
                     StringIndex('pa_source_lookup_only_src', 'only_src'),
@@ -332,6 +335,9 @@ def get_schema(Base):
         only_src = Column(String)
         has_rd = Column(Boolean)
         has_db = Column(Boolean)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
 
         @classmethod
         def definition(cls, db):
@@ -347,7 +353,7 @@ def get_schema(Base):
                                                 reading_sources=rd_sources,
                                                 db_sources=db_sources)
             return sql
-    read_views[PaSourceLookup.__tablename__] = PaSourceLookup
+    read_views[SourceMeta.__tablename__] = SourceMeta
 
     class TextMeta(Base, NamespaceLookup):
         __tablename__ = 'text_meta'

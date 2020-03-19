@@ -7,7 +7,7 @@ import logging
 
 from indra.util.get_version import get_version
 from indra.statements import Complex, SelfModification, ActiveForm, \
-    Conversion, Translocation
+    Conversion, Translocation, make_hash
 
 from indra_db.exceptions import IndraDbException
 
@@ -104,7 +104,8 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
     mut_data = []
     for i, stmt in enumerate(stmts):
         refs, mods, muts = extract_agent_data(stmt, stmt.get_hash())
-        ref_data.extend(refs)
+        hashed_refs = [ref + (make_hash(':'.join(ref[:-1])),) for ref in refs]
+        ref_data.extend(hashed_refs)
         mod_data.extend(mods)
         mut_data.extend(muts)
 

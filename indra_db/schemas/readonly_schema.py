@@ -120,6 +120,17 @@ def get_schema(Base):
         type = Column(String)
     read_views[FastRawPaLink.__tablename__] = FastRawPaLink
 
+    class PAAgentCounts(Base, ReadonlyTable):
+        __tablename__ = 'pa_agent_counts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ("SELECT count(distinct ag_num) as agent_count,"
+                          "       mk_hash\n"
+                          "FROM pa_agents GROUP BY mk_hash")
+        _indices = [BtreeIndex('pa_agent_counts_mk_hash_idx', 'mk_hash')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        agent_count = Column(Integer)
+    read_views[PAAgentCounts.__tablename__] = PAAgentCounts
+
     class PaMeta(Base, ReadonlyTable):
         __tablename__ = 'pa_meta'
         __table_args__ = {'schema': 'readonly'}

@@ -12,15 +12,26 @@ from .indexes import *
 
 logger = logging.getLogger(__name__)
 
-CREATE_ORDER = ['raw_stmt_src', 'fast_raw_pa_link', 'pa_stmt_src',
-                'evidence_counts', 'pa_source_lookup', 'reading_ref_link',
-                'pa_ref_link', 'pa_meta', 'text_meta', 'name_meta',
-                'other_meta']
+CREATE_ORDER = [
+    'raw_stmt_src',
+    'fast_raw_pa_link',
+    'pa_stmt_src',
+    'evidence_counts',
+    'reading_ref_link',
+    'pa_ref_link',
+    'pa_meta',
+    'mesh_ref_lookup',
+    'source_meta',
+    'text_meta',
+    'name_meta',
+    'other_meta',
+    'mesh_meta',
+]
 CREATE_UNORDERED = {}
 
 
 def get_schema(Base):
-    '''Return the schema for the reading view of the database.
+    """Return the schema for the reading view of the database.
 
     We use a readonly database to allow fast and efficient load of data,
     and to add a layer of separation between the processes of updating
@@ -34,18 +45,25 @@ def get_schema(Base):
       2. fast_raw_pa_link
       3. pa_stmt_src
       4. evidence_counts
-      5. pa_source_lookup
-      6. reading_ref_link
-      7. pa_ref_link
-      8. pa_meta
-      9. text_meta
-     10. name_meta
-     11. other_meta
+      5. reading_ref_link
+      6. pa_ref_link
+      7. pa_meta
+      8. mesh_ref_lookup
+      9. source_meta
+     10. text_meta
+     11. name_meta
+     12. other_meta
+     13. mesh_meta
     The following can be built at any time and in any order:
         (None currently)
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
-    '''
+
+    Parameters
+    ----------
+    Base : type
+        The base class for database tables
+    """
     read_views = {}
 
     class EvidenceCounts(Base, ReadonlyTable):

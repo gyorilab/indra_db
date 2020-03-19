@@ -428,6 +428,13 @@ def _labelled_hash_and_count(meta):
     return meta.mk_hash.label('mk_hash'), meta.ev_count.label('ev_count')
 
 
+def _make_mesh_hashes_query(ro, mesh_ids):
+    """Convert structure of the form (('A', '&', 'B'), '|' 'C') into query."""
+
+
+    pass
+
+
 def _make_mk_hashes_query(ro, agents, stmt_type):
 
     queries = []

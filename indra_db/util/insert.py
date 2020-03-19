@@ -104,7 +104,10 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
     mut_data = []
     for i, stmt in enumerate(stmts):
         refs, mods, muts = extract_agent_data(stmt, stmt.get_hash())
-        hashed_refs = [ref + (make_hash(':'.join(ref[:-1])),) for ref in refs]
+        hashed_refs = []
+        for ref in refs:
+            h = make_hash(':'.join([str(r) for r in ref[:-1]]), 16)
+            hashed_refs.append(ref + (h,))
         ref_data.extend(hashed_refs)
         mod_data.extend(mods)
         mut_data.extend(muts)
@@ -118,7 +121,8 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
 
     if 'agents' not in skip:
         db.copy_lazy('pa_agents', ref_data,
-                     ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
+                     ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role',
+                      'agent_ref_hash'),
                      commit=False)
     if 'mods' not in skip:
         db.copy('pa_mods', mod_data,

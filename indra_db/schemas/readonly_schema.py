@@ -135,16 +135,18 @@ def get_schema(Base):
         __tablename__ = 'pa_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = (
-            'SELECT pa_agents.db_name, pa_agents.db_id, '
-            '       pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,'
-            '       pa_statements.type, pa_statements.mk_hash, '
-            '       readonly.evidence_counts.ev_count, activity, is_active\n'
-            'FROM pa_agents, pa_statements, '
+            'SELECT pa_agents.db_name, pa_agents.db_id,\n'
+            '       pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,\n'
+            '       pa_statements.type, pa_statements.mk_hash,\n'
+            '       readonly.evidence_counts.ev_count, activity, is_active,\n'
+            '       agent_count\n'
+            'FROM pa_agents, pa_statements, readonly.pa_agent_counts,\n'
             '  readonly.evidence_counts'
             '  LEFT JOIN pa_activity'
             '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
             'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
-            'AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
+            '  AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
+            '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash'
         )
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),
@@ -159,17 +161,10 @@ def get_schema(Base):
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
     read_views[PaMeta.__tablename__] = PaMeta
-
-    class PAAgentCounts(Base, ReadonlyTable):
-        __tablename__ = 'pa_agent_counts'
-        __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT count(distinct ag_num) as num_ag, mk_hash\n"
-                          "FROM readonly.pa_meta GROUP BY mk_hash")
-        _indices = [BtreeIndex('pa_agent_counts_mk_hash_idx', 'mk_hash')]
-        mk_hash = Column(BigInteger, primary_key=True)
-        num_ag = Column(Integer)
-    read_views[PAAgentCounts.__tablename__] = PAAgentCounts
 
     class TextMeta(Base, NamespaceLookup):
         __tablename__ = 'text_meta'
@@ -186,6 +181,9 @@ def get_schema(Base):
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
     read_views[TextMeta.__tablename__] = TextMeta
 
     class NameMeta(Base, NamespaceLookup):
@@ -203,13 +201,18 @@ def get_schema(Base):
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
     read_views[NameMeta.__tablename__] = NameMeta
 
     class OtherMeta(Base, ReadonlyTable):
         __tablename__ = 'other_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num, "
-                          "type, mk_hash, ev_count FROM readonly.pa_meta "
+        __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num,\n"
+                          "       type, mk_hash, ev_count, activity,\n"
+                          "       is_active, agent_count\n"
+                          "FROM readonly.pa_meta\n"
                           "WHERE db_name NOT IN ('NAME', 'TEXT')")
         _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
                     StringIndex('other_meta_type_idx', 'type'),
@@ -224,6 +227,9 @@ def get_schema(Base):
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)
         ev_count = Column(Integer)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
     read_views[OtherMeta.__tablename__] = OtherMeta
 
     class MeshMeta(Base, ReadonlyTable):
@@ -231,16 +237,24 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ("SELECT count(distinct trid) AS tr_count,\n"
                           "       count(distinct sid) AS ev_count,\n"
-                          "       mk_hash,\n"
-                          "       mesh_num\n"
-                          "FROM readonly.mesh_ref_lookup\n"
+                          "       mk_hash, mesh_num, type,\n"
+                          "       activity, is_active, agent_count\n"
+                          "FROM readonly.mesh_ref_lookup,"
+                          "  readonly.pa_agent_counts\n"
+                          "WHERE readonly.mesh_ref_lookup.mk_hash "
+                          "  = readonly.pa_agent_counts.mk_hash\n"
                           "GROUP BY mk_hash, mesh_num")
         _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash')]
-        mk_hash = Column(BigInteger, primary_key=True)
+        mk_hash = Column(BigInteger,
+                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'),
+                         primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
         tr_count = Column(Integer)
         ev_count = Column(Integer)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
     read_views[MeshMeta.__tablename__] = MeshMeta
 
     class RawStmtSrc(Base, ReadonlyTable):

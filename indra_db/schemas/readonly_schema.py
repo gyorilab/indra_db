@@ -341,9 +341,11 @@ def get_schema(Base):
             'JOIN readonly.pa_meta \n'
             '  ON diversity.mk_hash = readonly.pa_meta.mk_hash'
         )
-        _indices = [BtreeIndex('pa_source_lookup_mk_hash_idx', 'mk_hash'),
-                    StringIndex('pa_source_lookup_only_src', 'only_src'),
-                    BtreeIndex('pa_source_lookup_num_srcs', 'num_srcs')]
+        _indices = [BtreeIndex('source_meta_mk_hash_idx', 'mk_hash'),
+                    StringIndex('source_meta_only_src_idx', 'only_src'),
+                    StringIndex('source_meta_activity_idx', 'activity'),
+                    StringIndex('source_meta_type_idx', 'type'),
+                    BtreeIndex('source_meta_num_srcs_idx', 'num_srcs')]
         loaded = False
 
         mk_hash = Column(BigInteger, primary_key=True)
@@ -378,7 +380,8 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __dbname__ = 'TEXT'
         _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
-                    StringIndex('text_meta_type_idx', 'type')]
+                    StringIndex('text_meta_type_idx', 'type'),
+                    StringIndex('text_meta_activity_idx', 'activity')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_id = Column(String)
@@ -398,7 +401,8 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __dbname__ = 'NAME'
         _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
-                    StringIndex('name_meta_type_idx', 'type')]
+                    StringIndex('name_meta_type_idx', 'type'),
+                    StringIndex('name_meta_activity_idx', 'activity')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_id = Column(String)
@@ -423,7 +427,8 @@ def get_schema(Base):
                           "WHERE db_name NOT IN ('NAME', 'TEXT')")
         _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
                     StringIndex('other_meta_type_idx', 'type'),
-                    StringIndex('other_meta_db_name_idx', 'db_name')]
+                    StringIndex('other_meta_db_name_idx', 'db_name'),
+                    StringIndex('other_meta_activity_idx', 'activity')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_name = Column(String)
@@ -452,7 +457,9 @@ def get_schema(Base):
                           "  = readonly.pa_agent_counts.mk_hash\n"
                           "GROUP BY mk_hash, mesh_num")
         _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
-                    BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash')]
+                    BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
+                    StringIndex('mesh_meta_type_idx', 'type'),
+                    StringIndex('mesh_meta_activity_idx', 'activity')]
         mk_hash = Column(BigInteger,
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'),
                          primary_key=True)

@@ -1,5 +1,6 @@
 __all__ = ['insert_raw_agents', 'insert_pa_agents', 'insert_pa_stmts',
-           'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data']
+           'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data',
+           'hash_pa_agents']
 
 import json
 import pickle
@@ -104,11 +105,7 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
     mut_data = []
     for i, stmt in enumerate(stmts):
         refs, mods, muts = extract_agent_data(stmt, stmt.get_hash())
-        hashed_refs = []
-        for ref in refs:
-            h = make_hash(':'.join([str(r) for r in ref[:-1]]), 16)
-            hashed_refs.append(ref + (h,))
-        ref_data.extend(hashed_refs)
+        ref_data.extend(hash_pa_agents(refs))
         mod_data.extend(mods)
         mut_data.extend(muts)
 
@@ -135,6 +132,15 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
     db.commit_copy('Error copying pa agents, mods, and muts, excluding: %s.'
                    % (', '.join(skip)))
     return
+
+
+def hash_pa_agents(agent_tuples):
+    logger.info("Adding hashes to %d pa agent refs." % len(agent_tuples))
+    hashed_tuples = []
+    for ref in agent_tuples:
+        h = make_hash(':'.join([str(r) for r in ref[:-1]]), 16)
+        hashed_tuples.append(ref + (h,))
+    return hashed_tuples
 
 
 def regularize_agent_id(id_val, id_ns):

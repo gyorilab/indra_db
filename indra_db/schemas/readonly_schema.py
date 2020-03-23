@@ -144,8 +144,8 @@ def get_schema(Base):
         __tablename__ = 'pa_agent_counts'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ("SELECT count(distinct ag_num) as agent_count,"
-                          "       mk_hash\n"
-                          "FROM pa_agents GROUP BY mk_hash")
+                          "       stmt_mk_hash as mk_hash\n"
+                          "FROM pa_agents GROUP BY stmt_mk_hash")
         _indices = [BtreeIndex('pa_agent_counts_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
         agent_count = Column(Integer)

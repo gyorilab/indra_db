@@ -297,7 +297,7 @@ def get_schema(Base):
     read_views[MeshRefLookup.__tablename__] = MeshRefLookup
 
     class SourceMeta(Base, SpecialColumnTable):
-        __tablename__ = 'pa_source_meta'
+        __tablename__ = 'source_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = (
             'WITH jsonified AS (\n'
@@ -308,6 +308,7 @@ def get_schema(Base):
             ')\n'
             'SELECT readonly.pa_stmt_src.*, \n'
             '       readonly.pa_meta.ev_count, \n'
+            '       readonly.pa_meta.type, \n'
             '       readonly.pa_meta.activity, \n'
             '       readonly.pa_meta.is_active,\n'
             '       readonly.pa_meta.agent_count,\n'
@@ -357,6 +358,7 @@ def get_schema(Base):
         only_src = Column(String)
         has_rd = Column(Boolean)
         has_db = Column(Boolean)
+        type = Column(String)
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)

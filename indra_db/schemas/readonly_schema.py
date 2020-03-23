@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 CREATE_ORDER = [
     'raw_stmt_src',
     'fast_raw_pa_link',
+    'pa_agent_counts',
     'pa_stmt_src',
     'evidence_counts',
     'reading_ref_link',
@@ -43,17 +44,18 @@ def get_schema(Base):
     The following views must be built in this specific order:
       1. raw_stmt_src
       2. fast_raw_pa_link
-      3. pa_stmt_src
-      4. evidence_counts
-      5. reading_ref_link
-      6. pa_ref_link
-      7. pa_meta
-      8. mesh_ref_lookup
-      9. source_meta
-     10. text_meta
-     11. name_meta
-     12. other_meta
-     13. mesh_meta
+      3. pa_agent_counts
+      4. pa_stmt_src
+      5. evidence_counts
+      6. reading_ref_link
+      7. pa_ref_link
+      8. pa_meta
+      9. mesh_ref_lookup
+     10. source_meta
+     11. text_meta
+     12. name_meta
+     13. other_meta
+     14. mesh_meta
     The following can be built at any time and in any order:
         (None currently)
     Note that the order of views below is determined not by the above

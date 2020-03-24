@@ -34,46 +34,52 @@ CREATE_ORDER = [
 CREATE_UNORDERED = {}
 
 
-class StatementTypeMapping(object):
+class StringIntMapping(object):
+    arg = NotImplemented
+
+    def __init__(self):
+        self._int_to_str = NotImplemented
+        self._str_to_int = NotImplemented
+        raise NotImplementedError("__init__ must be defined in sub class.")
+
+    def get_str(self, num: int) -> str:
+        return self._int_to_str[num]
+
+    def get_int(self, val: str) -> int:
+        return self._str_to_int[val]
+
+    def get_with_clause(self) -> str:
+        values = ',\n'.join('(%d, \'%s\')' % (num, val)
+                            for num, val in self._int_to_str.items())
+        return "{arg}_map({arg}_num, {arg}) AS (values\n{values}\n)".format(
+            arg=self.arg, values=values
+        )
+
+
+class StatementTypeMapping(StringIntMapping):
+    arg = 'type'
+
     def __init__(self):
         all_stmt_classes = get_all_descendants(Statement)
         stmt_class_names = [sc.__name__ for sc in all_stmt_classes]
         stmt_class_names.sort()
 
-        self.stmt_type_lookup = {}
-        self.type_num_lookup = {}
+        self._int_to_str = {}
+        self._str_to_int = {}
         for stmt_type_num, stmt_type in enumerate(stmt_class_names):
-            self.stmt_type_lookup[stmt_type_num] = stmt_type
-            self.type_num_lookup[stmt_type] = stmt_type_num
-
-    def get_type_string(self, type_num: int) -> str:
-        """Get the type string based on a type number."""
-        return self.stmt_type_lookup[type_num]
-
-    def get_type_num(self, type_str: str) -> int:
-        """Get the type number from the type string."""
-        return self.type_num_lookup[type_str]
-
-    def get_mapping_tuples(self) -> list:
-        return sorted([(num, name) for num, name in self.stmt_type_lookup.items()])
+            self._int_to_str[stmt_type_num] = stmt_type
+            self._str_to_int[stmt_type] = stmt_type_num
 
 
 ro_type_map = StatementTypeMapping()
 
 
-class RoleMapping(object):
+class RoleMapping(StringIntMapping):
+    arg = 'role'
+
     def __init__(self):
-        self._num_to_role = {-1: 'SUBJECT', 0: 'OTHER', 1: 'OBJECT'}
-        self._role_to_num = {v: k for k, v in self._num_to_role.items()}
-
-    def get_role_num(self, role_str: str) -> int:
-        return self._role_to_num[role_str]
-
-    def get_role_str(self, role_num: int) -> str:
-        return self._num_to_role[role_num]
-
-    def get_mapping_tuples(self) -> list:
-        return sorted([(num, role) for num, role in self._num_to_role.items()])
+        self._int_to_str = {-1: 'SUBJECT', 0: 'OTHER', 1: 'OBJECT'}
+        self._str_to_int = {v: k for k, v in self._int_to_str.items()}
 
 
 ro_role_map = RoleMapping()
@@ -159,9 +165,7 @@ def get_schema(Base):
     class FastRawPaLink(Base, ReadonlyTable):
         __tablename__ = 'fast_raw_pa_link'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ('WITH st_map(type_num, type) AS (\n'
-                          '  values %s\n'
-                          ')\n'
+        __definition__ = ('WITH %s\n'
                           'SELECT raw.id AS id,\n'
                           '       raw.json AS raw_json,\n'
                           '       raw.reading_id\n,'
@@ -178,7 +182,7 @@ def get_schema(Base):
                           'WHERE link.raw_stmt_id = raw.id\n'
                           '  AND link.pa_stmt_mk_hash = pa.mk_hash\n'
                           '  AND raw_src.sid = raw.id\n'
-                          '  AND pa.type = st_map.type')
+                          '  AND pa.type = type_map.type')
         _skip_disp = ['raw_json', 'pa_json']
         _indices = [BtreeIndex('hash_index', 'mk_hash'),
                     BtreeIndex('frp_reading_id_idx', 'reading_id'),
@@ -187,10 +191,7 @@ def get_schema(Base):
 
         @classmethod
         def get_definition(cls):
-            mapping_str = ',\n'.join(
-                "(%d, '%s')" % tpl for tpl in ro_type_map.get_mapping_tuples()
-            )
-            return cls.__definition__ % mapping_str
+            return cls.__definition__ % ro_type_map.get_with_clause()
 
         id = Column(Integer, primary_key=True)
         raw_json = Column(BYTEA)
@@ -220,22 +221,20 @@ def get_schema(Base):
         __tablename__ = 'pa_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = (
-            'WITH st_map(type_num, type) AS (\n'
-            '  values %s\n'
-            ')\n'
             'SELECT pa_agents.db_name, pa_agents.db_id,\n'
-            '       pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,\n'
+            '       pa_agents.id AS ag_id, role_num, pa_agents.ag_num,\n'
             '       type_num, pa_statements.mk_hash,\n'
             '       readonly.evidence_counts.ev_count, activity, is_active,\n'
             '       agent_count\n'
-            'FROM pa_agents, pa_statements, readonly.pa_agent_counts, st_map,\n'
-            '  readonly.evidence_counts'
+            'FROM pa_agents, pa_statements, readonly.pa_agent_counts, type_map,'
+            '  role_map, readonly.evidence_counts'
             '  LEFT JOIN pa_activity'
             '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
             'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
             '  AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
             '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash\n'
-            '  AND pa_statements.type = st_map.type'
+            '  AND pa_statements.type = type_map.type\n'
+            '  AND pa_agents.role = role_map.role'
         )
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),
@@ -243,10 +242,10 @@ def get_schema(Base):
 
         @classmethod
         def get_definition(cls):
-            mapping_str = ',\n'.join(
-                "(%d, '%s')" % tpl for tpl in ro_type_map.get_mapping_tuples()
-            )
-            return cls.__definition__ % mapping_str
+            with_clause = 'WITH\n'
+            with_clause += ro_type_map.get_with_clause() + ','
+            with_clause += ro_role_map.get_with_clause() + '\n'
+            return with_clause + cls.__definition__
 
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)

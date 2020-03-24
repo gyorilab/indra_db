@@ -178,7 +178,7 @@ def get_schema(Base):
                           '     pa_statements AS pa,\n'
                           '     raw_unique_links AS link,\n'
                           '     readonly.raw_stmt_src as raw_src,\n'
-                          '     st_map\n'
+                          '     type_map\n'
                           'WHERE link.raw_stmt_id = raw.id\n'
                           '  AND link.pa_stmt_mk_hash = pa.mk_hash\n'
                           '  AND raw_src.sid = raw.id\n'

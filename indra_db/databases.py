@@ -535,6 +535,12 @@ class DatabaseManager(object):
                 "Do not recognize one of the columns in %s for table %s." % \
                 (cols, tbl_name)
 
+        # Make sure that the number of columns matches the number of columns in
+        # the data.
+        if data and len(cols) != len(data[0]):
+            raise ValueError("Number of columns does not match number of "
+                             "columns in data.")
+
         # Check for automatic timestamps which won't be applied by the
         # database when using copy, and manually insert them.
         auto_timestamp_type = type(func.now())

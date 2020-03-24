@@ -6,6 +6,8 @@ from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA, JSON
 
+from indra.statements import get_all_descendants, Statement
+
 from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable
 from .indexes import *
 
@@ -29,6 +31,33 @@ CREATE_ORDER = [
     'mesh_meta',
 ]
 CREATE_UNORDERED = {}
+
+
+class StatementTypeMapping(object):
+    def __init__(self):
+        all_stmt_classes = get_all_descendants(Statement)
+        stmt_class_names = [sc.__name__ for sc in all_stmt_classes]
+        stmt_class_names.sort()
+
+        self.stmt_type_lookup = {}
+        self.type_num_lookup = {}
+        for stmt_type_num, stmt_type in enumerate(stmt_class_names):
+            self.stmt_type_lookup[stmt_type_num] = stmt_type
+            self.type_num_lookup[stmt_type] = stmt_type_num
+
+    def get_type_string(self, type_num: int) -> str:
+        """Get the type string based on a type number."""
+        return self.stmt_type_lookup[type_num]
+
+    def get_type_num(self, type_str: str) -> int:
+        """Get the type number from the type string."""
+        return self.type_num_lookup[type_str]
+
+    def get_mapping_tuples(self) -> list:
+        return sorted([(num, name) for num, name in self.stmt_type_lookup.items()])
+
+
+ro_type_map = StatementTypeMapping()
 
 
 def get_schema(Base):

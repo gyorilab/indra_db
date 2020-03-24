@@ -251,7 +251,7 @@ def get_schema(Base):
         ag_num = Column(Integer)
         db_name = Column(String)
         db_id = Column(String)
-        role = Column(String(20))
+        role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger,
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
@@ -423,7 +423,7 @@ def get_schema(Base):
         _indices = [BtreeIndex('source_meta_mk_hash_idx', 'mk_hash'),
                     StringIndex('source_meta_only_src_idx', 'only_src'),
                     StringIndex('source_meta_activity_idx', 'activity'),
-                    StringIndex('source_meta_type_num_idx', 'type_num'),
+                    BtreeIndex('source_meta_type_num_idx', 'type_num'),
                     BtreeIndex('source_meta_num_srcs_idx', 'num_srcs')]
         loaded = False
 
@@ -460,12 +460,12 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __dbname__ = 'TEXT'
         _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
-                    StringIndex('text_meta_type_num_idx', 'type_num'),
+                    BtreeIndex('text_meta_type_num_idx', 'type_num'),
                     StringIndex('text_meta_activity_idx', 'activity')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_id = Column(String)
-        role = Column(String(20))
+        role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger,
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
@@ -481,12 +481,12 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __dbname__ = 'NAME'
         _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
-                    StringIndex('name_meta_type_num_idx', 'type_num'),
+                    BtreeIndex('name_meta_type_num_idx', 'type_num'),
                     StringIndex('name_meta_activity_idx', 'activity')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_id = Column(String)
-        role = Column(String(20))
+        role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger,
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
@@ -500,20 +500,20 @@ def get_schema(Base):
     class OtherMeta(Base, ReadonlyTable):
         __tablename__ = 'other_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT db_name, db_id, ag_id, role, ag_num,\n"
-                          "       type, mk_hash, ev_count, activity,\n"
+        __definition__ = ("SELECT db_name, db_id, ag_id, role_num, ag_num,\n"
+                          "       type_num, mk_hash, ev_count, activity,\n"
                           "       is_active, agent_count\n"
                           "FROM readonly.pa_meta\n"
                           "WHERE db_name NOT IN ('NAME', 'TEXT')")
         _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
-                    StringIndex('other_meta_type_num_idx', 'type_num'),
+                    BtreeIndex('other_meta_type_num_idx', 'type_num'),
                     StringIndex('other_meta_db_name_idx', 'db_name'),
                     StringIndex('other_meta_activity_idx', 'activity')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_name = Column(String)
         db_id = Column(String)
-        role = Column(String(20))
+        role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger,
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
@@ -539,7 +539,7 @@ def get_schema(Base):
                           "  is_active, agent_count")
         _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
-                    StringIndex('mesh_meta_type_num_idx', 'type_num'),
+                    BtreeIndex('mesh_meta_type_num_idx', 'type_num'),
                     StringIndex('mesh_meta_activity_idx', 'activity')]
         mk_hash = Column(BigInteger,
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'),

@@ -61,6 +61,24 @@ class StatementTypeMapping(object):
 ro_type_map = StatementTypeMapping()
 
 
+class RoleMapping(object):
+    def __init__(self):
+        self._num_to_role = {-1: 'SUBJECT', 0: 'OTHER', 1: 'OBJECT'}
+        self._role_to_num = {v: k for k, v in self._num_to_role.items()}
+
+    def get_role_num(self, role_str: str) -> int:
+        return self._role_to_num[role_str]
+
+    def get_role_str(self, role_num: int) -> str:
+        return self._num_to_role[role_num]
+
+    def get_mapping_tuples(self) -> list:
+        return sorted([(num, role) for num, role in self._num_to_role.items()])
+
+
+ro_role_map = RoleMapping()
+
+
 def get_schema(Base):
     """Return the schema for the reading view of the database.
 

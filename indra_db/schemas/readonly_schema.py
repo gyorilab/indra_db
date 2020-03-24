@@ -140,22 +140,37 @@ def get_schema(Base):
     class FastRawPaLink(Base, ReadonlyTable):
         __tablename__ = 'fast_raw_pa_link'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ('SELECT raw.id AS id, raw.json AS raw_json, '
-                          'raw.reading_id, raw.db_info_id, '
-                          'pa.mk_hash, pa.json AS pa_json, pa.type,'
-                          'raw_src.src '
-                          'FROM raw_statements AS raw, '
-                          'pa_statements AS pa, '
-                          'raw_unique_links AS link,'
-                          'readonly.raw_stmt_src as raw_src '
-                          'WHERE link.raw_stmt_id = raw.id '
-                          'AND link.pa_stmt_mk_hash = pa.mk_hash '
-                          'AND raw_src.sid = raw.id')
+        __definition__ = ('WITH st_map(type_num, type) AS (\n'
+                          '  values %s\n'
+                          ')\n'
+                          'SELECT raw.id AS id,\n'
+                          '       raw.json AS raw_json,\n'
+                          '       raw.reading_id\n,'
+                          '       raw.db_info_id,\n'
+                          '       pa.mk_hash,\n'
+                          '       pa.json AS pa_json,\n'
+                          '       type_num,\n'
+                          '       raw_src.src\n'
+                          'FROM raw_statements AS raw,\n'
+                          '     pa_statements AS pa,\n'
+                          '     raw_unique_links AS link,\n'
+                          '     readonly.raw_stmt_src as raw_src\n'
+                          'WHERE link.raw_stmt_id = raw.id\n'
+                          '  AND link.pa_stmt_mk_hash = pa.mk_hash\n'
+                          '  AND raw_src.sid = raw.id\n'
+                          '  AND pa.type = st_map.type')
         _skip_disp = ['raw_json', 'pa_json']
         _indices = [BtreeIndex('hash_index', 'mk_hash'),
                     BtreeIndex('frp_reading_id_idx', 'reading_id'),
                     BtreeIndex('frp_db_info_id_idx', 'db_info_id'),
                     StringIndex('frp_src_idx', 'src')]
+
+        @classmethod
+        def get_definition(cls):
+            mapping_str = '\n'.join("(%d, '%s')" % tpl
+                                   for tpl in ro_type_map.get_mapping_tuples())
+            return cls.__definition__ % mapping_str
+
         id = Column(Integer, primary_key=True)
         raw_json = Column(BYTEA)
         reading_id = Column(BigInteger,

@@ -512,10 +512,11 @@ def get_schema(Base):
                           "       mk_hash, mesh_num, type_num,\n"
                           "       activity, is_active, agent_count\n"
                           "FROM readonly.mesh_ref_lookup,"
-                          "  readonly.pa_agent_counts\n"
+                          "  readonly.pa_meta\n"
                           "WHERE readonly.mesh_ref_lookup.mk_hash "
-                          "  = readonly.pa_agent_counts.mk_hash\n"
-                          "GROUP BY mk_hash, mesh_num")
+                          "  = readonly.pa_meta.mk_hash\n"
+                          "GROUP BY mk_hash, mesh_num, type_num, activity,\n"
+                          "  is_active, agent_count")
         _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
                     StringIndex('mesh_meta_type_num_idx', 'type_num'),

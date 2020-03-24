@@ -173,7 +173,8 @@ def get_schema(Base):
                           'FROM raw_statements AS raw,\n'
                           '     pa_statements AS pa,\n'
                           '     raw_unique_links AS link,\n'
-                          '     readonly.raw_stmt_src as raw_src\n'
+                          '     readonly.raw_stmt_src as raw_src,\n'
+                          '     st_map\n'
                           'WHERE link.raw_stmt_id = raw.id\n'
                           '  AND link.pa_stmt_mk_hash = pa.mk_hash\n'
                           '  AND raw_src.sid = raw.id\n'
@@ -186,8 +187,9 @@ def get_schema(Base):
 
         @classmethod
         def get_definition(cls):
-            mapping_str = '\n'.join("(%d, '%s')" % tpl
-                                   for tpl in ro_type_map.get_mapping_tuples())
+            mapping_str = ',\n'.join(
+                "(%d, '%s')" % tpl for tpl in ro_type_map.get_mapping_tuples()
+            )
             return cls.__definition__ % mapping_str
 
         id = Column(Integer, primary_key=True)
@@ -226,7 +228,7 @@ def get_schema(Base):
             '       type_num, pa_statements.mk_hash,\n'
             '       readonly.evidence_counts.ev_count, activity, is_active,\n'
             '       agent_count\n'
-            'FROM pa_agents, pa_statements, readonly.pa_agent_counts,\n'
+            'FROM pa_agents, pa_statements, readonly.pa_agent_counts, st_map,\n'
             '  readonly.evidence_counts'
             '  LEFT JOIN pa_activity'
             '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
@@ -241,8 +243,9 @@ def get_schema(Base):
 
         @classmethod
         def get_definition(cls):
-            mapping_str = '\n'.join("(%d, '%s')" % tpl
-                                    for tpl in ro_type_map.get_mapping_tuples())
+            mapping_str = ',\n'.join(
+                "(%d, '%s')" % tpl for tpl in ro_type_map.get_mapping_tuples()
+            )
             return cls.__definition__ % mapping_str
 
         ag_id = Column(Integer, primary_key=True)

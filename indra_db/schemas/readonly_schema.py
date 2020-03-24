@@ -381,13 +381,18 @@ def get_schema(Base):
             '           json_strip_nulls(json_build_object({all_sources})) \n'
             '           AS src_json \n'
             '    FROM readonly.pa_stmt_src\n'
+            '),'
+            'meta AS ('
+            '    SELECT distinct mk_hash, type_num, activity, is_active,\n'
+            '                    ev_count, agent_count'
+            '    FROM readonly.pa_meta'
             ')\n'
             'SELECT readonly.pa_stmt_src.*, \n'
-            '       readonly.pa_meta.ev_count, \n'
-            '       readonly.pa_meta.type_num, \n'
-            '       readonly.pa_meta.activity, \n'
-            '       readonly.pa_meta.is_active,\n'
-            '       readonly.pa_meta.agent_count,\n'
+            '       meta.ev_count, \n'
+            '       meta.type_num, \n'
+            '       meta.activity, \n'
+            '       meta.is_active,\n'
+            '       meta.agent_count,\n'
             '       diversity.num_srcs, \n'
             '       jsonified.src_json, \n'
             '       CASE WHEN diversity.num_srcs = 1 \n'
@@ -417,8 +422,8 @@ def get_schema(Base):
             '  ON jsonified.mk_hash = diversity.mk_hash\n'
             'JOIN readonly.pa_stmt_src \n'
             '  ON diversity.mk_hash = readonly.pa_stmt_src.mk_hash\n'
-            'JOIN readonly.pa_meta \n'
-            '  ON diversity.mk_hash = readonly.pa_meta.mk_hash'
+            'JOIN meta \n'
+            '  ON diversity.mk_hash = meta.mk_hash'
         )
         _indices = [BtreeIndex('source_meta_mk_hash_idx', 'mk_hash'),
                     StringIndex('source_meta_only_src_idx', 'only_src'),
@@ -527,16 +532,21 @@ def get_schema(Base):
     class MeshMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT count(distinct trid) AS tr_count,\n"
+        __definition__ = ("WITH meta AS (\n"
+                          "  SELECT DISTINCT mk_hash, type_num, \n"
+                          "                  ev_count, activity, \n"
+                          "                  is_active, agent_count \n"
+                          "  FROM readonly.pa_meta\n"
+                          ")"
+                          "SELECT count(distinct trid) AS tr_count,\n"
                           "       count(distinct sid) AS ev_count,\n"
                           "       mk_hash, mesh_num, type_num,\n"
                           "       activity, is_active, agent_count\n"
-                          "FROM readonly.mesh_ref_lookup,"
-                          "  readonly.pa_meta\n"
-                          "WHERE readonly.mesh_ref_lookup.mk_hash "
-                          "  = readonly.pa_meta.mk_hash\n"
-                          "GROUP BY mk_hash, mesh_num, type_num, activity,\n"
-                          "  is_active, agent_count")
+                          "FROM readonly.mesh_ref_lookup JOIN meta\n"
+                          "   ON readonly.mesh_ref_lookup.mk_hash "
+                          "      = meta.mk_hash\n"
+                          "GROUP BY mk_hash, mesh_num, type_num,\n"
+                          "  is_active, activity, agent_count")
         _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('mesh_meta_type_num_idx', 'type_num'),

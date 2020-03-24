@@ -200,9 +200,12 @@ def get_schema(Base):
         __tablename__ = 'pa_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = (
+            'WITH st_map(type_num, type) AS (\n'
+            '  values %s\n'
+            ')\n'
             'SELECT pa_agents.db_name, pa_agents.db_id,\n'
             '       pa_agents.id AS ag_id, pa_agents.role, pa_agents.ag_num,\n'
-            '       pa_statements.type, pa_statements.mk_hash,\n'
+            '       type_num, pa_statements.mk_hash,\n'
             '       readonly.evidence_counts.ev_count, activity, is_active,\n'
             '       agent_count\n'
             'FROM pa_agents, pa_statements, readonly.pa_agent_counts,\n'
@@ -211,17 +214,25 @@ def get_schema(Base):
             '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
             'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
             '  AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
-            '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash'
+            '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash\n'
+            '  AND pa_statements.type = st_map.type'
         )
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),
                     BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
+
+        @classmethod
+        def get_definition(cls):
+            mapping_str = '\n'.join("(%d, '%s')" % tpl
+                                    for tpl in ro_type_map.get_mapping_tuples())
+            return cls.__definition__ % mapping_str
+
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_name = Column(String)
         db_id = Column(String)
         role = Column(String(20))
-        type = Column(String(100))
+        type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger,
                          ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
         raw_pa_link = relationship(FastRawPaLink)

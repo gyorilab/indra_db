@@ -169,7 +169,7 @@ class NamespaceLookup(ReadonlyTable):
 
     @classmethod
     def get_definition(cls):
-        return ("SELECT db_id, ag_id, role, ag_num, type, "
+        return ("SELECT db_id, ag_id, role, ag_num, type_num, "
                 "       mk_hash, ev_count, activity, is_active, agent_count\n"
                 "FROM readonly.pa_meta\n"
                 "WHERE db_name = '%s'" % cls.__dbname__)

@@ -2,7 +2,8 @@ __all__ = ['get_schema']
 
 import logging
 
-from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger,\
+    Boolean, SmallInteger
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA, JSON
 
@@ -181,7 +182,7 @@ def get_schema(Base):
                          ForeignKey('readonly.evidence_counts.mk_hash'))
         ev_counts = relationship(EvidenceCounts)
         pa_json = Column(BYTEA)
-        type = Column(String)
+        type_num = Column(SmallInteger)
     read_views[FastRawPaLink.__tablename__] = FastRawPaLink
 
     class PAAgentCounts(Base, ReadonlyTable):

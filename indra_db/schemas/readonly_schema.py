@@ -24,7 +24,7 @@ CREATE_ORDER = [
     'reading_ref_link',
     'pa_ref_link',
     'pa_meta',
-    'mesh_ref_lookup',
+    'raw_stmt_mesh',
     'source_meta',
     'text_meta',
     'name_meta',
@@ -104,7 +104,7 @@ def get_schema(Base):
       6. reading_ref_link
       7. pa_ref_link
       8. pa_meta
-      9. mesh_ref_lookup
+      9. raw_stmt_mesh
      10. source_meta
      11. text_meta
      12. name_meta
@@ -344,33 +344,24 @@ def get_schema(Base):
         reader = Column(String)
     read_views[PaRefLink.__tablename__] = PaRefLink
 
-    class MeshRefLookup(Base, ReadonlyTable):
-        __tablename__ = 'mesh_ref_lookup'
+    class RawStmtMesh(Base, ReadonlyTable):
+        __tablename__ = 'raw_stmt_mesh'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT text_ref.id AS trid,\n"
-                          "       reading.id AS rid,\n"
-                          "       raw_statements.id AS sid,\n"
-                          "       pa_stmt_mk_hash AS mk_hash,\n"
-                          "       SUBSTRING(mesh_id, 2)::int as mesh_num\n"
-                          "FROM text_ref\n"
-                          "  JOIN mesh_ref_annotations\n"
-                          "    ON text_ref.pmid = mesh_ref_annotations.pmid\n"
-                          "  JOIN text_content ON text_ref.id = text_ref_id\n"
-                          "  JOIN reading \n"
-                          "    ON text_content.id = text_content_id\n"
-                          "  JOIN raw_statements ON reading.id = reading_id\n"
-                          "  JOIN raw_unique_links \n"
-                          "    ON raw_statements.id = raw_stmt_id")
-        _indices = [BtreeIndex('mrl_mesh_num_idx', 'mesh_num'),
-                    BtreeIndex('mrl_mk_hash_idx', 'mk_hash'),
-                    BtreeIndex('mrl_sid_idx', 'sid')]
+        __definition__ = ('SELECT DISTINCT raw_statements.id as sid,\n'
+                          '       SUBSTRING(mesh_id, 2)::int as mesh_num\n'
+                          'FROM text_ref\n'
+                          '  JOIN mesh_ref_annotations\n'
+                          '    ON text_ref.pmid = mesh_ref_annotations.pmid\n'
+                          '  JOIN text_content ON text_ref.id = text_ref_id\n'
+                          '  JOIN reading\n'
+                          '    ON text_content.id = text_content_id\n'
+                          '  JOIN raw_statements ON reading.id = reading_id\n')
+        _indices = [BtreeIndex('rsm_mesh_num_idx', 'mesh_num'),
+                    BtreeIndex('rsm_sid_idx', 'sid')]
 
-        trid = Column(Integer, primary_key=True)
-        rid = Column(BigInteger)
-        mesh_num = Column(Integer, primary_key=True)
         sid = Column(Integer, primary_key=True)
-        mk_hash = Column(BigInteger)
-    read_views[MeshRefLookup.__tablename__] = MeshRefLookup
+        mesh_num = Column(Integer, primary_key=True)
+    read_views[RawStmtMesh.__tablename__] = RawStmtMesh
 
     class SourceMeta(Base, SpecialColumnTable):
         __tablename__ = 'source_meta'
@@ -537,16 +528,19 @@ def get_schema(Base):
                           "                  ev_count, activity, \n"
                           "                  is_active, agent_count \n"
                           "  FROM readonly.pa_meta\n"
-                          ")"
-                          "SELECT count(distinct trid) AS tr_count,\n"
-                          "       count(distinct sid) AS ev_count,\n"
+                          ")\n"
+                          "SELECT COUNT(DISTINCT sid) as mesh_ev_count,\n"
+                          "       meta.ev_count,\n"
                           "       meta.mk_hash, mesh_num, type_num,\n"
                           "       activity, is_active, agent_count\n"
-                          "FROM readonly.mesh_ref_lookup JOIN meta\n"
-                          "   ON readonly.mesh_ref_lookup.mk_hash "
-                          "      = meta.mk_hash\n"
-                          "GROUP BY meta.mk_hash, mesh_num, type_num,\n"
-                          "  is_active, activity, agent_count")
+                          "FROM readonly.raw_stmt_mesh JOIN raw_unique_links\n"
+                          "     ON readonly.raw_stmt_mesh.sid\n"
+                          "        = raw_unique_links.raw_stmt_id\n"
+                          "   JOIN meta\n"
+                          "     ON meta.mk_hash\n"
+                          "        = raw_unique_links.pa_stmt_mk_hash\n"
+                          "GROUP BY meta.mk_hash, mesh_num, type_num, \n"
+                          "  meta.ev_count, is_active, activity, agent_count")
         _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('mesh_meta_type_num_idx', 'type_num'),

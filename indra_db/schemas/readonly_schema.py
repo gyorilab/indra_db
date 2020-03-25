@@ -540,12 +540,12 @@ def get_schema(Base):
                           ")"
                           "SELECT count(distinct trid) AS tr_count,\n"
                           "       count(distinct sid) AS ev_count,\n"
-                          "       mk_hash, mesh_num, type_num,\n"
+                          "       meta.mk_hash, mesh_num, type_num,\n"
                           "       activity, is_active, agent_count\n"
                           "FROM readonly.mesh_ref_lookup JOIN meta\n"
                           "   ON readonly.mesh_ref_lookup.mk_hash "
                           "      = meta.mk_hash\n"
-                          "GROUP BY mk_hash, mesh_num, type_num,\n"
+                          "GROUP BY meta.mk_hash, mesh_num, type_num,\n"
                           "  is_active, activity, agent_count")
         _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),

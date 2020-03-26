@@ -27,39 +27,6 @@ def get_schema(Base):
         __tablename__ = 'text_ref'
         _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
         _always_disp = ['id', 'pmid', 'pmcid']
-        _indices = [StringIndex('text_ref_pmid_idx', 'pmid')]
-
-        id = Column(Integer, primary_key=True)
-        pmid = Column(String(20))
-        pmcid = Column(String(20))
-        doi = Column(String(100))
-        pii = Column(String(250))
-        url = Column(String, unique=True)
-        manuscript_id = Column(String(100), unique=True)
-        create_date = Column(DateTime, default=func.now())
-        last_updated = Column(DateTime, onupdate=func.now())
-
-        __table_args__ = (
-            UniqueConstraint('pmid', 'doi', name='pmid-doi'),
-            UniqueConstraint('pmid', 'pmcid', name='pmid-pmcid'),
-            UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
-        )
-
-        def get_ref_dict(self):
-            ref_dict = {}
-            for ref in self._ref_cols:
-                val = getattr(self, ref, None)
-                if val:
-                    ref_dict[ref.upper()] = val
-            ref_dict['TRID'] = self.id
-            return ref_dict
-
-    table_dict[TextRef.__tablename__] = TextRef
-
-    class TextRef2(Base, IndraDBTable):
-        __tablename__ = 'text_ref_2'
-        _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
-        _always_disp = ['id', 'pmid', 'pmcid']
         _indices = [StringIndex('text_ref_pmid_idx', 'pmid'),
                     StringIndex('text_ref_pmcid_idx', 'pmcid'),
                     BtreeIndex('text_ref_pmid_num_idx', 'pmid_num'),
@@ -148,7 +115,7 @@ def get_schema(Base):
             ref_dict['TRID'] = self.id
             return ref_dict
 
-    table_dict[TextRef2.__tablename__] = TextRef2
+    table_dict[TextRef.__tablename__] = TextRef
 
     class MeshRefAnnotations(Base, IndraDBTable):
         __tablename__ = 'mesh_ref_annotations'

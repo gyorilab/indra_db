@@ -124,7 +124,7 @@ def get_schema(Base):
                 return doi, None, None
 
             # Split up the parts of the DOI
-            parts = doi.split('/')
+            parts = doi[3:].split('/')
             if len(parts) < 2:
                 return doi, None, None
 

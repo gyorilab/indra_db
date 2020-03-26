@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA, INET
 
 from indra_db.schemas.mixins import IndraDBTable
-from indra_db.schemas.indexes import StringIndex
+from indra_db.schemas.indexes import StringIndex, BtreeIndex
 
 foreign_key_map = [
     ('pa_agents', 'pa_statements'),
@@ -55,6 +55,85 @@ def get_schema(Base):
             return ref_dict
 
     table_dict[TextRef.__tablename__] = TextRef
+
+    class TextRef2(Base, IndraDBTable):
+        __tablename__ = 'text_ref_2'
+        _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
+        _always_disp = ['id', 'pmid', 'pmcid']
+        _indices = [StringIndex('text_ref_pmid_idx', 'pmid'),
+                    StringIndex('text_ref_pmcid_idx', 'pmcid'),
+                    BtreeIndex('text_ref_pmid_num_idx', 'pmid_num'),
+                    BtreeIndex('text_ref_pmcid_num_idx', 'pmcid_num'),
+                    BtreeIndex('text_ref_doi_ns_idx', 'doi_ns'),
+                    BtreeIndex('text_ref_doi_id_idx', 'doi_id')]
+
+        id = Column(Integer, primary_key=True)
+        pmid = Column(String(20))
+        pmid_num = Column(Integer)
+        pmcid = Column(String(20))
+        pmcid_num = Column(Integer)
+        doi = Column(String(100))
+        doi_ns = Column(Integer)
+        doi_id = Column(String)
+        pii = Column(String(250))
+        url = Column(String, unique=True)
+        manuscript_id = Column(String(100), unique=True)
+        create_date = Column(DateTime, default=func.now())
+        last_updated = Column(DateTime, onupdate=func.now())
+
+        __table_args__ = (
+            UniqueConstraint('pmid', 'doi', name='pmid-doi'),
+            UniqueConstraint('pmid', 'pmcid', name='pmid-pmcid'),
+            UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
+        )
+
+        @staticmethod
+        def process_pmid(pmid):
+            if not pmid:
+                return None, None
+            return pmid, int(pmid)
+
+        @staticmethod
+        def process_pmcid(pmcid):
+            if not pmcid or not pmcid.startswith('PMC'):
+                return None, None
+            return pmcid, int(pmcid[3:])
+
+        @staticmethod
+        def process_doi(doi):
+            # Check for invalid DOIs
+            if not doi or not doi.startswith('10.'):
+                return None, None, None
+
+            # Regularize case.
+            doi = doi.upper()
+
+            # Split up the parts of the DOI
+            parts = doi.split('/')
+            if len(parts) < 2:
+                return None, None, None
+
+            # Check the namespace number, make it an integer.
+            namespace_str = parts[0]
+            if not namespace_str.isdigit():
+                return None, None, None
+            namespace = int(namespace_str)
+
+            # Join the res of the parts together.
+            group_id = '/'.join(parts[1:])
+
+            return doi, namespace, group_id
+
+        def get_ref_dict(self):
+            ref_dict = {}
+            for ref in self._ref_cols:
+                val = getattr(self, ref, None)
+                if val:
+                    ref_dict[ref.upper()] = val
+            ref_dict['TRID'] = self.id
+            return ref_dict
+
+    table_dict[TextRef2.__tablename__] = TextRef2
 
     class MeshRefAnnotations(Base, IndraDBTable):
         __tablename__ = 'mesh_ref_annotations'

@@ -65,7 +65,8 @@ def get_schema(Base):
                     BtreeIndex('text_ref_pmid_num_idx', 'pmid_num'),
                     BtreeIndex('text_ref_pmcid_num_idx', 'pmcid_num'),
                     BtreeIndex('text_ref_doi_ns_idx', 'doi_ns'),
-                    BtreeIndex('text_ref_doi_id_idx', 'doi_id')]
+                    BtreeIndex('text_ref_doi_id_idx', 'doi_id'),
+                    StringIndex('text_ref_doi_idx', 'doi')]
 
         id = Column(Integer, primary_key=True)
         pmid = Column(String(20))
@@ -95,28 +96,35 @@ def get_schema(Base):
 
         @staticmethod
         def process_pmcid(pmcid):
-            if not pmcid or not pmcid.startswith('PMC'):
+            if not pmcid:
                 return None, None
+
+            if not pmcid.startswith('PMC'):
+                return pmcid, None
+
             return pmcid, int(pmcid[3:])
 
         @staticmethod
         def process_doi(doi):
             # Check for invalid DOIs
-            if not doi or not doi.startswith('10.'):
+            if not doi:
                 return None, None, None
 
             # Regularize case.
             doi = doi.upper()
 
+            if not doi.startswith('10.'):
+                return doi, None, None
+
             # Split up the parts of the DOI
             parts = doi.split('/')
             if len(parts) < 2:
-                return None, None, None
+                return doi, None, None
 
             # Check the namespace number, make it an integer.
             namespace_str = parts[0]
             if not namespace_str.isdigit():
-                return None, None, None
+                return doi, None, None
             namespace = int(namespace_str)
 
             # Join the res of the parts together.

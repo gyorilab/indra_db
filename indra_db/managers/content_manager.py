@@ -199,7 +199,53 @@ class ContentManager(object):
         return
 
     def copy_into_db(self, db, tbl_name, data, cols=None):
-        "Wrapper around the db.copy feature, pickels args upon exception."
+        """Wrapper around the db.copy feature, pickles args upon exception.
+
+        This function also regularizes any text ref data put into the database.
+        """
+
+        # Handle the breaking of text ref IDs into smaller more searchable bits
+        if tbl_name == 'text_ref':
+            logger.info("Processing text ref rows.")
+            # Create new cols
+            if cols is not None and cols != self.tr_cols:
+                raise ValueError("Invalid `cols` passed for text_ref.")
+
+            new_cols = []
+            for id_type in self.tr_cols:
+                if id_type == 'pmid':
+                    new_cols += ['pmid', 'pmid_num']
+                elif id_type == 'pmcid':
+                    new_cols += ['pmcid', 'pmcid_num', 'pmcid_version']
+                elif id_type == 'doi':
+                    new_cols += ['doi', 'doi_ns', 'doi_id']
+                else:
+                    new_cols.append(id_type)
+            cols = tuple(new_cols)
+
+            # Process all the rows.
+            new_data = []
+            for row in data:
+                if len(row) != len(self.tr_cols):
+                    raise ValueError("Row length does not match column length "
+                                     "of labels.")
+                new_row = []
+                for id_type, id_val in zip(self.tr_cols, row):
+                    if id_type == 'pmid':
+                        pmid, pmid_num = db.TextRef.process_pmid(id_val)
+                        new_row += [pmid, pmid_num]
+                    elif id_type == 'pmcid':
+                        pmcid, pmcid_num, pmcid_version = \
+                            db.TextRef.process_pmcid(id_val)
+                        new_row += [pmcid, pmcid_num, pmcid_version]
+                    elif id_type == 'doi':
+                        doi, doi_ns, doi_id = db.TextRef.process_doi(id_val)
+                        new_row += [doi, doi_ns, doi_id]
+                    else:
+                        new_row.append(id_val)
+                new_data.append(tuple(new_row))
+            data = new_data
+
         return db.copy_report_lazy(tbl_name, data, cols)
 
     def make_text_ref_str(self, tr):

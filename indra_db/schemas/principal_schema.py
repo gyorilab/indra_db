@@ -73,6 +73,7 @@ def get_schema(Base):
         pmid_num = Column(Integer)
         pmcid = Column(String(20))
         pmcid_num = Column(Integer)
+        pmcid_version = Column(Integer)
         doi = Column(String(100))
         doi_ns = Column(Integer)
         doi_id = Column(String)
@@ -97,12 +98,18 @@ def get_schema(Base):
         @staticmethod
         def process_pmcid(pmcid):
             if not pmcid:
-                return None, None
+                return None, None, None
 
             if not pmcid.startswith('PMC'):
-                return pmcid, None
+                return pmcid, None, None
 
-            return pmcid, int(pmcid[3:])
+            if '.' in pmcid:
+                pmcid, version_number_str = pmcid.split('.')
+                version_number = int(version_number_str)
+            else:
+                version_number = None
+
+            return pmcid, int(pmcid[3:]), version_number
 
         @staticmethod
         def process_doi(doi):

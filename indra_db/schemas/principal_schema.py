@@ -111,62 +111,56 @@ def get_schema(Base):
             return doi, namespace, group_id
 
         @classmethod
-        def pmid_in(cls, pmid_list):
+        def pmid_in(cls, pmid_list, filter_ids=False):
             """Get sqlalchemy clauses for a list of pmids."""
             pmid_num_set = set()
             for pmid in pmid_list:
                 _, pmid_num = cls.process_pmid(pmid)
                 if pmid_num is None:
-                    ValueError('"%s" is not a valid pmid.' % pmid)
+                    if filter_ids:
+                        logger.warning('"%s" is not a valid pmid. Skipping.'
+                                       % pmid)
+                        continue
+                    else:
+                        ValueError('"%s" is not a valid pmid.' % pmid)
                 pmid_num_set.add(pmid_num)
             return cls.pmid_num.in_(pmid_num_set)
 
         @classmethod
-        def pmcid_in(cls, pmcid_list, permissive=True):
+        def pmcid_in(cls, pmcid_list, filter_ids=False):
             """Get the sqlalchemy clauses for a list of pmcids."""
             pmcid_num_set = set()
-            pmcid_set = set()
             for pmcid in pmcid_list:
                 _, pmcid_num, _ = cls.process_pmcid(pmcid)
                 if not pmcid_num:
-                    if permissive:
-                        logger.warning("\"%s\" does not look like a valid "
-                                       "pmcid. Searching anyways, but "
-                                       "inefficiently." % pmcid)
-                        pmcid_set.add(pmcid)
+                    if filter_ids:
+                        logger.warning('"%s" does not look like a valid '
+                                       'pmcid. Skipping.' % pmcid)
+                        continue
                     else:
                         raise ValueError('"%s" is not a valid pmcid.' % pmcid)
                 else:
                     pmcid_num_set.add(pmcid_num)
 
-            if pmcid_set:
-                return or_(cls.pmcid.in_(pmcid_set),
-                           cls.pmcid_num.in_(pmcid_num_set))
             return cls.pmcid_num.in_(pmcid_num_set)
 
         @classmethod
-        def doi_in(cls, doi_list, permissive=True):
+        def doi_in(cls, doi_list, filter_ids=False):
             """Get clause for looking up a list of dois."""
             doi_tuple_set = set()
-            doi_set = set()
             for doi in doi_list:
                 doi, doi_ns, doi_id = cls.process_doi(doi)
                 if not doi_ns:
-                    if permissive:
+                    if filter_ids:
                         logger.warning('"%s" does not look like a normal doi. '
-                                       'Adding special clause to handle.'
-                                       % doi)
-                        doi_set.add(doi)
+                                       'Skipping.' % doi)
+                        continue
                     else:
                         raise ValueError('"%s" is not a valid doi.' % doi)
                 else:
                     doi_tuple_set.add((doi_ns, doi_id))
 
-            doi_tpl_search = tuple_(cls.doi_ns, cls.doi_id).in_(doi_tuple_set)
-
-            if doi_set:
-                return or_(cls.doi.in_(doi_set), doi_tpl_search)
-            return doi_tpl_search
+            return tuple_(cls.doi_ns, cls.doi_id).in_(doi_tuple_set)
 
         def get_ref_dict(self):
             ref_dict = {}

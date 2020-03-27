@@ -300,14 +300,25 @@ class ContentManager(object):
             # Add SqlAlchemy filter clause based on the ID list for this ID type
             if id_list:
                 if id_type == 'pmid':
-                    term = db.TextRef.pmid_in(id_list)
+                    term = db.TextRef.pmid_in(id_list, filter_ids=True)
+                    bad_ids = [pmid for pmid in id_list
+                               if not all(db.TextRef.process_pmid(pmid))]
                 elif id_type == 'pmcid':
-                    term = db.TextRef.pmcid_in(id_list)
+                    term = db.TextRef.pmcid_in(id_list, filter_ids=True)
+                    bad_ids = [pmcid for pmcid in id_list
+                               if not all(db.TextRef.process_pmcid(pmcid)[:2])]
                 elif id_type == 'doi':
-                    term = db.TextRef.doi_in(id_list)
+                    term = db.TextRef.doi_in(id_list, filter_ids=True)
+                    bad_ids = [doi for doi in id_list
+                               if not all(db.TextRef.process_doi(doi))]
                 else:
                     term = getattr(db.TextRef, id_type).in_(id_list)
+                    bad_ids = []
                 or_list.append(term)
+                if bad_ids:
+                    logger.info("Handling %d malformed '%s's with separate "
+                                "query." % (len(bad_ids), id_type))
+                    or_list.append(getattr(db.TextRef, id_type).in_(bad_ids))
         if len(or_list) == 1:
             tr_list = db.select_all(db.TextRef, or_list[0])
         else:

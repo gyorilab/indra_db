@@ -86,8 +86,6 @@ def main():
     r_cols = ('id', 'text_content_id', 'reader', 'reader_version', 'format',
               'batch_id')
     s_rows = set()
-    s_cols = ('uuid', 'mk_hash', 'text_hash', 'source_hash', 'reading_id',
-              'type', 'indra_version', 'json')
     for trid, trid_set in run_stmts.items():
         for reader, stmt_list in trid_set.items():
             tcid = tcid_lookup[trid]

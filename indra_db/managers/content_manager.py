@@ -299,7 +299,15 @@ class ContentManager(object):
                        if entry[id_idx(id_type)] is not None]
             # Add SqlAlchemy filter clause based on the ID list for this ID type
             if id_list:
-                or_list.append(getattr(db.TextRef, id_type).in_(id_list))
+                if id_type == 'pmid':
+                    term = db.TextRef.pmid_in(id_list)
+                elif id_type == 'pmcid':
+                    term = db.TextRef.pmcid_in(id_list)
+                elif id_type == 'doi':
+                    term = db.TextRef.doi_in(id_list)
+                else:
+                    term = getattr(db.TextRef, id_type).in_(id_list)
+                or_list.append(term)
         if len(or_list) == 1:
             tr_list = db.select_all(db.TextRef, or_list[0])
         else:

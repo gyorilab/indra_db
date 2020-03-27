@@ -292,7 +292,8 @@ class DatabaseReader(object):
         # Get the text content query object
         tc_query = self._db.filter_query(
             self._db.TextContent,
-            self._db.TextContent.id.in_(self.tcids)
+            self._db.TextContent.id.in_(self.tcids),
+            self._db.TextContent.source != 'xdd'
             )
 
         if self.reading_mode != 'all':
@@ -359,7 +360,8 @@ class DatabaseReader(object):
                 db.Reading,
                 db.Reading.reader == self.reader.name,
                 db.Reading.reader_version == self.reader.get_version()[:20],
-                db.Reading.text_content_id.in_(self.tcids)
+                db.Reading.text_content_id.in_(self.tcids),
+                db.Reading.format != 'xdd'
                 )
             for r in readings_query.yield_per(self.batch_size):
                 self.extant_readings.append(

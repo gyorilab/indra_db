@@ -3,7 +3,7 @@ import boto3
 from collections import defaultdict
 
 from indra.statements import Statement
-from indra_db.reading.read_db import DatabaseStatementData, DatabaseReadingData, generate_reading_id
+from indra_db.reading.read_db import DatabaseStatementData, generate_reading_id
 from indra_db.util import S3Path, get_db
 
 

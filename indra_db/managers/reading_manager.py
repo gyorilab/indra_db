@@ -113,7 +113,10 @@ class BulkReadingManager(ReadingManager):
         raise NotImplementedError("_run_reading must be defined in child.")
 
     def _get_constraints(self, db, reader_name):
-        constrains = []
+        # Ignore xDD placeholders.
+        constrains = [db.TextContent.format != 'xdd']
+
+        # Only read titles for TRIPS.
         if reader_name.lower() == 'trips':
             constrains.append(db.TextContent.text_type == "title")
         return constrains

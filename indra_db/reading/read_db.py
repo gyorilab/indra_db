@@ -34,6 +34,15 @@ class ReadDBError(Exception):
     pass
 
 
+def generate_reading_id(tcid, reader_name, reader_version):
+    reading_id = readers[reader_name.upper()] * 10e12
+    reading_id += (reader_versions[reader_name.lower()]
+                   .index(reader_version[:20]) * 10e10)
+    reading_id += tcid
+    reading_id = int(reading_id)
+    return reading_id
+
+
 class DatabaseReadingData(ReadingData):
     """This version of ReadingData adds valuable methods for database ops.
 
@@ -109,11 +118,9 @@ class DatabaseReadingData(ReadingData):
 
     def get_id(self):
         if self.reading_id is None:
-            self.reading_id = readers[self.reader_class.name.upper()]*10e12
-            self.reading_id += (reader_versions[self.reader_class.name.lower()]
-                                .index(self.reader_version[:20])*10e10)
-            self.reading_id += self.tcid
-            self.reading_id = int(self.reading_id)
+            self.reading_id = generate_reading_id(self.tcid,
+                                                  self.reader_class.__name__,
+                                                  self.reader_version)
         return self.reading_id
 
     def matches(self, r_entry):
@@ -285,7 +292,8 @@ class DatabaseReader(object):
         # Get the text content query object
         tc_query = self._db.filter_query(
             self._db.TextContent,
-            self._db.TextContent.id.in_(self.tcids)
+            self._db.TextContent.id.in_(self.tcids),
+            self._db.TextContent.source != 'xdd'
             )
 
         if self.reading_mode != 'all':
@@ -352,7 +360,8 @@ class DatabaseReader(object):
                 db.Reading,
                 db.Reading.reader == self.reader.name,
                 db.Reading.reader_version == self.reader.get_version()[:20],
-                db.Reading.text_content_id.in_(self.tcids)
+                db.Reading.text_content_id.in_(self.tcids),
+                db.Reading.format != 'xdd'
                 )
             for r in readings_query.yield_per(self.batch_size):
                 self.extant_readings.append(

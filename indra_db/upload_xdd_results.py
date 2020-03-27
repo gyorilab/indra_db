@@ -43,14 +43,12 @@ def main():
         bibs = json.loads(bib_obj['Body'].read())
         doi_lookup = {bib['_xddid']: bib['identifier'][0]['id']
                       for bib in bibs}
-        doi_vars = {doi for base_doi in doi_lookup.values()
-                            for doi in [base_doi, base_doi.upper(),
-                                        base_doi.lower()]}
+        dois = {doi for doi in doi_lookup.values()}
 
         print(f"Getting trids from database for {run_id}")
         trids = {doi.lower(): trid
                  for trid, doi in db.select_all([db.TextRef.id, db.TextRef.doi],
-                                                db.TextRef.doi.in_(doi_vars))}
+                                                db.TextRef.doi_in(dois))}
 
         try:
             stmts_obj = s3.get_object(**file_pair['stmts'].kw())

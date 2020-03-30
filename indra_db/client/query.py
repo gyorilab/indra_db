@@ -2,7 +2,7 @@ import json
 import logging
 from collections import OrderedDict
 
-from sqlalchemy import desc, true, select
+from sqlalchemy import desc, true, select, intersect_all
 
 from indra.statements import stmts_from_json, get_statement_by_name
 from indra_db.util import regularize_agent_id
@@ -56,8 +56,11 @@ class StatementQuery(object):
         self.limit = None
         self.offset = None
 
-    def run(self, *args, **kwargs):
-        raise NotImplementedError()
+    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+        mk_hashes_q = self._get_mk_hashes_query(ro)
+        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
+                                                      offset, best_first,
+                                                      ev_limit)
 
     def _return_result(self, results, evidence_totals, total_evidence,
                        returned_evidence, source_counts):
@@ -224,7 +227,7 @@ class HashQuery(StatementQuery):
     def _hash_count_pair(ro) -> tuple:
         return ro.PaMeta.mk_hash, ro.PaMeta.ev_count
 
-    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+    def _get_mk_hashes_query(self, ro):
         if len(self.stmt_hashes) == 0:
             return self._return_result({})
         elif len(self.stmt_hashes) == 1:
@@ -235,9 +238,7 @@ class HashQuery(StatementQuery):
             mk_hashes_q = \
                 ro.filter_query(self._hash_count_pair(ro),
                                 ro.PaMeta.mk_hash.in_(self.stmt_hashes))
-        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
-                                                      offset, best_first,
-                                                      ev_limit)
+        return mk_hashes_q
 
 
 class AgentQuery(StatementQuery):
@@ -278,12 +279,6 @@ class AgentQuery(StatementQuery):
             mk_hashes_q = mk_hashes_q.filter(meta.db_name.like(self.namespace))
         return mk_hashes_q
 
-    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
-        mk_hashes_q = self._get_mk_hashes_query(ro)
-        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
-                                                      offset, best_first,
-                                                      ev_limit)
-
 
 class MeshQuery(StatementQuery):
     def __init__(self, mesh_id):
@@ -309,8 +304,25 @@ class MeshQuery(StatementQuery):
                                       ro.MeshMeta.mesh_num == self.mesh_num)
         return mk_hashes_q
 
-    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
-        mk_hashes_q = self._get_mk_hashes_query(ro)
-        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
-                                                      offset, best_first,
-                                                      ev_limit)
+
+class IntersectionQuery(StatementQuery):
+    def __init__(self, other_query_list):
+        self._other_queries = other_query_list
+        super(IntersectionQuery, self).__init__()
+
+    def _get_constraint_json(self) -> dict:
+        return {'composite_query': [q._get_constraint_json()
+                                    for q in self._other_queries]}
+
+    @staticmethod
+    def _hash_count_pair(ro):
+        return None, None
+
+    def _get_mk_hashes_query(self, ro):
+        query_list = []
+        for q in self._other_queries:
+            query_list.append(q._get_mk_hashes_query(ro))
+        mk_hashes_al = intersect_all(*query_list).alias('intersection')
+        mk_hashes_q = ro.session.query(mk_hashes_al)
+        return mk_hashes_q
+

@@ -264,3 +264,24 @@ class AgentQuery(StatementQuery):
                                                       offset, best_first,
                                                       ev_limit)
 
+
+class MeshQuery(StatementQuery):
+    def __init__(self, mesh_id):
+        if not mesh_id.startswith('D') and not mesh_id[1:].is_digit():
+            raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
+                             "the rest must be a number." % mesh_id)
+        self.mesh_id = mesh_id
+        self.mesh_num = int(mesh_id[1:])
+        super(MeshQuery, self).__init__()
+
+    def _get_constraint_json(self) -> dict:
+        return {'mesh_query': {'mesh_id': self.mesh_id,
+                               'mesh_num': self.mesh_num}}
+
+    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+        mk_hashes_q = ro.filter_query([ro.MeshMeta.mk_hash.label('mk_hash'),
+                                       ro.MeshMeta.ev_count.label('ev_count')],
+                                      ro.MeshMeta.mesh_num == self.mesh_num)
+        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
+                                                      offset, best_first,
+                                                      ev_limit)

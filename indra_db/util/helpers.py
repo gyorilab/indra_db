@@ -22,6 +22,7 @@ def _set_evidence_text_ref(stmt, tr):
     # critical process that is executed in multiple places.
     for ev in stmt.evidence:
         ev.pmid = tr.pmid
+        ev.text_refs = tr.get_ref_dict()
 
 
 @clockit

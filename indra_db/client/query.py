@@ -5,7 +5,7 @@ from collections import OrderedDict
 from sqlalchemy import desc, true, select
 
 from indra.statements import stmts_from_json, get_statement_by_name
-
+from indra_db.util import regularize_agent_id
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +213,7 @@ class HashQuery(StatementQuery):
     def _get_constraint_json(self) -> dict:
         return {"hash_query": self.stmt_hashes}
 
-    def run(self, ro, limit=None, offset=None, best_first=True):
+    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
         if len(self.stmt_hashes) == 0:
             return self._return_result({})
         elif len(self.stmt_hashes) == 1:
@@ -226,33 +226,41 @@ class HashQuery(StatementQuery):
                                 ro.PaMeta.mk_hash.in_(self.stmt_hashes))
         self.ev_count_obj = ro.PaMeta.ev_count
         self.mk_hash_obj = ro.PaMeta.mk_hash
-        return self._get_stmt_jsons_from_hashes_query(mk_hashes_q, limit,
-                                                      offset, best_first)
+        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
+                                                      offset, best_first,
+                                                      ev_limit)
 
 
-class ComposableQuery(StatementQuery):
+class AgentQuery(StatementQuery):
+    def __init__(self, agent_id, namespace='NAME'):
+        self.agent_id = agent_id
+        self.namespace = namespace
+
+        # Regularize ID based on Database optimization (e.g. striping prefixes)
+        self.regularized_id = regularize_agent_id(agent_id, namespace)
+        super(AgentQuery, self).__init__()
 
     def _get_constraint_json(self) -> dict:
-        raise NotImplementedError()
+        return {'agent_query': {'agent_id': self.agent_id,
+                                'namespace': self.namespace,
+                                'regularized_id': self.regularized_id}}
 
-    def __and__(self, other):
-        pass
+    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+        if self.namespace == 'NAME':
+            meta = ro.NameMeta
+        elif self.namespace == 'TEXT':
+            meta = ro.TextMeta
+        else:
+            meta = ro.OtherMeta
 
-    def __or__(self, other):
-        pass
+        mk_hashes_q = ro.filter_query([meta.mk_hash.label('mk_hash'),
+                                       meta.ev_count.label('ev_count')],
+                                      meta.db_id.like(self.regularized_id))
 
+        if self.namespace not in ['NAME', 'TEXT', None]:
+            mk_hashes_q = mk_hashes_q.filter(meta.db_name.like(self.namespace))
 
-class ReadonlyQuery(StatementQuery):
-
-    def run(self, ro, stmt_types=None, activity=None, is_active=None,
-            agent_count=None, ev_count=None) -> StatementQueryResult:
-        raise NotImplementedError()
-
-
-class PrincipalQuery(StatementQuery):
-
-    def run(self, db, stmt_types=None, activity=None, is_active=None,
-            agent_count=None, ev_count=None) -> StatementQueryResult:
-        raise NotImplementedError()
-
+        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
+                                                      offset, best_first,
+                                                      ev_limit)
 

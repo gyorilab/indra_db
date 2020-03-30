@@ -55,8 +55,6 @@ class StatementQuery(object):
     def __init__(self):
         self.limit = None
         self.offset = None
-        self.ev_count_obj = None
-        self.mk_hash_obj = None
 
     def run(self, *args, **kwargs):
         raise NotImplementedError()
@@ -75,13 +73,22 @@ class StatementQuery(object):
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
 
+    @staticmethod
+    def _hash_count_pair(ro) -> tuple:
+        raise NotImplementedError()
+
+    def _get_mk_hashes_query(self, ro):
+        raise NotImplementedError()
+
     def _get_stmt_jsons_from_hashes_query(self, ro, mk_hashes_q, limit, offset,
                                           best_first, ev_limit):
         mk_hashes_q = mk_hashes_q.distinct()
 
+        mk_hash_obj, ev_count_obj = self._hash_count_pair(ro)
+
         # Apply the general options.
         if best_first:
-            mk_hashes_q = mk_hashes_q.order_by(desc(self.ev_count_obj))
+            mk_hashes_q = mk_hashes_q.order_by(desc(ev_count_obj))
         if limit is not None:
             mk_hashes_q = mk_hashes_q.limit(limit)
         if offset is not None:
@@ -213,19 +220,21 @@ class HashQuery(StatementQuery):
     def _get_constraint_json(self) -> dict:
         return {"hash_query": self.stmt_hashes}
 
+    @staticmethod
+    def _hash_count_pair(ro) -> tuple:
+        return ro.PaMeta.mk_hash, ro.PaMeta.ev_count
+
     def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
         if len(self.stmt_hashes) == 0:
             return self._return_result({})
         elif len(self.stmt_hashes) == 1:
             mk_hashes_q = \
-                ro.filter_query([ro.PaMeta.mk_hash, ro.PaMeta.ev_count],
+                ro.filter_query(self._hash_count_pair(ro),
                                 ro.PaMeta.mk_hash == self.stmt_hashes[0])
         else:
             mk_hashes_q = \
-                ro.filter_query([ro.PaMeta.mk_hash, ro.PaMeta.ev_count],
+                ro.filter_query(self._hash_count_pair(ro),
                                 ro.PaMeta.mk_hash.in_(self.stmt_hashes))
-        self.ev_count_obj = ro.PaMeta.ev_count
-        self.mk_hash_obj = ro.PaMeta.mk_hash
         return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
                                                       offset, best_first,
                                                       ev_limit)
@@ -245,21 +254,32 @@ class AgentQuery(StatementQuery):
                                 'namespace': self.namespace,
                                 'regularized_id': self.regularized_id}}
 
-    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+    def _choose_table(self, ro):
         if self.namespace == 'NAME':
             meta = ro.NameMeta
         elif self.namespace == 'TEXT':
             meta = ro.TextMeta
         else:
             meta = ro.OtherMeta
+        return meta
 
-        mk_hashes_q = ro.filter_query([meta.mk_hash.label('mk_hash'),
-                                       meta.ev_count.label('ev_count')],
+    def _hash_count_pair(self, ro) -> tuple:
+        meta = self._choose_table(ro)
+        return meta.mk_hash, meta.ev_count
+
+    def _get_mk_hashes_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
+        meta = self._choose_table(ro)
+        mk_hashes_q = ro.filter_query([mk_hash.label('mk_hash'),
+                                       ev_count.label('ev_count')],
                                       meta.db_id.like(self.regularized_id))
 
         if self.namespace not in ['NAME', 'TEXT', None]:
             mk_hashes_q = mk_hashes_q.filter(meta.db_name.like(self.namespace))
+        return mk_hashes_q
 
+    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+        mk_hashes_q = self._get_mk_hashes_query(ro)
         return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
                                                       offset, best_first,
                                                       ev_limit)
@@ -278,10 +298,19 @@ class MeshQuery(StatementQuery):
         return {'mesh_query': {'mesh_id': self.mesh_id,
                                'mesh_num': self.mesh_num}}
 
-    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
-        mk_hashes_q = ro.filter_query([ro.MeshMeta.mk_hash.label('mk_hash'),
-                                       ro.MeshMeta.ev_count.label('ev_count')],
+    @staticmethod
+    def _hash_count_pair(ro):
+        return ro.MeshMeta.mk_hash, ro.MeshMeta.ev_count
+
+    def _get_mk_hashes_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
+        mk_hashes_q = ro.filter_query([mk_hash.label('mk_hash'),
+                                       ev_count.label('ev_count')],
                                       ro.MeshMeta.mesh_num == self.mesh_num)
+        return mk_hashes_q
+
+    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+        mk_hashes_q = self._get_mk_hashes_query(ro)
         return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
                                                       offset, best_first,
                                                       ev_limit)

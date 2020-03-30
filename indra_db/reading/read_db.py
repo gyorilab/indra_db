@@ -119,7 +119,7 @@ class DatabaseReadingData(ReadingData):
     def get_id(self):
         if self.reading_id is None:
             self.reading_id = generate_reading_id(self.tcid,
-                                                  self.reader_class.__name__,
+                                                  self.reader_class.name,
                                                   self.reader_version)
         return self.reading_id
 

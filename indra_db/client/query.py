@@ -254,7 +254,7 @@ class HashQuery(StatementQuery):
 
     @staticmethod
     def _hash_count_pair(ro) -> tuple:
-        return ro.SourcMeta.mk_hash, ro.SourceMeta.ev_count
+        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
 
     def _get_mk_hashes_query(self, ro):
         mk_hash, ev_count = self._hash_count_pair(ro)
@@ -359,61 +359,59 @@ class MeshQuery(StatementQuery):
         return mk_hashes_q
 
 
-class IntersectionQuery(StatementQuery):
+class MergeQuery(StatementQuery):
+    merge_func = NotImplemented
+    join_word = NotImplemented
+    name = NotImplemented
+
     def __init__(self, query_list):
-        self.queries = query_list
-        super(IntersectionQuery, self).__init__()
+        # Make the collection of queries immutable.
+        self.queries = tuple(query_list)
+
+        # Because of the derivative nature of the "tables" involved, some more
+        # dynamism is required to get, for instance, the hash and count pair.
+        self._mk_hashes_al = None
+        super(MergeQuery, self).__init__()
 
     def __str__(self):
         query_strs = []
         for q in self.queries:
-            if isinstance(q, UnionQuery):
+            if isinstance(q, MergeQuery) and not isinstance(q, self.__class__):
                 query_strs.append(f"({q})")
             else:
                 query_strs.append(str(q))
-        return ' and '.join(query_strs)
+        return f' {self.join_word} '.join(query_strs)
 
     def _get_constraint_json(self) -> dict:
-        return {'intersection_query': [q._get_constraint_json()
+        return {f'{self.name}_query': [q._get_constraint_json()
                                        for q in self.queries]}
 
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
-        return None, None
+    def _hash_count_pair(self, ro) -> tuple:
+        mk_hashes_q = self._get_mk_hashes_al(ro)
+        return mk_hashes_q.c.mk_hash, mk_hashes_q.c.ev_count
+
+    def _get_mk_hashes_al(self, ro):
+        if self._mk_hashes_al is None:
+            mk_hashes_q_list = [q._get_mk_hashes_query(ro)
+                                for q in self.queries]
+            self._mk_hashes_al = (self.merge_func(*mk_hashes_q_list)
+                                      .alias(self.name))
+        return self._mk_hashes_al
 
     def _get_mk_hashes_query(self, ro):
-        query_list = []
-        for q in self.queries:
-            query_list.append(q._get_mk_hashes_query(ro))
-        mk_hashes_al = intersect_all(*query_list).alias('intersection')
-        mk_hashes_q = ro.session.query(mk_hashes_al)
+        mk_hash, ev_count = self._hash_count_pair(ro)
+        mk_hashes_q = ro.session.query(mk_hash.label('mk_hash'),
+                                       ev_count.label('ev_count'))
         return mk_hashes_q
 
 
-class UnionQuery(StatementQuery):
-    def __init__(self, query_list):
-        self.queries = query_list
-        super(UnionQuery, self).__init__()
+class IntersectionQuery(MergeQuery):
+    merge_func = intersect_all
+    name = 'intersection'
+    join_word = 'and'
 
-    def __str__(self):
-        query_strs = []
-        for q in self.queries:
-            if isinstance(q, IntersectionQuery):
-                query_strs.append(f"({q})")
-            else:
-                query_strs.append(str(q))
-        return ' or '.join(query_strs)
 
-    def _get_constraint_json(self) -> dict:
-        return {'union_query': [q._get_constraint_json()
-                                for q in self.queries]}
-
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
-        return None, None
-
-    def _get_mk_hashes_query(self, ro):
-        mk_hashes_q_list = [q._get_mk_hashes_query(ro) for q in self.queries]
-        mk_hashes_al = union_all(*mk_hashes_q_list).alias('union')
-        mk_hashes_q = ro.session.query(mk_hashes_al)
-        return mk_hashes_q
+class UnionQuery(MergeQuery):
+    merge_func = union_all
+    name = 'union'
+    join_word = 'or'

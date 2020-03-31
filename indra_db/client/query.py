@@ -241,7 +241,7 @@ class HashQuery(StatementQuery):
     def __init__(self, stmt_hashes):
         if len(stmt_hashes) == 0:
             raise ValueError("You must include at least one hash.")
-        self.stmt_hashes = stmt_hashes
+        self.stmt_hashes = tuple(stmt_hashes)
         super(HashQuery, self).__init__()
 
     def _get_constraint_json(self) -> dict:

@@ -272,6 +272,72 @@ class HashQuery(StatementQuery):
         return mk_hashes_q
 
 
+class SourceQuery(StatementQuery):
+    def __init__(self, only_source=None, has_readings=None, has_databases=None,
+                 has_sources=None):
+
+        if self.has_sources and self.only_source:
+            raise ValueError("You cannot have only_source and has_sources at "
+                             "the same time.")
+
+        self.only_source = only_source
+        self.has_readings = has_readings
+        self.has_databases = has_databases
+        self.has_sources = has_sources
+        super(SourceQuery, self).__init__()
+
+    def __str__(self):
+        s = ""
+        if self.only_source is not None:
+            s += f"only has source {self.only_source}"
+        elif self.has_sources is not None:
+            s += f"Has one of the sources: {self.has_sources}"
+
+        if self.has_readings is not None:
+            s += "has "
+            if not self.has_readings:
+                s += 'no '
+            s += 'readings'
+
+        if self.has_databases is not None:
+            s += 'has'
+            if not self.has_databases:
+                s += 'no '
+            s += 'databases'
+        return s
+
+    def _get_constraint_json(self) -> dict:
+        return {'source_query': {'only_source': self.only_source,
+                                 'has_readings': self.has_readings,
+                                 'has_databases': self.has_databases,
+                                 'has_sources': self.has_sources}}
+
+    @staticmethod
+    def _hash_count_pair(ro) -> tuple:
+        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
+
+    def _get_mk_hashes_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
+        meta = ro.SourceMeta
+
+        q = ro.session.query(mk_hash.label('mk_hash'),
+                                       ev_count.label('ev_count'))
+
+        if self.only_source is not None:
+            q = q.filter(meta.only_src.like(self.only_source))
+        elif self.has_sources is not None:
+            for src_name in self.has_sources:
+                q = q.filter(getattr(meta, src_name) >= 1)
+
+        if self.has_readings is not None:
+            q = q.filter(meta.has_rd == self.has_readings)
+
+        if self.has_databases is not None:
+            q = q.filter(meta.has_db == self.has_databases)
+
+        return q
+
+
 class AgentQuery(StatementQuery):
 
     def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):

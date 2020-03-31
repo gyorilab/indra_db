@@ -233,12 +233,17 @@ class StatementQuery(object):
 
 
 class HashQuery(StatementQuery):
-    def __init__(self, ro, stmt_hashes):
+    def __init__(self, stmt_hashes):
         self.stmt_hashes = stmt_hashes
         super(HashQuery, self).__init__()
 
     def _get_constraint_json(self) -> dict:
         return {"hash_query": self.stmt_hashes}
+
+    def __and__(self, other):
+        if isinstance(self, HashQuery) and isinstance(other, HashQuery):
+            return HashQuery(self.stmt_hashes + other.stmt_hashes)
+        return super(HashQuery, self).__and__(other)
 
     @staticmethod
     def _hash_count_pair(ro) -> tuple:

@@ -1,5 +1,6 @@
 __all__ = ['StatementQueryResult', 'StatementQuery', 'IntersectionQuery',
-           'UnionQuery', 'MergeQuery', 'AgentQuery', 'MeshQuery', 'HashQuery']
+           'UnionQuery', 'MergeQuery', 'AgentQuery', 'MeshQuery', 'HashQuery',
+           'SourceQuery']
 
 import json
 import logging
@@ -224,9 +225,9 @@ class StatementQuery(object):
             if isinstance(other, MergeClass):
                 return MergeClass(self.queries + other.queries)
             else:
-                return MergeClass(self.queries + [other])
+                return MergeClass(self.queries + (other,))
         elif isinstance(other, MergeClass):
-            return MergeClass(other.queries + [self])
+            return MergeClass(other.queries + (self,))
         else:
             return MergeClass([other, self])
 
@@ -277,9 +278,13 @@ class SourceQuery(StatementQuery):
                  has_readings=None, has_databases=None, has_sources=None,
                  lacks_sources=None):
 
-        if self.has_sources and self.only_source:
+        if has_sources and only_source:
             raise ValueError("You cannot have only_source and has_sources at "
                              "the same time.")
+
+        if lacks_sources and not_only_source:
+            raise ValueError("You cannot use lacks_sources and "
+                             "not_only_source at the same time.")
 
         self.only_source = only_source
         self.not_only_source = not_only_source
@@ -294,16 +299,21 @@ class SourceQuery(StatementQuery):
         if self.only_source is not None:
             s += f"only has source {self.only_source}"
         elif self.has_sources is not None:
-            s += f"Has one of the sources: {self.has_sources}"
+            s += f"has one of the sources: {self.has_sources}"
+
+        if self.not_only_source is not None:
+            s += f" is not only from {self.not_only_source}"
+        elif self.lacks_sources is not None:
+            s += f" is not from one of {self.lacks_sources}"
 
         if self.has_readings is not None:
-            s += "has "
+            s += " has "
             if not self.has_readings:
                 s += 'no '
             s += 'readings'
 
         if self.has_databases is not None:
-            s += 'has'
+            s += ' has '
             if not self.has_databases:
                 s += 'no '
             s += 'databases'

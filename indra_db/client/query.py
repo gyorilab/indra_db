@@ -62,8 +62,9 @@ class StatementQuery(object):
                                                       offset, best_first,
                                                       ev_limit)
 
-    def _return_result(self, results, evidence_totals, total_evidence,
-                       returned_evidence, source_counts):
+    def _return_result(self, results: dict, evidence_totals: dict,
+                       total_evidence: int, returned_evidence: int,
+                       source_counts: dict):
         return StatementQueryResult(results, self.limit, self.offset,
                                     evidence_totals, total_evidence,
                                     returned_evidence, source_counts,
@@ -234,6 +235,8 @@ class StatementQuery(object):
 
 class HashQuery(StatementQuery):
     def __init__(self, stmt_hashes):
+        if len(stmt_hashes) == 0:
+            raise ValueError("You must include at least one hash.")
         self.stmt_hashes = stmt_hashes
         super(HashQuery, self).__init__()
 
@@ -250,13 +253,11 @@ class HashQuery(StatementQuery):
 
     @staticmethod
     def _hash_count_pair(ro) -> tuple:
-        return ro.PaMeta.mk_hash, ro.PaMeta.ev_count
+        return ro.SourcMeta.mk_hash, ro.SourceMeta.ev_count
 
     def _get_mk_hashes_query(self, ro):
         mk_hash, ev_count = self._hash_count_pair(ro)
-        if len(self.stmt_hashes) == 0:
-            return self._return_result({})
-        elif len(self.stmt_hashes) == 1:
+        if len(self.stmt_hashes) == 1:
             mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
                                             ev_count.label('ev_count'))
                              .filter(ro.PaMeta.mk_hash == self.stmt_hashes[0]))

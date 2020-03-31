@@ -1,3 +1,6 @@
+__all__ = ['StatementQueryResult', 'StatementQuery', 'IntersectionQuery',
+           'UnionQuery', 'MergeQuery', 'AgentQuery', 'MeshQuery', 'HashQuery']
+
 import json
 import logging
 from collections import OrderedDict
@@ -261,11 +264,11 @@ class HashQuery(StatementQuery):
         if len(self.stmt_hashes) == 1:
             mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
                                             ev_count.label('ev_count'))
-                             .filter(ro.PaMeta.mk_hash == self.stmt_hashes[0]))
+                             .filter(mk_hash == self.stmt_hashes[0]))
         else:
             mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
                                             ev_count.label('ev_count'))
-                             .filter(ro.PaMeta.mk_hash.in_(self.stmt_hashes)))
+                             .filter(mk_hash.in_(self.stmt_hashes)))
         return mk_hashes_q
 
 

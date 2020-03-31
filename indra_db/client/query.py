@@ -214,6 +214,23 @@ class StatementQuery(object):
         return self._return_result(stmts_dict, ev_totals, total_evidence,
                                    returned_evidence, source_counts)
 
+    def __merge_queries(self, other, MergeClass):
+        if isinstance(self, MergeClass):
+            if isinstance(other, MergeClass):
+                return MergeClass(self.queries + other.queries)
+            else:
+                return MergeClass(self.queries + [other])
+        elif isinstance(other, MergeClass):
+            return MergeClass(other.queries + [self])
+        else:
+            return MergeClass([other, self])
+
+    def __and__(self, other):
+        return self.__merge_queries(other, IntersectionQuery)
+
+    def __or__(self, other):
+        return self.__merge_queries(other, UnionQuery)
+
 
 class HashQuery(StatementQuery):
     def __init__(self, ro, stmt_hashes):

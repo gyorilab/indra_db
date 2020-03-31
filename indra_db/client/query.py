@@ -5,6 +5,7 @@ from collections import OrderedDict
 from sqlalchemy import desc, true, select, intersect_all, union_all
 
 from indra.statements import stmts_from_json, get_statement_by_name
+from indra_db.schemas.readonly_schema import ro_role_map
 from indra_db.util import regularize_agent_id
 
 logger = logging.getLogger(__name__)
@@ -269,21 +270,35 @@ class HashQuery(StatementQuery):
 
 
 class AgentQuery(StatementQuery):
-    def __init__(self, agent_id, namespace='NAME'):
+
+    def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):
         self.agent_id = agent_id
         self.namespace = namespace
+
+        if role is not None and agent_num is not None:
+            raise ValueError("Only specify role OR agent_num, not both.")
+
+        self.role = role
+        self.agent_num = agent_num
 
         # Regularize ID based on Database optimization (e.g. striping prefixes)
         self.regularized_id = regularize_agent_id(agent_id, namespace)
         super(AgentQuery, self).__init__()
 
     def __str__(self):
-        return f"{self.namespace} = {self.agent_id}"
+        s = f"an agent has {self.namespace} = {self.agent_id}"
+        if self.role is not None:
+            s += f" with role={self.role}"
+        elif self.agent_num is not None:
+            s += f" with agent_num={self.agent_num}"
+        return s
 
     def _get_constraint_json(self) -> dict:
         return {'agent_query': {'agent_id': self.agent_id,
                                 'namespace': self.namespace,
-                                'regularized_id': self.regularized_id}}
+                                'regularized_id': self.regularized_id,
+                                'role': self.role,
+                                'agent_num': self.agent_num}}
 
     def _choose_table(self, ro):
         if self.namespace == 'NAME':
@@ -307,6 +322,12 @@ class AgentQuery(StatementQuery):
 
         if self.namespace not in ['NAME', 'TEXT', None]:
             mk_hashes_q = mk_hashes_q.filter(meta.db_name.like(self.namespace))
+
+        if self.role is not None:
+            role_num = ro_role_map.get_int(self.role)
+            mk_hashes_q = mk_hashes_q.filter(meta.role_num == role_num)
+        elif self.agent_num is not None:
+            mk_hashes_q = mk_hashes_q.filter(meta.agent_num == self.agent_num)
         return mk_hashes_q
 
 

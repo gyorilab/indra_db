@@ -273,17 +273,20 @@ class HashQuery(StatementQuery):
 
 
 class SourceQuery(StatementQuery):
-    def __init__(self, only_source=None, has_readings=None, has_databases=None,
-                 has_sources=None):
+    def __init__(self, only_source=None, not_only_source=None,
+                 has_readings=None, has_databases=None, has_sources=None,
+                 lacks_sources=None):
 
         if self.has_sources and self.only_source:
             raise ValueError("You cannot have only_source and has_sources at "
                              "the same time.")
 
         self.only_source = only_source
+        self.not_only_source = not_only_source
         self.has_readings = has_readings
         self.has_databases = has_databases
         self.has_sources = has_sources
+        self.lacks_sources = lacks_sources
         super(SourceQuery, self).__init__()
 
     def __str__(self):
@@ -328,6 +331,12 @@ class SourceQuery(StatementQuery):
         elif self.has_sources is not None:
             for src_name in self.has_sources:
                 q = q.filter(getattr(meta, src_name) >= 1)
+
+        if self.not_only_source is not None:
+            q = q.filter(meta.only_src.notlike(self.not_only_source))
+        elif self.lacks_sources is not None:
+            for src_name in self.lacks_sources:
+                q = q.filter(getattr(meta, src_name) == 0)
 
         if self.has_readings is not None:
             q = q.filter(meta.has_rd == self.has_readings)

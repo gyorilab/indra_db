@@ -2,7 +2,7 @@ import json
 import logging
 from collections import OrderedDict
 
-from sqlalchemy import desc, true, select, intersect_all
+from sqlalchemy import desc, true, select, intersect_all, union_all
 
 from indra.statements import stmts_from_json, get_statement_by_name
 from indra_db.util import regularize_agent_id
@@ -306,23 +306,42 @@ class MeshQuery(StatementQuery):
 
 
 class IntersectionQuery(StatementQuery):
-    def __init__(self, other_query_list):
-        self._other_queries = other_query_list
+    def __init__(self, query_list):
+        self.queries = query_list
         super(IntersectionQuery, self).__init__()
 
     def _get_constraint_json(self) -> dict:
-        return {'composite_query': [q._get_constraint_json()
-                                    for q in self._other_queries]}
+        return {'intersection_query': [q._get_constraint_json()
+                                       for q in self.queries]}
 
     @staticmethod
-    def _hash_count_pair(ro):
+    def _hash_count_pair(ro) -> tuple:
         return None, None
 
     def _get_mk_hashes_query(self, ro):
         query_list = []
-        for q in self._other_queries:
+        for q in self.queries:
             query_list.append(q._get_mk_hashes_query(ro))
         mk_hashes_al = intersect_all(*query_list).alias('intersection')
         mk_hashes_q = ro.session.query(mk_hashes_al)
         return mk_hashes_q
 
+
+class UnionQuery(StatementQuery):
+    def __init__(self, query_list):
+        self.queries = query_list
+        super(UnionQuery, self).__init__()
+
+    def _get_constraint_json(self) -> dict:
+        return {'union_query': [q._get_constraint_json()
+                                for q in self.queries]}
+
+    @staticmethod
+    def _hash_count_pair(ro) -> tuple:
+        return None, None
+
+    def _get_mk_hashes_query(self, ro):
+        mk_hashes_q_list = [q._get_mk_hashes_query(ro) for q in self.queries]
+        mk_hashes_al = union_all(*mk_hashes_q_list).alias('union')
+        mk_hashes_q = ro.session.query(mk_hashes_al)
+        return mk_hashes_q

@@ -360,9 +360,12 @@ class MeshQuery(StatementQuery):
 
 
 class MergeQuery(StatementQuery):
-    merge_func = NotImplemented
     join_word = NotImplemented
     name = NotImplemented
+
+    @staticmethod
+    def _merge(*queries):
+        raise NotImplementedError()
 
     def __init__(self, query_list):
         # Make the collection of queries immutable.
@@ -387,14 +390,14 @@ class MergeQuery(StatementQuery):
                                        for q in self.queries]}
 
     def _hash_count_pair(self, ro) -> tuple:
-        mk_hashes_q = self._get_mk_hashes_al(ro)
-        return mk_hashes_q.c.mk_hash, mk_hashes_q.c.ev_count
+        mk_hashes_al = self._get_mk_hashes_al(ro)
+        return mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count
 
     def _get_mk_hashes_al(self, ro):
         if self._mk_hashes_al is None:
             mk_hashes_q_list = [q._get_mk_hashes_query(ro)
                                 for q in self.queries]
-            self._mk_hashes_al = (self.merge_func(*mk_hashes_q_list)
+            self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
                                       .alias(self.name))
         return self._mk_hashes_al
 
@@ -406,12 +409,18 @@ class MergeQuery(StatementQuery):
 
 
 class IntersectionQuery(MergeQuery):
-    merge_func = intersect_all
+    @staticmethod
+    def _merge(*queries):
+        return intersect_all(*queries)
+
     name = 'intersection'
     join_word = 'and'
 
 
 class UnionQuery(MergeQuery):
-    merge_func = union_all
+    @staticmethod
+    def _merge(*queries):
+        return union_all(*queries)
+
     name = 'union'
     join_word = 'or'

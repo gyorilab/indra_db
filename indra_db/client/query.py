@@ -245,6 +245,9 @@ class HashQuery(StatementQuery):
             return HashQuery(self.stmt_hashes + other.stmt_hashes)
         return super(HashQuery, self).__and__(other)
 
+    def __str__(self):
+        return f"hash in list of {len(self.stmt_hashes)}"
+
     @staticmethod
     def _hash_count_pair(ro) -> tuple:
         return ro.PaMeta.mk_hash, ro.PaMeta.ev_count
@@ -271,6 +274,9 @@ class AgentQuery(StatementQuery):
         # Regularize ID based on Database optimization (e.g. striping prefixes)
         self.regularized_id = regularize_agent_id(agent_id, namespace)
         super(AgentQuery, self).__init__()
+
+    def __str__(self):
+        return f"{self.namespace} = {self.agent_id}"
 
     def _get_constraint_json(self) -> dict:
         return {'agent_query': {'agent_id': self.agent_id,
@@ -311,6 +317,9 @@ class MeshQuery(StatementQuery):
         self.mesh_num = int(mesh_id[1:])
         super(MeshQuery, self).__init__()
 
+    def __str__(self):
+        return f"MeSH ID = {self.mesh_id}"
+
     def _get_constraint_json(self) -> dict:
         return {'mesh_query': {'mesh_id': self.mesh_id,
                                'mesh_num': self.mesh_num}}
@@ -331,6 +340,15 @@ class IntersectionQuery(StatementQuery):
     def __init__(self, query_list):
         self.queries = query_list
         super(IntersectionQuery, self).__init__()
+
+    def __str__(self):
+        query_strs = []
+        for q in self.queries:
+            if isinstance(q, UnionQuery):
+                query_strs.append(f"({q})")
+            else:
+                query_strs.append(str(q))
+        return ' and '.join(query_strs)
 
     def _get_constraint_json(self) -> dict:
         return {'intersection_query': [q._get_constraint_json()
@@ -353,6 +371,15 @@ class UnionQuery(StatementQuery):
     def __init__(self, query_list):
         self.queries = query_list
         super(UnionQuery, self).__init__()
+
+    def __str__(self):
+        query_strs = []
+        for q in self.queries:
+            if isinstance(q, IntersectionQuery):
+                query_strs.append(f"({q})")
+            else:
+                query_strs.append(str(q))
+        return ' or '.join(query_strs)
 
     def _get_constraint_json(self) -> dict:
         return {'union_query': [q._get_constraint_json()

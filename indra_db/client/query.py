@@ -253,16 +253,17 @@ class HashQuery(StatementQuery):
         return ro.PaMeta.mk_hash, ro.PaMeta.ev_count
 
     def _get_mk_hashes_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
         if len(self.stmt_hashes) == 0:
             return self._return_result({})
         elif len(self.stmt_hashes) == 1:
-            mk_hashes_q = \
-                ro.filter_query(self._hash_count_pair(ro),
-                                ro.PaMeta.mk_hash == self.stmt_hashes[0])
+            mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
+                                            ev_count.label('ev_count'))
+                             .filter(ro.PaMeta.mk_hash == self.stmt_hashes[0]))
         else:
-            mk_hashes_q = \
-                ro.filter_query(self._hash_count_pair(ro),
-                                ro.PaMeta.mk_hash.in_(self.stmt_hashes))
+            mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
+                                            ev_count.label('ev_count'))
+                             .filter(ro.PaMeta.mk_hash.in_(self.stmt_hashes)))
         return mk_hashes_q
 
 
@@ -299,9 +300,9 @@ class AgentQuery(StatementQuery):
     def _get_mk_hashes_query(self, ro):
         mk_hash, ev_count = self._hash_count_pair(ro)
         meta = self._choose_table(ro)
-        mk_hashes_q = ro.filter_query([mk_hash.label('mk_hash'),
-                                       ev_count.label('ev_count')],
-                                      meta.db_id.like(self.regularized_id))
+        mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
+                                        ev_count.label('ev_count'))
+                         .filter(meta.db_id.like(self.regularized_id)))
 
         if self.namespace not in ['NAME', 'TEXT', None]:
             mk_hashes_q = mk_hashes_q.filter(meta.db_name.like(self.namespace))
@@ -330,9 +331,9 @@ class MeshQuery(StatementQuery):
 
     def _get_mk_hashes_query(self, ro):
         mk_hash, ev_count = self._hash_count_pair(ro)
-        mk_hashes_q = ro.filter_query([mk_hash.label('mk_hash'),
-                                       ev_count.label('ev_count')],
-                                      ro.MeshMeta.mesh_num == self.mesh_num)
+        mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
+                                        ev_count.label('ev_count'))
+                         .filter(ro.MeshMeta.mesh_num == self.mesh_num))
         return mk_hashes_q
 
 

@@ -117,13 +117,13 @@ class StatementQuery(object):
                    .outerjoin(json_content_al, true())
                    .outerjoin(ro.ReadingRefLink,
                               ro.ReadingRefLink.rid == json_content_al.c.rid)
-                   .outerjoin(ro.PaSourceLookup,
-                              ro.PaSourceLookup.mk_hash == mk_hashes_al.c.mk_hash))
+                   .outerjoin(ro.SourceMeta,
+                              ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
 
         ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
                          if not k.startswith('_')]
 
-        cols = [mk_hashes_al.c.mk_hash, ro.PaSourceLookup.src_json,
+        cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
                 mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
                 json_content_al.c.pa_json]
         cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]

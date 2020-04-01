@@ -1,7 +1,8 @@
 __all__ = ['StatementQueryResult', 'StatementQuery', 'IntersectionQuery',
            'UnionQuery', 'MergeQuery', 'AgentQuery', 'MeshQuery', 'HashQuery',
            'HasSourcesQuery', 'OnlySourceQuery', 'HasReadingsQuery',
-           'HasDatabaseQuery', 'SourceQuery', 'IntersectSourceQuery']
+           'HasDatabaseQuery', 'SourceQuery', 'IntersectSourceQuery',
+           'TypeQuery']
 
 import json
 import logging
@@ -9,7 +10,7 @@ from collections import OrderedDict
 
 from sqlalchemy import desc, true, select, intersect_all, union_all
 
-from indra.statements import stmts_from_json, get_statement_by_name
+from indra.statements import stmts_from_json, get_statement_by_name, get_all_descendants
 from indra_db.schemas.readonly_schema import ro_role_map
 from indra_db.util import regularize_agent_id
 
@@ -483,6 +484,47 @@ class AgentQuery(StatementQuery):
         elif self.agent_num is not None:
             mk_hashes_q = mk_hashes_q.filter(meta.agent_num == self.agent_num)
         return mk_hashes_q
+
+
+class TypeQuery(StatementQuery):
+    def __init__(self, stmt_types, include_subclasses=False):
+        if len(stmt_types) == 0:
+            raise ValueError("You must include at least one Statement type.")
+
+        st_set = set(stmt_types)
+        if include_subclasses:
+            for stmt_type in stmt_types:
+                stmt_class = get_statement_by_name(stmt_type)
+                sub_classes = get_all_descendants(stmt_class)
+                st_set |= [c.__name__ for c in sub_classes]
+        self.stmt_types = tuple(st_set)
+        super(TypeQuery, self).__init__()
+
+    def __or__(self, other):
+        if isinstance(other, TypeQuery):
+            return TypeQuery(self.stmt_types + other.stmt_types)
+        return super(TypeQuery, self).__or__(other)
+
+    def __str__(self):
+        return f"type in {self.stmt_types}"
+
+    def _get_constraint_json(self) -> dict:
+        return {'type_query': {'types': self.stmt_types}}
+
+    @staticmethod
+    def _hash_count_pair(ro) -> tuple:
+        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
+
+    def _apply_filter(self, meta, query):
+        if len(self.stmt_types) == 1:
+            return query.filter(meta.type == self.stmt_types[0])
+        return query.filter(meta.type.in_(self.stmt_types))
+
+    def _get_mk_hashes_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
+        query = ro.session.query(mk_hash.label('mk_hash'),
+                                 ev_count.label('ev_count'))
+        return self._apply_filter(ro.SourceMeta, query)
 
 
 class MeshQuery(StatementQuery):

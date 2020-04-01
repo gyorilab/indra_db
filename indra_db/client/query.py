@@ -1,7 +1,7 @@
 __all__ = ['StatementQueryResult', 'StatementQuery', 'IntersectionQuery',
            'UnionQuery', 'MergeQuery', 'AgentQuery', 'MeshQuery', 'HashQuery',
            'HasSourcesQuery', 'OnlySourceQuery', 'HasReadingsQuery',
-           'HasDatabaseQuery', 'SourceQuery', 'MultiSourceQuery']
+           'HasDatabaseQuery', 'SourceQuery', 'IntersectSourceQuery']
 
 import json
 import logging
@@ -246,9 +246,9 @@ class SourceQuery(StatementQuery):
 
     def __and__(self, other):
         if isinstance(other, SourceQuery):
-            return MultiSourceQuery([self, other])
-        elif isinstance(other, MultiSourceQuery):
-            return MultiSourceQuery(other.source_queries + (self,))
+            return IntersectSourceQuery([self, other])
+        elif isinstance(other, IntersectSourceQuery):
+            return IntersectSourceQuery(other.source_queries + (self,))
         return super(SourceQuery, self).__and__(other)
 
     @staticmethod
@@ -271,7 +271,7 @@ class SourceQuery(StatementQuery):
         return q
 
 
-class MultiSourceQuery(StatementQuery):
+class IntersectSourceQuery(StatementQuery):
     def __init__(self, source_queries):
         # Intelligently merge HasSourceQuery's.
         other_sqs = []
@@ -281,7 +281,7 @@ class MultiSourceQuery(StatementQuery):
             if isinstance(sq, HasSourcesQuery):
                 has_sources |= set(sq.sources)
             elif isinstance(sq, HashQuery):
-                hashes |= sq.stmt_hashes
+                hashes &= set(sq.stmt_hashes)
             else:
                 other_sqs.append(sq)
         if has_sources:
@@ -295,14 +295,15 @@ class MultiSourceQuery(StatementQuery):
                              f"allowed at once: "
                              f"{[sq.__class__ for sq in other_sqs]}")
         self.source_queries = tuple(other_sqs)
-        super(MultiSourceQuery, self).__init__()
+        super(IntersectSourceQuery, self).__init__()
 
     def __and__(self, other):
-        if isinstance(other, MultiSourceQuery):
-            return MultiSourceQuery(self.source_queries + other.source_queries)
+        if isinstance(other, IntersectSourceQuery):
+            return IntersectSourceQuery(self.source_queries
+                                        + other.source_queries)
         elif isinstance(other, SourceQuery):
-            return MultiSourceQuery(self.source_queries + (other,))
-        return super(MultiSourceQuery, self).__and__(other)
+            return IntersectSourceQuery(self.source_queries + (other,))
+        return super(IntersectSourceQuery, self).__and__(other)
 
     def __str__(self):
         str_list = [str(sq) for sq in self.source_queries]
@@ -347,7 +348,7 @@ class HasSourcesQuery(SourceQuery):
     def __init__(self, sources):
         if len(sources) == 0:
             raise ValueError("You must specify at least one source.")
-        self.sources = tuple(sources)
+        self.sources = tuple(set(sources))
         super(HasSourcesQuery, self).__init__()
 
     def __and__(self, other):
@@ -401,9 +402,14 @@ class HashQuery(SourceQuery):
     def _get_constraint_json(self) -> dict:
         return {"hash_query": self.stmt_hashes}
 
-    def __and__(self, other):
+    def __or__(self, other):
         if isinstance(other, HashQuery):
             return HashQuery(self.stmt_hashes + other.stmt_hashes)
+        return super(HashQuery, self).__or__(other)
+
+    def __and__(self, other):
+        if isinstance(other, HashQuery):
+            return HashQuery(set(self.stmt_hashes) & set(other.stmt_hashes))
         return super(HashQuery, self).__and__(other)
 
     def __str__(self):
@@ -561,7 +567,7 @@ class IntersectionQuery(MergeQuery):
     join_word = 'and'
 
     def __init__(self, query_list):
-        mergeable_query_types = [MultiSourceQuery, SourceQuery]
+        mergeable_query_types = [IntersectSourceQuery, SourceQuery]
         mergeable_groups = {C: [] for C in mergeable_query_types}
         other_queries = []
         for query in query_list:
@@ -589,6 +595,25 @@ class IntersectionQuery(MergeQuery):
 class UnionQuery(MergeQuery):
     name = 'union'
     join_word = 'or'
+
+    def __init__(self, query_list):
+        other_queries = []
+        hash_queries = []
+        for query in query_list:
+            if isinstance(query, HashQuery):
+                hash_queries.append(query)
+            else:
+                other_queries.append(query)
+
+        if len(hash_queries) == 1:
+            other_queries.append(hash_queries[0])
+        elif len(hash_queries) > 1:
+            query = hash_queries[0]
+            for other_query in hash_queries[1:]:
+                query = query | other_query
+            other_queries.append(query)
+
+        super(UnionQuery, self).__init__(other_queries)
 
     @staticmethod
     def _merge(*queries):

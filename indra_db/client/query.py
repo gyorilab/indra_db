@@ -84,9 +84,17 @@ class StatementQuery(object):
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
 
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
+    def _get_table(self, ro):
         raise NotImplementedError()
+
+    def _base_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
+        return ro.session.query(mk_hash.label('mk_hash'),
+                                ev_count.label('ev_count'))
+
+    def _hash_count_pair(self, ro) -> tuple:
+        meta = self._get_table(ro)
+        return meta.mk_hash, meta.ev_count
 
     def _get_mk_hashes_query(self, ro):
         raise NotImplementedError()
@@ -252,22 +260,14 @@ class SourceQuery(StatementQuery):
             return IntersectSourceQuery(other.source_queries + (self,))
         return super(SourceQuery, self).__and__(other)
 
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
-        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
-
-    def _get_base_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
-
-        query = ro.session.query(mk_hash.label('mk_hash'),
-                                 ev_count.label('ev_count'))
-        return query
+    def _get_table(self, ro):
+        return ro.SourceMeta
 
     def _apply_filter(self, ro, query):
         raise NotImplementedError()
 
     def _get_mk_hashes_query(self, ro):
-        q = self._get_base_query(ro)
+        q = self._base_query(ro)
         q = self._apply_filter(ro, q)
         return q
 
@@ -317,14 +317,11 @@ class IntersectSourceQuery(StatementQuery):
             info_dict.update(q_info)
         return {'multi_source_query': info_dict}
 
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
-        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
+    def _get_table(self, ro):
+        return ro.SourceMeta
 
     def _get_mk_hashes_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
-        query = ro.session.query(mk_hash.label('mk_hash'),
-                                 ev_count.label('ev_count'))
+        query = self._base_query(ro)
         for sq in self.source_queries:
             query = sq._apply_filter(ro, query)
         return query
@@ -455,7 +452,7 @@ class AgentQuery(StatementQuery):
                                 'role': self.role,
                                 'agent_num': self.agent_num}}
 
-    def _choose_table(self, ro):
+    def _get_table(self, ro):
         if self.namespace == 'NAME':
             meta = ro.NameMeta
         elif self.namespace == 'TEXT':
@@ -464,16 +461,10 @@ class AgentQuery(StatementQuery):
             meta = ro.OtherMeta
         return meta
 
-    def _hash_count_pair(self, ro) -> tuple:
-        meta = self._choose_table(ro)
-        return meta.mk_hash, meta.ev_count
-
     def _get_mk_hashes_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
-        meta = self._choose_table(ro)
-        mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
-                                        ev_count.label('ev_count'))
-                         .filter(meta.db_id.like(self.regularized_id)))
+        meta = self._get_table(ro)
+        mk_hashes_q = (self._base_query(ro)
+                           .filter(meta.db_id.like(self.regularized_id)))
 
         if self.namespace not in ['NAME', 'TEXT', None]:
             mk_hashes_q = mk_hashes_q.filter(meta.db_name.like(self.namespace))
@@ -511,9 +502,8 @@ class TypeQuery(StatementQuery):
     def _get_constraint_json(self) -> dict:
         return {'type_query': {'types': self.stmt_types}}
 
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
-        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
+    def _get_table(self, ro):
+        return ro.SourceMeta
 
     def _apply_filter(self, meta, query):
         if len(self.stmt_types) == 1:
@@ -521,10 +511,8 @@ class TypeQuery(StatementQuery):
         return query.filter(meta.type.in_(self.stmt_types))
 
     def _get_mk_hashes_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
-        query = ro.session.query(mk_hash.label('mk_hash'),
-                                 ev_count.label('ev_count'))
-        return self._apply_filter(ro.SourceMeta, query)
+        query = self._base_query(ro)
+        return self._apply_filter(self._get_table(ro), query)
 
 
 class MeshQuery(StatementQuery):
@@ -543,15 +531,12 @@ class MeshQuery(StatementQuery):
         return {'mesh_query': {'mesh_id': self.mesh_id,
                                'mesh_num': self.mesh_num}}
 
-    @staticmethod
-    def _hash_count_pair(ro):
-        return ro.MeshMeta.mk_hash, ro.MeshMeta.ev_count
+    def _get_table(self, ro):
+        return ro.MeshMeta
 
     def _get_mk_hashes_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
-        mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
-                                        ev_count.label('ev_count'))
-                         .filter(ro.MeshMeta.mesh_num == self.mesh_num))
+        mk_hashes_q = (self._base_query(ro)
+                           .filter(ro.MeshMeta.mesh_num == self.mesh_num))
         return mk_hashes_q
 
 
@@ -586,10 +571,10 @@ class MergeQuery(StatementQuery):
                                        for q in self.queries]}
 
     def _hash_count_pair(self, ro) -> tuple:
-        mk_hashes_al = self._get_mk_hashes_al(ro)
+        mk_hashes_al = self._get_table(ro)
         return mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count
 
-    def _get_mk_hashes_al(self, ro):
+    def _get_table(self, ro):
         if self._mk_hashes_al is None:
             mk_hashes_q_list = [q._get_mk_hashes_query(ro)
                                 for q in self.queries]
@@ -598,10 +583,7 @@ class MergeQuery(StatementQuery):
         return self._mk_hashes_al
 
     def _get_mk_hashes_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
-        mk_hashes_q = ro.session.query(mk_hash.label('mk_hash'),
-                                       ev_count.label('ev_count'))
-        return mk_hashes_q
+        return self._base_query(ro)
 
 
 class IntersectionQuery(MergeQuery):
@@ -612,13 +594,22 @@ class IntersectionQuery(MergeQuery):
         mergeable_query_types = [IntersectSourceQuery, SourceQuery]
         mergeable_groups = {C: [] for C in mergeable_query_types}
         other_queries = []
+        self.type_query = None
         for query in query_list:
             for C in mergeable_query_types:
                 if isinstance(query, C):
                     mergeable_groups[C].append(query)
                     break
             else:
-                other_queries.append(query)
+                if isinstance(query, TypeQuery):
+                    if self.type_query is None:
+                        self.type_query = query
+                    else:
+                        raise ValueError("Only one TypeQuery can be "
+                                         "intersected at once.")
+                else:
+                    other_queries.append(query)
+
         for queries in mergeable_groups.values():
             if len(queries) == 1:
                 other_queries.append(queries[0])

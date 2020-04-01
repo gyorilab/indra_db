@@ -274,15 +274,20 @@ class SourceQuery(StatementQuery):
 class MultiSourceQuery(StatementQuery):
     def __init__(self, source_queries):
         # Intelligently merge HasSourceQuery's.
-        has_sources = set()
         other_sqs = []
+        has_sources = set()
+        hashes = set()
         for sq in source_queries:
             if isinstance(sq, HasSourcesQuery):
                 has_sources |= set(sq.sources)
+            elif isinstance(sq, HashQuery):
+                hashes |= sq.stmt_hashes
             else:
                 other_sqs.append(sq)
         if has_sources:
             other_sqs.append(HasSourcesQuery(has_sources))
+        if hashes:
+            other_sqs.append(HashQuery(hashes))
 
         classes = {sq.__class__ for sq in other_sqs}
         if len(classes) != len(other_sqs):

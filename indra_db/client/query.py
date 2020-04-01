@@ -624,6 +624,17 @@ class IntersectionQuery(MergeQuery):
     def _merge(*queries):
         return intersect_all(*queries)
 
+    def _get_table(self, ro):
+        if self._mk_hashes_al is not None:
+            return self._mk_hashes_al
+        mkhq_list = []
+        for query in self.queries:
+            mkhq = query._get_mk_hashes_query(ro)
+            mkhq = self.type_query._apply_filter(query._get_table(ro), mkhq)
+            mkhq_list.append(mkhq)
+        self._mk_hashes_al = self._merge(*mkhq_list)
+        return self._mk_hashes_al
+
 
 class UnionQuery(MergeQuery):
     name = 'union'

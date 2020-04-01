@@ -506,10 +506,6 @@ class MergeQuery(StatementQuery):
     join_word = NotImplemented
     name = NotImplemented
 
-    @staticmethod
-    def _merge(*queries):
-        raise NotImplementedError()
-
     def __init__(self, query_list):
         # Make the collection of queries immutable.
         self.queries = tuple(query_list)
@@ -518,6 +514,10 @@ class MergeQuery(StatementQuery):
         # dynamism is required to get, for instance, the hash and count pair.
         self._mk_hashes_al = None
         super(MergeQuery, self).__init__()
+
+    @staticmethod
+    def _merge(*queries):
+        raise NotImplementedError()
 
     def __str__(self):
         query_strs = []
@@ -552,18 +552,39 @@ class MergeQuery(StatementQuery):
 
 
 class IntersectionQuery(MergeQuery):
+    name = 'intersection'
+    join_word = 'and'
+
+    def __init__(self, query_list):
+        mergeable_query_types = [MultiSourceQuery, SourceQuery]
+        mergeable_groups = {C: [] for C in mergeable_query_types}
+        other_queries = []
+        for query in query_list:
+            for C in mergeable_query_types:
+                if isinstance(query, C):
+                    mergeable_groups[C].append(query)
+                    break
+            else:
+                other_queries.append(query)
+        for queries in mergeable_groups.values():
+            if len(queries) == 1:
+                other_queries.append(queries[0])
+            elif len(queries) > 1:
+                query = queries[0]
+                for q in queries[1:]:
+                    query = query & q
+                other_queries.append(query)
+        super(IntersectionQuery, self).__init__(other_queries)
+
     @staticmethod
     def _merge(*queries):
         return intersect_all(*queries)
 
-    name = 'intersection'
-    join_word = 'and'
-
 
 class UnionQuery(MergeQuery):
+    name = 'union'
+    join_word = 'or'
+
     @staticmethod
     def _merge(*queries):
         return union_all(*queries)
-
-    name = 'union'
-    join_word = 'or'

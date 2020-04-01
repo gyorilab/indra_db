@@ -281,13 +281,15 @@ class MultiSourceQuery(StatementQuery):
                 has_sources |= set(sq.sources)
             else:
                 other_sqs.append(sq)
-        hsq = HasSourcesQuery(has_sources)
+        if has_sources:
+            other_sqs.append(HasSourcesQuery(has_sources))
 
         classes = {sq.__class__ for sq in other_sqs}
-        if len(classes) != len(source_queries):
-            raise ValueError("Only one each of non-HasSourceQuery entries "
-                             "allowed at once.")
-        self.source_queries = tuple(other_sqs + [hsq])
+        if len(classes) != len(other_sqs):
+            raise ValueError(f"Only one each of non-HasSourceQuery entries "
+                             f"allowed at once: "
+                             f"{[sq.__class__ for sq in other_sqs]}")
+        self.source_queries = tuple(other_sqs)
         super(MultiSourceQuery, self).__init__()
 
     def __and__(self, other):

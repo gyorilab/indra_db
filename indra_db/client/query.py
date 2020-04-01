@@ -1,6 +1,7 @@
 __all__ = ['StatementQueryResult', 'StatementQuery', 'IntersectionQuery',
            'UnionQuery', 'MergeQuery', 'AgentQuery', 'MeshQuery', 'HashQuery',
-           'SourceQuery']
+           'HasSourcesQuery', 'OnlySourceQuery', 'HasReadingsQuery',
+           'HasDatabaseQuery', 'SourceQuery', 'MultiSourceQuery']
 
 import json
 import logging
@@ -238,7 +239,152 @@ class StatementQuery(object):
         return self.__merge_queries(other, UnionQuery)
 
 
-class HashQuery(StatementQuery):
+class SourceQuery(StatementQuery):
+
+    def _get_constraint_json(self) -> dict:
+        raise NotImplementedError()
+
+    def __and__(self, other):
+        if isinstance(other, SourceQuery):
+            return MultiSourceQuery([self, other])
+        elif isinstance(other, MultiSourceQuery):
+            return MultiSourceQuery(other.source_queries + (self,))
+        return super(SourceQuery, self).__and__(other)
+
+    @staticmethod
+    def _hash_count_pair(ro) -> tuple:
+        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
+
+    def _get_base_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
+
+        query = ro.session.query(mk_hash.label('mk_hash'),
+                                 ev_count.label('ev_count'))
+        return query
+
+    def _apply_filter(self, ro, query):
+        raise NotImplementedError()
+
+    def _get_mk_hashes_query(self, ro):
+        q = self._get_base_query(ro)
+        q = self._apply_filter(ro, q)
+        return q
+
+
+class MultiSourceQuery(StatementQuery):
+    def __init__(self, source_queries):
+        # Intelligently merge HasSourceQuery's.
+        has_sources = set()
+        other_sqs = []
+        for sq in source_queries:
+            if isinstance(sq, HasSourcesQuery):
+                has_sources |= set(sq.sources)
+            else:
+                other_sqs.append(sq)
+        hsq = HasSourcesQuery(has_sources)
+
+        classes = {sq.__class__ for sq in other_sqs}
+        if len(classes) != len(source_queries):
+            raise ValueError("Only one each of non-HasSourceQuery entries "
+                             "allowed at once.")
+        self.source_queries = tuple(other_sqs + [hsq])
+        super(MultiSourceQuery, self).__init__()
+
+    def __and__(self, other):
+        if isinstance(other, MultiSourceQuery):
+            return MultiSourceQuery(self.source_queries + other.source_queries)
+        elif isinstance(other, SourceQuery):
+            return MultiSourceQuery(self.source_queries + (other,))
+        return super(MultiSourceQuery, self).__and__(other)
+
+    def __str__(self):
+        str_list = [str(sq) for sq in self.source_queries]
+        return ' and '.join(str_list)
+
+    def _get_constraint_json(self) -> dict:
+        info_dict = {}
+        for q in self.source_queries:
+            q_info = q._get_constraint_json()
+            info_dict.update(q_info)
+        return {'multi_source_query': info_dict}
+
+    @staticmethod
+    def _hash_count_pair(ro) -> tuple:
+        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
+
+    def _get_mk_hashes_query(self, ro):
+        mk_hash, ev_count = self._hash_count_pair(ro)
+        query = ro.session.query(mk_hash.label('mk_hash'),
+                                 ev_count.label('ev_count'))
+        for sq in self.source_queries:
+            query = sq._apply_filter(ro, query)
+        return query
+
+
+class OnlySourceQuery(SourceQuery):
+    def __init__(self, only_source):
+        self.only_source = only_source
+        super(OnlySourceQuery, self).__init__()
+
+    def __str__(self):
+        return f"is only from {self.only_source}"
+
+    def _get_constraint_json(self) -> dict:
+        return {'only_source_query': {'only_source': self.only_source}}
+
+    def _apply_filter(self, ro, query):
+        return query.filter(ro.SourceMeta.only_src.like(self.only_source))
+
+
+class HasSourcesQuery(SourceQuery):
+    def __init__(self, sources):
+        if len(sources) == 0:
+            raise ValueError("You must specify at least one source.")
+        self.sources = tuple(sources)
+        super(HasSourcesQuery, self).__init__()
+
+    def __and__(self, other):
+        if isinstance(other, HasSourcesQuery):
+            return HasSourcesQuery(self.sources + other.sources)
+        return super(HasSourcesQuery, self).__and__(other)
+
+    def __str__(self):
+        return f"is from one of {self.sources}"
+
+    def _get_constraint_json(self) -> dict:
+        return {'has_source_query': {'sources': self.sources}}
+
+    def _apply_filter(self, ro, query):
+        for src in self.sources:
+            query = query.filter(getattr(ro.SourceMeta, src) > 0)
+        return query
+
+
+class HasReadingsQuery(SourceQuery):
+
+    def __str__(self):
+        return "has readings"
+
+    def _get_constraint_json(self) -> dict:
+        return {'has_readings_query': {'has_readings': True}}
+
+    def _apply_filter(self, ro, query):
+        return query.filter(ro.SourceMeta.has_rd == True)
+
+
+class HasDatabaseQuery(SourceQuery):
+
+    def __str__(self):
+        return "has databases"
+
+    def _get_constraint_json(self) -> dict:
+        return {'has_databases_query': {'has_database': True}}
+
+    def _apply_filter(self, ro, query):
+        return query.filter(ro.SourceMeta.has_db == True)
+
+
+class HashQuery(SourceQuery):
     def __init__(self, stmt_hashes):
         if len(stmt_hashes) == 0:
             raise ValueError("You must include at least one hash.")
@@ -249,116 +395,23 @@ class HashQuery(StatementQuery):
         return {"hash_query": self.stmt_hashes}
 
     def __and__(self, other):
-        if isinstance(self, HashQuery) and isinstance(other, HashQuery):
+        if isinstance(other, HashQuery):
             return HashQuery(self.stmt_hashes + other.stmt_hashes)
         return super(HashQuery, self).__and__(other)
 
     def __str__(self):
-        return f"hash in list of {len(self.stmt_hashes)}"
+        return f"hash in {self.stmt_hashes}"
 
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
-        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
-
-    def _get_mk_hashes_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
+    def _apply_filter(self, ro, query):
+        mk_hash, _ = self._hash_count_pair(ro)
         if len(self.stmt_hashes) == 1:
-            mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
-                                            ev_count.label('ev_count'))
-                             .filter(mk_hash == self.stmt_hashes[0]))
+            query = query.filter(mk_hash == self.stmt_hashes[0])
         else:
-            mk_hashes_q = (ro.session.query(mk_hash.label('mk_hash'),
-                                            ev_count.label('ev_count'))
-                             .filter(mk_hash.in_(self.stmt_hashes)))
-        return mk_hashes_q
-
-
-class SourceQuery(StatementQuery):
-    def __init__(self, only_source=None, not_only_source=None,
-                 has_readings=None, has_databases=None, has_sources=None,
-                 lacks_sources=None):
-
-        if has_sources and only_source:
-            raise ValueError("You cannot have only_source and has_sources at "
-                             "the same time.")
-
-        if lacks_sources and not_only_source:
-            raise ValueError("You cannot use lacks_sources and "
-                             "not_only_source at the same time.")
-
-        self.only_source = only_source
-        self.not_only_source = not_only_source
-        self.has_readings = has_readings
-        self.has_databases = has_databases
-        self.has_sources = has_sources
-        self.lacks_sources = lacks_sources
-        super(SourceQuery, self).__init__()
-
-    def __str__(self):
-        s = ""
-        if self.only_source is not None:
-            s += f"only has source {self.only_source}"
-        elif self.has_sources is not None:
-            s += f"has one of the sources: {self.has_sources}"
-
-        if self.not_only_source is not None:
-            s += f" is not only from {self.not_only_source}"
-        elif self.lacks_sources is not None:
-            s += f" is not from one of {self.lacks_sources}"
-
-        if self.has_readings is not None:
-            s += " has "
-            if not self.has_readings:
-                s += 'no '
-            s += 'readings'
-
-        if self.has_databases is not None:
-            s += ' has '
-            if not self.has_databases:
-                s += 'no '
-            s += 'databases'
-        return s
-
-    def _get_constraint_json(self) -> dict:
-        return {'source_query': {'only_source': self.only_source,
-                                 'has_readings': self.has_readings,
-                                 'has_databases': self.has_databases,
-                                 'has_sources': self.has_sources}}
-
-    @staticmethod
-    def _hash_count_pair(ro) -> tuple:
-        return ro.SourceMeta.mk_hash, ro.SourceMeta.ev_count
-
-    def _get_mk_hashes_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
-        meta = ro.SourceMeta
-
-        q = ro.session.query(mk_hash.label('mk_hash'),
-                                       ev_count.label('ev_count'))
-
-        if self.only_source is not None:
-            q = q.filter(meta.only_src.like(self.only_source))
-        elif self.has_sources is not None:
-            for src_name in self.has_sources:
-                q = q.filter(getattr(meta, src_name) >= 1)
-
-        if self.not_only_source is not None:
-            q = q.filter(meta.only_src.notlike(self.not_only_source))
-        elif self.lacks_sources is not None:
-            for src_name in self.lacks_sources:
-                q = q.filter(getattr(meta, src_name) == 0)
-
-        if self.has_readings is not None:
-            q = q.filter(meta.has_rd == self.has_readings)
-
-        if self.has_databases is not None:
-            q = q.filter(meta.has_db == self.has_databases)
-
-        return q
+            query = query.filter(mk_hash.in_(self.stmt_hashes))
+        return query
 
 
 class AgentQuery(StatementQuery):
-
     def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):
         self.agent_id = agent_id
         self.namespace = namespace

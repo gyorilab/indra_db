@@ -620,14 +620,6 @@ class MergeQuery(StatementQuery):
         mk_hashes_al = self._get_table(ro)
         return mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count
 
-    def _get_table(self, ro):
-        if self._mk_hashes_al is None:
-            mk_hashes_q_list = [q._get_mk_hashes_query(ro)
-                                for q in self.queries]
-            self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
-                                      .alias(self.name))
-        return self._mk_hashes_al
-
     def _get_mk_hashes_query(self, ro):
         return self._base_query(ro)
 
@@ -716,7 +708,15 @@ class UnionQuery(MergeQuery):
 
     @staticmethod
     def _merge(*queries):
-        non_empty_queries = [q for q in queries if not q.empty]
-        if len(non_empty_queries) == 1:
-            return non_empty_queries[0]
-        return union_all(*non_empty_queries)
+        return union_all(*queries)
+
+    def _get_table(self, ro):
+        if self._mk_hashes_al is None:
+            mk_hashes_q_list = [q._get_mk_hashes_query(ro)
+                                for q in self.queries if not q.empty]
+            if len(mk_hashes_q_list) == 1:
+                self._mk_hashes_al = mk_hashes_q_list[0].alias(self.name)
+            else:
+                self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
+                                      .alias(self.name))
+        return self._mk_hashes_al

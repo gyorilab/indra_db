@@ -42,23 +42,34 @@ def test_query_set_behavior():
         TypeQuery(['Complex'])
     ]
 
+    failures = []
+
+    def try_query(q, compair=None):
+        try:
+            result = dq(q)
+            if compair is not None:
+                assert result == compair
+        except Exception as e:
+            failures.append({'query': q.to_json(), 'error': e, 'result': result,
+                             'compair': compair})
+            return q, None
+        return q, result
+
     results = []
     for q in queries:
-        results.append(dq(q))
+        q, res = try_query(q)
+        if res:
+            results.append((q, res))
 
-    for (r1, q1), (r2, q2) in permutations(zip(results, queries), 2):
-        r1n2 = dq(q1 & q2)
-        assert r1n2 == r1 & r2
-        r1r2 = dq(q1 | q2)
-        assert r1r2 == r1 | r2
+    for (r1, q1), (r2, q2) in permutations(results, 2):
+        try_query(q1 & q2, r1 & r2)
+        try_query(q1 | q2, r1 | r2)
 
-    for (r1, q1), (r2, q2), (r3, q3) in combinations(zip(results, queries), 3):
-        r1n2n3 = dq(q1 & q2 & q3)
-        assert r1n2n3 == r1 & r2 & r3
+    for (r1, q1), (r2, q2), (r3, q3) in combinations(results, 3):
+        try_query(q1 & q2 & q3, r1 & r2 & r3)
+        try_query(q1 | q2 | q3, r1 | r2 | r3)
 
-        r1r2r3 = dq(q1 | q2 | q3)
-        assert r1r2r3 == r1 | r2 | r3
+    for (r1, q1), (r2, q2), (r3, q3) in permutations(results, 3):
+        try_query(q1 & q2 | q3, r1 & r2 | r3)
 
-    for (r1, q1), (r2, q2), (r3, q3) in permutations(queries, 3):
-        r1n2r3 = dq(q1 & q2 | q3)
-        assert r1n2r3 == r1 & r2 | r3
+    return results, failures

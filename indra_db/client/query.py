@@ -78,12 +78,17 @@ class StatementQueryResult(QueryResult):
 
 
 class StatementQuery(object):
-    def __init__(self):
+    def __init__(self, empty=False):
         self.limit = None
         self.offset = None
+        self.empty = empty
 
     def get_statements(self, ro, limit=None, offset=None, best_first=True,
                        ev_limit=None):
+        if self.empty:
+            return StatementQueryResult({}, limit, offset, {}, 0, {},
+                                        self.to_json())
+
         mk_hashes_q = self._get_mk_hashes_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
@@ -95,6 +100,9 @@ class StatementQuery(object):
                                     self.to_json())
 
     def get_hashes(self, ro, limit=None, offset=None, best_first=True):
+        if self.empty:
+            return QueryResult(set(), limit, offset, {}, self.to_json())
+
         mk_hashes_q = self._get_mk_hashes_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
@@ -370,10 +378,12 @@ class OnlySourceQuery(SourceQuery):
 
 class HasSourcesQuery(SourceQuery):
     def __init__(self, sources):
+        empty = False
         if len(sources) == 0:
-            raise ValueError("You must specify at least one source.")
+            empty = True
+            logger.warning("No sources specified, query is by default empty.")
         self.sources = tuple(set(sources))
-        super(HasSourcesQuery, self).__init__()
+        super(HasSourcesQuery, self).__init__(empty)
 
     def __and__(self, other):
         if isinstance(other, HasSourcesQuery):
@@ -418,10 +428,12 @@ class HasDatabaseQuery(SourceQuery):
 
 class HashQuery(SourceQuery):
     def __init__(self, stmt_hashes):
+        empty = False
         if len(stmt_hashes) == 0:
-            raise ValueError("You must include at least one hash.")
+            empty = True
+            logger.warning("No hashes given, query is by default empty.")
         self.stmt_hashes = tuple(stmt_hashes)
-        super(HashQuery, self).__init__()
+        super(HashQuery, self).__init__(empty)
 
     def _get_constraint_json(self) -> dict:
         return {"hash_query": self.stmt_hashes}
@@ -505,8 +517,10 @@ class AgentQuery(StatementQuery):
 
 class TypeQuery(StatementQuery):
     def __init__(self, stmt_types, include_subclasses=False):
+        empty = False
         if len(stmt_types) == 0:
-            raise ValueError("You must include at least one Statement type.")
+            empty = True
+            logger.warning('No statement types indicated, query is empty.')
 
         st_set = set(stmt_types)
         if include_subclasses:
@@ -515,7 +529,7 @@ class TypeQuery(StatementQuery):
                 sub_classes = get_all_descendants(stmt_class)
                 st_set |= {c.__name__ for c in sub_classes}
         self.stmt_types = tuple(st_set)
-        super(TypeQuery, self).__init__()
+        super(TypeQuery, self).__init__(empty)
 
     def __or__(self, other):
         if isinstance(other, TypeQuery):
@@ -576,14 +590,14 @@ class MergeQuery(StatementQuery):
     join_word = NotImplemented
     name = NotImplemented
 
-    def __init__(self, query_list):
+    def __init__(self, query_list, *args, **kwargs):
         # Make the collection of queries immutable.
         self.queries = tuple(query_list)
 
         # Because of the derivative nature of the "tables" involved, some more
         # dynamism is required to get, for instance, the hash and count pair.
         self._mk_hashes_al = None
-        super(MergeQuery, self).__init__()
+        super(MergeQuery, self).__init__(*args, **kwargs)
 
     @staticmethod
     def _merge(*queries):
@@ -627,7 +641,10 @@ class IntersectionQuery(MergeQuery):
         mergeable_groups = {C: [] for C in mergeable_query_types}
         other_queries = []
         self.type_query = None
+        empty = False
         for query in query_list:
+            if query.empty:
+                empty = True
             for C in mergeable_query_types:
                 if isinstance(query, C):
                     mergeable_groups[C].append(query)
@@ -637,8 +654,7 @@ class IntersectionQuery(MergeQuery):
                     if self.type_query is None:
                         self.type_query = query
                     else:
-                        raise ValueError("Only one TypeQuery can be "
-                                         "intersected at once.")
+                        self.type_query = self.type_query & query
                 other_queries.append(query)
 
         for queries in mergeable_groups.values():
@@ -649,7 +665,7 @@ class IntersectionQuery(MergeQuery):
                 for q in queries[1:]:
                     query = query & q
                 other_queries.append(query)
-        super(IntersectionQuery, self).__init__(other_queries)
+        super(IntersectionQuery, self).__init__(other_queries, empty)
 
     @staticmethod
     def _merge(*queries):
@@ -678,7 +694,11 @@ class UnionQuery(MergeQuery):
     def __init__(self, query_list):
         other_queries = []
         hash_queries = []
+        all_empty = True
         for query in query_list:
+            if not query.empty:
+                all_empty = False
+
             if isinstance(query, HashQuery):
                 hash_queries.append(query)
             else:
@@ -692,8 +712,11 @@ class UnionQuery(MergeQuery):
                 query = query | other_query
             other_queries.append(query)
 
-        super(UnionQuery, self).__init__(other_queries)
+        super(UnionQuery, self).__init__(other_queries, all_empty)
 
     @staticmethod
     def _merge(*queries):
-        return union_all(*queries)
+        non_empty_queries = [q for q in queries if not q.empty]
+        if len(non_empty_queries) == 1:
+            return non_empty_queries[0]
+        return union_all(*non_empty_queries)

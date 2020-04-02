@@ -6,18 +6,44 @@ __all__ = ['StatementQueryResult', 'StatementQuery', 'IntersectionQuery',
 
 import json
 import logging
-from collections import OrderedDict
+from collections import OrderedDict, Iterable
 
 from sqlalchemy import desc, true, select, intersect_all, union_all
 
-from indra.statements import stmts_from_json, get_statement_by_name, get_all_descendants
+from indra.statements import stmts_from_json, get_statement_by_name, \
+    get_all_descendants
 from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map
 from indra_db.util import regularize_agent_id
 
 logger = logging.getLogger(__name__)
 
 
-class StatementQueryResult(object):
+class QueryResult(object):
+    def __init__(self, results, limit: int, offset: int, query_json: dict,
+                 evidence_totals: dict):
+        if not isinstance(results, Iterable) or isinstance(results, str):
+            raise ValueError("Input `results` is expected to be an iterable, "
+                             "and not a string.")
+        self.results = results
+        self.evidence_totals = evidence_totals
+        self.total_evidence = sum(self.evidence_totals.values())
+        self.limit = limit
+        self.offset = offset
+        self.query_json = query_json
+
+    def json(self):
+        if not isinstance(self.results, dict) \
+                and not isinstance(self.results, list):
+            json_results = list(self.results)
+        else:
+            json_results = self.results
+        return {'results': json_results, 'limit': self.limit,
+                'offset': self.offset, 'query': self.query_json,
+                'evidence_totals': self.evidence_totals,
+                'total_evidence': self.total_evidence}
+
+
+class StatementQueryResult(QueryResult):
     """The result of a statement query.
 
     This class encapsulates the results of a search for statements in the
@@ -34,25 +60,18 @@ class StatementQueryResult(object):
         A description of the query that was used.
     """
     def __init__(self, results: dict, limit: int, offset: int,
-                 evidence_totals: dict, total_evidence: int,
-                 returned_evidence: int, source_counts: dict,
-                 query_json: dict):
-        self.results = results
-        self.limit = limit
-        self.offset = offset
-        self.evidence_totals = evidence_totals
-        self.total_evidence = total_evidence
+                 evidence_totals: dict, returned_evidence: int,
+                 source_counts: dict, query_json: dict):
+        super(StatementQueryResult, self).__init__(results, limit, offset,
+                                                   query_json, evidence_totals)
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
-        self.query_json = query_json
 
     def json(self):
-        return {'results': self.results, 'limit': self.limit,
-                'offset': self.offset, 'query': self.query_json,
-                'evidence_totals': self.evidence_totals,
-                'total_evidence': self.total_evidence,
-                'returned_evidence': self.returned_evidence,
-                'source_counts': self.source_counts}
+        json_dict = super(StatementQueryResult, self).json()
+        json_dict.update({'returned_evidence': self.returned_evidence,
+                          'source_counts': self.source_counts})
+        return json_dict
 
     def statements(self):
         return stmts_from_json(list(self.results.values()))
@@ -66,17 +85,38 @@ class StatementQuery(object):
     def get_statements(self, ro, limit=None, offset=None, best_first=True,
                        ev_limit=None):
         mk_hashes_q = self._get_mk_hashes_query(ro)
-        return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
-                                                      offset, best_first,
-                                                      ev_limit)
+        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
+                                         best_first)
 
-    def _return_result(self, results: dict, evidence_totals: dict,
-                       total_evidence: int, returned_evidence: int,
-                       source_counts: dict):
-        return StatementQueryResult(results, self.limit, self.offset,
-                                    evidence_totals, total_evidence,
+        stmt_dict, ev_totals, returned_evidence, source_counts = \
+            self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit)
+        return StatementQueryResult(stmt_dict, limit, offset, ev_totals,
                                     returned_evidence, source_counts,
                                     self.to_json())
+
+    def get_hashes(self, ro, limit=None, offset=None, best_first=True):
+        mk_hashes_q = self._get_mk_hashes_query(ro)
+        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
+                                         best_first)
+        result = mk_hashes_q.all()
+        evidence_totals = {h: cnt for h, cnt in result}
+        return QueryResult(set(evidence_totals.keys()), limit, offset,
+                           evidence_totals, self.to_json())
+
+    def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
+                      best_first=True):
+        mk_hashes_q = mk_hashes_q.distinct()
+
+        mk_hash_obj, ev_count_obj = self._hash_count_pair(ro)
+
+        # Apply the general options.
+        if best_first:
+            mk_hashes_q = mk_hashes_q.order_by(desc(ev_count_obj))
+        if limit is not None:
+            mk_hashes_q = mk_hashes_q.limit(limit)
+        if offset is not None:
+            mk_hashes_q = mk_hashes_q.offset(offset)
+        return mk_hashes_q
 
     def to_json(self) -> dict:
         return {'limit': self.limit, 'offset': self.offset,
@@ -100,20 +140,8 @@ class StatementQuery(object):
     def _get_mk_hashes_query(self, ro):
         raise NotImplementedError()
 
-    def _get_stmt_jsons_from_hashes_query(self, ro, mk_hashes_q, limit, offset,
-                                          best_first, ev_limit):
-        mk_hashes_q = mk_hashes_q.distinct()
-
-        mk_hash_obj, ev_count_obj = self._hash_count_pair(ro)
-
-        # Apply the general options.
-        if best_first:
-            mk_hashes_q = mk_hashes_q.order_by(desc(ev_count_obj))
-        if limit is not None:
-            mk_hashes_q = mk_hashes_q.limit(limit)
-        if offset is not None:
-            mk_hashes_q = mk_hashes_q.offset(offset)
-
+    @staticmethod
+    def _get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit):
         # Create the link
         mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
         raw_json_c = ro.FastRawPaLink.raw_json.label('raw_json')
@@ -158,7 +186,6 @@ class StatementQuery(object):
         stmts_dict = OrderedDict()
         ev_totals = OrderedDict()
         source_counts = OrderedDict()
-        total_evidence = 0
         returned_evidence = 0
         src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
         for row in res:
@@ -181,7 +208,6 @@ class StatementQuery(object):
 
             # Add a new statement if the hash is new.
             if mk_hash not in stmts_dict.keys():
-                total_evidence += ev_count
                 source_counts[mk_hash] = src_dict
                 ev_totals[mk_hash] = ev_count
                 stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
@@ -228,8 +254,7 @@ class StatementQuery(object):
             # Add the evidence JSON to the list.
             stmts_dict[mk_hash]['evidence'].append(ev_json)
 
-        return self._return_result(stmts_dict, ev_totals, total_evidence,
-                                   returned_evidence, source_counts)
+        return stmts_dict, ev_totals, returned_evidence, source_counts
 
     def __merge_queries(self, other, MergeClass):
         if isinstance(self, MergeClass):

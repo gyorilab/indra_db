@@ -59,7 +59,7 @@ def test_query_set_behavior():
     for q in queries:
         q, res = try_query(q)
         if res:
-            results.append((q, res))
+            results.append((res, q))
 
     for (r1, q1), (r2, q2) in permutations(results, 2):
         try_query(q1 & q2, r1 & r2)

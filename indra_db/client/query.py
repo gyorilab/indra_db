@@ -11,7 +11,7 @@ from collections import OrderedDict
 from sqlalchemy import desc, true, select, intersect_all, union_all
 
 from indra.statements import stmts_from_json, get_statement_by_name, get_all_descendants
-from indra_db.schemas.readonly_schema import ro_role_map
+from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map
 from indra_db.util import regularize_agent_id
 
 logger = logging.getLogger(__name__)
@@ -506,9 +506,10 @@ class TypeQuery(StatementQuery):
         return ro.SourceMeta
 
     def _apply_filter(self, meta, query):
-        if len(self.stmt_types) == 1:
-            return query.filter(meta.type == self.stmt_types[0])
-        return query.filter(meta.type.in_(self.stmt_types))
+        type_nums = [ro_type_map.get_int(st) for st in self.stmt_types]
+        if len(type_nums) == 1:
+            return query.filter(meta.type_num == type_nums[0])
+        return query.filter(meta.type_num.in_(type_nums))
 
     def _get_mk_hashes_query(self, ro):
         query = self._base_query(ro)

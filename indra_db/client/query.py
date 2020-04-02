@@ -522,6 +522,11 @@ class TypeQuery(StatementQuery):
             return TypeQuery(self.stmt_types + other.stmt_types)
         return super(TypeQuery, self).__or__(other)
 
+    def __and__(self, other):
+        if isinstance(other, TypeQuery):
+            return TypeQuery(set(self.stmt_types) & set(other.stmt_types))
+        return super(TypeQuery, self).__and__(other)
+
     def __str__(self):
         return f"type in {self.stmt_types}"
 

@@ -513,7 +513,7 @@ class TypeQuery(StatementQuery):
             for stmt_type in stmt_types:
                 stmt_class = get_statement_by_name(stmt_type)
                 sub_classes = get_all_descendants(stmt_class)
-                st_set |= [c.__name__ for c in sub_classes]
+                st_set |= {c.__name__ for c in sub_classes}
         self.stmt_types = tuple(st_set)
         super(TypeQuery, self).__init__()
 

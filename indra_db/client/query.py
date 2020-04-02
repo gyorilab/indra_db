@@ -634,8 +634,7 @@ class IntersectionQuery(MergeQuery):
                     else:
                         raise ValueError("Only one TypeQuery can be "
                                          "intersected at once.")
-                else:
-                    other_queries.append(query)
+                other_queries.append(query)
 
         for queries in mergeable_groups.values():
             if len(queries) == 1:
@@ -662,6 +661,8 @@ class IntersectionQuery(MergeQuery):
             return self._mk_hashes_al
         mkhq_list = []
         for query in self.queries:
+            if query == self.type_query:
+                continue
             mkhq = query._get_mk_hashes_query(ro)
             if self.type_query is not None:
                 mkhq = self.type_query._apply_filter(query._get_table(ro),

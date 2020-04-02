@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class QueryResult(object):
-    def __init__(self, results, limit: int, offset: int, query_json: dict,
-                 evidence_totals: dict):
+    def __init__(self, results, limit: int, offset: int,
+                 evidence_totals: dict, query_json: dict):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
                              "and not a string.")
@@ -63,7 +63,7 @@ class StatementQueryResult(QueryResult):
                  evidence_totals: dict, returned_evidence: int,
                  source_counts: dict, query_json: dict):
         super(StatementQueryResult, self).__init__(results, limit, offset,
-                                                   query_json, evidence_totals)
+                                                   evidence_totals, query_json)
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
 

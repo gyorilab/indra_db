@@ -45,6 +45,7 @@ def test_query_set_behavior():
     failures = []
 
     def try_query(q, compair=None):
+        result = None
         try:
             result = dq(q)
             if compair is not None:

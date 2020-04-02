@@ -647,6 +647,12 @@ class IntersectionQuery(MergeQuery):
                 other_queries.append(query)
         super(IntersectionQuery, self).__init__(other_queries)
 
+    def __str__(self):
+        s = super(IntersectionQuery, self).__str__()
+        if self.type_query:
+            s += ' and ' + str(self.type_query)
+        return s
+
     @staticmethod
     def _merge(*queries):
         return intersect_all(*queries)

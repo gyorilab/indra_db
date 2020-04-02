@@ -63,7 +63,8 @@ class StatementQuery(object):
         self.limit = None
         self.offset = None
 
-    def run(self, ro, limit=None, offset=None, best_first=True, ev_limit=None):
+    def get_statements(self, ro, limit=None, offset=None, best_first=True,
+                       ev_limit=None):
         mk_hashes_q = self._get_mk_hashes_query(ro)
         return self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, limit,
                                                       offset, best_first,

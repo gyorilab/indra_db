@@ -661,7 +661,7 @@ class IntersectionQuery(MergeQuery):
                 mkhq = self.type_query._apply_filter(query._get_table(ro),
                                                      mkhq)
             mkhq_list.append(mkhq)
-        self._mk_hashes_al = self._merge(*mkhq_list)
+        self._mk_hashes_al = self._merge(*mkhq_list).alias(self.name)
         return self._mk_hashes_al
 
 

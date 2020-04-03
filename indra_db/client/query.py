@@ -292,7 +292,7 @@ class StatementQuery(object):
         return self.__merge_queries(other, UnionQuery)
 
     def __sub__(self, other):
-        pass
+        return self.__merge_queries(~other, IntersectionQuery)
 
 
 class SourceQuery(StatementQuery):

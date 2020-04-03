@@ -12,7 +12,7 @@ def dq(q):
     print('---------------------------')
     print(q)
     print('---------------------------')
-    print(q._get_mk_hashes_query(db))
+    print(q._get_hash_query(db))
     print('---------------------------')
     start = datetime.now()
     # res = q.get_statements(db, limit=10, ev_limit=2)

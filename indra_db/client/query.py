@@ -79,9 +79,16 @@ class StatementQueryResult(QueryResult):
 
 class StatementQuery(object):
     def __init__(self, empty=False):
-        self.limit = None
-        self.offset = None
         self.empty = empty
+        self._inverted = False
+
+    def __invert__(self):
+        raise NotImplementedError()
+
+    def _do_invert(self, *args, **kwargs):
+        new_obj = self.__class__(*args, **kwargs)
+        new_obj._inverted = not self._inverted
+        return new_obj
 
     def get_statements(self, ro, limit=None, offset=None, best_first=True,
                        ev_limit=None):
@@ -89,7 +96,7 @@ class StatementQuery(object):
             return StatementQueryResult({}, limit, offset, {}, 0, {},
                                         self.to_json())
 
-        mk_hashes_q = self._get_mk_hashes_query(ro)
+        mk_hashes_q = self._get_hash_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
 
@@ -103,7 +110,7 @@ class StatementQuery(object):
         if self.empty:
             return QueryResult(set(), limit, offset, {}, self.to_json())
 
-        mk_hashes_q = self._get_mk_hashes_query(ro)
+        mk_hashes_q = self._get_hash_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
         result = mk_hashes_q.all()
@@ -127,8 +134,8 @@ class StatementQuery(object):
         return mk_hashes_q
 
     def to_json(self) -> dict:
-        return {'limit': self.limit, 'offset': self.offset,
-                'constraint': self._get_constraint_json()}
+        return {'constraint': self._get_constraint_json(),
+                'inverted': self._inverted}
 
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
@@ -145,7 +152,7 @@ class StatementQuery(object):
         meta = self._get_table(ro)
         return meta.mk_hash, meta.ev_count
 
-    def _get_mk_hashes_query(self, ro):
+    def _get_hash_query(self, ro):
         raise NotImplementedError()
 
     @staticmethod
@@ -284,6 +291,9 @@ class StatementQuery(object):
     def __or__(self, other):
         return self.__merge_queries(other, UnionQuery)
 
+    def __sub__(self, other):
+        pass
+
 
 class SourceQuery(StatementQuery):
 
@@ -297,13 +307,16 @@ class SourceQuery(StatementQuery):
             return IntersectSourceQuery(other.source_queries + (self,))
         return super(SourceQuery, self).__and__(other)
 
+    def __invert__(self):
+        raise NotImplementedError()
+
     def _get_table(self, ro):
         return ro.SourceMeta
 
-    def _apply_filter(self, ro, query):
+    def _apply_filter(self, ro, query, invert=False):
         raise NotImplementedError()
 
-    def _get_mk_hashes_query(self, ro):
+    def _get_hash_query(self, ro):
         q = self._base_query(ro)
         q = self._apply_filter(ro, q)
         return q
@@ -335,6 +348,9 @@ class IntersectSourceQuery(StatementQuery):
         self.source_queries = tuple(other_sqs)
         super(IntersectSourceQuery, self).__init__()
 
+    def __invert__(self):
+        return self._do_invert(self.source_queries)
+
     def __and__(self, other):
         if isinstance(other, IntersectSourceQuery):
             return IntersectSourceQuery(self.source_queries
@@ -345,7 +361,10 @@ class IntersectSourceQuery(StatementQuery):
 
     def __str__(self):
         str_list = [str(sq) for sq in self.source_queries]
-        return ' and '.join(str_list)
+        if not self._inverted:
+            return ' and '.join(str_list)
+        else:
+            return 'not ' + ' and not '.join(str_list)
 
     def _get_constraint_json(self) -> dict:
         info_dict = {}
@@ -357,10 +376,10 @@ class IntersectSourceQuery(StatementQuery):
     def _get_table(self, ro):
         return ro.SourceMeta
 
-    def _get_mk_hashes_query(self, ro):
+    def _get_hash_query(self, ro):
         query = self._base_query(ro)
         for sq in self.source_queries:
-            query = sq._apply_filter(ro, query)
+            query = sq._apply_filter(ro, query, self._inverted)
         return query
 
 
@@ -370,13 +389,23 @@ class OnlySourceQuery(SourceQuery):
         super(OnlySourceQuery, self).__init__()
 
     def __str__(self):
-        return f"is only from {self.only_source}"
+        invert_mod = 'not ' if self._inverted else ''
+        return f"is {invert_mod}only from {self.only_source}"
+
+    def __invert__(self):
+        return self._do_invert(self.only_source)
 
     def _get_constraint_json(self) -> dict:
         return {'only_source_query': {'only_source': self.only_source}}
 
-    def _apply_filter(self, ro, query):
-        return query.filter(ro.SourceMeta.only_src.like(self.only_source))
+    def _apply_filter(self, ro, query, invert=False):
+        inverted = self._inverted ^ invert
+        meta = self._get_table(ro)
+        if not inverted:
+            clause = meta.only_src.like(self.only_source)
+        else:
+            clause = meta.only_src.notlike(self.only_source)
+        return query.filter(clause)
 
 
 class HasSourcesQuery(SourceQuery):
@@ -393,40 +422,62 @@ class HasSourcesQuery(SourceQuery):
             return HasSourcesQuery(self.sources + other.sources)
         return super(HasSourcesQuery, self).__and__(other)
 
+    def __invert__(self):
+        return self._do_invert(self.sources)
+
     def __str__(self):
-        return f"is from one of {self.sources}"
+        invert_word = 'not ' if self._inverted else ''
+        return f"is{invert_word} from one of {self.sources}"
 
     def _get_constraint_json(self) -> dict:
         return {'has_source_query': {'sources': self.sources}}
 
-    def _apply_filter(self, ro, query):
+    def _apply_filter(self, ro, query, invert=False):
+        inverted = self._inverted ^ invert
+        meta = self._get_table(ro)
         for src in self.sources:
-            query = query.filter(getattr(ro.SourceMeta, src) > 0)
+            if not inverted:
+                clause = getattr(meta, src) > 0
+            else:
+                clause = getattr(meta, src) == 0
+            query = query.filter(clause)
         return query
 
 
-class HasReadingsQuery(SourceQuery):
+class HasSourceTypeQuery(SourceQuery):
+    name = NotImplemented
+    col = NotImplemented
 
     def __str__(self):
-        return "has readings"
+        if not self._inverted:
+            return f"has {self.name}"
+        else:
+            return f"has no {self.name}"
+
+    def __invert__(self):
+        return self._do_invert()
 
     def _get_constraint_json(self) -> dict:
-        return {'has_readings_query': {'has_readings': True}}
+        return {f'has_{self.name}_query': {f'has_{self.name}': True}}
 
-    def _apply_filter(self, ro, query):
-        return query.filter(ro.SourceMeta.has_rd == True)
+    def _apply_filter(self, ro, query, invert=False):
+        inverted = self._inverted ^ invert
+        meta = self._get_table(ro)
+        if not inverted:
+            clause = getattr(meta, self.col) == True
+        else:
+            clause = getattr(meta, self.col) == False
+        return query.filter(clause)
 
 
-class HasDatabaseQuery(SourceQuery):
+class HasReadingsQuery(HasSourceTypeQuery):
+    name = 'readings'
+    col = 'has_rd'
 
-    def __str__(self):
-        return "has databases"
 
-    def _get_constraint_json(self) -> dict:
-        return {'has_databases_query': {'has_database': True}}
-
-    def _apply_filter(self, ro, query):
-        return query.filter(ro.SourceMeta.has_db == True)
+class HasDatabaseQuery(HasSourceTypeQuery):
+    name = 'databases'
+    col = 'has_db'
 
 
 class HashQuery(SourceQuery):
@@ -438,8 +489,8 @@ class HashQuery(SourceQuery):
         self.stmt_hashes = tuple(stmt_hashes)
         super(HashQuery, self).__init__(empty)
 
-    def _get_constraint_json(self) -> dict:
-        return {"hash_query": self.stmt_hashes}
+    def __invert__(self):
+        return self._do_invert(self.stmt_hashes)
 
     def __or__(self, other):
         if isinstance(other, HashQuery):
@@ -452,15 +503,25 @@ class HashQuery(SourceQuery):
         return super(HashQuery, self).__and__(other)
 
     def __str__(self):
-        return f"hash in {self.stmt_hashes}"
+        return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
 
-    def _apply_filter(self, ro, query):
+    def _get_constraint_json(self) -> dict:
+        return {"hash_query": self.stmt_hashes}
+
+    def _apply_filter(self, ro, query, invert=False):
+        inverted = self._inverted ^ invert
         mk_hash, _ = self._hash_count_pair(ro)
         if len(self.stmt_hashes) == 1:
-            query = query.filter(mk_hash == self.stmt_hashes[0])
+            if not inverted:
+                clause = mk_hash == self.stmt_hashes[0]
+            else:
+                clause = mk_hash != self.stmt_hashes[0]
         else:
-            query = query.filter(mk_hash.in_(self.stmt_hashes))
-        return query
+            if not inverted:
+                clause = mk_hash.in_(self.stmt_hashes)
+            else:
+                clause = mk_hash.notin_(self.stmt_hashes)
+        return query.filter(clause)
 
 
 class AgentQuery(StatementQuery):
@@ -478,8 +539,13 @@ class AgentQuery(StatementQuery):
         self.regularized_id = regularize_agent_id(agent_id, namespace)
         super(AgentQuery, self).__init__()
 
+    def __invert__(self):
+        return self._do_invert(self.agent_id, self.namespace, self.role,
+                               self.agent_num)
+
     def __str__(self):
-        s = f"an agent has {self.namespace} = {self.agent_id}"
+        s = 'not ' if self._inverted else ''
+        s += f"an agent where {self.namespace} = {self.agent_id}"
         if self.role is not None:
             s += f" with role={self.role}"
         elif self.agent_num is not None:
@@ -502,20 +568,29 @@ class AgentQuery(StatementQuery):
             meta = ro.OtherMeta
         return meta
 
-    def _get_mk_hashes_query(self, ro):
+    def _get_hash_query(self, ro):
         meta = self._get_table(ro)
-        mk_hashes_q = (self._base_query(ro)
-                           .filter(meta.db_id.like(self.regularized_id)))
+        query = self._base_query(ro)
+        if not self._inverted:
+            query = query.filter(meta.db_id.like(self.regularized_id))
+        else:
+            query = query.filter(meta.db_id.notlike(self.regularized_id))
 
         if self.namespace not in ['NAME', 'TEXT', None]:
-            mk_hashes_q = mk_hashes_q.filter(meta.db_name.like(self.namespace))
+            query = query.filter(meta.db_name.like(self.namespace))
 
         if self.role is not None:
             role_num = ro_role_map.get_int(self.role)
-            mk_hashes_q = mk_hashes_q.filter(meta.role_num == role_num)
+            if not self._inverted:
+                query = query.filter(meta.role_num == role_num)
+            else:
+                query = query.filter(meta.role_num != role_num)
         elif self.agent_num is not None:
-            mk_hashes_q = mk_hashes_q.filter(meta.agent_num == self.agent_num)
-        return mk_hashes_q
+            if not self._inverted:
+                query = query.filter(meta.agent_num == self.agent_num)
+            else:
+                query = query.filter(meta.agent_num != self.agent_num)
+        return query
 
 
 class TypeQuery(StatementQuery):
@@ -534,6 +609,9 @@ class TypeQuery(StatementQuery):
         self.stmt_types = tuple(st_set)
         super(TypeQuery, self).__init__(empty)
 
+    def __invert__(self):
+        self._do_invert(self.stmt_types)
+
     def __or__(self, other):
         if isinstance(other, TypeQuery):
             return TypeQuery(self.stmt_types + other.stmt_types)
@@ -545,7 +623,8 @@ class TypeQuery(StatementQuery):
         return super(TypeQuery, self).__and__(other)
 
     def __str__(self):
-        return f"type in {self.stmt_types}"
+        invert_word = 'not ' if self._inverted else ''
+        return f"type {invert_word}in {self.stmt_types}"
 
     def _get_constraint_json(self) -> dict:
         return {'type_query': {'types': self.stmt_types}}
@@ -553,15 +632,25 @@ class TypeQuery(StatementQuery):
     def _get_table(self, ro):
         return ro.SourceMeta
 
-    def _apply_filter(self, meta, query):
-        type_nums = [ro_type_map.get_int(st) for st in self.stmt_types]
-        if len(type_nums) == 1:
-            return query.filter(meta.type_num == type_nums[0])
-        return query.filter(meta.type_num.in_(type_nums))
+    def _get_type_nums(self):
+        return [ro_type_map.get_int(st) for st in self.stmt_types]
 
-    def _get_mk_hashes_query(self, ro):
-        query = self._base_query(ro)
-        return self._apply_filter(self._get_table(ro), query)
+    def _apply_filter(self, meta, query):
+        type_nums = self._get_type_nums()
+        if len(type_nums) == 1:
+            if not self._inverted:
+                clause = meta.type_num == type_nums[0]
+            else:
+                clause = meta.type_num != type_nums[0]
+        else:
+            if not self._inverted:
+                clause = meta.type_num.in_(type_nums)
+            else:
+                clause = meta.type_num.notin_(type_nums)
+        return query.filter(clause)
+
+    def _get_hash_query(self, ro):
+        return self._apply_filter(self._get_table(ro), self._base_query(ro))
 
 
 class MeshQuery(StatementQuery):
@@ -574,7 +663,11 @@ class MeshQuery(StatementQuery):
         super(MeshQuery, self).__init__()
 
     def __str__(self):
-        return f"MeSH ID = {self.mesh_id}"
+        invert_char = '!' if self._inverted else ''
+        return f"MeSH ID {invert_char}= {self.mesh_id}"
+
+    def __invert__(self):
+        return self._do_invert(self.mesh_id)
 
     def _get_constraint_json(self) -> dict:
         return {'mesh_query': {'mesh_id': self.mesh_id,
@@ -583,10 +676,14 @@ class MeshQuery(StatementQuery):
     def _get_table(self, ro):
         return ro.MeshMeta
 
-    def _get_mk_hashes_query(self, ro):
-        mk_hashes_q = (self._base_query(ro)
-                           .filter(ro.MeshMeta.mesh_num == self.mesh_num))
-        return mk_hashes_q
+    def _get_hash_query(self, ro):
+        meta = self._get_table(ro)
+        if not self._inverted:
+            clause = meta.mesh_num == self.mesh_num
+        else:
+            clause = meta.mesh_num != self.mesh_num
+
+        return self._base_query(ro).filter(clause)
 
 
 class MergeQuery(StatementQuery):
@@ -601,6 +698,12 @@ class MergeQuery(StatementQuery):
         # dynamism is required to get, for instance, the hash and count pair.
         self._mk_hashes_al = None
         super(MergeQuery, self).__init__(*args, **kwargs)
+
+    def __invert__(self):
+        raise NotImplementedError()
+
+    def _get_table(self, ro):
+        raise NotImplementedError()
 
     @staticmethod
     def _merge(*queries):
@@ -623,7 +726,7 @@ class MergeQuery(StatementQuery):
         mk_hashes_al = self._get_table(ro)
         return mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count
 
-    def _get_mk_hashes_query(self, ro):
+    def _get_hash_query(self, ro):
         return self._base_query(ro)
 
 
@@ -662,6 +765,11 @@ class IntersectionQuery(MergeQuery):
                 other_queries.append(query)
         super(IntersectionQuery, self).__init__(other_queries, empty)
 
+    def __invert__(self):
+        new_obj = UnionQuery([~q for q in self.queries])
+        new_obj._inverted = not self._inverted
+        return new_obj
+
     @staticmethod
     def _merge(*queries):
         return intersect_all(*queries)
@@ -673,7 +781,7 @@ class IntersectionQuery(MergeQuery):
         for query in self.queries:
             if query == self.type_query:
                 continue
-            mkhq = query._get_mk_hashes_query(ro)
+            mkhq = query._get_hash_query(ro)
             if self.type_query is not None:
                 mkhq = self.type_query._apply_filter(query._get_table(ro),
                                                      mkhq)
@@ -709,17 +817,22 @@ class UnionQuery(MergeQuery):
 
         super(UnionQuery, self).__init__(other_queries, all_empty)
 
+    def __invert__(self):
+        new_obj = IntersectionQuery([~q for q in self.queries])
+        new_obj._inverted = not self._inverted
+        return new_obj
+
     @staticmethod
     def _merge(*queries):
         return union_all(*queries)
 
     def _get_table(self, ro):
         if self._mk_hashes_al is None:
-            mk_hashes_q_list = [q._get_mk_hashes_query(ro)
+            mk_hashes_q_list = [q._get_hash_query(ro)
                                 for q in self.queries if not q.empty]
             if len(mk_hashes_q_list) == 1:
                 self._mk_hashes_al = mk_hashes_q_list[0].alias(self.name)
             else:
                 self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
-                                      .alias(self.name))
+                                          .alias(self.name))
         return self._mk_hashes_al

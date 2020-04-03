@@ -265,6 +265,9 @@ class StatementQuery(object):
         return stmts_dict, ev_totals, returned_evidence, source_counts
 
     def __merge_queries(self, other, MergeClass):
+        if not isinstance(other, StatementQuery):
+            raise ValueError(f"StatementQuery cannot operate with "
+                             f"{type(other)}")
         if isinstance(self, MergeClass):
             if isinstance(other, MergeClass):
                 return MergeClass(self.queries + other.queries)

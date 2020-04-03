@@ -1,8 +1,7 @@
-__all__ = ['StatementQueryResult', 'StatementQuery', 'IntersectionQuery',
-           'UnionQuery', 'MergeQuery', 'AgentQuery', 'MeshQuery', 'HashQuery',
-           'HasSourcesQuery', 'OnlySourceQuery', 'HasReadingsQuery',
-           'HasDatabaseQuery', 'SourceQuery', 'IntersectSourceQuery',
-           'TypeQuery']
+__all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
+           'MergeQueryCore', 'HasAgent', 'FromMeshId', 'InHashList',
+           'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
+           'SourceCore', 'SourceIntersection', 'HasAnyType']
 
 import json
 import logging
@@ -77,7 +76,7 @@ class StatementQueryResult(QueryResult):
         return stmts_from_json(list(self.results.values()))
 
 
-class StatementQuery(object):
+class QueryCore(object):
     def __init__(self, empty=False):
         self.empty = empty
         self._inverted = False
@@ -272,7 +271,7 @@ class StatementQuery(object):
         return stmts_dict, ev_totals, returned_evidence, source_counts
 
     def __merge_queries(self, other, MergeClass):
-        if not isinstance(other, StatementQuery):
+        if not isinstance(other, QueryCore):
             raise ValueError(f"StatementQuery cannot operate with "
                              f"{type(other)}")
         if isinstance(self, MergeClass):
@@ -286,26 +285,26 @@ class StatementQuery(object):
             return MergeClass([other, self])
 
     def __and__(self, other):
-        return self.__merge_queries(other, IntersectionQuery)
+        return self.__merge_queries(other, Intersection)
 
     def __or__(self, other):
-        return self.__merge_queries(other, UnionQuery)
+        return self.__merge_queries(other, Union)
 
     def __sub__(self, other):
-        return self.__merge_queries(~other, IntersectionQuery)
+        return self.__merge_queries(~other, Intersection)
 
 
-class SourceQuery(StatementQuery):
+class SourceCore(QueryCore):
 
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
 
     def __and__(self, other):
-        if isinstance(other, SourceQuery):
-            return IntersectSourceQuery([self, other])
-        elif isinstance(other, IntersectSourceQuery):
-            return IntersectSourceQuery(other.source_queries + (self,))
-        return super(SourceQuery, self).__and__(other)
+        if isinstance(other, SourceCore):
+            return SourceIntersection([self, other])
+        elif isinstance(other, SourceIntersection):
+            return SourceIntersection(other.source_queries + (self,))
+        return super(SourceCore, self).__and__(other)
 
     def __invert__(self):
         raise NotImplementedError()
@@ -322,23 +321,23 @@ class SourceQuery(StatementQuery):
         return q
 
 
-class IntersectSourceQuery(StatementQuery):
+class SourceIntersection(QueryCore):
     def __init__(self, source_queries):
         # Intelligently merge HasSourceQuery's.
         other_sqs = []
         has_sources = set()
         hashes = set()
         for sq in source_queries:
-            if isinstance(sq, HasSourcesQuery):
+            if isinstance(sq, HasSources):
                 has_sources |= set(sq.sources)
-            elif isinstance(sq, HashQuery):
+            elif isinstance(sq, InHashList):
                 hashes &= set(sq.stmt_hashes)
             else:
                 other_sqs.append(sq)
         if has_sources:
-            other_sqs.append(HasSourcesQuery(has_sources))
+            other_sqs.append(HasSources(has_sources))
         if hashes:
-            other_sqs.append(HashQuery(hashes))
+            other_sqs.append(InHashList(hashes))
 
         classes = {sq.__class__ for sq in other_sqs}
         if len(classes) != len(other_sqs):
@@ -346,18 +345,18 @@ class IntersectSourceQuery(StatementQuery):
                              f"allowed at once: "
                              f"{[sq.__class__ for sq in other_sqs]}")
         self.source_queries = tuple(other_sqs)
-        super(IntersectSourceQuery, self).__init__()
+        super(SourceIntersection, self).__init__()
 
     def __invert__(self):
         return self._do_invert(self.source_queries)
 
     def __and__(self, other):
-        if isinstance(other, IntersectSourceQuery):
-            return IntersectSourceQuery(self.source_queries
-                                        + other.source_queries)
-        elif isinstance(other, SourceQuery):
-            return IntersectSourceQuery(self.source_queries + (other,))
-        return super(IntersectSourceQuery, self).__and__(other)
+        if isinstance(other, SourceIntersection):
+            return SourceIntersection(self.source_queries
+                                      + other.source_queries)
+        elif isinstance(other, SourceCore):
+            return SourceIntersection(self.source_queries + (other,))
+        return super(SourceIntersection, self).__and__(other)
 
     def __str__(self):
         str_list = [str(sq) for sq in self.source_queries]
@@ -383,10 +382,10 @@ class IntersectSourceQuery(StatementQuery):
         return query
 
 
-class OnlySourceQuery(SourceQuery):
+class HasOnlySource(SourceCore):
     def __init__(self, only_source):
         self.only_source = only_source
-        super(OnlySourceQuery, self).__init__()
+        super(HasOnlySource, self).__init__()
 
     def __str__(self):
         invert_mod = 'not ' if self._inverted else ''
@@ -408,19 +407,19 @@ class OnlySourceQuery(SourceQuery):
         return query.filter(clause)
 
 
-class HasSourcesQuery(SourceQuery):
+class HasSources(SourceCore):
     def __init__(self, sources):
         empty = False
         if len(sources) == 0:
             empty = True
             logger.warning("No sources specified, query is by default empty.")
         self.sources = tuple(set(sources))
-        super(HasSourcesQuery, self).__init__(empty)
+        super(HasSources, self).__init__(empty)
 
     def __and__(self, other):
-        if isinstance(other, HasSourcesQuery):
-            return HasSourcesQuery(self.sources + other.sources)
-        return super(HasSourcesQuery, self).__and__(other)
+        if isinstance(other, HasSources):
+            return HasSources(self.sources + other.sources)
+        return super(HasSources, self).__and__(other)
 
     def __invert__(self):
         return self._do_invert(self.sources)
@@ -444,7 +443,7 @@ class HasSourcesQuery(SourceQuery):
         return query
 
 
-class HasSourceTypeQuery(SourceQuery):
+class SourceTypeCore(SourceCore):
     name = NotImplemented
     col = NotImplemented
 
@@ -470,37 +469,37 @@ class HasSourceTypeQuery(SourceQuery):
         return query.filter(clause)
 
 
-class HasReadingsQuery(HasSourceTypeQuery):
+class HasReadings(SourceTypeCore):
     name = 'readings'
     col = 'has_rd'
 
 
-class HasDatabaseQuery(HasSourceTypeQuery):
+class HasDatabases(SourceTypeCore):
     name = 'databases'
     col = 'has_db'
 
 
-class HashQuery(SourceQuery):
+class InHashList(SourceCore):
     def __init__(self, stmt_hashes):
         empty = False
         if len(stmt_hashes) == 0:
             empty = True
             logger.warning("No hashes given, query is by default empty.")
         self.stmt_hashes = tuple(stmt_hashes)
-        super(HashQuery, self).__init__(empty)
+        super(InHashList, self).__init__(empty)
 
     def __invert__(self):
         return self._do_invert(self.stmt_hashes)
 
     def __or__(self, other):
-        if isinstance(other, HashQuery):
-            return HashQuery(self.stmt_hashes + other.stmt_hashes)
-        return super(HashQuery, self).__or__(other)
+        if isinstance(other, InHashList):
+            return InHashList(self.stmt_hashes + other.stmt_hashes)
+        return super(InHashList, self).__or__(other)
 
     def __and__(self, other):
-        if isinstance(other, HashQuery):
-            return HashQuery(set(self.stmt_hashes) & set(other.stmt_hashes))
-        return super(HashQuery, self).__and__(other)
+        if isinstance(other, InHashList):
+            return InHashList(set(self.stmt_hashes) & set(other.stmt_hashes))
+        return super(InHashList, self).__and__(other)
 
     def __str__(self):
         return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
@@ -524,7 +523,7 @@ class HashQuery(SourceQuery):
         return query.filter(clause)
 
 
-class AgentQuery(StatementQuery):
+class HasAgent(QueryCore):
     def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):
         self.agent_id = agent_id
         self.namespace = namespace
@@ -537,7 +536,7 @@ class AgentQuery(StatementQuery):
 
         # Regularize ID based on Database optimization (e.g. striping prefixes)
         self.regularized_id = regularize_agent_id(agent_id, namespace)
-        super(AgentQuery, self).__init__()
+        super(HasAgent, self).__init__()
 
     def __invert__(self):
         return self._do_invert(self.agent_id, self.namespace, self.role,
@@ -593,7 +592,7 @@ class AgentQuery(StatementQuery):
         return query
 
 
-class TypeQuery(StatementQuery):
+class HasAnyType(QueryCore):
     def __init__(self, stmt_types, include_subclasses=False):
         empty = False
         if len(stmt_types) == 0:
@@ -607,20 +606,20 @@ class TypeQuery(StatementQuery):
                 sub_classes = get_all_descendants(stmt_class)
                 st_set |= {c.__name__ for c in sub_classes}
         self.stmt_types = tuple(st_set)
-        super(TypeQuery, self).__init__(empty)
+        super(HasAnyType, self).__init__(empty)
 
     def __invert__(self):
         self._do_invert(self.stmt_types)
 
     def __or__(self, other):
-        if isinstance(other, TypeQuery):
-            return TypeQuery(self.stmt_types + other.stmt_types)
-        return super(TypeQuery, self).__or__(other)
+        if isinstance(other, HasAnyType):
+            return HasAnyType(self.stmt_types + other.stmt_types)
+        return super(HasAnyType, self).__or__(other)
 
     def __and__(self, other):
-        if isinstance(other, TypeQuery):
-            return TypeQuery(set(self.stmt_types) & set(other.stmt_types))
-        return super(TypeQuery, self).__and__(other)
+        if isinstance(other, HasAnyType):
+            return HasAnyType(set(self.stmt_types) & set(other.stmt_types))
+        return super(HasAnyType, self).__and__(other)
 
     def __str__(self):
         invert_word = 'not ' if self._inverted else ''
@@ -653,14 +652,14 @@ class TypeQuery(StatementQuery):
         return self._apply_filter(self._get_table(ro), self._base_query(ro))
 
 
-class MeshQuery(StatementQuery):
+class FromMeshId(QueryCore):
     def __init__(self, mesh_id):
         if not mesh_id.startswith('D') and not mesh_id[1:].is_digit():
             raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
                              "the rest must be a number." % mesh_id)
         self.mesh_id = mesh_id
         self.mesh_num = int(mesh_id[1:])
-        super(MeshQuery, self).__init__()
+        super(FromMeshId, self).__init__()
 
     def __str__(self):
         invert_char = '!' if self._inverted else ''
@@ -686,7 +685,7 @@ class MeshQuery(StatementQuery):
         return self._base_query(ro).filter(clause)
 
 
-class MergeQuery(StatementQuery):
+class MergeQueryCore(QueryCore):
     join_word = NotImplemented
     name = NotImplemented
 
@@ -697,7 +696,7 @@ class MergeQuery(StatementQuery):
         # Because of the derivative nature of the "tables" involved, some more
         # dynamism is required to get, for instance, the hash and count pair.
         self._mk_hashes_al = None
-        super(MergeQuery, self).__init__(*args, **kwargs)
+        super(MergeQueryCore, self).__init__(*args, **kwargs)
 
     def __invert__(self):
         raise NotImplementedError()
@@ -712,7 +711,7 @@ class MergeQuery(StatementQuery):
     def __str__(self):
         query_strs = []
         for q in self.queries:
-            if isinstance(q, MergeQuery) and not isinstance(q, self.__class__):
+            if isinstance(q, MergeQueryCore) and not isinstance(q, self.__class__):
                 query_strs.append(f"({q})")
             else:
                 query_strs.append(str(q))
@@ -730,12 +729,12 @@ class MergeQuery(StatementQuery):
         return self._base_query(ro)
 
 
-class IntersectionQuery(MergeQuery):
+class Intersection(MergeQueryCore):
     name = 'intersection'
     join_word = 'and'
 
     def __init__(self, query_list):
-        mergeable_query_types = [IntersectSourceQuery, SourceQuery]
+        mergeable_query_types = [SourceIntersection, SourceCore]
         mergeable_groups = {C: [] for C in mergeable_query_types}
         other_queries = []
         self.type_query = None
@@ -748,7 +747,7 @@ class IntersectionQuery(MergeQuery):
                     mergeable_groups[C].append(query)
                     break
             else:
-                if isinstance(query, TypeQuery):
+                if isinstance(query, HasAnyType):
                     if self.type_query is None:
                         self.type_query = query
                     else:
@@ -763,10 +762,10 @@ class IntersectionQuery(MergeQuery):
                 for q in queries[1:]:
                     query = query & q
                 other_queries.append(query)
-        super(IntersectionQuery, self).__init__(other_queries, empty)
+        super(Intersection, self).__init__(other_queries, empty)
 
     def __invert__(self):
-        new_obj = UnionQuery([~q for q in self.queries])
+        new_obj = Union([~q for q in self.queries])
         new_obj._inverted = not self._inverted
         return new_obj
 
@@ -790,7 +789,7 @@ class IntersectionQuery(MergeQuery):
         return self._mk_hashes_al
 
 
-class UnionQuery(MergeQuery):
+class Union(MergeQueryCore):
     name = 'union'
     join_word = 'or'
 
@@ -802,7 +801,7 @@ class UnionQuery(MergeQuery):
             if not query.empty:
                 all_empty = False
 
-            if isinstance(query, HashQuery):
+            if isinstance(query, InHashList):
                 hash_queries.append(query)
             else:
                 other_queries.append(query)
@@ -815,10 +814,10 @@ class UnionQuery(MergeQuery):
                 query = query | other_query
             other_queries.append(query)
 
-        super(UnionQuery, self).__init__(other_queries, all_empty)
+        super(Union, self).__init__(other_queries, all_empty)
 
     def __invert__(self):
-        new_obj = IntersectionQuery([~q for q in self.queries])
+        new_obj = Intersection([~q for q in self.queries])
         new_obj._inverted = not self._inverted
         return new_obj
 

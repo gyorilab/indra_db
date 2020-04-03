@@ -27,19 +27,19 @@ def dq(q):
 def test_query_set_behavior():
 
     queries = [
-        AgentQuery('TP53', role='SUBJECT'),
-        AgentQuery('ERK', namespace='FPLX', role='OBJECT'),
-        MeshQuery('D056910'),
-        HashQuery([12080991702025131, 12479954161276307, 24255960759225919]),
-        HashQuery([25663052342435447]),
-        OnlySourceQuery('reach'),
-        HasReadingsQuery(),
-        HasDatabaseQuery(),
-        HasSourcesQuery(['sparser', 'reach']),
-        HasSourcesQuery(['medscan']),
-        TypeQuery(['Phosphorylation', 'Activation']),
-        TypeQuery(['RegulateActivity'], include_subclasses=True),
-        TypeQuery(['Complex'])
+        HasAgent('TP53', role='SUBJECT'),
+        HasAgent('ERK', namespace='FPLX', role='OBJECT'),
+        FromMeshId('D056910'),
+        InHashList([12080991702025131, 12479954161276307, 24255960759225919]),
+        InHashList([25663052342435447]),
+        HasOnlySource('reach'),
+        HasReadings(),
+        HasDatabases(),
+        HasSources(['sparser', 'reach']),
+        HasSources(['medscan']),
+        HasAnyType(['Phosphorylation', 'Activation']),
+        HasAnyType(['RegulateActivity'], include_subclasses=True),
+        HasAnyType(['Complex'])
     ]
 
     failures = []

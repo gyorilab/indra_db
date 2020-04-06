@@ -1,32 +1,14 @@
+import json
 import random
 from datetime import datetime
 from itertools import combinations, permutations, product
 
 from indra.statements import Agent, get_statement_by_name
-from indra_db.schemas.readonly_schema import ro_type_map
+from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map
 from indra_db.util import get_db, extract_agent_data
 from indra_db.client.query import *
 
 from indra_db.tests.util import get_temp_db
-
-
-db = get_db('primary')
-
-
-def dq(q):
-    print('---------------------------')
-    print(q)
-    print('---------------------------')
-    print(q._get_hash_query(db))
-    print('---------------------------')
-    start = datetime.now()
-    # res = q.get_statements(db, limit=10, ev_limit=2)
-    res = q.get_hashes(db)
-    print(f'Number of hashes: {len(res.results)}')
-    end = datetime.now()
-    print(f'Duration: {end - start}')
-    print('\n================================================\n')
-    return res.results
 
 
 def make_agent_from_ref(ref):
@@ -63,7 +45,7 @@ def build_test_set():
             src_iter = combinations(sources, num_srcs)
 
         for src_list in src_iter:
-            only_src = None if len(src_list) > 1 else src_list[0]
+            only_src = None if len(src_list) > 1 else src_list[0][0]
             has_rd = any(t == 'rd' for _, t in src_list)
             if has_rd:
                 mesh_ids = mesh_combos[len(source_data) % len(mesh_combos)]
@@ -130,10 +112,10 @@ def build_test_set():
         ev_count = sum(source_dict['sources'].values())
         src_row = (stmt.get_hash(),)
         for src_name in ['reach', 'medscan', 'pc11', 'signor']:
-            src_row += (src_name, source_dict['sources'].get(src_name))
+            src_row += (source_dict['sources'].get(src_name),)
         src_row += (ev_count, ro_type_map.get_int(stype), activity, is_active,
                     len(refs), len(source_dict['sources']),
-                    source_dict['sources'].copy(), source_dict['only_src'],
+                    json.dumps(source_dict['sources']), source_dict['only_src'],
                     source_dict['has_rd'], source_dict['has_db'])
         source_meta_rows.append(src_row)
 
@@ -146,7 +128,9 @@ def build_test_set():
         # Generate agent rows.
         ref_rows, _, _ = extract_agent_data(stmt, stmt.get_hash())
         for row in ref_rows:
-            row += (stype, ev_count, activity, is_active, len(refs))
+            row = row[:4] + (ro_role_map.get_int(row[4]),
+                             ro_type_map.get_int(stype),  ev_count, activity,
+                             is_active, len(refs))
             if row[2] == 'NAME':
                 row = row[:2] + row[3:]
                 name_meta_rows.append(row)
@@ -157,15 +141,36 @@ def build_test_set():
                 other_meta_rows.append(row)
 
     db = get_temp_db(clear=True)
+    src_meta_cols = [{'name': col} for col, _ in sources]
+    db.SourceMeta.load_cols(db.engine, src_meta_cols)
+    for tbl in [db.SourceMeta, db.MeshMeta, db.NameMeta, db.TextMeta,
+                db.OtherMeta]:
+        tbl.__table__.create(db.engine)
     db.copy('readonly.source_meta', source_meta_rows, source_meta_cols)
     db.copy('readonly.mesh_meta', mesh_meta_rows, mesh_meta_cols)
     db.copy('readonly.name_meta', name_meta_rows, name_meta_cols)
     db.copy('readonly.text_meta', text_meta_rows, text_meta_cols)
     db.copy('readonly.other_meta', other_meta_rows, other_meta_cols)
-    return
+    return db
 
 
 def test_query_set_behavior():
+    db = build_test_set()
+
+    def dq(q):
+        print('---------------------------')
+        print(q)
+        print('---------------------------')
+        print(q._get_hash_query(db))
+        print('---------------------------')
+        start = datetime.now()
+        # res = q.get_statements(db, limit=10, ev_limit=2)
+        res = q.get_hashes(db)
+        print(f'Number of hashes: {len(res.results)}')
+        end = datetime.now()
+        print(f'Duration: {end - start}')
+        print('\n================================================\n')
+        return res.results
 
     queries = [
         HasAgent('TP53', role='SUBJECT'),

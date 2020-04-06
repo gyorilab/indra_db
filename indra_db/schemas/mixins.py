@@ -142,16 +142,17 @@ class SpecialColumnTable(ReadonlyTable):
         return sql
 
     @classmethod
-    def load_cols(cls, engine):
+    def load_cols(cls, engine, cols=None):
         if cls.loaded:
             return
 
-        try:
-            schema = cls.__table_args__.get('schema', 'public')
-            cols = inspect(engine).get_columns(cls.__tablename__,
-                                               schema=schema)
-        except NoSuchTableError:
-            return
+        if cols is None:
+            try:
+                schema = cls.__table_args__.get('schema', 'public')
+                cols = inspect(engine).get_columns(cls.__tablename__,
+                                                   schema=schema)
+            except NoSuchTableError:
+                return
 
         existing_cols = {col.name for col in cls.__table__.columns}
         for col in cols:

@@ -1,8 +1,13 @@
-from datetime import datetime, timedelta
-from itertools import combinations, permutations
+import random
+from datetime import datetime
+from itertools import combinations, permutations, product
 
-from indra_db.util import get_db
+from indra.statements import Agent, get_statement_by_name
+from indra_db.schemas.readonly_schema import ro_type_map
+from indra_db.util import get_db, extract_agent_data
 from indra_db.client.query import *
+
+from indra_db.tests.util import get_temp_db
 
 
 db = get_db('primary')
@@ -22,6 +27,142 @@ def dq(q):
     print(f'Duration: {end - start}')
     print('\n================================================\n')
     return res.results
+
+
+def make_agent_from_ref(ref):
+    db_refs = ref.copy()
+    name = db_refs.pop('NAME')
+    return Agent(name, db_refs=db_refs)
+
+
+def build_test_set():
+    agents = [{'NAME': 'ERK', 'FPLX': 'ERK', 'TEXT': 'MAPK'},
+              {'NAME': 'TP53', 'HGNC': '11998'},
+              {'NAME': 'MEK', 'FPLX': 'MEK'},
+              {'NAME': 'Vemurafenib', 'CHEBI': 'CHEBI:63637'}]
+    stypes = ['Phosphorylation', 'Activation', 'Inhibition', 'Complex']
+    sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc11', 'db'),
+               ('signor', 'db')]
+    mesh_ids = ['D000225', 'D002352', 'D015536']
+
+    mesh_combos = []
+    for num_mesh in range(0, 3):
+        if num_mesh == 1:
+            mesh_groups = [[mid] for mid in mesh_ids]
+        else:
+            mesh_groups = combinations(mesh_ids, num_mesh)
+
+        mesh_combos.extend(list(mesh_groups))
+    random.shuffle(mesh_combos)
+
+    source_data = []
+    for num_srcs in range(1, 5):
+        if num_srcs == 1:
+            src_iter = [[src] for src in sources]
+        else:
+            src_iter = combinations(sources, num_srcs)
+
+        for src_list in src_iter:
+            only_src = None if len(src_list) > 1 else src_list[0]
+            has_rd = any(t == 'rd' for _, t in src_list)
+            if has_rd:
+                mesh_ids = mesh_combos[len(source_data) % len(mesh_combos)]
+            else:
+                mesh_ids = []
+            source_data.append({'sources': {src: random.randint(1, 50)
+                                            for src, _ in src_list},
+                                'has_rd': any(t == 'rd' for _, t in src_list),
+                                'has_db': any(t == 'db' for _, t in src_list),
+                                'only_src': only_src,
+                                'mesh_ids': mesh_ids})
+    random.shuffle(source_data)
+
+    stmts = [tuple(tpl) + (None, None)
+             for tpl in product(stypes, permutations(agents, 2))]
+    stmts += [('ActiveForm', (ref,), activity, is_active)
+              for activity, is_active, ref
+              in product(['transcription', 'activity'], [True, False], agents)]
+
+    complex_pairs = []
+
+    name_meta_rows = []
+    name_meta_cols = ('mk_hash', 'ag_num', 'db_id', 'role_num', 'type_num',
+                      'ev_count', 'activity', 'is_active', 'agent_count')
+
+    text_meta_rows = []
+    text_meta_cols = ('mk_hash', 'ag_num', 'db_id', 'role_num', 'type_num',
+                      'ev_count', 'activity', 'is_active', 'agent_count')
+
+    other_meta_rows = []
+    other_meta_cols = ('mk_hash', 'ag_num', 'db_name', 'db_id', 'role_num',
+                       'type_num', 'ev_count', 'activity', 'is_active',
+                       'agent_count')
+
+    source_meta_rows = []
+    source_meta_cols = ('mk_hash', 'reach', 'medscan', 'pc11', 'signor',
+                        'ev_count', 'type_num', 'activity', 'is_active',
+                        'agent_count', 'num_srcs', 'src_json', 'only_src',
+                        'has_rd', 'has_db')
+
+    mesh_meta_rows = []
+    mesh_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
+                      'activity', 'is_active', 'agent_count')
+    for stype, refs, activity, is_active in stmts:
+
+        # Extract agents, and make a Statement.
+        StmtClass = get_statement_by_name(stype)
+        if stype == 'ActiveForm':
+            ag = make_agent_from_ref(refs[0])
+            stmt = StmtClass(ag, activity=activity, is_active=is_active)
+        else:
+            ag1 = make_agent_from_ref(refs[0])
+            ag2 = make_agent_from_ref(refs[1])
+            if stype == 'Complex':
+                if {ag1.name, ag2.name} in complex_pairs:
+                    continue
+                stmt = StmtClass([ag1, ag2])
+                complex_pairs.append({ag1.name, ag2.name})
+            else:
+                stmt = StmtClass(ag1, ag2)
+
+        # Connect with a source.
+        source_dict = source_data[len(source_meta_rows) % len(source_data)]
+        ev_count = sum(source_dict['sources'].values())
+        src_row = (stmt.get_hash(),)
+        for src_name in ['reach', 'medscan', 'pc11', 'signor']:
+            src_row += (src_name, source_dict['sources'].get(src_name))
+        src_row += (ev_count, ro_type_map.get_int(stype), activity, is_active,
+                    len(refs), len(source_dict['sources']),
+                    source_dict['sources'].copy(), source_dict['only_src'],
+                    source_dict['has_rd'], source_dict['has_db'])
+        source_meta_rows.append(src_row)
+
+        # Add mesh rows
+        for mesh_id in source_dict['mesh_ids']:
+            mesh_meta_rows.append((stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                                   ro_type_map.get_int(stype), activity,
+                                   is_active, len(refs)))
+
+        # Generate agent rows.
+        ref_rows, _, _ = extract_agent_data(stmt, stmt.get_hash())
+        for row in ref_rows:
+            row += (stype, ev_count, activity, is_active, len(refs))
+            if row[2] == 'NAME':
+                row = row[:2] + row[3:]
+                name_meta_rows.append(row)
+            elif row[2] == 'TEXT':
+                row = row[:2] + row[3:]
+                text_meta_rows.append(row)
+            else:
+                other_meta_rows.append(row)
+
+    db = get_temp_db(clear=True)
+    db.copy('readonly.source_meta', source_meta_rows, source_meta_cols)
+    db.copy('readonly.mesh_meta', mesh_meta_rows, mesh_meta_cols)
+    db.copy('readonly.name_meta', name_meta_rows, name_meta_cols)
+    db.copy('readonly.text_meta', text_meta_rows, text_meta_cols)
+    db.copy('readonly.other_meta', other_meta_rows, other_meta_cols)
+    return
 
 
 def test_query_set_behavior():

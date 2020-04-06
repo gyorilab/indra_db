@@ -86,7 +86,7 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     return
 
 
-def insert_pa_agents(db, stmts, verbose=False, skip=None):
+def insert_pa_agents(db, stmts, verbose=False, skip=None, commit=True):
     if skip is None:
         skip = []
 
@@ -129,8 +129,9 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
         db.copy('pa_muts', mut_data,
                 ('stmt_mk_hash', 'ag_num', 'position', 'residue_from',
                  'residue_to'), commit=False)
-    db.commit_copy('Error copying pa agents, mods, and muts, excluding: %s.'
-                   % (', '.join(skip)))
+    if commit:
+        db.commit_copy('Error copying pa agents, mods, and muts, excluding: '
+                       '%s.' % (', '.join(skip)))
     return
 
 
@@ -303,11 +304,19 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         statements for insert. Default False.
     do_copy : bool
         If True (default), use pgcopy to quickly insert the agents.
+    ignore_agents : bool
+        If False (default), add agents to the database. If True, then agent
+        insertion is skipped.
+    commit : bool
+        If True (default), commit the result immediately. Otherwise the results
+        are not committed (thus allowing multiple related insertions to be
+        neatly rolled back upon failure.)
     """
     logger.info("Beginning to insert pre-assembled statements.")
     stmt_data = []
     indra_version = get_version()
     cols = ('uuid', 'matches_key', 'mk_hash', 'type', 'json', 'indra_version')
+    activity_rows = []
     if verbose:
         print("Loading:", end='', flush=True)
     for i, stmt in enumerate(stmts):
@@ -320,12 +329,22 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
             indra_version
         )
         stmt_data.append(stmt_rec)
+
+        if isinstance(stmt, ActiveForm):
+            activity_record = (
+                stmt.get_hash(shallow=True),
+                stmt.activity,
+                stmt.is_active
+            )
+            activity_rows.append(activity_record)
         if verbose and i % (len(stmts)//25) == 0:
             print('|', end='', flush=True)
     if verbose:
         print(" Done loading %d statements." % len(stmts))
     if do_copy:
-        db.copy('pa_statements', stmt_data, cols, commit=commit)
+        db.copy('pa_statements', stmt_data, cols, commit=False)
+        db.copy('pa_activity', activity_rows,
+                ('mk_hash', 'activity', 'is_active'), commit=commit)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
     if not ignore_agents:

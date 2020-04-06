@@ -84,6 +84,9 @@ class QueryCore(object):
     def __invert__(self):
         raise NotImplementedError()
 
+    def invert(self):
+        return self.__invert__()
+
     def _do_invert(self, *args, **kwargs):
         new_obj = self.__class__(*args, **kwargs)
         new_obj._inverted = not self._inverted

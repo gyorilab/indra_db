@@ -178,10 +178,10 @@ def test_query_set_behavior():
         FromMeshId('D056910'),
         InHashList([12080991702025131, 12479954161276307, 24255960759225919]),
         InHashList([25663052342435447]),
-        HasOnlySource('reach'),
+        HasOnlySource('pc11'),
         HasReadings(),
         HasDatabases(),
-        HasSources(['sparser', 'reach']),
+        HasSources(['signor', 'reach']),
         HasSources(['medscan']),
         HasAnyType(['Phosphorylation', 'Activation']),
         HasAnyType(['RegulateActivity'], include_subclasses=True),
@@ -191,15 +191,15 @@ def test_query_set_behavior():
     failures = []
     results = []
 
-    def try_query(q, compair=None):
+    def try_query(q, compair=None, md=None):
         result = None
         try:
             result = dq(q)
             if compair is not None:
-                assert result == compair
+                assert result == compair, 'Result mismatch.'
         except Exception as e:
-            failures.append({'query': q.to_json(), 'error': e, 'result': result,
-                             'compair': compair})
+            failures.append({'query': q, 'error': e, 'result': result,
+                             'compair': compair, 'md': md})
             return q, None
         results.append((result, q))
         return q, result
@@ -209,15 +209,36 @@ def test_query_set_behavior():
     original_results = results[:]
 
     for (r1, q1), (r2, q2) in permutations(original_results, 2):
-        try_query(q1 & q2, r1 & r2)
-        try_query(q1 | q2, r1 | r2)
+        try_query(q1 & q2, r1 & r2, md=f'{q1} and {q2}')
+        try_query(q1 | q2, r1 | r2, md=f'{q1} or {q2}')
 
     for (r1, q1), (r2, q2), (r3, q3) in combinations(original_results, 3):
-        try_query(q1 & q2 & q3, r1 & r2 & r3)
-        try_query(q1 | q2 | q3, r1 | r2 | r3)
+        try_query(q1 & q2 & q3, r1 & r2 & r3, md=f'{q1} and {q2} and {q3}')
+        try_query(q1 | q2 | q3, r1 | r2 | r3, md=f'{q1} or {q2} or {q3}')
 
     for (r1, q1), (r2, q2), (r3, q3) in permutations(original_results, 3):
-        try_query(q1 & q2 | q3, r1 & r2 | r3)
+        try_query(q1 & q2 | q3, r1 & r2 | r3, md=f'{q1} and {q2} or {q3}')
+
+    if failures:
+        print("REPORT:")
+        error_groups = {}
+        for fd in failures:
+            err_str = str(fd['error'])
+            if err_str not in error_groups:
+                error_groups[err_str] = []
+            error_groups[err_str].append({'result': fd['query'],
+                                          'input': fd['md']})
+        for err_str, examples in error_groups.items():
+            print("=================================")
+            print(err_str)
+            print("=================================")
+            for example in examples[:5]:
+                print('---------------------------------')
+                print('input:', example['input'])
+                print('query:', example['result'])
+            if len(examples) > 5:
+                print('...')
+            print()
 
     assert not failures, f"{len(failures)}/{len(results)} checks failed."
 

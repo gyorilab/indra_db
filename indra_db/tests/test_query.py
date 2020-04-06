@@ -189,6 +189,7 @@ def test_query_set_behavior():
     ]
 
     failures = []
+    results = []
 
     def try_query(q, compair=None):
         result = None
@@ -200,23 +201,24 @@ def test_query_set_behavior():
             failures.append({'query': q.to_json(), 'error': e, 'result': result,
                              'compair': compair})
             return q, None
+        results.append((result, q))
         return q, result
 
-    results = []
     for q in queries:
-        q, res = try_query(q)
-        if res:
-            results.append((res, q))
+        try_query(q)
+    original_results = results[:]
 
-    for (r1, q1), (r2, q2) in permutations(results, 2):
+    for (r1, q1), (r2, q2) in permutations(original_results, 2):
         try_query(q1 & q2, r1 & r2)
         try_query(q1 | q2, r1 | r2)
 
-    for (r1, q1), (r2, q2), (r3, q3) in combinations(results, 3):
+    for (r1, q1), (r2, q2), (r3, q3) in combinations(original_results, 3):
         try_query(q1 & q2 & q3, r1 & r2 & r3)
         try_query(q1 | q2 | q3, r1 | r2 | r3)
 
-    for (r1, q1), (r2, q2), (r3, q3) in permutations(results, 3):
+    for (r1, q1), (r2, q2), (r3, q3) in permutations(original_results, 3):
         try_query(q1 & q2 | q3, r1 & r2 | r3)
+
+    assert not failures, f"{len(failures)}/{len(results)} checks failed."
 
     return results, failures

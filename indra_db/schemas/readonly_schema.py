@@ -2,9 +2,8 @@ __all__ = ['get_schema']
 
 import logging
 
-from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger,\
-    Boolean, SmallInteger
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, BigInteger, Boolean,\
+    SmallInteger
 from sqlalchemy.dialects.postgresql import BYTEA, JSON
 
 from indra.statements import get_all_descendants, Statement
@@ -195,13 +194,9 @@ def get_schema(Base):
 
         id = Column(Integer, primary_key=True)
         raw_json = Column(BYTEA)
-        reading_id = Column(BigInteger,
-                            ForeignKey('readonly.reading_ref_link.rid'))
-        reading_ref = relationship(ReadingRefLink)
+        reading_id = Column(BigInteger)
         db_info_id = Column(Integer)
-        mk_hash = Column(BigInteger,
-                         ForeignKey('readonly.evidence_counts.mk_hash'))
-        ev_counts = relationship(EvidenceCounts)
+        mk_hash = Column(BigInteger)
         pa_json = Column(BYTEA)
         type_num = Column(SmallInteger)
     read_views[FastRawPaLink.__tablename__] = FastRawPaLink
@@ -253,9 +248,7 @@ def get_schema(Base):
         db_id = Column(String)
         role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
-        mk_hash = Column(BigInteger,
-                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
-        raw_pa_link = relationship(FastRawPaLink)
+        mk_hash = Column(BigInteger)
         ev_count = Column(Integer)
         activity = Column(String)
         is_active = Column(Boolean)
@@ -463,9 +456,7 @@ def get_schema(Base):
         db_id = Column(String)
         role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
-        mk_hash = Column(BigInteger,
-                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
-        raw_pa_link = relationship(FastRawPaLink)
+        mk_hash = Column(BigInteger)
         ev_count = Column(Integer)
         activity = Column(String)
         is_active = Column(Boolean)
@@ -484,9 +475,7 @@ def get_schema(Base):
         db_id = Column(String)
         role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
-        mk_hash = Column(BigInteger,
-                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
-        raw_pa_link = relationship(FastRawPaLink)
+        mk_hash = Column(BigInteger)
         ev_count = Column(Integer)
         activity = Column(String)
         is_active = Column(Boolean)
@@ -511,9 +500,7 @@ def get_schema(Base):
         db_id = Column(String)
         role_num = Column(SmallInteger)
         type_num = Column(SmallInteger)
-        mk_hash = Column(BigInteger,
-                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'))
-        raw_pa_link = relationship(FastRawPaLink)
+        mk_hash = Column(BigInteger)
         ev_count = Column(Integer)
         activity = Column(String)
         is_active = Column(Boolean)
@@ -545,9 +532,7 @@ def get_schema(Base):
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('mesh_meta_type_num_idx', 'type_num'),
                     StringIndex('mesh_meta_activity_idx', 'activity')]
-        mk_hash = Column(BigInteger,
-                         ForeignKey('readonly.fast_raw_pa_link.mk_hash'),
-                         primary_key=True)
+        mk_hash = Column(BigInteger, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
         tr_count = Column(Integer)
         ev_count = Column(Integer)

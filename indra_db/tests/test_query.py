@@ -159,19 +159,14 @@ def test_query_set_behavior():
     all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
     lookup_hashes = random.sample(all_hashes, 4)
 
-    def dq(q):
-        print('---------------------------')
-        print(q)
-        print('---------------------------')
-        print(q._get_hash_query(db))
-        print('---------------------------')
-        start = datetime.now()
-        # res = q.get_statements(db, limit=10, ev_limit=2)
-        res = q.get_hashes(db)
-        print(f'Number of hashes: {len(res.results)}')
-        end = datetime.now()
-        print(f'Duration: {end - start}')
-        print('\n================================================\n')
+    #counter = [0]
+
+    def dq(query):
+        #start = datetime.now()
+        res = query.get_hashes(db)
+        #end = datetime.now()
+        #print(counter[0], end - start, query)
+        #counter[0] += 1
         return res.results
 
     queries = [
@@ -202,17 +197,39 @@ def test_query_set_behavior():
                 assert result == compair, 'Result mismatch.'
             if not q.empty and not result:
                 unfound.append(q)
+            results.append((result, q))
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
                              'compair': compair, 'md': md})
             results.append((result, q))
             return
-        results.append((result, q))
+
+        negative_result = None
+        nq = None
+        try:
+            nq = ~q
+            negative_result = dq(nq)
+            assert negative_result == (all_hashes - result), \
+                'Negative result mismatch (result).'
+
+            if not nq.empty and not negative_result:
+                unfound.append(nq)
+            results.append((negative_result, nq))
+        except Exception as e:
+            if md is not None:
+                neg_md = 'not ' + md
+            else:
+                neg_md = None
+            failures.append({'query': nq, 'error': e, 'result': negative_result,
+                             'compair': all_hashes - result, 'md': neg_md})
+            results.append((negative_result, nq))
+            return
+
         return
 
     for q in queries:
         try_query(q)
-    original_results = results[:]
+    original_results = [res for res in results if res[1] is not None]
 
     for (r1, q1), (r2, q2) in permutations(original_results, 2):
         try_query(q1 & q2, r1 & r2, md=f'{q1} and {q2}')

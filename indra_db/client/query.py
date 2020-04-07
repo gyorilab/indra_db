@@ -734,12 +734,12 @@ class FromMeshId(QueryCore):
 
     def _get_hash_query(self, ro):
         meta = self._get_table(ro)
-        if not self._inverted:
-            clause = meta.mesh_num == self.mesh_num
-        else:
-            clause = meta.mesh_num != self.mesh_num
-
-        return self._base_query(ro).filter(clause)
+        qry = self._base_query(ro).filter(meta.mesh_num == self.mesh_num)
+        if self._inverted:
+            qry = (ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
+                                    ro.SourceMeta.ev_count.label('ev_count'))
+                     .except_(qry))
+        return qry
 
 
 class MergeQueryCore(QueryCore):

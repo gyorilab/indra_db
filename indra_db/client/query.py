@@ -329,17 +329,20 @@ class SourceIntersection(QueryCore):
         # Intelligently merge HasSourceQuery's.
         other_sqs = []
         has_sources = set()
-        hashes = set()
+        hashes = None
         for sq in source_queries:
             if isinstance(sq, HasSources):
                 has_sources |= set(sq.sources)
             elif isinstance(sq, InHashList):
-                hashes &= set(sq.stmt_hashes)
+                if hashes is None:
+                    hashes = set(sq.stmt_hashes)
+                else:
+                    hashes &= set(sq.stmt_hashes)
             else:
                 other_sqs.append(sq)
         if has_sources:
             other_sqs.append(HasSources(has_sources))
-        if hashes:
+        if hashes is not None:
             other_sqs.append(InHashList(hashes))
 
         classes = {sq.__class__ for sq in other_sqs}
@@ -348,7 +351,8 @@ class SourceIntersection(QueryCore):
                              f"allowed at once: "
                              f"{[sq.__class__ for sq in other_sqs]}")
         self.source_queries = tuple(other_sqs)
-        super(SourceIntersection, self).__init__()
+        empty = any(q.empty for q in self.source_queries)
+        super(SourceIntersection, self).__init__(empty)
 
     def __invert__(self):
         return self._do_invert(self.source_queries)

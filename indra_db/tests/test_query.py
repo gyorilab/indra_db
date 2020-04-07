@@ -157,6 +157,7 @@ def build_test_set():
 def test_query_set_behavior():
     db = build_test_set()
     all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
+    print(f"There are {len(all_hashes)} distinct hashes in the database.")
     lookup_hashes = random.sample(all_hashes, 4)
 
     def dq(query):
@@ -213,9 +214,9 @@ def test_query_set_behavior():
             results.append((negative_result, nq))
         except Exception as e:
             if md is not None:
-                neg_md = 'not ' + md
+                neg_md = 'not (' + md + ')'
             else:
-                neg_md = None
+                neg_md = 'not (' + str(q) + ')'
             failures.append({'query': nq, 'error': e, 'result': negative_result,
                              'compair': all_hashes - result, 'md': neg_md})
             results.append((negative_result, nq))

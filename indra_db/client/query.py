@@ -1,3 +1,5 @@
+from itertools import combinations
+
 __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
            'MergeQueryCore', 'HasAgent', 'FromMeshId', 'InHashList',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
@@ -83,6 +85,9 @@ class QueryCore(object):
 
     def __invert__(self):
         raise NotImplementedError()
+
+    def __hash__(self):
+        return hash(str(self))
 
     def invert(self):
         return self.__invert__()
@@ -275,8 +280,9 @@ class QueryCore(object):
 
     def __merge_queries(self, other, MergeClass):
         if not isinstance(other, QueryCore):
-            raise ValueError(f"StatementQuery cannot operate with "
+            raise ValueError(f"{self.__class__.__name__} cannot operate with "
                              f"{type(other)}")
+
         if isinstance(self, MergeClass):
             if isinstance(other, MergeClass):
                 return MergeClass(self.queries + other.queries)
@@ -345,10 +351,17 @@ class SourceIntersection(QueryCore):
         if hashes is not None:
             other_sqs.append(InHashList(hashes))
 
+        skip_queries = set()
+        for sq1, sq2 in combinations(source_queries, 2):
+            if sq1.__class__ == sq2.__class__:
+                if sq1._get_constraint_json() == sq2._get_constraint_json() \
+                   and sq1._inverted != sq2._inverted:
+                    skip_queries |= {sq1, sq2}
+        other_sqs = set(other_sqs) - skip_queries
+
         classes = {sq.__class__ for sq in other_sqs}
         if len(classes) != len(other_sqs):
-            raise ValueError(f"Only one each of non-HasSourceQuery entries "
-                             f"allowed at once: "
+            raise ValueError(f"Multiple instances of the same class: "
                              f"{[sq.__class__ for sq in other_sqs]}")
         self.source_queries = tuple(other_sqs)
         empty = any(q.empty for q in self.source_queries)

@@ -512,13 +512,17 @@ class InHashList(SourceCore):
         return self._do_invert(self.stmt_hashes)
 
     def __or__(self, other):
-        if isinstance(other, InHashList):
-            return InHashList(self.stmt_hashes + other.stmt_hashes)
+        if isinstance(other, InHashList) and self._inverted == other._inverted:
+            res = InHashList(set(self.stmt_hashes) | set(other.stmt_hashes))
+            res._inverted = self._inverted
+            return res
         return super(InHashList, self).__or__(other)
 
     def __and__(self, other):
-        if isinstance(other, InHashList):
-            return InHashList(set(self.stmt_hashes) & set(other.stmt_hashes))
+        if isinstance(other, InHashList) and self._inverted == other._inverted:
+            res = InHashList(set(self.stmt_hashes) & set(other.stmt_hashes))
+            res._inverted = self._inverted
+            return res
         return super(InHashList, self).__and__(other)
 
     def __str__(self):

@@ -669,12 +669,12 @@ class HasAnyType(QueryCore):
         return self._do_invert(self.stmt_types)
 
     def __or__(self, other):
-        if isinstance(other, HasAnyType):
-            return HasAnyType(self.stmt_types + other.stmt_types)
+        if isinstance(other, HasAnyType) and self._inverted == other._inverted:
+            return HasAnyType(set(self.stmt_types) | set(other.stmt_types))
         return super(HasAnyType, self).__or__(other)
 
     def __and__(self, other):
-        if isinstance(other, HasAnyType):
+        if isinstance(other, HasAnyType) and self._inverted == other._inverted:
             return HasAnyType(set(self.stmt_types) & set(other.stmt_types))
         return super(HasAnyType, self).__and__(other)
 
@@ -796,8 +796,10 @@ class Intersection(MergeQueryCore):
     def __init__(self, query_list):
         mergeable_query_types = [SourceIntersection, SourceCore]
         mergeable_groups = {C: [] for C in mergeable_query_types}
-        other_queries = []
+        other_groups = defaultdict(list)
+        other_queries = set()
         self.type_query = None
+        self.not_type_query = None
         empty = False
         for query in query_list:
             if query.empty:
@@ -808,20 +810,53 @@ class Intersection(MergeQueryCore):
                     break
             else:
                 if isinstance(query, HasAnyType):
-                    if self.type_query is None:
-                        self.type_query = query
+                    if not query._inverted:
+                        if self.type_query is None:
+                            self.type_query = query
+                        else:
+                            self.type_query &= query
                     else:
-                        self.type_query = self.type_query & query
-                other_queries.append(query)
+                        if self.not_type_query is None:
+                            self.not_type_query = query
+                        else:
+                            self.not_type_query |= query
+                else:
+                    other_groups[query.__class__].append(query)
+                other_queries.add(query)
 
+        # Add mergeable queries into the final set.
         for queries in mergeable_groups.values():
             if len(queries) == 1:
-                other_queries.append(queries[0])
+                other_queries.add(queries[0])
             elif len(queries) > 1:
-                query = queries[0]
-                for q in queries[1:]:
-                    query &= q
-                other_queries.append(query)
+                # Merge the queries based on their inversion.
+                pos_query = None
+                neg_query = None
+                for q in queries:
+                    if not q._inverted:
+                        if pos_query is None:
+                            pos_query = q
+                        else:
+                            pos_query &= q
+                    else:
+                        if neg_query is None:
+                            neg_query = q
+                        else:
+                            neg_query |= q
+
+                # Add the merged queries to the final set.
+                for q in [neg_query, pos_query]:
+                    if q is not None:
+                        other_queries.add(q)
+                        other_groups[q.__class__].append(q)
+
+        # Look for exact contradictions.
+        for q_list in other_groups.values():
+            if len(q_list) > 1:
+                for q1, q2 in combinations(q_list, 2):
+                    if q1._get_constraint_json() == q2._get_constraint_json() \
+                            and q1._inverted != q2._inverted:
+                        empty = True
         super(Intersection, self).__init__(other_queries, empty)
 
     def __invert__(self):
@@ -844,6 +879,9 @@ class Intersection(MergeQueryCore):
             if self.type_query is not None:
                 mkhq = self.type_query._apply_filter(query._get_table(ro),
                                                      mkhq)
+            if self.not_type_query is not None:
+                mkhq = self.not_type_query._apply_filter(query._get_table(ro),
+                                                         mkhq)
             mkhq_list.append(mkhq)
         self._mk_hashes_al = self._merge(*mkhq_list).alias(self.name)
         return self._mk_hashes_al
@@ -854,7 +892,7 @@ class Union(MergeQueryCore):
     join_word = 'or'
 
     def __init__(self, query_list):
-        other_queries = []
+        other_queries = set()
         pos_hash_queries = []
         neg_hash_queries = []
         all_empty = True
@@ -868,16 +906,19 @@ class Union(MergeQueryCore):
                 else:
                     neg_hash_queries.append(query)
             else:
-                other_queries.append(query)
+                other_queries.add(query)
 
         for hash_query_group in [pos_hash_queries, neg_hash_queries]:
             if len(hash_query_group) == 1:
-                other_queries.append(hash_query_group[0])
+                other_queries.add(hash_query_group[0])
             elif len(hash_query_group) > 1:
                 query = hash_query_group[0]
                 for other_query in hash_query_group[1:]:
-                    query |= other_query
-                other_queries.append(query)
+                    if not query._inverted:
+                        query |= other_query
+                    else:
+                        query &= other_query
+                other_queries.add(query)
 
         super(Union, self).__init__(other_queries, all_empty)
 

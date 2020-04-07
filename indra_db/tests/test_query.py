@@ -159,14 +159,8 @@ def test_query_set_behavior():
     all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
     lookup_hashes = random.sample(all_hashes, 4)
 
-    #counter = [0]
-
     def dq(query):
-        #start = datetime.now()
         res = query.get_hashes(db)
-        #end = datetime.now()
-        #print(counter[0], end - start, query)
-        #counter[0] += 1
         return res.results
 
     queries = [
@@ -208,6 +202,8 @@ def test_query_set_behavior():
         nq = None
         try:
             nq = ~q
+            if nq is None:
+                assert False, "Inverted query is None."
             negative_result = dq(nq)
             assert negative_result == (all_hashes - result), \
                 'Negative result mismatch (result).'

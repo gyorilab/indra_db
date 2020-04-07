@@ -237,7 +237,7 @@ def test_query_set_behavior():
                 print('input:', example['input'])
                 print('query:', example['result'])
             if len(examples) > 5:
-                print('...')
+                print(f'...overall {len(examples)} errors...')
             print()
 
     assert not failures, f"{len(failures)}/{len(results)} checks failed."

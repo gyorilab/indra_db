@@ -437,8 +437,10 @@ class HasSources(SourceCore):
         super(HasSources, self).__init__(empty)
 
     def __and__(self, other):
-        if isinstance(other, HasSources):
-            return HasSources(self.sources + other.sources)
+        if isinstance(other, HasSources) and self._inverted == other._inverted:
+            ret = HasSources(set(self.sources) | set(other.sources))
+            ret._inverted = self._inverted
+            return ret
         return super(HasSources, self).__and__(other)
 
     def __invert__(self):

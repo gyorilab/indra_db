@@ -9,7 +9,8 @@ import json
 import logging
 from collections import OrderedDict, Iterable, defaultdict
 
-from sqlalchemy import desc, true, select, intersect_all, union_all
+from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
+    except_
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
@@ -633,27 +634,19 @@ class HasAgent(QueryCore):
 
     def _get_hash_query(self, ro):
         meta = self._get_table(ro)
-        query = self._base_query(ro)
-        if not self._inverted:
-            query = query.filter(meta.db_id.like(self.regularized_id))
-        else:
-            query = query.filter(meta.db_id.notlike(self.regularized_id))
-
+        qry = self._base_query(ro).filter(meta.db_id.like(self.regularized_id))
         if self.namespace not in ['NAME', 'TEXT', None]:
-            query = query.filter(meta.db_name.like(self.namespace))
-
+            qry = qry.filter(meta.db_name.like(self.namespace))
         if self.role is not None:
             role_num = ro_role_map.get_int(self.role)
-            if not self._inverted:
-                query = query.filter(meta.role_num == role_num)
-            else:
-                query = query.filter(meta.role_num != role_num)
+            qry = qry.filter(meta.role_num == role_num)
         elif self.agent_num is not None:
-            if not self._inverted:
-                query = query.filter(meta.agent_num == self.agent_num)
-            else:
-                query = query.filter(meta.agent_num != self.agent_num)
-        return query
+            qry = qry.filter(meta.agent_num == self.agent_num)
+
+        if self._inverted:
+            qry = self._base_query(ro).except_(qry)
+
+        return qry
 
 
 class HasAnyType(QueryCore):

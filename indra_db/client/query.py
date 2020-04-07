@@ -7,7 +7,7 @@ __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
 
 import json
 import logging
-from collections import OrderedDict, Iterable
+from collections import OrderedDict, Iterable, defaultdict
 
 from sqlalchemy import desc, true, select, intersect_all, union_all
 
@@ -332,39 +332,77 @@ class SourceCore(QueryCore):
 
 class SourceIntersection(QueryCore):
     def __init__(self, source_queries):
-        # Intelligently merge HasSourceQuery's.
-        other_sqs = []
-        has_sources = set()
-        hashes = None
+        # There are several points at which we could realize this query is by
+        # definition empty.
+        empty = False
+
+        # Look through all the queries, picking out special cases and grouping
+        # the rest by class.
+        add_sources = set()
+        rem_sources = set()
+        add_hashes = None
+        rem_hashes = set()
+        class_groups = defaultdict(list)
         for sq in source_queries:
             if isinstance(sq, HasSources):
-                has_sources |= set(sq.sources)
-            elif isinstance(sq, InHashList):
-                if hashes is None:
-                    hashes = set(sq.stmt_hashes)
+                # Carefully track which sources to add and which to remove.
+                if not sq._inverted:
+                    add_sources |= set(sq.sources)
                 else:
-                    hashes &= set(sq.stmt_hashes)
+                    rem_sources |= set(sq.sources)
+            elif isinstance(sq, InHashList):
+                # Collect all hashes to include and those to exclude.
+                if not sq._inverted:
+                    # This is a part of an intersection, so intersection is
+                    # appropriate.
+                    if add_hashes is None:
+                        add_hashes = set(sq.stmt_hashes)
+                    else:
+                        add_hashes &= set(sq.stmt_hashes)
+                else:
+                    # This follows form De Morgan's Law
+                    rem_hashes |= set(sq.stmt_hashes)
             else:
-                other_sqs.append(sq)
-        if has_sources:
-            other_sqs.append(HasSources(has_sources))
-        if hashes is not None:
-            other_sqs.append(InHashList(hashes))
+                # We will need to check other class groups for inversion, so
+                # group them now for efficiency.
+                class_groups[sq.__class__].append(sq)
 
-        skip_queries = set()
-        for sq1, sq2 in combinations(source_queries, 2):
-            if sq1.__class__ == sq2.__class__:
-                if sq1._get_constraint_json() == sq2._get_constraint_json() \
-                   and sq1._inverted != sq2._inverted:
-                    skip_queries |= {sq1, sq2}
-        other_sqs = set(other_sqs) - skip_queries
+        # Start building up the true set of queries.
+        filtered_queries = set()
 
-        classes = {sq.__class__ for sq in other_sqs}
-        if len(classes) != len(other_sqs):
+        # Add the source queries. Net empty queries will be dropped.
+        if add_sources:
+            filtered_queries.add(HasSources(add_sources - rem_sources))
+        if rem_sources:
+            filtered_queries.add(~HasSources(rem_sources - add_sources))
+
+        # Add the hash queries. Net empty queries will be dropped.
+        if add_hashes is not None:
+            filtered_queries.add(InHashList(add_hashes - rem_hashes))
+            rem_hashes -= add_hashes
+        elif not add_hashes:
+            empty = True
+
+        if rem_hashes:
+            filtered_queries.add(~InHashList(rem_hashes))
+
+        # Now add in all the other queries, removing those that cancel out.
+        for q_list in class_groups.values():
+            if len(q_list) == 1:
+                filtered_queries.add(q_list[0])
+            else:
+                filtered_queries |= set(q_list)
+                for q1, q2 in combinations(q_list, 2):
+                    if q1._get_constraint_json() == q2._get_constraint_json() \
+                            and q1._inverted != q2._inverted:
+                        filtered_queries -= {q1, q2}
+
+        inv_classes = {(sq.__class__, sq._inverted) for sq in filtered_queries}
+        if len(inv_classes) != len(filtered_queries):
             raise ValueError(f"Multiple instances of the same class: "
-                             f"{[sq.__class__ for sq in other_sqs]}")
-        self.source_queries = tuple(other_sqs)
-        empty = any(q.empty for q in self.source_queries)
+                             f"{[sq.__class__ for sq in filtered_queries]}")
+        self.source_queries = tuple(filtered_queries)
+        empty |= any(q.empty for q in self.source_queries)
         super(SourceIntersection, self).__init__(empty)
 
     def __invert__(self):

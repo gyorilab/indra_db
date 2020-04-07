@@ -833,7 +833,8 @@ class Union(MergeQueryCore):
             mk_hashes_q_list = [q._get_hash_query(ro)
                                 for q in self.queries if not q.empty]
             if len(mk_hashes_q_list) == 1:
-                self._mk_hashes_al = mk_hashes_q_list[0].alias(self.name)
+                self._mk_hashes_al = (mk_hashes_q_list[0].subquery()
+                                                         .alias(self.name))
             else:
                 self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
                                           .alias(self.name))

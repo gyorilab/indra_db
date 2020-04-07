@@ -827,7 +827,7 @@ class Intersection(MergeQueryCore):
             elif len(queries) > 1:
                 query = queries[0]
                 for q in queries[1:]:
-                    query = query & q
+                    query &= q
                 other_queries.append(query)
         super(Intersection, self).__init__(other_queries, empty)
 
@@ -862,24 +862,29 @@ class Union(MergeQueryCore):
 
     def __init__(self, query_list):
         other_queries = []
-        hash_queries = []
+        pos_hash_queries = []
+        neg_hash_queries = []
         all_empty = True
         for query in query_list:
             if not query.empty:
                 all_empty = False
 
             if isinstance(query, InHashList):
-                hash_queries.append(query)
+                if not query._inverted:
+                    pos_hash_queries.append(query)
+                else:
+                    neg_hash_queries.append(query)
             else:
                 other_queries.append(query)
 
-        if len(hash_queries) == 1:
-            other_queries.append(hash_queries[0])
-        elif len(hash_queries) > 1:
-            query = hash_queries[0]
-            for other_query in hash_queries[1:]:
-                query = query | other_query
-            other_queries.append(query)
+        for hash_query_group in [pos_hash_queries, neg_hash_queries]:
+            if len(hash_query_group) == 1:
+                other_queries.append(hash_query_group[0])
+            elif len(hash_query_group) > 1:
+                query = hash_query_group[0]
+                for other_query in hash_query_group[1:]:
+                    query |= other_query
+                other_queries.append(query)
 
         super(Union, self).__init__(other_queries, all_empty)
 

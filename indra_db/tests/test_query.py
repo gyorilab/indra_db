@@ -1,11 +1,10 @@
 import json
 import random
-from datetime import datetime
 from itertools import combinations, permutations, product
 
 from indra.statements import Agent, get_statement_by_name
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map
-from indra_db.util import get_db, extract_agent_data
+from indra_db.util import extract_agent_data
 from indra_db.client.query import *
 
 from indra_db.tests.util import get_temp_db

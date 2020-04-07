@@ -9,8 +9,7 @@ import json
 import logging
 from collections import OrderedDict, Iterable, defaultdict
 
-from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-    except_
+from sqlalchemy import desc, true, select, intersect_all, union_all, or_
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants

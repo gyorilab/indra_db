@@ -383,7 +383,7 @@ class SourceIntersection(QueryCore):
         if not self._inverted:
             return ' and '.join(str_list)
         else:
-            return 'not ' + ' and not '.join(str_list)
+            return 'not (' + ' and not '.join(str_list) + ')'
 
     def _get_constraint_json(self) -> dict:
         info_dict = {}
@@ -737,11 +737,14 @@ class MergeQueryCore(QueryCore):
     def __str__(self):
         query_strs = []
         for q in self.queries:
-            if isinstance(q, MergeQueryCore) and not isinstance(q, self.__class__):
+            if isinstance(q, MergeQueryCore) and not q._inverted:
                 query_strs.append(f"({q})")
             else:
                 query_strs.append(str(q))
-        return f' {self.join_word} '.join(query_strs)
+        ret = f' {self.join_word} '.join(query_strs)
+        if self._inverted:
+            ret = f'not ({ret})'
+        return ret
 
     def _get_constraint_json(self) -> dict:
         return {f'{self.name}_query': [q._get_constraint_json()

@@ -205,9 +205,10 @@ def test_query_set_behavior():
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
                              'compair': compair, 'md': md})
-            return q, None
+            results.append((result, q))
+            return
         results.append((result, q))
-        return q, result
+        return
 
     for q in queries:
         try_query(q)

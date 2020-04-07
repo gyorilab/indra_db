@@ -486,8 +486,10 @@ class HasSources(SourceCore):
         return self._do_invert(self.sources)
 
     def __str__(self):
-        invert_word = 'not ' if self._inverted else ''
-        return f"is{invert_word} from one of {self.sources}"
+        if not self._inverted:
+            return f"is from all of {self.sources}"
+        else:
+            return f"is not from one of {self.sources}"
 
     def _get_constraint_json(self) -> dict:
         return {'has_source_query': {'sources': self.sources}}
@@ -495,12 +497,16 @@ class HasSources(SourceCore):
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
         meta = self._get_table(ro)
+        clauses = []
         for src in self.sources:
             if not inverted:
-                clause = getattr(meta, src) > 0
+                clauses.append(getattr(meta, src) > 0)
             else:
-                clause = getattr(meta, src) == 0
-            query = query.filter(clause)
+                clauses.append(getattr(meta, src).is_(None))
+        if not inverted:
+            query = query.filter(*clauses)
+        else:
+            query = query.filter(or_(*clauses))
         return query
 
 

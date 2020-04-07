@@ -156,6 +156,8 @@ def build_test_set():
 
 def test_query_set_behavior():
     db = build_test_set()
+    all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
+    lookup_hashes = random.sample(all_hashes, 4)
 
     def dq(q):
         print('---------------------------')
@@ -175,9 +177,9 @@ def test_query_set_behavior():
     queries = [
         HasAgent('TP53', role='SUBJECT'),
         HasAgent('ERK', namespace='FPLX', role='OBJECT'),
-        FromMeshId('D056910'),
-        InHashList([12080991702025131, 12479954161276307, 24255960759225919]),
-        InHashList([25663052342435447]),
+        FromMeshId('D015536'),
+        InHashList(lookup_hashes[:-1]),
+        InHashList(lookup_hashes[-1:]),
         HasOnlySource('pc11'),
         HasReadings(),
         HasDatabases(),
@@ -190,6 +192,7 @@ def test_query_set_behavior():
 
     failures = []
     results = []
+    unfound = []
 
     def try_query(q, compair=None, md=None):
         result = None
@@ -197,6 +200,8 @@ def test_query_set_behavior():
             result = dq(q)
             if compair is not None:
                 assert result == compair, 'Result mismatch.'
+            if not q.empty and not result:
+                unfound.append(q)
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
                              'compair': compair, 'md': md})
@@ -219,8 +224,16 @@ def test_query_set_behavior():
     for (r1, q1), (r2, q2), (r3, q3) in permutations(original_results, 3):
         try_query(q1 & q2 | q3, r1 & r2 | r3, md=f'{q1} and {q2} or {q3}')
 
+    print(f"UNFOUND:")
+    for q in unfound[:10]:
+        print('-------------------------')
+        print(q)
+    if len(unfound) > 10:
+        print(f"...overall {len(unfound)}...")
+    print()
+
     if failures:
-        print("REPORT:")
+        print("FAILURES:")
         error_groups = {}
         for fd in failures:
             err_str = str(fd['error'])

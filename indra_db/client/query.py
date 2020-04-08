@@ -936,8 +936,16 @@ class Intersection(MergeQueryCore):
         queries = [self.__apply_types(ro, q) for q in self.queries
                    if not q.full and q != self.type_query
                    and q != self.not_type_query]
-
-        if len(queries) == 1:
+        if not queries:
+            if self.type_query and self.not_type_query:
+                queries = [self.type_query._get_table(ro),
+                           self.not_type_query._get_table(ro)]
+                self._mk_hashes_al = self._merge(*queries).alias(self.name)
+            else:
+                # There should never be two type queries of the same inversion,
+                # they coudl simply have been merged together.
+                raise RuntimeError("Malformed Intersection occurred.")
+        elif len(queries) == 1:
             self._mk_hashes_al = queries[0].subquery().alias(self.name)
         else:
             self._mk_hashes_al = self._merge(*queries).alias(self.name)

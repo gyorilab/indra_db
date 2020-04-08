@@ -310,14 +310,24 @@ class QueryCore(object):
         else:
             return MergeClass([other, self])
 
-    def __and__(self, other):
+    def _do_and(self, other):
         return self.__merge_queries(other, Intersection)
 
-    def __or__(self, other):
+    def __and__(self, other):
+        if self == other:
+            return self
+        return self._do_and(other)
+
+    def _do_or(self, other):
         return self.__merge_queries(other, Union)
 
+    def __or__(self, other):
+        if self == other:
+            return self
+        return self._do_or(other)
+
     def __sub__(self, other):
-        return self.__merge_queries(~other, Intersection)
+        return self._do_and(~other)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
@@ -337,12 +347,12 @@ class SourceCore(QueryCore):
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
 
-    def __and__(self, other):
+    def _do_and(self, other):
         if isinstance(other, SourceCore):
             return SourceIntersection([self, other])
         elif isinstance(other, SourceIntersection):
             return SourceIntersection(other.source_queries + (self,))
-        return super(SourceCore, self).__and__(other)
+        return super(SourceCore, self)._do_and(other)
 
     def __invert__(self):
         raise NotImplementedError()
@@ -436,13 +446,13 @@ class SourceIntersection(QueryCore):
     def __invert__(self):
         return self._do_invert(self.source_queries)
 
-    def __and__(self, other):
+    def _do_and(self, other):
         if isinstance(other, SourceIntersection):
             return SourceIntersection(self.source_queries
                                       + other.source_queries)
         elif isinstance(other, SourceCore):
             return SourceIntersection(self.source_queries + (other,))
-        return super(SourceIntersection, self).__and__(other)
+        return super(SourceIntersection, self)._do_and(other)
 
     def __str__(self):
         str_list = [str(sq) for sq in self.source_queries]
@@ -504,12 +514,12 @@ class HasSources(SourceCore):
         self.sources = tuple(set(sources))
         super(HasSources, self).__init__(empty)
 
-    def __and__(self, other):
+    def _do_and(self, other):
         if isinstance(other, HasSources) and self._inverted == other._inverted:
             ret = HasSources(set(self.sources) | set(other.sources))
             ret._inverted = self._inverted
             return ret
-        return super(HasSources, self).__and__(other)
+        return super(HasSources, self)._do_and(other)
 
     def __invert__(self):
         return self._do_invert(self.sources)
@@ -587,19 +597,19 @@ class InHashList(SourceCore):
     def __invert__(self):
         return self._do_invert(self.stmt_hashes)
 
-    def __or__(self, other):
+    def _do_or(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
             res = InHashList(set(self.stmt_hashes) | set(other.stmt_hashes))
             res._inverted = self._inverted
             return res
-        return super(InHashList, self).__or__(other)
+        return super(InHashList, self)._do_or(other)
 
-    def __and__(self, other):
+    def _do_and(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
             res = InHashList(set(self.stmt_hashes) & set(other.stmt_hashes))
             res._inverted = self._inverted
             return res
-        return super(InHashList, self).__and__(other)
+        return super(InHashList, self)._do_and(other)
 
     def __str__(self):
         return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
@@ -705,15 +715,15 @@ class HasAnyType(QueryCore):
     def __invert__(self):
         return self._do_invert(self.stmt_types)
 
-    def __or__(self, other):
+    def _do_or(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
             return HasAnyType(set(self.stmt_types) | set(other.stmt_types))
-        return super(HasAnyType, self).__or__(other)
+        return super(HasAnyType, self)._do_or(other)
 
-    def __and__(self, other):
+    def _do_and(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
             return HasAnyType(set(self.stmt_types) & set(other.stmt_types))
-        return super(HasAnyType, self).__and__(other)
+        return super(HasAnyType, self)._do_and(other)
 
     def __str__(self):
         invert_word = 'not ' if self._inverted else ''

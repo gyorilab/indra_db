@@ -941,6 +941,7 @@ class Union(MergeQueryCore):
 
     def __init__(self, query_list):
         other_queries = set()
+        query_groups = defaultdict(list)
         pos_hash_queries = []
         neg_hash_queries = []
         all_empty = True
@@ -955,6 +956,7 @@ class Union(MergeQueryCore):
                     neg_hash_queries.append(query)
             else:
                 other_queries.add(query)
+                query_groups[query.__class__].append(query)
 
         for hash_query_group in [pos_hash_queries, neg_hash_queries]:
             if len(hash_query_group) == 1:
@@ -968,7 +970,14 @@ class Union(MergeQueryCore):
                         query &= other_query
                 other_queries.add(query)
 
-        super(Union, self).__init__(other_queries, all_empty)
+        full = False
+        for q_list in query_groups.values():
+            if len(q_list) > 1:
+                for q1, q2 in combinations(q_list, 2):
+                    if q1.is_inverse_of(q2):
+                        full = True
+
+        super(Union, self).__init__(other_queries, all_empty, full)
 
     def __invert__(self):
         new_obj = Intersection([~q for q in self.queries])

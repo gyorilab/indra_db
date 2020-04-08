@@ -409,18 +409,18 @@ class SourceIntersection(QueryCore):
         # Start building up the true set of queries.
         filtered_queries = set()
 
-        # Add the source queries. Net empty queries will be dropped.
+        # Add the source queries.
         if add_sources:
             filtered_queries.add(HasSources(add_sources - rem_sources))
         if rem_sources:
             filtered_queries.add(~HasSources(rem_sources - add_sources))
 
-        # Add the hash queries. Net empty queries will be dropped.
+        # Add the hash queries.
         if add_hashes is not None:
+            if not add_hashes:
+                empty = True
             filtered_queries.add(InHashList(add_hashes - rem_hashes))
             rem_hashes -= add_hashes
-        elif not add_hashes:
-            empty = True
 
         if rem_hashes:
             filtered_queries.add(~InHashList(rem_hashes))

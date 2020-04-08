@@ -867,7 +867,6 @@ class Intersection(MergeQueryCore):
 
     def __invert__(self):
         new_obj = Union([~q for q in self.queries])
-        new_obj._inverted = not self._inverted
         return new_obj
 
     @staticmethod
@@ -930,7 +929,6 @@ class Union(MergeQueryCore):
 
     def __invert__(self):
         new_obj = Intersection([~q for q in self.queries])
-        new_obj._inverted = not self._inverted
         return new_obj
 
     @staticmethod

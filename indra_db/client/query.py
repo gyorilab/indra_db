@@ -83,6 +83,13 @@ class QueryCore(object):
         self.empty = empty
         self._inverted = False
 
+    def __repr__(self):
+        args = list(self._get_constraint_json().values())[0]
+        arg_strs = [f'{k}={v}' for k, v in args.items()
+                    if v is not None and not k.startswith('_')]
+        return f'{"~" if self._inverted else ""}{self.__class__.__name__}' \
+            f'({", ".join(arg_strs)})'
+
     def __invert__(self):
         raise NotImplementedError()
 
@@ -423,12 +430,13 @@ class SourceIntersection(QueryCore):
         else:
             return 'not (' + ' and not '.join(str_list) + ')'
 
+    def __repr__(self):
+        query_reprs = [repr(q) for q in self.source_queries]
+        return f'{self.__class__.__name__}([{", ".join(query_reprs)}])'
+
     def _get_constraint_json(self) -> dict:
-        info_dict = {}
-        for q in self.source_queries:
-            q_info = q._get_constraint_json()
-            info_dict.update(q_info)
-        return {'multi_source_query': info_dict}
+        query_list = [q.to_json() for q in self.source_queries]
+        return {'multi_source_query': query_list}
 
     def _get_table(self, ro):
         return ro.SourceMeta
@@ -524,7 +532,7 @@ class SourceTypeCore(SourceCore):
         return self._do_invert()
 
     def _get_constraint_json(self) -> dict:
-        return {f'has_{self.name}_query': {f'has_{self.name}': True}}
+        return {f'has_{self.name}_query': {f'_has_{self.name}': True}}
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -625,7 +633,7 @@ class HasAgent(QueryCore):
     def _get_constraint_json(self) -> dict:
         return {'agent_query': {'agent_id': self.agent_id,
                                 'namespace': self.namespace,
-                                'regularized_id': self.regularized_id,
+                                '_regularized_id': self.regularized_id,
                                 'role': self.role,
                                 'agent_num': self.agent_num}}
 
@@ -733,7 +741,7 @@ class FromMeshId(QueryCore):
 
     def _get_constraint_json(self) -> dict:
         return {'mesh_query': {'mesh_id': self.mesh_id,
-                               'mesh_num': self.mesh_num}}
+                               '_mesh_num': self.mesh_num}}
 
     def _get_table(self, ro):
         return ro.MeshMeta
@@ -774,18 +782,19 @@ class MergeQueryCore(QueryCore):
     def __str__(self):
         query_strs = []
         for q in self.queries:
-            if isinstance(q, MergeQueryCore) and not q._inverted:
+            if isinstance(q, MergeQueryCore) or q._inverted:
                 query_strs.append(f"({q})")
             else:
                 query_strs.append(str(q))
         ret = f' {self.join_word} '.join(query_strs)
-        if self._inverted:
-            ret = f'not ({ret})'
         return ret
 
+    def __repr__(self):
+        query_strs = [repr(q) for q in self.queries]
+        return f'{self.__class__.__name__}([{", ".join(query_strs)}'
+
     def _get_constraint_json(self) -> dict:
-        return {f'{self.name}_query': [q._get_constraint_json()
-                                       for q in self.queries]}
+        return {f'{self.name}_query': [q.to_json() for q in self.queries]}
 
     def _hash_count_pair(self, ro) -> tuple:
         mk_hashes_al = self._get_table(ro)

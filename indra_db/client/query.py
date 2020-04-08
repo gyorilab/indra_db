@@ -319,6 +319,18 @@ class QueryCore(object):
     def __sub__(self, other):
         return self.__merge_queries(~other, Intersection)
 
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.to_json() == other.to_json()
+
+    def is_inverse_of(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        if not self._get_constraint_json() == other._get_constraint_json():
+            return False
+        return self._inverted == other._inverted
+
 
 class SourceCore(QueryCore):
 
@@ -410,8 +422,7 @@ class SourceIntersection(QueryCore):
             else:
                 filtered_queries |= set(q_list)
                 for q1, q2 in combinations(q_list, 2):
-                    if q1._get_constraint_json() == q2._get_constraint_json() \
-                            and q1._inverted != q2._inverted:
+                    if q1.is_inverse_of(q2):
                         filtered_queries -= {q1, q2}
 
         inv_classes = {(sq.__class__, sq._inverted) for sq in filtered_queries}
@@ -888,8 +899,7 @@ class Intersection(MergeQueryCore):
         for q_list in other_groups.values():
             if len(q_list) > 1:
                 for q1, q2 in combinations(q_list, 2):
-                    if q1._get_constraint_json() == q2._get_constraint_json() \
-                            and q1._inverted != q2._inverted:
+                    if q1.is_inverse_of(q2):
                         empty = True
         super(Intersection, self).__init__(filtered_queries, empty, all_full)
 

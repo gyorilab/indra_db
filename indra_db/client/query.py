@@ -838,8 +838,8 @@ class Intersection(MergeQueryCore):
     def __init__(self, query_list):
         mergeable_query_types = [SourceIntersection, SourceCore]
         mergeable_groups = {C: [] for C in mergeable_query_types}
-        other_groups = defaultdict(list)
-        other_queries = set()
+        query_groups = defaultdict(list)
+        filtered_queries = set()
         self.type_query = None
         self.not_type_query = None
         empty = False
@@ -866,13 +866,13 @@ class Intersection(MergeQueryCore):
                         else:
                             self.not_type_query |= query
                 else:
-                    other_groups[query.__class__].append(query)
-                other_queries.add(query)
+                    query_groups[query.__class__].append(query)
+                filtered_queries.add(query)
 
         # Add mergeable queries into the final set.
         for queries in mergeable_groups.values():
             if len(queries) == 1:
-                other_queries.add(queries[0])
+                filtered_queries.add(queries[0])
             elif len(queries) > 1:
                 # Merge the queries based on their inversion.
                 pos_query = None
@@ -892,11 +892,11 @@ class Intersection(MergeQueryCore):
                 # Add the merged queries to the final set.
                 for q in [neg_query, pos_query]:
                     if q is not None:
-                        other_queries.add(q)
-                        other_groups[q.__class__].append(q)
+                        filtered_queries.add(q)
+                        query_groups[q.__class__].append(q)
 
-        # Look for exact contradictions.
-        for q_list in other_groups.values():
+        # Look for exact contradictions (any one of which makes this empty).
+        for q_list in query_groups.values():
             if len(q_list) > 1:
                 for q1, q2 in combinations(q_list, 2):
                     if q1.is_inverse_of(q2):

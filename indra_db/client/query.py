@@ -510,7 +510,6 @@ class HasSources(SourceCore):
         empty = False
         if len(sources) == 0:
             empty = True
-            logger.warning("No sources specified, query is by default empty.")
         self.sources = tuple(set(sources))
         super(HasSources, self).__init__(empty)
 
@@ -590,7 +589,6 @@ class InHashList(SourceCore):
         empty = False
         if len(stmt_hashes) == 0:
             empty = True
-            logger.warning("No hashes given, query is by default empty.")
         self.stmt_hashes = tuple(stmt_hashes)
         super(InHashList, self).__init__(empty)
 
@@ -701,7 +699,6 @@ class HasAnyType(QueryCore):
         empty = False
         if len(stmt_types) == 0:
             empty = True
-            logger.warning('No statement types indicated, query is empty.')
 
         st_set = set(stmt_types)
         if include_subclasses:
@@ -911,6 +908,12 @@ class Intersection(MergeQueryCore):
                 for q1, q2 in combinations(q_list, 2):
                     if q1.is_inverse_of(q2):
                         empty = True
+
+        # Check to see if the types overlap
+        if self.type_query and self.not_type_query:
+            if self.type_query.is_inverse_of(self.not_type_query):
+                empty = True
+
         super(Intersection, self).__init__(filtered_queries, empty, all_full)
 
     def __invert__(self):
@@ -938,8 +941,8 @@ class Intersection(MergeQueryCore):
                    and q != self.not_type_query]
         if not queries:
             if self.type_query and self.not_type_query:
-                queries = [self.type_query._get_table(ro),
-                           self.not_type_query._get_table(ro)]
+                queries = [self.type_query.get_hash_query(ro),
+                           self.not_type_query.get_hash_query(ro)]
                 self._mk_hashes_al = self._merge(*queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,

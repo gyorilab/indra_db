@@ -80,8 +80,11 @@ class StatementQueryResult(QueryResult):
 
 
 class QueryCore(object):
-    def __init__(self, empty=False):
+    def __init__(self, empty=False, full=False):
+        if empty and full:
+            raise ValueError("Cannot be both empty and full.")
         self.empty = empty
+        self.full = full
         self._inverted = False
 
     def __repr__(self):
@@ -111,7 +114,7 @@ class QueryCore(object):
             return StatementQueryResult({}, limit, offset, {}, 0, {},
                                         self.to_json())
 
-        mk_hashes_q = self._get_hash_query(ro)
+        mk_hashes_q = self.get_hash_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
 
@@ -125,7 +128,7 @@ class QueryCore(object):
         if self.empty:
             return QueryResult(set(), limit, offset, {}, self.to_json())
 
-        mk_hashes_q = self._get_hash_query(ro)
+        mk_hashes_q = self.get_hash_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
         result = mk_hashes_q.all()
@@ -166,6 +169,12 @@ class QueryCore(object):
     def _hash_count_pair(self, ro) -> tuple:
         meta = self._get_table(ro)
         return meta.mk_hash, meta.ev_count
+
+    def get_hash_query(self, ro):
+        if self.full:
+            return ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
+                                    ro.SourceMeta.ev_count.label('ev_count'))
+        return self._get_hash_query(ro)
 
     def _get_hash_query(self, ro):
         raise NotImplementedError()
@@ -823,9 +832,12 @@ class Intersection(MergeQueryCore):
         self.type_query = None
         self.not_type_query = None
         empty = False
+        all_full = True
         for query in query_list:
             if query.empty:
                 empty = True
+            if not query.full:
+                all_full = False
             for C in mergeable_query_types:
                 if isinstance(query, C):
                     mergeable_groups[C].append(query)
@@ -879,7 +891,7 @@ class Intersection(MergeQueryCore):
                     if q1._get_constraint_json() == q2._get_constraint_json() \
                             and q1._inverted != q2._inverted:
                         empty = True
-        super(Intersection, self).__init__(other_queries, empty)
+        super(Intersection, self).__init__(filtered_queries, empty, all_full)
 
     def __invert__(self):
         new_obj = Union([~q for q in self.queries])
@@ -889,22 +901,27 @@ class Intersection(MergeQueryCore):
     def _merge(*queries):
         return intersect_all(*queries)
 
+    def __apply_types(self, ro, query):
+        mkhq = query.get_hash_query(ro)
+        if self.type_query is not None:
+            mkhq = self.type_query._apply_filter(query._get_table(ro), mkhq)
+        if self.not_type_query is not None:
+            mkhq = self.not_type_query._apply_filter(query._get_table(ro), mkhq)
+        return mkhq
+
     def _get_table(self, ro):
         if self._mk_hashes_al is not None:
             return self._mk_hashes_al
-        mkhq_list = []
-        for query in self.queries:
-            if query == self.type_query:
-                continue
-            mkhq = query._get_hash_query(ro)
-            if self.type_query is not None:
-                mkhq = self.type_query._apply_filter(query._get_table(ro),
-                                                     mkhq)
-            if self.not_type_query is not None:
-                mkhq = self.not_type_query._apply_filter(query._get_table(ro),
-                                                         mkhq)
-            mkhq_list.append(mkhq)
-        self._mk_hashes_al = self._merge(*mkhq_list).alias(self.name)
+
+        queries = [self.__apply_types(ro, q) for q in self.queries
+                   if not q.full and q != self.type_query
+                   and q != self.not_type_query]
+
+        if len(queries) == 1:
+            self._mk_hashes_al = queries[0].subquery().alias(self.name)
+        else:
+            self._mk_hashes_al = self._merge(*queries).alias(self.name)
+
         return self._mk_hashes_al
 
 
@@ -953,7 +970,7 @@ class Union(MergeQueryCore):
 
     def _get_table(self, ro):
         if self._mk_hashes_al is None:
-            mk_hashes_q_list = [q._get_hash_query(ro)
+            mk_hashes_q_list = [q.get_hash_query(ro)
                                 for q in self.queries if not q.empty]
             if len(mk_hashes_q_list) == 1:
                 self._mk_hashes_al = (mk_hashes_q_list[0].subquery()

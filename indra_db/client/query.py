@@ -9,7 +9,8 @@ import json
 import logging
 from collections import OrderedDict, Iterable, defaultdict
 
-from sqlalchemy import desc, true, select, intersect_all, union_all, or_
+from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
+    except_
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
@@ -658,7 +659,9 @@ class HasAgent(QueryCore):
             qry = qry.filter(meta.agent_num == self.agent_num)
 
         if self._inverted:
-            qry = self._base_query(ro).except_(qry)
+            al = except_(self._base_query(ro), qry).alias('agent_exclude')
+            qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
+                                   al.c.ev_count.label('ev_count'))
 
         return qry
 
@@ -750,9 +753,13 @@ class FromMeshId(QueryCore):
         meta = self._get_table(ro)
         qry = self._base_query(ro).filter(meta.mesh_num == self.mesh_num)
         if self._inverted:
-            qry = (ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
-                                    ro.SourceMeta.ev_count.label('ev_count'))
-                     .except_(qry))
+            al = except_(
+                ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
+                                 ro.SourceMeta.ev_count.label('ev_count')),
+                qry
+            ).alias('mesh_exclude')
+            qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
+                                   al.c.ev_count.label('ev_count'))
         return qry
 
 

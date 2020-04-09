@@ -157,7 +157,7 @@ def test_query_set_behavior():
     db = build_test_set()
     all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
     print(f"There are {len(all_hashes)} distinct hashes in the database.")
-    lookup_hashes = random.sample(all_hashes, 4)
+    lookup_hashes = random.sample(all_hashes, 5)
 
     def dq(query):
         res = query.get_hashes(db)
@@ -167,9 +167,11 @@ def test_query_set_behavior():
         HasAgent('TP53', role='SUBJECT'),
         HasAgent('ERK', namespace='FPLX', role='OBJECT'),
         FromMeshId('D015536'),
-        InHashList(lookup_hashes[:-1]),
+        InHashList(lookup_hashes[:-3]),
         InHashList(lookup_hashes[-1:]),
+        InHashList(lookup_hashes[-4:-1]),
         HasOnlySource('pc11'),
+        HasOnlySource('medscan'),
         HasReadings(),
         HasDatabases(),
         HasSources(['signor', 'reach']),
@@ -223,18 +225,22 @@ def test_query_set_behavior():
 
         return
 
+    print("Testing individual queries...")
     for q in queries:
         try_query(q)
     original_results = [res for res in results if res[1] is not None]
 
+    print("Testing pairs...")
     for (r1, q1), (r2, q2) in permutations(original_results, 2):
         try_query(q1 & q2, r1 & r2, md=f'{q1} and {q2}')
         try_query(q1 | q2, r1 | r2, md=f'{q1} or {q2}')
 
+    print("Testing simple triples...")
     for (r1, q1), (r2, q2), (r3, q3) in combinations(original_results, 3):
         try_query(q1 & q2 & q3, r1 & r2 & r3, md=f'{q1} and {q2} and {q3}')
         try_query(q1 | q2 | q3, r1 | r2 | r3, md=f'{q1} or {q2} or {q3}')
 
+    print("Testing mixed triples...")
     for (r1, q1), (r2, q2), (r3, q3) in permutations(original_results, 3):
         try_query(q1 & q2 | q3, r1 & r2 | r3, md=f'{q1} and {q2} or {q3}')
 

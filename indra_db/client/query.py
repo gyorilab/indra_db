@@ -605,7 +605,11 @@ class InHashList(SourceCore):
 
     def _do_or(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
-            res = InHashList(set(self.stmt_hashes) | set(other.stmt_hashes))
+            if not self._inverted:
+                hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
+            else:
+                hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
+            res = InHashList(hashes)
             res._inverted = self._inverted
             return res
         elif self.is_inverse_of(other):
@@ -614,7 +618,11 @@ class InHashList(SourceCore):
 
     def _do_and(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
-            res = InHashList(set(self.stmt_hashes) & set(other.stmt_hashes))
+            if not self._inverted:
+                hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
+            else:
+                hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
+            res = InHashList(hashes)
             res._inverted = self._inverted
             return res
         elif self.is_inverse_of(other):

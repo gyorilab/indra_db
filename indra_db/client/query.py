@@ -429,7 +429,13 @@ class QueryCore(object):
     def __and__(self, other):
         # Dismiss the trivial case where two queries are the same.
         if self == other:
-            return self
+            return self.copy()
+
+        if self.full and not other.full:
+            return other.copy()
+        elif other.full and self.full:
+            return self.copy()
+
         return self._do_and(other)
 
     def _do_or(self, other):

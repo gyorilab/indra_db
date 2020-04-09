@@ -339,7 +339,7 @@ class QueryCore(object):
             return False
         if not self._get_constraint_json() == other._get_constraint_json():
             return False
-        return self._inverted == other._inverted
+        return self._inverted != other._inverted
 
 
 class SourceCore(QueryCore):
@@ -592,20 +592,24 @@ class HasDatabases(SourceTypeCore):
 
 class InHashList(SourceCore):
     def __init__(self, stmt_hashes):
-        empty = False
-        if len(stmt_hashes) == 0:
-            empty = True
+        empty = len(stmt_hashes) == 0
         self.stmt_hashes = tuple(stmt_hashes)
         super(InHashList, self).__init__(empty)
 
     def __invert__(self):
-        return self._do_invert(self.stmt_hashes)
+        res = self._do_invert(self.stmt_hashes)
+        if self.empty or self.full:
+            res.empty = self.full
+            res.full = self.empty
+        return res
 
     def _do_or(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
             res = InHashList(set(self.stmt_hashes) | set(other.stmt_hashes))
             res._inverted = self._inverted
             return res
+        elif self.is_inverse_of(other):
+            return ~self.__class__([])
         return super(InHashList, self)._do_or(other)
 
     def _do_and(self, other):
@@ -613,13 +617,15 @@ class InHashList(SourceCore):
             res = InHashList(set(self.stmt_hashes) & set(other.stmt_hashes))
             res._inverted = self._inverted
             return res
+        elif self.is_inverse_of(other):
+            return self.__class__([])
         return super(InHashList, self)._do_and(other)
 
     def __str__(self):
         return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
 
     def _get_constraint_json(self) -> dict:
-        return {"hash_query": self.stmt_hashes}
+        return {"hash_query": {'hashes': list(self.stmt_hashes)}}
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert

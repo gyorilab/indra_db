@@ -1040,6 +1040,7 @@ class Union(MergeQueryCore):
         query_groups = defaultdict(list)
         pos_hash_queries = []
         neg_hash_queries = []
+        full = False
         all_empty = True
         for query in query_list:
             if not query.empty:
@@ -1064,14 +1065,18 @@ class Union(MergeQueryCore):
                         query |= other_query
                     else:
                         query &= other_query
+                if query.full:
+                    full = True
                 other_queries.add(query)
 
-        full = False
-        for q_list in query_groups.values():
-            if len(q_list) > 1:
-                for q1, q2 in combinations(q_list, 2):
-                    if q1.is_inverse_of(q2):
-                        full = True
+        full |= any(q.full for q in other_queries)
+
+        if not full:
+            for q_list in query_groups.values():
+                if len(q_list) > 1:
+                    for q1, q2 in combinations(q_list, 2):
+                        if q1.is_inverse_of(q2):
+                            full = True
 
         super(Union, self).__init__(other_queries, all_empty, full)
 

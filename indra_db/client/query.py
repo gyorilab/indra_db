@@ -21,6 +21,20 @@ logger = logging.getLogger(__name__)
 
 
 class QueryResult(object):
+    """The generic result of a query.
+
+    This class standardizes the results of queries to the readonly database.
+
+    Attributes
+    ----------
+    results : dict
+        The results of the query keyed by unique IDs (mk_hash for PA Statements,
+        IDs for Raw Statements, etc.)
+    limit : int
+        The limit that was applied to this query.
+    query_json : dict
+        A description of the query that was used.
+    """
     def __init__(self, results, limit: int, offset: int,
                  evidence_totals: dict, query_json: dict):
         if not isinstance(results, Iterable) or isinstance(results, str):
@@ -46,7 +60,7 @@ class QueryResult(object):
 
 
 class StatementQueryResult(QueryResult):
-    """The result of a statement query.
+    """The result of a query to retrieve Statements.
 
     This class encapsulates the results of a search for statements in the
     database. This standardizes the results of such searches.
@@ -80,6 +94,8 @@ class StatementQueryResult(QueryResult):
 
 
 class QueryCore(object):
+    """The core class for all queries; not functional on its own."""
+
     def __init__(self, empty=False, full=False):
         if empty and full:
             raise ValueError("Cannot be both empty and full.")
@@ -101,23 +117,66 @@ class QueryCore(object):
         return hash(str(self))
 
     def invert(self):
+        """ A useful way to get the inversion of a query in order of operations.
+
+        When chain operations, `~q` is evaluated after all `.` terms. This
+        allows you to cleanly bypass that issue, having:
+
+            HasReadings().invert().get_statements(ro)
+
+        rather than
+
+            (~HasReadings()).get_statements()
+
+        which is harder to read.
+        """
         return self.__invert__()
 
     def _do_invert(self, *args, **kwargs):
+        """General formula for getting an inversion using init inputs."""
         new_obj = self.__class__(*args, **kwargs)
         new_obj._inverted = not self._inverted
         return new_obj
 
     def get_statements(self, ro, limit=None, offset=None, best_first=True,
                        ev_limit=None):
+        """Get the statements that satisfy this query.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+        ev_limit : int
+            Limit the number of evidence returned for each statement.
+
+        Returns
+        -------
+        result : StatementQueryResult
+            An object holding the JSON result from the database, as well as the
+            metadata for the query.
+        """
+        # If the result is by definition empty, save ourselves time and work.
         if self.empty:
             return StatementQueryResult({}, limit, offset, {}, 0, {},
                                         self.to_json())
 
+        # Get the query for mk_hashes and ev_counts, and apply the generic
+        # limits to it.
         mk_hashes_q = self.get_hash_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
 
+        # Do the difficult work of turning a query for hashes and ev_counts into
+        # a query for statement JSONs. Return the results.
         stmt_dict, ev_totals, returned_evidence, source_counts = \
             self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit)
         return StatementQueryResult(stmt_dict, limit, offset, ev_totals,
@@ -125,12 +184,39 @@ class QueryCore(object):
                                     self.to_json())
 
     def get_hashes(self, ro, limit=None, offset=None, best_first=True):
+        """Get the hashes of statements that satisfy this query.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+
+        Returns
+        -------
+        result : QueryResult
+            An object holding the results of the query, as well as the metadata
+            for the query definition.
+        """
+        # If the result is by definition empty, save time and effort.
         if self.empty:
             return QueryResult(set(), limit, offset, {}, self.to_json())
 
+        # Get the query for mk_hashes and ev_counts, and apply the generic
+        # limits to it.
         mk_hashes_q = self.get_hash_query(ro)
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
+
+        # Make the query, and package the results.
         result = mk_hashes_q.all()
         evidence_totals = {h: cnt for h, cnt in result}
         return QueryResult(set(evidence_totals.keys()), limit, offset,
@@ -138,6 +224,7 @@ class QueryCore(object):
 
     def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
                       best_first=True):
+        """Apply the general query limits to the net hash query."""
         mk_hashes_q = mk_hashes_q.distinct()
 
         mk_hash_obj, ev_count_obj = self._hash_count_pair(ro)
@@ -152,10 +239,12 @@ class QueryCore(object):
         return mk_hashes_q
 
     def to_json(self) -> dict:
+        """Get the JSON representation of this query."""
         return {'constraint': self._get_constraint_json(),
                 'inverted': self._inverted}
 
     def _get_constraint_json(self) -> dict:
+        """Get the custom constraint JSONs from the subclass"""
         raise NotImplementedError()
 
     def _get_table(self, ro):
@@ -171,9 +260,13 @@ class QueryCore(object):
         return meta.mk_hash, meta.ev_count
 
     def get_hash_query(self, ro, type_queries=None):
+        """[Internal] Build the query for hashes."""
+        # If the query is by definition everything, save much time and effort.
         if self.full:
             return ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
                                     ro.SourceMeta.ev_count.label('ev_count'))
+
+        # Otherwise proceed with the usual query.
         return self._get_hash_query(ro, type_queries)
 
     def _get_hash_query(self, ro, type_queries=None):
@@ -181,6 +274,11 @@ class QueryCore(object):
 
     @staticmethod
     def _get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit):
+        """Turn a query for hashes into a query for statements.
+
+        In particular, this function retrieves refs, and the limited number of
+        evidence for each statement.
+        """
         # Create the link
         mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
         raw_json_c = ro.FastRawPaLink.raw_json.label('raw_json')
@@ -192,9 +290,11 @@ class QueryCore(object):
         if ev_limit is not None:
             cont_q = cont_q.limit(ev_limit)
 
+        # Apply the lateral join to get evidence.
         # TODO: Only make a lateral-joined query when evidence is limited.
         json_content_al = cont_q.subquery().lateral('json_content')
 
+        # Join up with other tables to pull metadata.
         stmts_q = (mk_hashes_al
                    .outerjoin(json_content_al, true())
                    .outerjoin(ro.ReadingRefLink,
@@ -210,6 +310,7 @@ class QueryCore(object):
                 json_content_al.c.pa_json]
         cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
 
+        # Execute the query.
         selection = select(cols).select_from(stmts_q)
 
         logger.debug("Executing sql to get statements:\n%s" % str(selection))
@@ -296,10 +397,17 @@ class QueryCore(object):
         return stmts_dict, ev_totals, returned_evidence, source_counts
 
     def __merge_queries(self, other, MergeClass):
+        """This is the most general method for handling query merges.
+
+        That is to say, for handling __and__ and __or__ calls.
+        """
+        # We cannot merge with things that aren't queries.
         if not isinstance(other, QueryCore):
             raise ValueError(f"{self.__class__.__name__} cannot operate with "
                              f"{type(other)}")
 
+        # If this and/or the other is a merged query, special handling ensures
+        # the result is efficient. Otherwise, just create a new merged query.
         if isinstance(self, MergeClass):
             if isinstance(other, MergeClass):
                 return MergeClass(self.queries + other.queries)
@@ -311,22 +419,27 @@ class QueryCore(object):
             return MergeClass([other, self])
 
     def _do_and(self, other):
+        """Sub-method of __and__ that can be over-written by child classes."""
         return self.__merge_queries(other, Intersection)
 
     def __and__(self, other):
+        # Dismiss the trivial case where two queries are the same.
         if self == other:
             return self
         return self._do_and(other)
 
     def _do_or(self, other):
+        """Sub-method of __or__ that can be over-written by chile classes."""
         return self.__merge_queries(other, Union)
 
     def __or__(self, other):
+        # Dismiss the trivial case where two queries are the same.
         if self == other:
             return self
         return self._do_or(other)
 
     def __sub__(self, other):
+        # Subtraction is the same as "and not"
         return self._do_and(~other)
 
     def __eq__(self, other):
@@ -335,6 +448,7 @@ class QueryCore(object):
         return self.to_json() == other.to_json()
 
     def is_inverse_of(self, other):
+        """Check if a query is the exact opposite of another."""
         if not isinstance(other, self.__class__):
             return False
         if not self._get_constraint_json() == other._get_constraint_json():

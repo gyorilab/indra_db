@@ -734,7 +734,11 @@ class HasAnyType(QueryCore):
         super(HasAnyType, self).__init__(empty)
 
     def __invert__(self):
-        return self._do_invert(self.stmt_types)
+        res = self._do_invert(self.stmt_types)
+        if self.empty or self.full:
+            res.empty = self.full
+            res.full = self.empty
+        return res
 
     def _do_or(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:

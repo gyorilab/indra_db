@@ -170,13 +170,13 @@ class QueryCore(object):
         meta = self._get_table(ro)
         return meta.mk_hash, meta.ev_count
 
-    def get_hash_query(self, ro):
+    def get_hash_query(self, ro, type_queries=None):
         if self.full:
             return ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
                                     ro.SourceMeta.ev_count.label('ev_count'))
-        return self._get_hash_query(ro)
+        return self._get_hash_query(ro, type_queries)
 
-    def _get_hash_query(self, ro):
+    def _get_hash_query(self, ro, type_queries=None):
         raise NotImplementedError()
 
     @staticmethod
@@ -363,9 +363,12 @@ class SourceCore(QueryCore):
     def _apply_filter(self, ro, query, invert=False):
         raise NotImplementedError()
 
-    def _get_hash_query(self, ro):
+    def _get_hash_query(self, ro, type_queries=None):
         q = self._base_query(ro)
         q = self._apply_filter(ro, q)
+        if type_queries is not None:
+            for type_q in type_queries:
+                q = type_q._apply_filter(self._get_table(ro), q)
         return q
 
 
@@ -472,10 +475,13 @@ class SourceIntersection(QueryCore):
     def _get_table(self, ro):
         return ro.SourceMeta
 
-    def _get_hash_query(self, ro):
+    def _get_hash_query(self, ro, type_queries=None):
         query = self._base_query(ro)
         for sq in self.source_queries:
             query = sq._apply_filter(ro, query, self._inverted)
+        if type_queries:
+            for tq in type_queries:
+                query = tq._apply_filter(self._get_table(ro), query)
         return query
 
 
@@ -652,7 +658,7 @@ class HasAgent(QueryCore):
 
     def __str__(self):
         s = 'not ' if self._inverted else ''
-        s += f"an agent where {self.namespace} = {self.agent_id}"
+        s += f"has an agent where {self.namespace} = {self.agent_id}"
         if self.role is not None:
             s += f" with role={self.role}"
         elif self.agent_num is not None:
@@ -675,7 +681,7 @@ class HasAgent(QueryCore):
             meta = ro.OtherMeta
         return meta
 
-    def _get_hash_query(self, ro):
+    def _get_hash_query(self, ro, type_queries=None):
         meta = self._get_table(ro)
         qry = self._base_query(ro).filter(meta.db_id.like(self.regularized_id))
         if self.namespace not in ['NAME', 'TEXT', None]:
@@ -687,9 +693,18 @@ class HasAgent(QueryCore):
             qry = qry.filter(meta.agent_num == self.agent_num)
 
         if self._inverted:
+            if type_queries:
+                type_clauses = [tq.invert()._get_clause(self._get_table(ro))
+                                for tq in type_queries]
+                qry = self._base_query(ro).filter(or_(qry.whereclause,
+                                                      *type_clauses))
             al = except_(self._base_query(ro), qry).alias('agent_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
+        else:
+            if type_queries:
+                for tq in type_queries:
+                    qry = tq._apply_filter(self._get_table(ro), qry)
 
         return qry
 
@@ -735,7 +750,7 @@ class HasAnyType(QueryCore):
     def _get_type_nums(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
 
-    def _apply_filter(self, meta, query):
+    def _get_clause(self, meta):
         type_nums = self._get_type_nums()
         if len(type_nums) == 1:
             if not self._inverted:
@@ -747,9 +762,14 @@ class HasAnyType(QueryCore):
                 clause = meta.type_num.in_(type_nums)
             else:
                 clause = meta.type_num.notin_(type_nums)
-        return query.filter(clause)
+        return clause
 
-    def _get_hash_query(self, ro):
+    def _apply_filter(self, meta, query):
+        return query.filter(self._get_clause(meta))
+
+    def _get_hash_query(self, ro, type_queries=None):
+        if type_queries is not None:
+            raise ValueError("Cannot apply type queries to type query.")
         return self._apply_filter(self._get_table(ro), self._base_query(ro))
 
 
@@ -776,10 +796,16 @@ class FromMeshId(QueryCore):
     def _get_table(self, ro):
         return ro.MeshMeta
 
-    def _get_hash_query(self, ro):
+    def _get_hash_query(self, ro, type_queries=None):
         meta = self._get_table(ro)
         qry = self._base_query(ro).filter(meta.mesh_num == self.mesh_num)
+
         if self._inverted:
+            if type_queries:
+                type_clauses = [tq.invert()._get_clause(self._get_table(ro))
+                                for tq in type_queries]
+                qry = self._base_query(ro).filter(or_(qry.whereclause,
+                                                      *type_clauses))
             al = except_(
                 ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
                                  ro.SourceMeta.ev_count.label('ev_count')),
@@ -787,6 +813,10 @@ class FromMeshId(QueryCore):
             ).alias('mesh_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
+        else:
+            if type_queries:
+                for tq in type_queries:
+                    qry = tq._apply_filter(self._get_table(ro), qry)
         return qry
 
 
@@ -797,6 +827,10 @@ class MergeQueryCore(QueryCore):
     def __init__(self, query_list, *args, **kwargs):
         # Make the collection of queries immutable.
         self.queries = tuple(query_list)
+
+        # This variable is used internally during the construction of the
+        # joint query.
+        self._type_queries = None
 
         # Because of the derivative nature of the "tables" involved, some more
         # dynamism is required to get, for instance, the hash and count pair.
@@ -834,8 +868,14 @@ class MergeQueryCore(QueryCore):
         mk_hashes_al = self._get_table(ro)
         return mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count
 
-    def _get_hash_query(self, ro):
-        return self._base_query(ro)
+    def _get_hash_query(self, ro, type_queries=None):
+        self._type_queries = type_queries
+        self._mk_hashes_al = None  # recalculate the join
+        try:
+            qry = self._base_query(ro)
+        finally:
+            self._type_queries = None
+        return qry
 
 
 class Intersection(MergeQueryCore):
@@ -924,21 +964,21 @@ class Intersection(MergeQueryCore):
     def _merge(*queries):
         return intersect_all(*queries)
 
-    def __apply_types(self, ro, query):
-        mkhq = query.get_hash_query(ro)
-        if self.type_query is not None:
-            mkhq = self.type_query._apply_filter(query._get_table(ro), mkhq)
-        if self.not_type_query is not None:
-            mkhq = self.not_type_query._apply_filter(query._get_table(ro), mkhq)
-        return mkhq
-
     def _get_table(self, ro):
         if self._mk_hashes_al is not None:
             return self._mk_hashes_al
 
-        queries = [self.__apply_types(ro, q) for q in self.queries
-                   if not q.full and q != self.type_query
-                   and q != self.not_type_query]
+        if self._type_queries is not None:
+            raise ValueError("Type queries should not be applied to "
+                             "Intersection, but handled as an intersected "
+                             "query.")
+
+        type_queries = [tq for tq in [self.type_query, self.not_type_query]
+                        if tq is not None]
+        if not type_queries:
+            type_queries = None
+        queries = [q.get_hash_query(ro, type_queries) for q in self.queries
+                   if not q.full and not isinstance(q, HasAnyType)]
         if not queries:
             if self.type_query and self.not_type_query:
                 queries = [self.type_query.get_hash_query(ro),
@@ -946,7 +986,7 @@ class Intersection(MergeQueryCore):
                 self._mk_hashes_al = self._merge(*queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,
-                # they coudl simply have been merged together.
+                # they could simply have been merged together.
                 raise RuntimeError("Malformed Intersection occurred.")
         elif len(queries) == 1:
             self._mk_hashes_al = queries[0].subquery().alias(self.name)
@@ -1010,7 +1050,7 @@ class Union(MergeQueryCore):
 
     def _get_table(self, ro):
         if self._mk_hashes_al is None:
-            mk_hashes_q_list = [q.get_hash_query(ro)
+            mk_hashes_q_list = [q.get_hash_query(ro, self._type_queries)
                                 for q in self.queries if not q.empty]
             if len(mk_hashes_q_list) == 1:
                 self._mk_hashes_al = (mk_hashes_q_list[0].subquery()

@@ -431,6 +431,7 @@ class QueryCore(object):
         if self == other:
             return self.copy()
 
+        # Handle the case where one of the queries is full, but not the other.
         if self.full and not other.full:
             return other.copy()
         elif other.full and self.full:
@@ -1087,7 +1088,7 @@ class Intersection(MergeQueryCore):
                         if self.not_type_query is None:
                             self.not_type_query = query
                         else:
-                            self.not_type_query |= query
+                            self.not_type_query &= query
                 else:
                     query_groups[query.__class__].append(query)
                 filtered_queries.add(query)
@@ -1099,6 +1100,7 @@ class Intersection(MergeQueryCore):
             elif len(queries) > 1:
                 # Merge the queries based on their inversion.
                 pos_query = None
+                neg_query = None
                 for q in queries:
                     if not q._inverted:
                         if pos_query is None:
@@ -1106,12 +1108,16 @@ class Intersection(MergeQueryCore):
                         else:
                             pos_query &= q
                     else:
-                        filtered_queries.add(q)
+                        if neg_query is None:
+                            neg_query = q
+                        else:
+                            neg_query &= q
 
                 # Add the merged query to the final set.
-                if pos_query is not None:
-                    filtered_queries.add(pos_query)
-                    query_groups[q.__class__].append(pos_query)
+                for query in [neg_query, pos_query]:
+                    if query is not None:
+                        filtered_queries.add(query)
+                        query_groups[query.__class__].append(query)
 
         # Look for exact contradictions (any one of which makes this empty).
         for q_list in query_groups.values():
@@ -1197,10 +1203,7 @@ class Union(MergeQueryCore):
             elif len(hash_query_group) > 1:
                 query = hash_query_group[0]
                 for other_query in hash_query_group[1:]:
-                    if not query._inverted:
-                        query |= other_query
-                    else:
-                        query &= other_query
+                    query |= other_query
                 if query.full:
                     full = True
                 other_queries.add(query)

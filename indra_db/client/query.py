@@ -1050,8 +1050,19 @@ class Union(MergeQueryCore):
 
     def _get_table(self, ro):
         if self._mk_hashes_al is None:
-            mk_hashes_q_list = [q.get_hash_query(ro, self._type_queries)
-                                for q in self.queries if not q.empty]
+            mk_hashes_q_list = []
+            for q in self.queries:
+                if q.empty:
+                    continue
+                if isinstance(q, HasAnyType) and self._type_queries:
+                    for tq in self._type_queries:
+                        q &= tq
+                    if q.empty:
+                        continue
+                    mkhq = q.get_hash_query(ro)
+                else:
+                    mkhq = q.get_hash_query(ro, self._type_queries)
+                mk_hashes_q_list.append(mkhq)
             if len(mk_hashes_q_list) == 1:
                 self._mk_hashes_al = (mk_hashes_q_list[0].subquery()
                                                          .alias(self.name))

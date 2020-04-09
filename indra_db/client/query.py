@@ -742,16 +742,40 @@ class HasAnyType(QueryCore):
 
     def _do_or(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            res = HasAnyType(set(self.stmt_types) | set(other.stmt_types))
+            if not self._inverted:
+                type_list = set(self.stmt_types) | set(other.stmt_types)
+                empty = len(type_list) == 0
+                full = False
+            else:
+                type_list = set(self.stmt_types) & set(other.stmt_types)
+                full = len(type_list) == 0
+                empty = False
+            res = HasAnyType(type_list)
             res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
             return res
+        elif self.is_inverse_of(other):
+            return ~self.__class__([])
         return super(HasAnyType, self)._do_or(other)
 
     def _do_and(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            res = HasAnyType(set(self.stmt_types) & set(other.stmt_types))
+            if not self._inverted:
+                type_list = set(self.stmt_types) & set(other.stmt_types)
+                empty = len(type_list) == 0
+                full = False
+            else:
+                type_list = set(self.stmt_types) | set(other.stmt_types)
+                full = len(type_list) == 0
+                empty = False
+            res = HasAnyType(type_list)
             res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
             return res
+        elif self.is_inverse_of(other):
+            return self.__class__([])
         return super(HasAnyType, self)._do_and(other)
 
     def __str__(self):

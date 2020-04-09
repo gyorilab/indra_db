@@ -444,6 +444,7 @@ class SourceIntersection(QueryCore):
                              f"{[sq.__class__ for sq in filtered_queries]}")
         self.source_queries = tuple(filtered_queries)
         empty |= any(q.empty for q in self.source_queries)
+        empty |= len(self.source_queries) == 0
         super(SourceIntersection, self).__init__(empty)
 
     def __invert__(self):
@@ -607,10 +608,16 @@ class InHashList(SourceCore):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
             if not self._inverted:
                 hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
+                empty = len(hashes) == 0
+                full = False
             else:
                 hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
+                full = len(hashes) == 0
+                empty = False
             res = InHashList(hashes)
             res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
             return res
         elif self.is_inverse_of(other):
             return ~self.__class__([])
@@ -620,10 +627,16 @@ class InHashList(SourceCore):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
             if not self._inverted:
                 hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
+                empty = len(hashes) == 0
+                full = False
             else:
                 hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
+                full = len(hashes) == 0
+                empty = False
             res = InHashList(hashes)
             res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
             return res
         elif self.is_inverse_of(other):
             return self.__class__([])
@@ -872,7 +885,7 @@ class MergeQueryCore(QueryCore):
 
     def __repr__(self):
         query_strs = [repr(q) for q in self.queries]
-        return f'{self.__class__.__name__}([{", ".join(query_strs)}'
+        return f'{self.__class__.__name__}([{", ".join(query_strs)}])'
 
     def _get_constraint_json(self) -> dict:
         return {f'{self.name}_query': [q.to_json() for q in self.queries]}

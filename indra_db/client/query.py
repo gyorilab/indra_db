@@ -111,6 +111,16 @@ class QueryCore(object):
             f'({", ".join(arg_strs)})'
 
     def __invert__(self):
+        """Get the inverse of this object.
+
+        q.__invert__() == ~q
+        """
+        inv = self.copy()
+        inv._inverted = not self._inverted
+        return inv
+
+    def copy(self):
+        """Get a copy of this query."""
         raise NotImplementedError()
 
     def __hash__(self):
@@ -131,12 +141,6 @@ class QueryCore(object):
         which is harder to read.
         """
         return self.__invert__()
-
-    def _do_invert(self, *args, **kwargs):
-        """General formula for getting an inversion using init inputs."""
-        new_obj = self.__class__(*args, **kwargs)
-        new_obj._inverted = not self._inverted
-        return new_obj
 
     def get_statements(self, ro, limit=None, offset=None, best_first=True,
                        ev_limit=None):
@@ -410,13 +414,13 @@ class QueryCore(object):
         # the result is efficient. Otherwise, just create a new merged query.
         if isinstance(self, MergeClass):
             if isinstance(other, MergeClass):
-                return MergeClass(self.queries + other.queries)
+                return MergeClass(self.queries[:] + other.queries[:])
             else:
-                return MergeClass(self.queries + (other,))
+                return MergeClass(self.queries[:] + (other.copy(),))
         elif isinstance(other, MergeClass):
-            return MergeClass(other.queries + (self,))
+            return MergeClass(other.queries[:] + (self.copy(),))
         else:
-            return MergeClass([other, self])
+            return MergeClass([other.copy(), self.copy()])
 
     def _do_and(self, other):
         """Sub-method of __and__ that can be over-written by child classes."""
@@ -468,7 +472,7 @@ class SourceCore(QueryCore):
             return SourceIntersection(other.source_queries + (self,))
         return super(SourceCore, self)._do_and(other)
 
-    def __invert__(self):
+    def copy(self):
         raise NotImplementedError()
 
     def _get_table(self, ro):
@@ -550,6 +554,9 @@ class SourceIntersection(QueryCore):
         empty |= len(self.source_queries) == 0
         super(SourceIntersection, self).__init__(empty)
 
+    def copy(self):
+        return self.__class__(self.source_queries)
+
     def __invert__(self):
         return Union([~q for q in self.source_queries])
 
@@ -598,8 +605,8 @@ class HasOnlySource(SourceCore):
         invert_mod = 'not ' if self._inverted else ''
         return f"is {invert_mod}only from {self.only_source}"
 
-    def __invert__(self):
-        return self._do_invert(self.only_source)
+    def copy(self):
+        return self.__class__(self.only_source)
 
     def _get_constraint_json(self) -> dict:
         return {'only_source_query': {'only_source': self.only_source}}
@@ -623,8 +630,8 @@ class HasSources(SourceCore):
         self.sources = tuple(set(sources))
         super(HasSources, self).__init__(empty)
 
-    def __invert__(self):
-        return self._do_invert(self.sources)
+    def copy(self):
+        return self.__class__(self.sources)
 
     def __str__(self):
         if not self._inverted:
@@ -661,8 +668,8 @@ class SourceTypeCore(SourceCore):
         else:
             return f"has no {self.name}"
 
-    def __invert__(self):
-        return self._do_invert()
+    def copy(self):
+        return self.__class__()
 
     def _get_constraint_json(self) -> dict:
         return {f'has_{self.name}_query': {f'_has_{self.name}': True}}
@@ -693,8 +700,11 @@ class InHashList(SourceCore):
         self.stmt_hashes = tuple(stmt_hashes)
         super(InHashList, self).__init__(empty)
 
+    def copy(self):
+        return self.__class__(self.stmt_hashes)
+
     def __invert__(self):
-        res = self._do_invert(self.stmt_hashes)
+        res = super(InHashList, self).__invert__()
         if self.empty or self.full:
             res.empty = self.full
             res.full = self.empty
@@ -775,9 +785,9 @@ class HasAgent(QueryCore):
         self.regularized_id = regularize_agent_id(agent_id, namespace)
         super(HasAgent, self).__init__()
 
-    def __invert__(self):
-        return self._do_invert(self.agent_id, self.namespace, self.role,
-                               self.agent_num)
+    def copy(self):
+        return self.__class__(self.agent_id, self.namespace, self.role,
+                              self.agent_num)
 
     def __str__(self):
         s = 'not ' if self._inverted else ''
@@ -847,8 +857,11 @@ class HasAnyType(QueryCore):
         self.stmt_types = tuple(st_set)
         super(HasAnyType, self).__init__(empty)
 
+    def copy(self):
+        return self.__class__(self.stmt_types)
+
     def __invert__(self):
-        res = self._do_invert(self.stmt_types)
+        res = super(HasAnyType, self).__invert__()
         if self.empty or self.full:
             res.empty = self.full
             res.full = self.empty
@@ -941,8 +954,8 @@ class FromMeshId(QueryCore):
         invert_char = '!' if self._inverted else ''
         return f"MeSH ID {invert_char}= {self.mesh_id}"
 
-    def __invert__(self):
-        return self._do_invert(self.mesh_id)
+    def copy(self):
+        return self.__class__(self.mesh_id)
 
     def _get_constraint_json(self) -> dict:
         return {'mesh_query': {'mesh_id': self.mesh_id,
@@ -993,6 +1006,9 @@ class MergeQueryCore(QueryCore):
 
     def __invert__(self):
         raise NotImplementedError()
+
+    def copy(self):
+        return self.__class__(self.queries)
 
     def _get_table(self, ro):
         raise NotImplementedError()

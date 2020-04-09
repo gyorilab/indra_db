@@ -742,12 +742,16 @@ class HasAnyType(QueryCore):
 
     def _do_or(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            return HasAnyType(set(self.stmt_types) | set(other.stmt_types))
+            res = HasAnyType(set(self.stmt_types) | set(other.stmt_types))
+            res._inverted = self._inverted
+            return res
         return super(HasAnyType, self)._do_or(other)
 
     def _do_and(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            return HasAnyType(set(self.stmt_types) & set(other.stmt_types))
+            res = HasAnyType(set(self.stmt_types) & set(other.stmt_types))
+            res._inverted = self._inverted
+            return res
         return super(HasAnyType, self)._do_and(other)
 
     def __str__(self):

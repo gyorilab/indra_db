@@ -963,7 +963,6 @@ class Intersection(MergeQueryCore):
             elif len(queries) > 1:
                 # Merge the queries based on their inversion.
                 pos_query = None
-                neg_query = None
                 for q in queries:
                     if not q._inverted:
                         if pos_query is None:
@@ -971,16 +970,12 @@ class Intersection(MergeQueryCore):
                         else:
                             pos_query &= q
                     else:
-                        if neg_query is None:
-                            neg_query = q
-                        else:
-                            neg_query |= q
-
-                # Add the merged queries to the final set.
-                for q in [neg_query, pos_query]:
-                    if q is not None:
                         filtered_queries.add(q)
-                        query_groups[q.__class__].append(q)
+
+                # Add the merged query to the final set.
+                if pos_query is not None:
+                    filtered_queries.add(pos_query)
+                    query_groups[q.__class__].append(pos_query)
 
         # Look for exact contradictions (any one of which makes this empty).
         for q_list in query_groups.values():

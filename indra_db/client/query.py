@@ -413,20 +413,30 @@ class SourceIntersection(QueryCore):
         filtered_queries = set()
 
         # Add the source queries.
-        if add_sources:
-            filtered_queries.add(HasSources(add_sources - rem_sources))
-        if rem_sources:
-            filtered_queries.add(~HasSources(rem_sources - add_sources))
+        if add_sources and rem_sources and add_sources == rem_sources:
+            empty = True
+            filtered_queries |= {HasSources(add_sources),
+                                 ~HasSources(rem_sources)}
+        else:
+            if add_sources:
+                filtered_queries.add(HasSources(add_sources - rem_sources))
+            if rem_sources:
+                filtered_queries.add(~HasSources(rem_sources - add_sources))
 
         # Add the hash queries.
-        if add_hashes is not None:
-            if not add_hashes:
-                empty = True
-            filtered_queries.add(InHashList(add_hashes - rem_hashes))
-            rem_hashes -= add_hashes
+        if add_hashes and rem_hashes and add_hashes == rem_hashes:
+            empty = True
+            filtered_queries |= {InHashList(add_hashes),
+                                 ~InHashList(rem_hashes)}
+        else:
+            if add_hashes is not None:
+                if not add_hashes:
+                    empty = True
+                filtered_queries.add(InHashList(add_hashes - rem_hashes))
+                rem_hashes -= add_hashes
 
-        if rem_hashes:
-            filtered_queries.add(~InHashList(rem_hashes))
+            if rem_hashes:
+                filtered_queries.add(~InHashList(rem_hashes))
 
         # Now add in all the other queries, removing those that cancel out.
         for q_list in class_groups.values():
@@ -434,9 +444,11 @@ class SourceIntersection(QueryCore):
                 filtered_queries.add(q_list[0])
             else:
                 filtered_queries |= set(q_list)
-                for q1, q2 in combinations(q_list, 2):
-                    if q1.is_inverse_of(q2):
-                        filtered_queries -= {q1, q2}
+                if not empty:
+                    for q1, q2 in combinations(q_list, 2):
+                        if q1.is_inverse_of(q2):
+                            empty = True
+                            break
 
         inv_classes = {(sq.__class__, sq._inverted) for sq in filtered_queries}
         if len(inv_classes) != len(filtered_queries):

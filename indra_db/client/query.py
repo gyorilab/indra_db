@@ -447,7 +447,7 @@ class SourceIntersection(QueryCore):
         super(SourceIntersection, self).__init__(empty)
 
     def __invert__(self):
-        return self._do_invert(self.source_queries)
+        return Union([~q for q in self.source_queries])
 
     def _do_and(self, other):
         if isinstance(other, SourceIntersection):
@@ -1054,8 +1054,10 @@ class Union(MergeQueryCore):
         super(Union, self).__init__(other_queries, all_empty, full)
 
     def __invert__(self):
-        new_obj = Intersection([~q for q in self.queries])
-        return new_obj
+        inv_queries = [~q for q in self.queries]
+        if all(isinstance(q, SourceCore) for q in self.queries):
+            return SourceIntersection(inv_queries)
+        return Intersection(inv_queries)
 
     @staticmethod
     def _merge(*queries):

@@ -206,7 +206,7 @@ def test_query_set_behavior():
                 assert False, "Inverted query is None."
             negative_result = dq(nq)
             assert negative_result == (all_hashes - result), \
-                'Negative result mismatch (result).'
+                'Negative result mismatch.'
 
             if not nq.empty and not negative_result:
                 unfound.append(nq)

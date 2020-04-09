@@ -801,16 +801,15 @@ class FromMeshId(QueryCore):
         qry = self._base_query(ro).filter(meta.mesh_num == self.mesh_num)
 
         if self._inverted:
+            new_base = ro.session.query(
+                ro.SourceMeta.mk_hash.label('mk_hash'),
+                ro.SourceMeta.ev_count.label('ev_count')
+            )
             if type_queries:
-                type_clauses = [tq.invert()._get_clause(self._get_table(ro))
-                                for tq in type_queries]
-                qry = self._base_query(ro).filter(or_(qry.whereclause,
-                                                      *type_clauses))
-            al = except_(
-                ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
-                                 ro.SourceMeta.ev_count.label('ev_count')),
-                qry
-            ).alias('mesh_exclude')
+                for tq in type_queries:
+                    new_base = tq._apply_filter(ro.SourceMeta, new_base)
+
+            al = except_(new_base, qry).alias('mesh_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
         else:

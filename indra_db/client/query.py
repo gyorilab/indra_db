@@ -446,7 +446,14 @@ class QueryCore(object):
     def __or__(self, other):
         # Dismiss the trivial case where two queries are the same.
         if self == other:
-            return self
+            return self.copy()
+
+        # If one of the queries is empty, but not the other, dismiss them:
+        if self.empty and not other.empty:
+            return other.copy()
+        elif other.empty and not self.empty:
+            return self.copy()
+
         return self._do_or(other)
 
     def __sub__(self, other):

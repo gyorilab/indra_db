@@ -380,19 +380,11 @@ class SourceIntersection(QueryCore):
 
         # Look through all the queries, picking out special cases and grouping
         # the rest by class.
-        add_sources = set()
-        rem_sources = set()
         add_hashes = None
         rem_hashes = set()
         class_groups = defaultdict(list)
         for sq in source_queries:
-            if isinstance(sq, HasSources):
-                # Carefully track which sources to add and which to remove.
-                if not sq._inverted:
-                    add_sources |= set(sq.sources)
-                else:
-                    rem_sources |= set(sq.sources)
-            elif isinstance(sq, InHashList):
+            if isinstance(sq, InHashList):
                 # Collect all hashes to include and those to exclude.
                 if not sq._inverted:
                     # This is a part of an intersection, so intersection is
@@ -411,17 +403,6 @@ class SourceIntersection(QueryCore):
 
         # Start building up the true set of queries.
         filtered_queries = set()
-
-        # Add the source queries.
-        if add_sources and rem_sources and add_sources == rem_sources:
-            empty = True
-            filtered_queries |= {HasSources(add_sources),
-                                 ~HasSources(rem_sources)}
-        else:
-            if add_sources:
-                filtered_queries.add(HasSources(add_sources - rem_sources))
-            if rem_sources:
-                filtered_queries.add(~HasSources(rem_sources - add_sources))
 
         # Add the hash queries.
         if add_hashes and rem_hashes and add_hashes == rem_hashes:
@@ -450,10 +431,6 @@ class SourceIntersection(QueryCore):
                             empty = True
                             break
 
-        inv_classes = {(sq.__class__, sq._inverted) for sq in filtered_queries}
-        if len(inv_classes) != len(filtered_queries):
-            raise ValueError(f"Multiple instances of the same class: "
-                             f"{[sq.__class__ for sq in filtered_queries]}")
         self.source_queries = tuple(filtered_queries)
         empty |= any(q.empty for q in self.source_queries)
         empty |= len(self.source_queries) == 0
@@ -483,7 +460,7 @@ class SourceIntersection(QueryCore):
 
     def _get_constraint_json(self) -> dict:
         query_list = [q.to_json() for q in self.source_queries]
-        return {'multi_source_query': query_list}
+        return {'multi_source_query': {'source_queries': query_list}}
 
     def _get_table(self, ro):
         return ro.SourceMeta
@@ -531,13 +508,6 @@ class HasSources(SourceCore):
             empty = True
         self.sources = tuple(set(sources))
         super(HasSources, self).__init__(empty)
-
-    def _do_and(self, other):
-        if isinstance(other, HasSources) and self._inverted == other._inverted:
-            ret = HasSources(set(self.sources) | set(other.sources))
-            ret._inverted = self._inverted
-            return ret
-        return super(HasSources, self)._do_and(other)
 
     def __invert__(self):
         return self._do_invert(self.sources)

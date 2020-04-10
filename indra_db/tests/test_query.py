@@ -153,11 +153,50 @@ def build_test_set():
     return db
 
 
+class Counter:
+    def __init__(self):
+        self.correct = 0
+        self.incorrect = 0
+        self.total = 0
+        self.section_correct = 0
+        self.section_incorrect = 0
+        self.section_total = 0
+
+    def up(self, correct):
+        if correct:
+            self.correct += 1
+            self.section_correct += 1
+        else:
+            self.incorrect += 1
+            self.section_incorrect += 1
+        self.total += 1
+        self.section_total += 1
+
+        if self.section_total % 100 == 0:
+            self._print()
+        return
+
+    def _print(self):
+        print(f'\rCorrect: {self.section_correct}, '
+              f'Incorrect: {self.section_incorrect}, '
+              f'Total: {self.section_total}', end='', flush=True)
+
+    def mark(self, section):
+        self._print()
+        print()
+        print(section)
+        self.section_total = 0
+        self.section_incorrect = 0
+        self.section_correct = 0
+
+
 def test_query_set_behavior():
     db = build_test_set()
     all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
     print(f"There are {len(all_hashes)} distinct hashes in the database.")
     lookup_hashes = random.sample(all_hashes, 5)
+
+    c = Counter()
 
     def dq(query):
         res = query.get_hashes(db)
@@ -194,10 +233,12 @@ def test_query_set_behavior():
             if not q.empty and not result:
                 unfound.append(q)
             results.append((result, q))
+            c.up(True)
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
                              'compair': compair, 'md': md})
             results.append((result, q))
+            c.up(False)
             return
 
         negative_result = None
@@ -213,6 +254,7 @@ def test_query_set_behavior():
             if not nq.empty and not negative_result:
                 unfound.append(nq)
             results.append((negative_result, nq))
+            c.up(True)
         except Exception as e:
             if md is not None:
                 neg_md = 'not (' + md + ')'
@@ -221,26 +263,27 @@ def test_query_set_behavior():
             failures.append({'query': nq, 'error': e, 'result': negative_result,
                              'compair': all_hashes - result, 'md': neg_md})
             results.append((negative_result, nq))
+            c.up(False)
             return
 
         return
 
-    print("Testing individual queries...")
+    c.mark("Testing individual queries...")
     for q in queries:
         try_query(q)
     original_results = [res for res in results if res[1] is not None]
 
-    print("Testing pairs...")
+    c.mark("Testing pairs...")
     for (r1, q1), (r2, q2) in permutations(original_results, 2):
         try_query(q1 & q2, r1 & r2, md=f'{q1} and {q2}')
         try_query(q1 | q2, r1 | r2, md=f'{q1} or {q2}')
 
-    print("Testing simple triples...")
+    c.mark("Testing simple triples...")
     for (r1, q1), (r2, q2), (r3, q3) in combinations(original_results, 3):
         try_query(q1 & q2 & q3, r1 & r2 & r3, md=f'{q1} and {q2} and {q3}')
         try_query(q1 | q2 | q3, r1 | r2 | r3, md=f'{q1} or {q2} or {q3}')
 
-    print("Testing mixed triples...")
+    c.mark("Testing mixed triples...")
     for (r1, q1), (r2, q2), (r3, q3) in permutations(original_results, 3):
         try_query(q1 & q2 | q3, r1 & r2 | r3, md=f'{q1} and {q2} or {q3}')
 

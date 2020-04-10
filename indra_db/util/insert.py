@@ -1,5 +1,6 @@
 __all__ = ['insert_raw_agents', 'insert_pa_agents', 'insert_pa_stmts',
-           'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data']
+           'insert_db_stmts', 'regularize_agent_id', 'extract_agent_data',
+           'hash_pa_agents']
 
 import json
 import pickle
@@ -7,7 +8,7 @@ import logging
 
 from indra.util.get_version import get_version
 from indra.statements import Complex, SelfModification, ActiveForm, \
-    Conversion, Translocation
+    Conversion, Translocation, make_hash
 
 from indra_db.exceptions import IndraDbException
 
@@ -85,7 +86,7 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     return
 
 
-def insert_pa_agents(db, stmts, verbose=False, skip=None):
+def insert_pa_agents(db, stmts, verbose=False, skip=None, commit=True):
     if skip is None:
         skip = []
 
@@ -104,7 +105,7 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
     mut_data = []
     for i, stmt in enumerate(stmts):
         refs, mods, muts = extract_agent_data(stmt, stmt.get_hash())
-        ref_data.extend(refs)
+        ref_data.extend(hash_pa_agents(refs))
         mod_data.extend(mods)
         mut_data.extend(muts)
 
@@ -117,7 +118,8 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
 
     if 'agents' not in skip:
         db.copy_lazy('pa_agents', ref_data,
-                     ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role'),
+                     ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role',
+                      'agent_ref_hash'),
                      commit=False)
     if 'mods' not in skip:
         db.copy('pa_mods', mod_data,
@@ -127,9 +129,19 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None):
         db.copy('pa_muts', mut_data,
                 ('stmt_mk_hash', 'ag_num', 'position', 'residue_from',
                  'residue_to'), commit=False)
-    db.commit_copy('Error copying pa agents, mods, and muts, excluding: %s.'
-                   % (', '.join(skip)))
+    if commit:
+        db.commit_copy('Error copying pa agents, mods, and muts, excluding: '
+                       '%s.' % (', '.join(skip)))
     return
+
+
+def hash_pa_agents(agent_tuples):
+    logger.info("Adding hashes to %d pa agent refs." % len(agent_tuples))
+    hashed_tuples = []
+    for ref in agent_tuples:
+        h = make_hash(':'.join([str(r) for r in ref[:-1]]), 16)
+        hashed_tuples.append(ref + (h,))
+    return hashed_tuples
 
 
 def regularize_agent_id(id_val, id_ns):
@@ -292,11 +304,19 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
         statements for insert. Default False.
     do_copy : bool
         If True (default), use pgcopy to quickly insert the agents.
+    ignore_agents : bool
+        If False (default), add agents to the database. If True, then agent
+        insertion is skipped.
+    commit : bool
+        If True (default), commit the result immediately. Otherwise the results
+        are not committed (thus allowing multiple related insertions to be
+        neatly rolled back upon failure.)
     """
     logger.info("Beginning to insert pre-assembled statements.")
     stmt_data = []
     indra_version = get_version()
     cols = ('uuid', 'matches_key', 'mk_hash', 'type', 'json', 'indra_version')
+    activity_rows = []
     if verbose:
         print("Loading:", end='', flush=True)
     for i, stmt in enumerate(stmts):
@@ -309,12 +329,22 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
             indra_version
         )
         stmt_data.append(stmt_rec)
+
+        if isinstance(stmt, ActiveForm):
+            activity_record = (
+                stmt.get_hash(shallow=True),
+                stmt.activity,
+                stmt.is_active
+            )
+            activity_rows.append(activity_record)
         if verbose and i % (len(stmts)//25) == 0:
             print('|', end='', flush=True)
     if verbose:
         print(" Done loading %d statements." % len(stmts))
     if do_copy:
-        db.copy('pa_statements', stmt_data, cols, commit=commit)
+        db.copy('pa_statements', stmt_data, cols, commit=False)
+        db.copy('pa_activity', activity_rows,
+                ('mk_hash', 'activity', 'is_active'), commit=commit)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
     if not ignore_agents:

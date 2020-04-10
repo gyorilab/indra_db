@@ -22,7 +22,11 @@ class S3Path(object):
         return ret
 
     def get_element_path(self, *subkeys):
-        return self.from_key_parts(self.bucket, self.key, path.join(*subkeys))
+        args = []
+        if self.key is not None:
+            args.append(self.key)
+        args += subkeys
+        return self.from_key_parts(self.bucket, *args)
 
     @classmethod
     def from_key_parts(cls, bucket, *key_elements):

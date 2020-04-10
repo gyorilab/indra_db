@@ -549,7 +549,15 @@ class DatabaseManager(object):
 
         # Format the data for the copy.
         data_bts = []
+        n_cols = len(cols)
         for entry in data:
+            # Make sure that the number of columns matches the number of columns in
+            # the data.
+            if n_cols != len(entry):
+                raise ValueError("Number of columns does not match number of "
+                                 "columns in data.")
+
+            # Convert the entry to bytes
             new_entry = []
             for element in entry:
                 if isinstance(element, str):
@@ -888,6 +896,8 @@ class PrincipalDatabaseManager(DatabaseManager):
                     for t in d.values()):
             if tbl.__name__ == 'PaStmtSrc':
                 self.__PaStmtSrc = tbl
+            elif tbl.__name__ == 'SourceMeta':
+                self.__SourceMeta = tbl
             else:
                 setattr(self, tbl.__name__, tbl)
 
@@ -898,6 +908,9 @@ class PrincipalDatabaseManager(DatabaseManager):
         if item == 'PaStmtSrc':
             self.__PaStmtSrc.load_cols(self.engine)
             return self.__PaStmtSrc
+        elif item == 'SourceMeta':
+            self.__SourceMeta.load_cols(self.engine)
+            return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
 
     def generate_readonly(self, ro_list=None, allow_continue=True):
@@ -1041,6 +1054,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
         for tbl in self.tables.values():
             if tbl.__name__ == 'PaStmtSrc':
                 self.__PaStmtSrc = tbl
+            elif tbl.__name__ == 'SourceMeta':
+                self.__SourceMeta = tbl
             else:
                 setattr(self, tbl.__name__, tbl)
 
@@ -1048,6 +1063,9 @@ class ReadonlyDatabaseManager(DatabaseManager):
         if item == 'PaStmtSrc':
             self.__PaStmtSrc.load_cols(self.engine)
             return self.__PaStmtSrc
+        elif item == 'SourceMeta':
+            self.__SourceMeta.load_cols(self.engine)
+            return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
 
     def load_dump(self, dump_file, force_clear=True):

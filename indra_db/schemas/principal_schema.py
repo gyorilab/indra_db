@@ -335,6 +335,18 @@ def get_schema(Base):
         insert_date = Column(DateTime, default=func.now())
     table_dict[DiscardedStatements.__tablename__] = DiscardedStatements
 
+    class RawActivity(Base, IndraDBTable):
+        __tablename__ = 'raw_activity'
+        _always_disp = ['stmt_id', 'activity', 'is_active']
+        id = Column(Integer, primary_key=True)
+        stmt_id = Column(Integer,
+                         ForeignKey('raw_statements.id'),
+                         nullable=False)
+        statements = relationship(RawStatements)
+        activity = Column(String)
+        is_active = Column(Boolean)
+    table_dict[RawActivity.__tablename__] = RawActivity
+
     class RawAgents(Base, IndraDBTable):
         __tablename__ = 'raw_agents'
         _always_disp = ['stmt_id', 'db_name', 'db_id', 'ag_num']
@@ -347,10 +359,6 @@ def get_schema(Base):
         db_id = Column(String, nullable=False)
         ag_num = Column(Integer, nullable=False)
         role = Column(String(20), nullable=False)
-        __table_args = (
-            UniqueConstraint('stmt_id', 'db_name', 'db_id', 'role',
-                             name='raw-agents-uniqueness'),
-        )
     table_dict[RawAgents.__tablename__] = RawAgents
 
     class RawMods(Base, IndraDBTable):
@@ -412,13 +420,25 @@ def get_schema(Base):
         _default_order_by = 'create_date'
 
         mk_hash = Column(BigInteger, primary_key=True)
-        matches_key = Column(String, unique=True, nullable=False)
+        matches_key = Column(String, nullable=False)
         uuid = Column(String(40), unique=True, nullable=False)
         type = Column(String(100), nullable=False)
         indra_version = Column(String(100), nullable=False)
         json = Column(BYTEA, nullable=False)
         create_date = Column(DateTime, default=func.now())
     table_dict[PAStatements.__tablename__] = PAStatements
+
+    class PAActivity(Base, IndraDBTable):
+        __tablename__ = 'pa_activity'
+        __always_disp__ = ['stmt_mk_hash', 'activity', 'is_active']
+        id = Column(Integer, primary_key=True)
+        stmt_mk_hash = Column(BigInteger,
+                              ForeignKey('pa_statements.mk_hash'),
+                              nullable=False)
+        statements = relationship(PAStatements)
+        activity = Column(String)
+        is_active = Column(Boolean)
+    table_dict[PAActivity.__tablename__] = PAActivity
 
     class PAAgents(Base, IndraDBTable):
         __tablename__ = 'pa_agents'
@@ -432,10 +452,7 @@ def get_schema(Base):
         db_id = Column(String, nullable=False)
         role = Column(String(20), nullable=False)
         ag_num = Column(Integer, nullable=False)
-        __table_args__ = (
-            UniqueConstraint('stmt_mk_hash', 'db_name', 'db_id', 'role',
-                             name='pa-agent-uniqueness'),
-        )
+        agent_ref_hash = Column(BigInteger, unique=True, nullable=False)
     table_dict[PAAgents.__tablename__] = PAAgents
 
     class PAMods(Base, IndraDBTable):

@@ -142,16 +142,17 @@ class SpecialColumnTable(ReadonlyTable):
         return sql
 
     @classmethod
-    def load_cols(cls, engine):
+    def load_cols(cls, engine, cols=None):
         if cls.loaded:
             return
 
-        try:
-            schema = cls.__table_args__.get('schema', 'public')
-            cols = inspect(engine).get_columns(cls.__tablename__,
-                                               schema=schema)
-        except NoSuchTableError:
-            return
+        if cols is None:
+            try:
+                schema = cls.__table_args__.get('schema', 'public')
+                cols = inspect(engine).get_columns(cls.__tablename__,
+                                                   schema=schema)
+            except NoSuchTableError:
+                return
 
         existing_cols = {col.name for col in cls.__table__.columns}
         for col in cols:
@@ -169,7 +170,8 @@ class NamespaceLookup(ReadonlyTable):
 
     @classmethod
     def get_definition(cls):
-        return ("SELECT db_id, ag_id, role, ag_num, type, "
-                "mk_hash, ev_count FROM readonly.pa_meta "
+        return ("SELECT db_id, ag_id, role_num, ag_num, type_num, "
+                "       mk_hash, ev_count, activity, is_active, agent_count\n"
+                "FROM readonly.pa_meta\n"
                 "WHERE db_name = '%s'" % cls.__dbname__)
 

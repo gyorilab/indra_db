@@ -9,7 +9,8 @@ from indra.util import clockit
 
 from indra_db.util import get_ro
 from indra_db.client.tools import _apply_limits
-from indra_db.client.readonly.pa_statements import _make_mk_hashes_query
+from indra_db.client.readonly.pa_statements import _make_mk_hashes_query, \
+    _labelled_hash_and_count
 
 
 @clockit
@@ -154,3 +155,31 @@ def get_interaction_statements_from_agents(*args, **kwargs):
         stmts.append(stmt)
     result['stmts'] = stmts
     return result
+
+
+def get_interaction_jsons_from_mesh_ids(mesh_ids, join='outer', ro=None,
+                                        best_first=True, max_relations=None,
+                                        offset=None, detail_level='hashes'):
+    if detail_level not in {'hashes', 'relations', 'agents'}:
+        raise ValueError("Invalid detail_level: %s" % detail_level)
+
+    if ro is None:
+        ro = get_ro('primary')
+
+    if not all(mid.startswith('D') and mid[1:].isdigit() for mid in mesh_ids):
+        raise ValueError("Invalid Mesh IDs included: %s" % str(mesh_ids))
+
+    mesh_ids = [int(mid[1:]) for mid in mesh_ids]
+
+    if not mesh_ids:
+        return {'relations': [], 'next_offset': None}
+    elif len(mesh_ids) == 1:
+        hashes_q = (ro.filter_query(_labelled_hash_and_count(ro.MeshRefLookup),
+                                    ro.MeshRefLookup.mesh_num == mesh_ids[0]))
+    if join == 'inner':
+        queries = []
+        for mesh_id in mesh_ids:
+            q = ro.filter_query(_labelled_hash_and_count(ro.MeshRefLookup),
+                                ro.MeshRefLookup.mesh_num == mesh_id)
+            queries.append(q)
+

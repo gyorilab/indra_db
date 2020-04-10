@@ -19,7 +19,7 @@ from indra.preassembler.hierarchy_manager import hierarchies
 
 from indra_db.util.data_gatherer import DataGatherer, DGContext
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
-    extract_agent_data, insert_pa_agents
+    extract_agent_data, insert_pa_agents, hash_pa_agents
 
 site_logger.setLevel(logging.INFO)
 grounding_logger.setLevel(logging.WARNING)
@@ -157,9 +157,9 @@ class PreassemblyManager(object):
                     ('pa_stmt_mk_hash', 'raw_stmt_id'), commit=False)
             gatherer.add('evidence', len(ev_links))
 
-            db.copy_lazy('pa_agents', agent_tuples,
-                         ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id',
-                          'role'),
+            db.copy_lazy('pa_agents', hash_pa_agents(agent_tuples),
+                         ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role',
+                          'agent_ref_hash'),
                          commit=False)
             insert_pa_agents(db, new_unique_stmts, verbose=True,
                              skip=['agents'])  # This will commit

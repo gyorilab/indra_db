@@ -485,6 +485,7 @@ class QueryCore(object):
 
 
 class SourceCore(QueryCore):
+    """The core of all queries that use SourceMeta."""
 
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
@@ -515,6 +516,13 @@ class SourceCore(QueryCore):
 
 
 class SourceIntersection(QueryCore):
+    """A special type of intersection between children of SourceCore.
+
+    All SourceCore queries use the same table, so when doing an intersection it
+    doesn't make sense to do an actual intersection operation, and instead
+    simply apply all the filters of each query to build a normal multi-
+    conditioned query.
+    """
     def __init__(self, source_queries):
         # There are several points at which we could realize this query is by
         # definition empty.

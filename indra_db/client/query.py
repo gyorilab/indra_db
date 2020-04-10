@@ -117,12 +117,17 @@ class QueryCore(object):
         """
         inv = self.copy()
         inv._inverted = not self._inverted
+        if self.full or self.empty:
+            inv.full = self.empty
+            inv.empty = self.full
         return inv
 
     def copy(self):
         """Get a _copy of this query."""
         cp = self._copy()
         cp._inverted = self._inverted
+        cp.full = self.full
+        cp.empty = self.empty
         return cp
 
     def _copy(self):
@@ -722,13 +727,6 @@ class InHashList(SourceCore):
     def _copy(self):
         return self.__class__(self.stmt_hashes)
 
-    def __invert__(self):
-        res = super(InHashList, self).__invert__()
-        if self.empty or self.full:
-            res.empty = self.full
-            res.full = self.empty
-        return res
-
     def _do_or(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
             if not self._inverted:
@@ -878,13 +876,6 @@ class HasAnyType(QueryCore):
 
     def _copy(self):
         return self.__class__(self.stmt_types)
-
-    def __invert__(self):
-        res = super(HasAnyType, self).__invert__()
-        if self.empty or self.full:
-            res.empty = self.full
-            res.full = self.empty
-        return res
 
     def _do_or(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:

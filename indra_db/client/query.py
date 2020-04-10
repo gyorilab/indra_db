@@ -492,9 +492,9 @@ class SourceCore(QueryCore):
 
     def _do_and(self, other):
         if isinstance(other, SourceCore):
-            return SourceIntersection([self, other])
+            return SourceIntersection([self.copy(), other.copy()])
         elif isinstance(other, SourceIntersection):
-            return SourceIntersection(other.source_queries + (self,))
+            return SourceIntersection(other.source_queries + (self.copy(),))
         return super(SourceCore, self)._do_and(other)
 
     def _copy(self):

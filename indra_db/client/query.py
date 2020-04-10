@@ -48,6 +48,7 @@ class QueryResult(object):
         self.query_json = query_json
 
     def json(self):
+        """Return the JSON representaion of the results."""
         if not isinstance(self.results, dict) \
                 and not isinstance(self.results, list):
             json_results = list(self.results)
@@ -84,12 +85,14 @@ class StatementQueryResult(QueryResult):
         self.source_counts = source_counts
 
     def json(self):
+        """Get the JSON dump of the results."""
         json_dict = super(StatementQueryResult, self).json()
         json_dict.update({'returned_evidence': self.returned_evidence,
                           'source_counts': self.source_counts})
         return json_dict
 
     def statements(self):
+        """Get a list of Statements from the results."""
         return stmts_from_json(list(self.results.values()))
 
 
@@ -115,8 +118,12 @@ class QueryCore(object):
 
         q.__invert__() == ~q
         """
+        # An inverted object is just a copy with a special flag added.
         inv = self.copy()
         inv._inverted = not self._inverted
+
+        # The inverse of full is empty, and vice versa. Make sure it stays that
+        # way.
         if self.full or self.empty:
             inv.full = self.empty
             inv.empty = self.full
@@ -491,6 +498,8 @@ class SourceCore(QueryCore):
         raise NotImplementedError()
 
     def _do_and(self, other):
+        # Make sure that intersections of SourceCore children end up in
+        # SourceIntersection.
         if isinstance(other, SourceCore):
             return SourceIntersection([self.copy(), other.copy()])
         elif isinstance(other, SourceIntersection):
@@ -556,10 +565,16 @@ class SourceIntersection(QueryCore):
 
         # Add the hash queries.
         if add_hashes and rem_hashes and add_hashes == rem_hashes:
+            # In this special case I am empty, and to make sure my inversion
+            # works smoothly, I keep these two queries around so the Union can
+            # successfully work out the logic without special communication
+            # being necessary.
             empty = True
             filtered_queries |= {InHashList(add_hashes),
                                  ~InHashList(rem_hashes)}
         else:
+            # Check for added hashes and add a positive and an inverted hash
+            # query for the net positive and net negative hashes.
             if add_hashes is not None:
                 if not add_hashes:
                     empty = True
@@ -581,7 +596,10 @@ class SourceIntersection(QueryCore):
                             empty = True
                             break
 
+        # Make the source queries a tuple, thus immutable.
         self.source_queries = tuple(filtered_queries)
+
+        # I am empty if any of my queries is empty, or if I have no queries.
         empty |= any(q.empty for q in self.source_queries)
         empty |= len(self.source_queries) == 0
         super(SourceIntersection, self).__init__(empty)
@@ -593,11 +611,13 @@ class SourceIntersection(QueryCore):
         return Union([~q for q in self.source_queries])
 
     def _do_and(self, other):
+        # This is the complement of _do_and in SourceCore, together ensuring
+        # that any intersecting group of Source queries goes into this class.
         if isinstance(other, SourceIntersection):
             return SourceIntersection(self.source_queries
                                       + other.source_queries)
         elif isinstance(other, SourceCore):
-            return SourceIntersection(self.source_queries + (other,))
+            return SourceIntersection(self.source_queries + (other.copy(),))
         return super(SourceIntersection, self)._do_and(other)
 
     def __str__(self):
@@ -620,8 +640,12 @@ class SourceIntersection(QueryCore):
 
     def _get_hash_query(self, ro, type_queries=None):
         query = self._base_query(ro)
+
+        # Apply each of the source queries' filters.
         for sq in self.source_queries:
             query = sq._apply_filter(ro, query, self._inverted)
+
+        # Apply any type queries.
         if type_queries:
             for tq in type_queries:
                 query = tq._apply_filter(self._get_table(ro), query)
@@ -629,6 +653,15 @@ class SourceIntersection(QueryCore):
 
 
 class HasOnlySource(SourceCore):
+    """Find Statements that come exclusively from a particular source.
+
+    For example, find statements that come only from sparser.
+
+    Parameters
+    ----------
+    only_source : str
+        The only source that spawned the statement, e.g. signor, or reach.
+    """
     def __init__(self, only_source):
         self.only_source = only_source
         super(HasOnlySource, self).__init__()
@@ -655,6 +688,17 @@ class HasOnlySource(SourceCore):
 
 
 class HasSources(SourceCore):
+    """Find Statements that include a set of sources.
+
+    For example, find Statements that have support from both medscan and reach.
+
+    Parameters
+    ----------
+    sources : list or set or tuple
+        A collection of strings, each string the canonical name for a source.
+        The result will include statements that have evidence from ALL sources
+        that you include.
+    """
     def __init__(self, sources):
         empty = False
         if len(sources) == 0:
@@ -682,15 +726,18 @@ class HasSources(SourceCore):
             if not inverted:
                 clauses.append(getattr(meta, src) > 0)
             else:
+                # Careful here: lacking a source makes the cell null, not 0.
                 clauses.append(getattr(meta, src).is_(None))
         if not inverted:
             query = query.filter(*clauses)
         else:
+            # Recall De Morgan's Law.
             query = query.filter(or_(*clauses))
         return query
 
 
 class SourceTypeCore(SourceCore):
+    """The base class for HasReadings and HasDatabases."""
     name = NotImplemented
     col = NotImplemented
 
@@ -709,6 +756,10 @@ class SourceTypeCore(SourceCore):
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
         meta = self._get_table(ro)
+
+        # In raw SQL, you can simply say "WHERE has_rd", for example, if it is
+        # boolean. I would like to see if I can do that here...might speed
+        # things up.
         if not inverted:
             clause = getattr(meta, self.col) == True
         else:
@@ -717,16 +768,26 @@ class SourceTypeCore(SourceCore):
 
 
 class HasReadings(SourceTypeCore):
+    """Find Statements that have readings."""
     name = 'readings'
     col = 'has_rd'
 
 
 class HasDatabases(SourceTypeCore):
+    """Find Statements that have databases."""
     name = 'databases'
     col = 'has_db'
 
 
 class InHashList(SourceCore):
+    """Find Statements from a list of hashes.
+
+    Parameters
+    ----------
+    stmt_hashes : list or set or tuple
+        A collection of integers, where each integer is a shallow matches key
+        hash of a Statement (frequently simply called "mk_hash" or "hash")
+    """
     def __init__(self, stmt_hashes):
         empty = len(stmt_hashes) == 0
         self.stmt_hashes = tuple(stmt_hashes)
@@ -737,11 +798,14 @@ class InHashList(SourceCore):
 
     def _do_or(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
+            # Two hash queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
             if not self._inverted:
                 hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
                 empty = len(hashes) == 0
                 full = False
             else:
+                # Recall De Morgan's Law.
                 hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
                 full = len(hashes) == 0
                 empty = False
@@ -751,16 +815,21 @@ class InHashList(SourceCore):
             res.empty = empty
             return res
         elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return a full
+            # result trivially. (A or not A is anything)
             return ~self.__class__([])
         return super(InHashList, self)._do_or(other)
 
     def _do_and(self, other):
         if isinstance(other, InHashList) and self._inverted == other._inverted:
+            # Two hash queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
             if not self._inverted:
                 hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
                 empty = len(hashes) == 0
                 full = False
             else:
+                # RDML
                 hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
                 full = len(hashes) == 0
                 empty = False
@@ -770,6 +839,8 @@ class InHashList(SourceCore):
             res.empty = empty
             return res
         elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return an empty
+            # result trivially. (A and not A is nothing)
             return self.__class__([])
         return super(InHashList, self)._do_and(other)
 
@@ -783,11 +854,13 @@ class InHashList(SourceCore):
         inverted = self._inverted ^ invert
         mk_hash, _ = self._hash_count_pair(ro)
         if len(self.stmt_hashes) == 1:
+            # If there is only one hash, use equalities (faster)
             if not inverted:
                 clause = mk_hash == self.stmt_hashes[0]
             else:
                 clause = mk_hash != self.stmt_hashes[0]
         else:
+            # Otherwise use "in"s.
             if not inverted:
                 clause = mk_hash.in_(self.stmt_hashes)
             else:
@@ -796,6 +869,23 @@ class InHashList(SourceCore):
 
 
 class HasAgent(QueryCore):
+    """Get Statements that have a particular agent in a particular role.
+
+    Parameters
+    ----------
+    agent_id : str
+        The ID string naming the agent, for example 'ERK' (FPLX or NAME) or
+        'plx' (TEXT), and so on.
+    namespace : str
+        (optional) By default, this is NAME, indicating the canonical name of
+        the agent. Other options for namespace include FPLX (FamPlex), CHEBI,
+        CHEMBL, HGNC, UP (UniProt), TEXT (for raw text mentions), and many more.
+    role : str or None
+        (optional) None by default. Options are "SUBJECT", "OBJECT", or "OTHER".
+    agent_num : int or None
+        (optional) None by default. The regularized position of the agent in the
+        Statement's list of agents.
+    """
     def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):
         self.agent_id = agent_id
         self.namespace = namespace
@@ -831,6 +921,7 @@ class HasAgent(QueryCore):
                                 'agent_num': self.agent_num}}
 
     def _get_table(self, ro):
+        # The table used depends on the namespace.
         if self.namespace == 'NAME':
             meta = ro.NameMeta
         elif self.namespace == 'TEXT':
@@ -840,18 +931,34 @@ class HasAgent(QueryCore):
         return meta
 
     def _get_hash_query(self, ro, type_queries=None):
+        # Get the base query and filter by regularized ID.
         meta = self._get_table(ro)
         qry = self._base_query(ro).filter(meta.db_id.like(self.regularized_id))
+
+        # If we aren't going to one of the special tables for NAME or TEXT, we
+        # need to filter by namespace.
         if self.namespace not in ['NAME', 'TEXT', None]:
             qry = qry.filter(meta.db_name.like(self.namespace))
+
+        # Convert the role to a number for faster lookup, or else apply
+        # agent_num.
         if self.role is not None:
             role_num = ro_role_map.get_int(self.role)
             qry = qry.filter(meta.role_num == role_num)
         elif self.agent_num is not None:
             qry = qry.filter(meta.agent_num == self.agent_num)
 
-        if self._inverted:
+        # Apply the type searches, and invert if needed..
+        if not self._inverted:
             if type_queries:
+                for tq in type_queries:
+                    qry = tq._apply_filter(self._get_table(ro), qry)
+        else:
+            # Inversion in this case requires using an "except" clause, because
+            # each hash is represented by multiple agents.
+            if type_queries:
+                # which does mean the Application of De Morgan's law is tricky
+                # here, but apply it we must.
                 type_clauses = [tq.invert()._get_clause(self._get_table(ro))
                                 for tq in type_queries]
                 qry = self._base_query(ro).filter(or_(qry.whereclause,
@@ -859,21 +966,36 @@ class HasAgent(QueryCore):
             al = except_(self._base_query(ro), qry).alias('agent_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
-        else:
-            if type_queries:
-                for tq in type_queries:
-                    qry = tq._apply_filter(self._get_table(ro), qry)
 
         return qry
 
 
 class HasAnyType(QueryCore):
+    """Find Statements that are one of a collection of types.
+
+    For example, you can find Statements that are Phosphorylations or
+    Activations, or you could find all subclasses of RegulateActivity.
+
+    NOTE: when used in an Intersection with other queries, type is handled
+    specially, with each sub query having a type constraint added to it.
+
+    Parameters
+    ----------
+    stmt_types : set or list or tuple
+        A collection of Strings, where each string is a class name for a type
+        of Statement. Spelling and capitalization are necessary.
+    include_subclasses : bool
+        (optional) default is False. If True, each Statement type given in the
+        list will be expanded to include all of its sub classes.
+    """
     def __init__(self, stmt_types, include_subclasses=False):
         empty = False
         if len(stmt_types) == 0:
             empty = True
 
         st_set = set(stmt_types)
+
+        # Do the expansion of sub classes, if requested.
         if include_subclasses:
             for stmt_type in stmt_types:
                 stmt_class = get_statement_by_name(stmt_type)
@@ -887,11 +1009,14 @@ class HasAnyType(QueryCore):
 
     def _do_or(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
+            # Two type queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
             if not self._inverted:
                 type_list = set(self.stmt_types) | set(other.stmt_types)
                 empty = len(type_list) == 0
                 full = False
             else:
+                # RDML (Remember De Morgan's Law)
                 type_list = set(self.stmt_types) & set(other.stmt_types)
                 full = len(type_list) == 0
                 empty = False
@@ -901,16 +1026,21 @@ class HasAnyType(QueryCore):
             res.empty = empty
             return res
         elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return a full
+            # result trivially. (A or not A is anything)
             return ~self.__class__([])
         return super(HasAnyType, self)._do_or(other)
 
     def _do_and(self, other):
         if isinstance(other, HasAnyType) and self._inverted == other._inverted:
+            # Two type queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
             if not self._inverted:
                 type_list = set(self.stmt_types) & set(other.stmt_types)
                 empty = len(type_list) == 0
                 full = False
             else:
+                # RDML
                 type_list = set(self.stmt_types) | set(other.stmt_types)
                 full = len(type_list) == 0
                 empty = False
@@ -920,6 +1050,8 @@ class HasAnyType(QueryCore):
             res.empty = empty
             return res
         elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return a empty
+            # result trivially. (A and not A is nothing)
             return self.__class__([])
         return super(HasAnyType, self)._do_and(other)
 
@@ -951,6 +1083,11 @@ class HasAnyType(QueryCore):
         return clause
 
     def _apply_filter(self, meta, query):
+        """Apply the filter to the query.
+
+        Defined generically for application by other classes when included
+        in an Intersection.
+        """
         return query.filter(self._get_clause(meta))
 
     def _get_hash_query(self, ro, type_queries=None):
@@ -960,6 +1097,13 @@ class HasAnyType(QueryCore):
 
 
 class FromMeshId(QueryCore):
+    """Find Statements whose text sources were given a particular MeSH ID.
+
+    Parameters
+    ----------
+    mesh_id : str
+        A canonical MeSH ID, of the "D" variety, e.g. "D000135".
+    """
     def __init__(self, mesh_id):
         if not mesh_id.startswith('D') and not mesh_id[1:].is_digit():
             raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
@@ -986,7 +1130,14 @@ class FromMeshId(QueryCore):
         meta = self._get_table(ro)
         qry = self._base_query(ro).filter(meta.mesh_num == self.mesh_num)
 
-        if self._inverted:
+        if not self._inverted:
+            if type_queries:
+                for tq in type_queries:
+                    qry = tq._apply_filter(self._get_table(ro), qry)
+        else:
+            # For much the same reason as with agent queries, an `except_` is
+            # required to perform inversion. Also likewise, great care is
+            # required to handle the type queries.
             new_base = ro.session.query(
                 ro.SourceMeta.mk_hash.label('mk_hash'),
                 ro.SourceMeta.ev_count.label('ev_count')
@@ -998,14 +1149,19 @@ class FromMeshId(QueryCore):
             al = except_(new_base, qry).alias('mesh_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
-        else:
-            if type_queries:
-                for tq in type_queries:
-                    qry = tq._apply_filter(self._get_table(ro), qry)
         return qry
 
 
 class MergeQueryCore(QueryCore):
+    """This is the parent of the two merge classes: Intersection and Union.
+
+    This class of queries is extremely special, in that the "table" is actually
+    constructed on the fly. This presents various subtle challenges. Moreover
+    an intersection/union is an expensive process, so I go to great lengths to
+    minimize its use, making the __init__ methods quite hefty. It is also in
+    Intersections and Unions that `full` and `empty` states are most likely to
+    occur, and in some wonderfully subtle and hard to find ways.
+    """
     join_word = NotImplemented
     name = NotImplemented
 
@@ -1067,10 +1223,19 @@ class MergeQueryCore(QueryCore):
 
 
 class Intersection(MergeQueryCore):
+    """The Intersection of multiple queries.
+
+    Baring special handling, this is what results from q1 & q2.
+
+    NOTE: the inverse of an Intersection is a Union (De Morgans's Law)
+    """
     name = 'intersection'
     join_word = 'and'
 
     def __init__(self, query_list):
+        # Look for groups of queries that can be merged otherwise, and gather
+        # up the type queries for special handling. Also, check to see if any
+        # queries are empty, in which case the net query is necessarily empty.
         mergeable_query_types = [SourceIntersection, SourceCore]
         mergeable_groups = {C: [] for C in mergeable_query_types}
         query_groups = defaultdict(list)
@@ -1085,11 +1250,15 @@ class Intersection(MergeQueryCore):
             if not query.full:
                 all_full = False
             for C in mergeable_query_types:
+                # If this is any kind of source query, add it to a list to be
+                # merged with its own kind.
                 if isinstance(query, C):
                     mergeable_groups[C].append(query)
                     break
             else:
                 if isinstance(query, HasAnyType):
+                    # Extract the type queries and merge them together as much
+                    # as possible.
                     if not query._inverted:
                         if self.type_query is None:
                             self.type_query = query
@@ -1131,12 +1300,24 @@ class Intersection(MergeQueryCore):
                         query_groups[query.__class__].append(query)
 
         # Look for exact contradictions (any one of which makes this empty).
+        # Also make sure there is no empty-inducing interaction between my
+        # type queries and the Unions.
         if not empty:
             for cls, q_list in query_groups.items():
+                # Simply check for exact contradictions.
                 if len(q_list) > 1:
                     for q1, q2 in combinations(q_list, 2):
                         if q1.is_inverse_of(q2):
                             empty = True
+
+                # Special care is needed to make sure my type queries don't
+                # identically wipe out everything in my Unions. Specifically, if
+                # the union has only type queries, and the intersection of every
+                # one of those type queries with every one of my type queries,
+                # then the result is an empty query, making this query empty.
+                # Furthermore, trying to apply that Union would result in an
+                # empty query and errors and headaches. And late nights
+                # debugging code.
                 if cls == Union and (self.type_query or self.not_type_query):
                     for q in q_list:
                         all_empty = True
@@ -1201,10 +1382,19 @@ class Intersection(MergeQueryCore):
 
 
 class Union(MergeQueryCore):
+    """The union of multiple queries.
+
+    Baring special handling, this is generally the result of q1 | q2.
+
+    NOTE: the inverse of a Union is an Intersection (De Morgans's Law)
+    """
     name = 'union'
     join_word = 'or'
 
     def __init__(self, query_list):
+        # Break queries into groups to check for inversions, and check to see
+        # that not all queries are empty. Special handling is also applied for
+        # hash queries.
         other_queries = set()
         query_groups = defaultdict(list)
         pos_hash_queries = []
@@ -1224,6 +1414,7 @@ class Union(MergeQueryCore):
                 other_queries.add(query)
                 query_groups[query.__class__].append(query)
 
+        # Merge up the hash queries.
         for hash_query_group in [pos_hash_queries, neg_hash_queries]:
             if len(hash_query_group) == 1:
                 other_queries.add(hash_query_group[0])
@@ -1235,8 +1426,13 @@ class Union(MergeQueryCore):
                     full = True
                 other_queries.add(query)
 
+        # Check if any of the resuling queries so far is a logical query of
+        # everything.
         full |= any(q.full for q in other_queries)
 
+        # If it isn't already clear that we cover the space, look through all
+        # the query groups for inverse pairs, any one of which would mean we
+        # contain everything.
         if not full:
             for q_list in query_groups.values():
                 if len(q_list) > 1:
@@ -1248,6 +1444,9 @@ class Union(MergeQueryCore):
 
     def __invert__(self):
         inv_queries = [~q for q in self.queries]
+
+        # If all the queries are SourceCore, this should be passed back to the
+        # specialized SourceIntersection.
         if all(isinstance(q, SourceCore) for q in self.queries):
             return SourceIntersection(inv_queries)
         return Intersection(inv_queries)
@@ -1262,6 +1461,9 @@ class Union(MergeQueryCore):
             for q in self.queries:
                 if q.empty:
                     continue
+
+                # If it is a type query, merge it with the given type queries,
+                # or else pass the type queries along.
                 if isinstance(q, HasAnyType) and self._type_queries:
                     for tq in self._type_queries:
                         q &= tq

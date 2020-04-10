@@ -2,9 +2,6 @@ import sys
 import logging
 from os import path, mkdir, environ
 from shutil import copyfile
-
-from indra_db.util.s3_path import S3Path
-
 if sys.version_info[0] == 3:
     from configparser import ConfigParser
 else:
@@ -139,10 +136,7 @@ def get_s3_dump(force_update=False, include_config=True):
     if not CONFIG or force_update:
         _load(include_config)
 
-    if 's3_dump' not in CONFIG:
-        return None
-
-    return S3Path(CONFIG['s3_dump']['bucket'], CONFIG['s3_dump'].get('prefix'))
+    return CONFIG['s3_dump']
 
 
 _load(True)

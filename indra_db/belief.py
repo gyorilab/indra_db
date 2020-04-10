@@ -7,11 +7,8 @@ corpus to be processed locally in RAM, in very little time.
 
 import pickle
 import logging
-import argparse
-from datetime import datetime
 
-from indra_db import util as dbu
-from indra_db.util.dump_sif import upload_pickle_to_s3, S3_SUBDIR
+from indra_db import get_primary_db
 
 logger = logging.getLogger('db_belief')
 
@@ -24,8 +21,7 @@ class LoadError(Exception):
 
 class MockStatement(object):
     """A class to imitate real INDRA Statements for calculating belief."""
-    def __init__(self, mk_hash, evidence=None, supports=None,
-                 supported_by=None):
+    def __init__(self, mk_hash, evidence=None, supports=None, supported_by=None):
         if isinstance(evidence, list):
             self.evidence = evidence
         elif evidence is None:
@@ -137,32 +133,14 @@ def calculate_belief(stmts):
     return {s.matches_key(): s.belief for s in stmts}
 
 
-def get_belief(db=None):
+def run(db=None):
     if db is None:
-        db = dbu.get_db('primary')
+        db = get_primary_db()
     stmts = load_mock_statements(db)
     return calculate_belief(stmts)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='DB Belief Score Dumper')
-    parser.add_argument('--fname',
-                        nargs='?',
-                        type=str,
-                        default='belief_dict.pkl',
-                        help='Filename of the belief dict output')
-    parser.add_argument('-s3',
-                        action='store_true',
-                        default=False,
-                        help='Upload belief dict to the bigmech s3 bucket '
-                             'instead of saving it locally')
-    args = parser.parse_args()
-    fname = 's3:' + '/'.join([S3_SUBDIR,
-                              datetime.utcnow().strftime('%Y-%m-%d'),
-                              args.fname]) if args.s3 else args.fname
-    belief_dict = get_belief()
-    if fname.startswith('s3:'):
-        upload_pickle_to_s3(obj=belief_dict, key=fname)
-    else:
-        with open(fname, 'wb') as f:
-            pickle.dump(belief_dict, f)
+    belief_dict = run()
+    with open('belief_dict.pkl', 'wb') as f:
+        pickle.dump(belief_dict, f)

@@ -4,7 +4,7 @@ from os import path, remove
 import pandas as pd
 
 import indra_db.tests.util as tu
-from indra_db.util.dump_sif import load_db_content, get_source_counts, \
+from indra_db.util.dump_sif import load_db_content, make_ev_strata, \
     make_dataframe, NS_LIST
 
 # Get db
@@ -73,7 +73,7 @@ class SifDumperTester(unittest.TestCase):
     def test_stratified_evidence(self):
         """Check the stratified evidence dumper"""
 
-        ev_dict = get_source_counts(ro=self.db)
+        ev_dict = make_ev_strata(ro=self.db)
 
         # Check if nested dict
         for k in ev_dict:

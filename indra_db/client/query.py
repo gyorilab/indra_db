@@ -1123,11 +1123,27 @@ class Intersection(MergeQueryCore):
                         query_groups[query.__class__].append(query)
 
         # Look for exact contradictions (any one of which makes this empty).
-        for q_list in query_groups.values():
-            if len(q_list) > 1:
-                for q1, q2 in combinations(q_list, 2):
-                    if q1.is_inverse_of(q2):
-                        empty = True
+        if not empty:
+            for cls, q_list in query_groups.items():
+                if len(q_list) > 1:
+                    for q1, q2 in combinations(q_list, 2):
+                        if q1.is_inverse_of(q2):
+                            empty = True
+                if cls == Union and (self.type_query or self.not_type_query):
+                    for q in q_list:
+                        all_empty = True
+                        for sq in q.queries:
+                            if not isinstance(sq, HasAnyType):
+                                all_empty = False
+                                break
+                            for tq in [self.type_query, self.not_type_query]:
+                                if tq is None:
+                                    continue
+                                if not (sq & tq).empty:
+                                    all_empty = False
+                            if not all_empty:
+                                break
+                        empty = all_empty
 
         # Check to see if the types overlap
         if self.type_query and self.not_type_query:

@@ -229,7 +229,8 @@ def get_schema(Base):
             '  AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
             '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash\n'
             '  AND pa_statements.type = type_map.type\n'
-            '  AND pa_agents.role = role_map.role'
+            '  AND pa_agents.role = role_map.role\n'
+            '  AND LENGTH(pa_agents.db_id) < 50'
         )
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),

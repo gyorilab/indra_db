@@ -23,9 +23,8 @@ class XddManager:
     def load_groups(self, db):
         logger.info("Finding groups that have not been handled yet.")
         s3 = boto3.client('s3')
-        groups = _list_s3(s3, self.bucket, delimiter='/')
-        previous_groups = \
-            {s for s, in db.XddUpdates.select_all(db.XddUpdates.day_str)}
+        groups = _list_s3_prefixes(s3, self.bucket)
+        previous_groups = {s for s, in db.select_all(db.XddUpdates.day_str)}
 
         self.groups = [group for group in groups
                        if group.key not in previous_groups]
@@ -110,10 +109,15 @@ class XddManager:
         self.dump_statements(db)
 
 
-def _list_s3(s3, s3_path, **kwargs):
-    kwargs.update(s3_path.kw())
-    list_res = s3.list_objects_v2(**kwargs)
+def _list_s3(s3, s3_path):
+    list_res = s3.list_objects_v2(**s3_path.kw())
     return [s3_path.get_element_path(e['Key']) for e in list_res['Contents']]
+
+
+def _list_s3_prefixes(s3, s3_path):
+    list_res = s3.list_objects_v2(Delimiter='/', **s3_path.kw())
+    return [s3_path.get_element_path(e['Prefix'])
+            for e in list_res['CommonPrefixes']]
 
 
 def _get_file_pairs_from_group(s3, group):

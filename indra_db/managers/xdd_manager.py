@@ -23,11 +23,11 @@ class XddManager:
     def load_groups(self, db):
         logger.info("Finding groups that have not been handled yet.")
         s3 = boto3.client('s3')
-        groups = _list_s3_prefixes(s3, self.bucket)
+        groups = self.bucket.list_prefixes(s3)
         previous_groups = {s for s, in db.select_all(db.XddUpdates.day_str)}
 
         self.groups = [group for group in groups
-                       if group.key not in previous_groups]
+                       if group.key[:-1] not in previous_groups]
         return
 
     def load_statements(self, db):
@@ -109,19 +109,8 @@ class XddManager:
         self.dump_statements(db)
 
 
-def _list_s3(s3, s3_path):
-    list_res = s3.list_objects_v2(**s3_path.kw())
-    return [s3_path.get_element_path(e['Key']) for e in list_res['Contents']]
-
-
-def _list_s3_prefixes(s3, s3_path):
-    list_res = s3.list_objects_v2(Delimiter='/', **s3_path.kw())
-    return [s3_path.get_element_path(e['Prefix'])
-            for e in list_res['CommonPrefixes']]
-
-
-def _get_file_pairs_from_group(s3, group):
-    files = _list_s3(s3, group)
+def _get_file_pairs_from_group(s3, group: S3Path):
+    files = group.list_objects(s3)
     file_pairs = defaultdict(dict)
     for file_path in files:
         run_id, file_suffix = file_path.key.split('_')
@@ -135,7 +124,15 @@ def _get_file_pairs_from_group(s3, group):
             logger.exception(e)
             if run_id in file_pairs:
                 del file_pairs[run_id]
-    return {k: (v['bib'], v['stmts']) for k, v in file_pairs.items()}
+
+    ret = {}
+    for run_id, files in file_pairs.items():
+        if len(files) != 2 or 'bib' not in files or 'stmts' not in files:
+            logger.warning(f"Run {run_id} does not have both 'bib' and "
+                           f"'stmts' in files: {files.keys()}. Skipping.")
+            continue
+        ret[run_id] = (files['bib'], files['stmts'])
+    return ret
 
 
 def _get_trids_from_dois(db, dois):

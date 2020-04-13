@@ -149,12 +149,19 @@ class DatabaseStatementData(object):
     reading_id : int or None
         The id number of the entry in the `readings` table of the database.
         None if no such id is available.
+    indra_version : str or None
+        Override the default indra version, which is the version of indra
+        currently installed.
     """
-    def __init__(self, statement, reading_id=None, db_info_id=None):
+    def __init__(self, statement, reading_id=None, db_info_id=None,
+                 indra_version=None):
         self.reading_id = reading_id
         self.db_info_id = db_info_id
         self.statement = statement
-        self.indra_version = get_indra_version()
+        if indra_version is None:
+            self.indra_version = get_indra_version()
+        else:
+            self.indra_version = indra_version
         self.__text_patt = re.compile('[\W_]+')
         return
 

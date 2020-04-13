@@ -18,11 +18,9 @@ class XddManager:
 
     def __init__(self):
         self.groups = None
+        self.statements = None
 
-    def get_groups(self, db):
-        if self.groups is not None:
-            return self.groups
-
+    def load_groups(self, db):
         logger.info("Finding groups that have not been handled yet.")
         s3 = boto3.client('s3')
         groups = _list_s3(s3, self.bucket, delimiter='/')
@@ -31,12 +29,11 @@ class XddManager:
 
         self.groups = [group for group in groups
                        if group.key not in previous_groups]
-        return self.groups
+        return
 
-    def get_statements(self, db):
+    def load_statements(self, db):
         s3 = boto3.client('s3')
-
-        run_stmts = defaultdict(lambda: defaultdict(list))
+        self.statements = defaultdict(lambda: defaultdict(list))
         for group in self.groups:
             file_pair_dict = _get_file_pairs_from_group(s3, group)
             for run_id, (bibs, stmts) in file_pair_dict.items():
@@ -56,9 +53,61 @@ class XddManager:
                     ev['text_refs']['XDD_RUN_ID'] = run_id
                     ev['text_refs']['XDD_GROUP_ID'] = group.key
 
-                    run_stmts[trid][ev['text_refs']['READER']].append(sj)
+                    self.statements[trid][ev['text_refs']['READER']].append(sj)
+        return
 
-        return run_stmts
+    def dump_statements(self, db):
+        tc_rows = {(trid, 'xdd', 'xdd', 'fulltext')
+                   for trid in self.statements.keys()}
+        tc_cols = ('text_ref_id', 'source', 'format', 'text_type')
+        db.copy_lazy('text_content', tc_rows, tc_cols, commit=False)
+
+        # Look up tcids for newly entered content.
+        tcids = db.select_all(
+            [db.TextContent.text_ref_id, db.TextContent.id],
+            db.TextContent.text_ref_id.in_(self.statements.keys()),
+            db.TextContent.source == 'xdd'
+        )
+        tcid_lookup = {trid: tcid for trid, tcid in tcids}
+
+        # Compile reading and statements into rows.
+        r_rows = set()
+        r_cols = ('id', 'text_content_id', 'reader', 'reader_version',
+                  'format', 'batch_id')
+        s_rows = set()
+        for trid, trid_set in self.statements.items():
+            for reader, stmt_list in trid_set.items():
+                tcid = tcid_lookup[trid]
+                reader_version = self.reader_versions[reader.upper()]
+                reading_id = generate_reading_id(tcid, reader, reader_version)
+                r_rows.add((reading_id, tcid, reader.upper(), reader_version,
+                            'xdd', db.make_copy_batch_id()))
+                for sj in stmt_list:
+                    stmt = Statement._from_json(sj)
+                    sd = DatabaseStatementData(
+                        stmt,
+                        reading_id,
+                        indra_version=self.indra_version
+                    )
+                    s_rows.add(sd.make_tuple(db.make_copy_batch_id()))
+
+        print("Dumping reading.")
+        db.copy_lazy('reading', r_rows, r_cols, commit=False)
+
+        print("Dumping raw statements.")
+        db.copy_lazy('raw_statements', s_rows,
+                     DatabaseStatementData.get_cols())
+
+        db.insert(db.XddUpdates, [{'reader_versions': self.reader_versions,
+                                   'indra_version': self.indra_version,
+                                   'day_str': group.key}
+                                  for group in self.groups])
+        return
+
+    def run(self, db):
+        self.load_groups(db)
+        self.load_statements(db)
+        self.dump_statements(db)
 
 
 def _list_s3(s3, s3_path, **kwargs):
@@ -94,50 +143,8 @@ def _get_trids_from_dois(db, dois):
 def main():
     db = get_db('primary')
 
-    print("Processing statements...")
-    run_stmts = defaultdict(lambda: defaultdict(list))
-    for run_id, file_pair in file_pairs.items():
-        print(f"Processing {run_id}")
-        try:
-            bib_obj = s3.get_object(**file_pair['bib'].kw())
-        except Exception as e:
-            print(f'ERROR on bib for {run_id}: {e}')
-            continue
-        bibs = json.loads(bib_obj['Body'].read())
-
-    print("Dumping text content.")
-    tc_rows = {(trid, 'xdd', 'xdd', 'fulltext') for trid in run_stmts.keys()}
-    tc_cols = ('text_ref_id', 'source', 'format', 'text_type')
-    db.copy_lazy('text_content', tc_rows, tc_cols, commit=False)
-
-    print("Looking up new tcids.")
-    tcids = db.select_all([db.TextContent.text_ref_id, db.TextContent.id],
-                          db.TextContent.text_ref_id.in_(run_stmts.keys()),
-                          db.TextContent.source == 'xdd')
-    tcid_lookup = {trid: tcid for trid, tcid in tcids}
-
-    print("Compiling reading and statement rows.")
-    r_rows = set()
-    r_cols = ('id', 'text_content_id', 'reader', 'reader_version', 'format',
-              'batch_id')
-    s_rows = set()
-    for trid, trid_set in run_stmts.items():
-        for reader, stmt_list in trid_set.items():
-            tcid = tcid_lookup[trid]
-            reader_version = XDD_READER_VERSIONS[reader.upper()]
-            reading_id = generate_reading_id(tcid, reader, reader_version)
-            r_rows.add((reading_id, tcid, reader.upper(), reader_version,
-                        'xdd', db.make_copy_batch_id()))
-            for sj in stmt_list:
-                stmt = Statement._from_json(sj)
-                sd = DatabaseStatementData(stmt, reading_id)
-                s_rows.add(sd.make_tuple(db.make_copy_batch_id()))
-
-    print("Dumping reading.")
-    db.copy_lazy('reading', r_rows, r_cols, commit=False)
-
-    print("Dumping raw statements.")
-    db.copy_lazy('raw_statements', s_rows, DatabaseStatementData.get_cols())
+    m = XddManager()
+    m.run(db)
 
 
 if __name__ == '__main__':

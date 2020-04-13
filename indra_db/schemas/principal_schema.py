@@ -5,7 +5,7 @@ import logging
 from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
      Boolean, DateTime, func, BigInteger, or_, tuple_
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import BYTEA, INET
+from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB
 
 from indra_db.schemas.mixins import IndraDBTable
 from indra_db.schemas.indexes import StringIndex, BtreeIndex
@@ -268,6 +268,16 @@ def get_schema(Base):
         earliest_datetime = Column(DateTime)
         latest_datetime = Column(DateTime, nullable=False)
     table_dict[ReadingUpdates.__tablename__] = ReadingUpdates
+
+    class XddUpdates(Base, IndraDBTable):
+        __tablename__ = 'xdd_updates'
+        _always_disp = ['day_str']
+        id = Column(Integer, primary_key=True)
+        reader_versions = Column(JSONB)
+        indra_version = Column(String)
+        day_str = Column(String, nullable=False, unique=True)
+        processed_date = Column(DateTime, default=func.now())
+    table_dict[XddUpdates.__tablename__] = XddUpdates
 
     class DBInfo(Base, IndraDBTable):
         __tablename__ = 'db_info'

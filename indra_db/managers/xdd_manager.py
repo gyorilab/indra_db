@@ -1,10 +1,13 @@
 import json
 import boto3
+import logging
 from collections import defaultdict
 
 from indra.statements import Statement
 from indra_db.reading.read_db import DatabaseStatementData, generate_reading_id
 from indra_db.util import S3Path, get_db
+
+logger = logging.getLogger(__name__)
 
 
 class XddManager:
@@ -15,37 +18,81 @@ class XddManager:
 
     def __init__(self):
         self.groups = None
-        pass
 
     def get_groups(self, db):
         if self.groups is not None:
             return self.groups
 
+        logger.info("Finding groups that have not been handled yet.")
         s3 = boto3.client('s3')
-        groups_res = s3.list_objects_v2(Delimiter='/', **self.bucket.kw())
-        groups = [self.bucket.get_element_path(e['Key'])
-                  for e in groups_res['Contents']]
+        groups = _list_s3(s3, self.bucket, delimiter='/')
         previous_groups = \
             {s for s, in db.XddUpdates.select_all(db.XddUpdates.day_str)}
 
-        self.groups = [group_key for group_key in groups
-                       if group_key.key not in previous_groups]
+        self.groups = [group for group in groups
+                       if group.key not in previous_groups]
         return self.groups
+
+    def get_statements(self, db):
+        s3 = boto3.client('s3')
+
+        run_stmts = defaultdict(lambda: defaultdict(list))
+        for group in self.groups:
+            file_pair_dict = _get_file_pairs_from_group(s3, group)
+            for run_id, (bibs, stmts) in file_pair_dict.items():
+                doi_lookup = {bib['_xddid']: bib['identifier'][0]['id']
+                              for bib in bibs}
+                dois = {doi for doi in doi_lookup.values()}
+                trids = _get_trids_from_dois(db, dois)
+
+                for sj in stmts:
+                    ev = sj['evidence'][0]
+                    xddid = ev['text_refs']['CONTENT_ID']
+                    ev.pop('pmid', None)
+                    ev['text_refs']['DOI'] = doi_lookup[xddid]
+
+                    trid = trids[doi_lookup[xddid]]
+                    ev['text_refs']['TRID'] = trid
+                    ev['text_refs']['XDD_RUN_ID'] = run_id
+                    ev['text_refs']['XDD_GROUP_ID'] = group.key
+
+                    run_stmts[trid][ev['text_refs']['READER']].append(sj)
+
+        return run_stmts
+
+
+def _list_s3(s3, s3_path, **kwargs):
+    kwargs.update(s3_path.kw())
+    list_res = s3.list_objects_v2(**kwargs)
+    return [s3_path.get_element_path(e['Key']) for e in list_res['Contents']]
+
+
+def _get_file_pairs_from_group(s3, group):
+    files = _list_s3(s3, group)
+    file_pairs = defaultdict(dict)
+    for file_path in files:
+        run_id, file_suffix = file_path.key.split('_')
+        file_type = file_suffix.split('.')[0]
+        try:
+            file_obj = s3.get_object(**file_path.kw())
+            file_json = json.loads(file_obj['Body'].read())
+            file_pairs[run_id][file_type] = file_json
+        except Exception as e:
+            logger.error(f"Failed to load {file_path}")
+            logger.exception(e)
+            if run_id in file_pairs:
+                del file_pairs[run_id]
+    return {k: (v['bib'], v['stmts']) for k, v in file_pairs.items()}
+
+
+def _get_trids_from_dois(db, dois):
+    trid_doi_res = db.select_all([db.TextRef.id, db.TextRef.doi],
+                                 db.TextRef.doi_in(dois))
+    return {doi.lower(): trid for trid, doi in trid_doi_res}
 
 
 def main():
     db = get_db('primary')
-
-    print("Looking for good xdd files.")
-    print(f"Found {len(good_files)} good files.")
-
-    print("Pairing up xdd files...")
-    file_pairs = defaultdict(dict)
-    for file in good_files:
-        run_id, file_suffix = file.key.split('_')
-        file_type = file_suffix.split('.')[0]
-        file_pairs[run_id][file_type] = file
-    print(f"Found {len(file_pairs)} pairs.")
 
     print("Processing statements...")
     run_stmts = defaultdict(lambda: defaultdict(list))
@@ -57,32 +104,6 @@ def main():
             print(f'ERROR on bib for {run_id}: {e}')
             continue
         bibs = json.loads(bib_obj['Body'].read())
-        doi_lookup = {bib['_xddid']: bib['identifier'][0]['id']
-                      for bib in bibs}
-        dois = {doi for doi in doi_lookup.values()}
-
-        print(f"Getting trids from database for {run_id}")
-        trids = {doi.lower(): trid
-                 for trid, doi in db.select_all([db.TextRef.id, db.TextRef.doi],
-                                                db.TextRef.doi_in(dois))}
-
-        try:
-            stmts_obj = s3.get_object(**file_pair['stmts'].kw())
-        except Exception as e:
-            print(f'ERROR on stmt for {run_id}: {e}')
-            continue
-        stmts = json.loads(stmts_obj['Body'].read())
-        for sj in stmts:
-            ev = sj['evidence'][0]
-            xddid = ev['text_refs']['CONTENT_ID']
-            ev.pop('pmid', None)
-            ev['text_refs']['DOI'] = doi_lookup[xddid]
-
-            trid = trids[doi_lookup[xddid]]
-            ev['text_refs']['TRID'] = trid
-            ev['text_refs']['XDD_RUN_ID'] = run_id
-
-            run_stmts[trid][ev['text_refs']['READER']].append(sj)
 
     print("Dumping text content.")
     tc_rows = {(trid, 'xdd', 'xdd', 'fulltext') for trid in run_stmts.keys()}

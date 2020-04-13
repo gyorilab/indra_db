@@ -7,20 +7,36 @@ from indra_db.reading.read_db import DatabaseStatementData, generate_reading_id
 from indra_db.util import S3Path, get_db
 
 
-BUCKET = S3Path(bucket='hms-uw-collaboration')
-XDD_READER_VERSIONS = {'REACH': '1.3.3-61059a-biores-e9ee36',
+class XddManager:
+    bucket = S3Path(bucket='hms-uw-collaboration')
+    reader_versions = {'REACH': '1.3.3-61059a-biores-e9ee36',
                        'SPARSER': 'February2020-linux'}
-XDD_INDRA_VERSION = '1.16.0-c439fdbc936f4eac00cafd559927d7ee06c492e8'
+    indra_version = '1.16.0-c439fdbc936f4eac00cafd559927d7ee06c492e8'
+
+    def __init__(self):
+        self.groups = None
+        pass
+
+    def get_groups(self, db):
+        if self.groups is not None:
+            return self.groups
+
+        s3 = boto3.client('s3')
+        groups_res = s3.list_objects_v2(Delimiter='/', **self.bucket.kw())
+        groups = [self.bucket.get_element_path(e['Key'])
+                  for e in groups_res['Contents']]
+        previous_groups = \
+            {s for s, in db.XddUpdates.select_all(db.XddUpdates.day_str)}
+
+        self.groups = [group_key for group_key in groups
+                       if group_key.key not in previous_groups]
+        return self.groups
 
 
 def main():
     db = get_db('primary')
 
     print("Looking for good xdd files.")
-    s3 = boto3.client('s3')
-    list_res = s3.list_objects_v2(**BUCKET.kw())
-    files = [BUCKET.get_element_path(e['Key']) for e in list_res['Contents']]
-    good_files = [file for file in files if not file.key.startswith('852')]
     print(f"Found {len(good_files)} good files.")
 
     print("Pairing up xdd files...")

@@ -103,12 +103,13 @@ class XddManager:
 
         print("Dumping raw statements.")
         db.copy_lazy('raw_statements', s_rows,
-                     DatabaseStatementData.get_cols())
+                     DatabaseStatementData.get_cols(), commit=False)
 
-        db.insert(db.XddUpdates, [{'reader_versions': self.reader_versions,
-                                   'indra_version': self.indra_version,
-                                   'day_str': group.key}
-                                  for group in self.groups])
+        update_rows = [(json.dumps(self.reader_versions), self.indra_version,
+                        group.key[:-1])
+                       for group in self.groups]
+        db.copy('xdd_updates', update_rows,
+                ('reader_versions', 'indra_version', 'day_str'))
         return
 
     def run(self, db):

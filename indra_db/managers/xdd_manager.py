@@ -31,11 +31,14 @@ class XddManager:
         return
 
     def load_statements(self, db):
+        logger.info("Loading statements.")
         s3 = boto3.client('s3')
         self.statements = defaultdict(lambda: defaultdict(list))
         for group in self.groups:
+            logger.info(f"Processing {group.key}")
             file_pair_dict = _get_file_pairs_from_group(s3, group)
             for run_id, (bibs, stmts) in file_pair_dict.items():
+                logger.info(f"Loading {run_id}")
                 doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
                               for bib in bibs}
                 dois = {doi for doi in doi_lookup.values()}
@@ -56,6 +59,7 @@ class XddManager:
         return
 
     def dump_statements(self, db):
+        logger.info("Dumping statements.")
         tc_rows = {(trid, 'xdd', 'xdd', 'fulltext')
                    for trid in self.statements.keys()}
         tc_cols = ('text_ref_id', 'source', 'format', 'text_type')
@@ -142,6 +146,7 @@ def _get_trids_from_dois(db, dois):
     # Add new dois (if any)
     new_dois = set(dois) - {tr.doi.upper() for tr in tr_list}
     if new_dois:
+        logger.info("Adding new text refs.")
         new_trs = [db.TextRef.new(doi=doi) for doi in new_dois]
         db.session.add_all(new_trs)
         db.session.commit()

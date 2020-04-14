@@ -40,7 +40,7 @@ class XddManager:
             for run_id, (bibs, stmts) in file_pair_dict.items():
                 logger.info(f"Loading {run_id}")
                 doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
-                              for bib in bibs}
+                              for bib in bibs if 'identifier' in bib}
                 dois = {doi for doi in doi_lookup.values()}
                 trids = _get_trids_from_dois(db, dois)
 
@@ -48,6 +48,10 @@ class XddManager:
                     ev = sj['evidence'][0]
                     xddid = ev['text_refs']['CONTENT_ID']
                     ev.pop('pmid', None)
+                    if xddid not in doi_lookup:
+                        logger.warning("Skipping statement because bib "
+                                       "lacked a DOI.")
+                        continue
                     ev['text_refs']['DOI'] = doi_lookup[xddid]
 
                     trid = trids[doi_lookup[xddid]]

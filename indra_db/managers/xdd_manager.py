@@ -67,7 +67,7 @@ class XddManager:
         tc_rows = {(trid, 'xdd', 'xdd', 'fulltext')
                    for trid in self.statements.keys()}
         tc_cols = ('text_ref_id', 'source', 'format', 'text_type')
-        db.copy_lazy('text_content', tc_rows, tc_cols, commit=False)
+        db.copy_lazy('text_content', tc_rows, tc_cols)
 
         # Look up tcids for newly entered content.
         tcids = db.select_all(

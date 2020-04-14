@@ -60,6 +60,26 @@ def get_schema(Base):
             UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
         )
 
+        def __repr__(self):
+            terms = [f'id={self.id}']
+            for col in ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']:
+                if getattr(self, col) is not None:
+                    terms.append(f'{col}={getattr(self, col)}')
+                if len(terms) > 2:
+                    break
+            return f'{self.__class__.__name__}({", ".join(terms)})'
+
+        @classmethod
+        def new(cls, pmid=None, pmcid=None, doi=None, pii=None, url=None,
+                manuscript_id=None):
+            pmid, pmid_num = cls.process_pmid(pmid)
+            pmcid, pmcid_num, pmcid_version = cls.process_pmcid(pmcid)
+            doi, doi_ns, doi_id = cls.process_doi(doi)
+            return cls(pmid=pmid, pmid_num=pmid_num, pmcid=pmcid,
+                       pmcid_num=pmcid_num, pmcid_version=pmcid_version,
+                       doi=doi, doi_ns=doi_ns, doi_id=doi_id, pii=pii, url=url,
+                       manuscript_id=manuscript_id)
+
         @staticmethod
         def process_pmid(pmid):
             if not pmid:

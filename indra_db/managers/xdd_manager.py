@@ -36,7 +36,7 @@ class XddManager:
         for group in self.groups:
             file_pair_dict = _get_file_pairs_from_group(s3, group)
             for run_id, (bibs, stmts) in file_pair_dict.items():
-                doi_lookup = {bib['_xddid']: bib['identifier'][0]['id']
+                doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
                               for bib in bibs}
                 dois = {doi for doi in doi_lookup.values()}
                 trids = _get_trids_from_dois(db, dois)
@@ -136,9 +136,19 @@ def _get_file_pairs_from_group(s3, group: S3Path):
 
 
 def _get_trids_from_dois(db, dois):
-    trid_doi_res = db.select_all([db.TextRef.id, db.TextRef.doi],
-                                 db.TextRef.doi_in(dois))
-    return {doi.lower(): trid for trid, doi in trid_doi_res}
+    # Get current relevant text refs (if any)
+    tr_list = db.select_all(db.TextRef, db.TextRef.doi_in(dois))
+
+    # Add new dois (if any)
+    new_dois = set(dois) - {tr.doi.upper() for tr in tr_list}
+    if new_dois:
+        new_trs = [db.TextRef.new(doi=doi) for doi in new_dois]
+        db.session.add_all(new_trs)
+        db.session.commit()
+        tr_list += new_trs
+
+    # Make the full mapping table.
+    return {tr.doi.upper(): tr.id for tr in tr_list}
 
 
 def main():

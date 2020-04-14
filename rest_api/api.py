@@ -1,11 +1,12 @@
 import sys
 import json
 import logging
-from os import path
+from os import path, environ
 from functools import wraps
 from datetime import datetime
 
-from flask import Flask, request, abort, Response, redirect, url_for, jsonify
+from flask import Flask, request, abort, Response, redirect, jsonify
+from flask import url_for as base_url_for
 from flask_compress import Compress
 from flask_cors import CORS
 from flask_jwt_extended import get_jwt_identity, jwt_optional
@@ -15,7 +16,7 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
     stmts_from_json, HtmlAssembler, SOURCE_COLORS, _format_evidence_text, \
     _format_stmt_text
 from indra.assemblers.english import EnglishAssembler
-from indra.statements import make_statement_camel
+from indra.statements import make_statement_camel, get_all_descendants
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -45,10 +46,19 @@ logger.error("ERROR working.")
 
 TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
+DEPLOYMENT = environ.get('INDRA_DB_API_DEPLOYMENT')
 
 # Instantiate a jinja2 env.
 env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
                                        indra_loader]))
+
+
+def url_for(*args, **kwargs):
+    res = base_url_for(*args, **kwargs)
+    if DEPLOYMENT is not None:
+        pass
+    return res
+
 
 # Here we can add functions to the jinja2 env.
 env.globals.update(url_for=url_for)
@@ -209,25 +219,32 @@ def _query_wrapper(f):
 # ==========================
 
 
-@app.route('/', methods=['GET'])
+def dep_route(url, **kwargs):
+    if DEPLOYMENT is not None:
+        url = f'/{DEPLOYMENT}{url}'
+    flask_dec = app.route(url, **kwargs)
+    return flask_dec
+
+
+@dep_route('/', methods=['GET'])
 def iamalive():
-    return redirect('statements', code=302)
+    return redirect(url_for('search'), code=302)
 
 
-@app.route('/ground', methods=['GET'])
+@dep_route('/ground', methods=['GET'])
 def ground():
     ag = request.args['agent']
     res_json = gilda_ground(ag)
     return jsonify(res_json)
 
 
-@app.route('/search', methods=['GET'])
+@dep_route('/search', methods=['GET'])
 def search():
     return render_my_template('search.html', 'Search',
                               source_colors=SOURCE_COLORS)
 
 
-@app.route('/data-vis/<path:file_path>')
+@dep_route('/data-vis/<path:file_path>')
 def serve_data_vis(file_path):
     full_path = path.join(HERE, 'data-vis/dist', file_path)
     logger.info('data-vis: ' + full_path)
@@ -246,12 +263,12 @@ def serve_data_vis(file_path):
                         content_type=ct)
 
 
-@app.route('/monitor')
+@dep_route('/monitor')
 def get_data_explorer():
     return render_my_template('daily_data.html', 'Monitor')
 
 
-@app.route('/monitor/data/runtime')
+@dep_route('/monitor/data/runtime')
 def serve_runtime():
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
@@ -261,7 +278,7 @@ def serve_runtime():
     return jsonify(json.loads(res['Body'].read()))
 
 
-@app.route('/monitor/data/liststages')
+@dep_route('/monitor/data/liststages')
 def list_stages():
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
@@ -277,7 +294,7 @@ def list_stages():
     return jsonify(ret)
 
 
-@app.route('/monitor/data/<stage>')
+@dep_route('/monitor/data/<stage>')
 def serve_stages(stage):
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
@@ -288,7 +305,7 @@ def serve_stages(stage):
     return jsonify(json.loads(res['Body'].read()))
 
 
-@app.route('/statements', methods=['GET'])
+@dep_route('/statements', methods=['GET'])
 @jwt_optional
 def get_statements_query_format():
     # Create a template object from the template file, load once
@@ -297,7 +314,7 @@ def get_statements_query_format():
                               endpoint=request.url_root)
 
 
-@app.route('/statements/from_agents', methods=['GET'])
+@dep_route('/statements/from_agents', methods=['GET'])
 @_query_wrapper
 def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
                    censured_sources):
@@ -339,7 +356,7 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
                                 censured_sources)
 
 
-@app.route('/statements/from_hashes', methods=['POST'])
+@dep_route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
 def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first,
                              censured_sources):
@@ -361,7 +378,7 @@ def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first,
     return result
 
 
-@app.route('/statements/from_hash/<hash_val>', methods=['GET'])
+@dep_route('/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
 def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                           censured_sources, hash_val):
@@ -373,7 +390,7 @@ def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
                                            censured_sources=censured_sources)
 
 
-@app.route('/statements/from_papers', methods=['POST'])
+@dep_route('/statements/from_papers', methods=['POST'])
 @_query_wrapper
 def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first,
                          censured_sources):
@@ -407,12 +424,12 @@ def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first,
     return result
 
 
-@app.route('/curation', methods=['GET'])
+@dep_route('/curation', methods=['GET'])
 def describe_curation():
     return redirect('/statements', code=302)
 
 
-@app.route('/curation/submit/<hash_val>', methods=['POST'])
+@dep_route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_optional
 def submit_curation_endpoint(hash_val, **kwargs):
     user, roles = resolve_auth(dict(request.args))
@@ -450,14 +467,14 @@ def submit_curation_endpoint(hash_val, **kwargs):
     return jsonify(res)
 
 
-@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
+@dep_route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
 def list_curations(stmt_hash, src_hash):
     curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
     curation_json = [cur.to_json() for cur in curations]
     return jsonify(curation_json)
 
 
-@app.route('/metadata/<level>/from_agents', methods=['GET'])
+@dep_route('/metadata/<level>/from_agents', methods=['GET'])
 @jwt_optional
 def get_metadata(level):
     start = datetime.utcnow()

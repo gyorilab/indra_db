@@ -10,7 +10,7 @@ import logging
 from collections import OrderedDict, Iterable, defaultdict
 
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-    except_
+    except_, func, Integer
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
@@ -242,6 +242,65 @@ class QueryCore(object):
         evidence_totals = {h: cnt for h, cnt in result}
         return QueryResult(set(evidence_totals.keys()), limit, offset,
                            evidence_totals, self.to_json())
+
+    def get_interactions(self, ro, limit=None, offset=None, best_first=True,
+                         detail_level='relations'):
+        """Get the simple interaction information from the Statements metadata.
+
+        There are three levels of detail:
+            hashes -> Each entry in the result corresponds to a single
+                    preassembled Statement, distinguished by its hash.
+            relations -> Each entry in the result corresponds to a relation,
+                    meaning an interaction type, and the names of the agents
+                    involved.
+            agents -> Each entry is simply a pair (or more) of Agents involved
+                    in an interaction.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+        detail_level : 'hashes', 'relations', or 'agents'
+            Select the granularity of the statements. See above description for
+            more details.
+        """
+        if self.empty:
+            return QueryResult({}, limit, offset, {}, self.to_json())
+
+        mk_hashes_q = self.get_hash_query(ro)
+        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
+                                         best_first)
+
+        mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
+        q = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
+                              ro.NameMeta.ag_num, ro.NameMeta.type_num,
+                              ro.SourceMeta.src_json)
+             .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
+                     ro.SourceMeta.mk_hash == mk_hashes_sq.c.mk_hash))
+        if detail_level == 'relations':
+            sq = q.subquery('names')
+            q = ro.session.query(
+                func.jsonb_object(
+                    func.array_agg(sq.c.ag_num.cast(Integer)),
+                    func.array_agg(sq.c.db_id)
+                ),
+                sq.c.type_num
+            ).group_by(
+                sq.c.mk_hash,
+                sq.c.type_num
+            )
+            print(q)
+        names = q.all()
+        return
 
     def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
                       best_first=True):

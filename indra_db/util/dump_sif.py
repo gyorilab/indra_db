@@ -10,6 +10,7 @@ from itertools import permutations
 from collections import OrderedDict
 
 from indra.util.aws import get_s3_client
+from indra_db.schemas.readonly_schema import ro_type_map
 
 try:
     import pandas as pd
@@ -85,10 +86,11 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
             logger.info("Querying for {ns}".format(ns=ns))
             res = ro.select_all([ro.PaMeta.mk_hash, ro.PaMeta.db_name,
                                  ro.PaMeta.db_id, ro.PaMeta.ag_num,
-                                 ro.PaMeta.ev_count, ro.PaMeta.type],
+                                 ro.PaMeta.ev_count, ro.PaMeta.type_num],
                                 ro.PaMeta.db_name.like(ns))
             results.extend(res)
-        results = set(results)
+        results = {(h, dbn, dbi, ag_num, ev_cnt, ro_type_map.get_str(tn))
+                   for h, dbn, dbi, ag_num, ev_cnt, tn in results}
         if pkl_filename:
             if isinstance(pkl_filename, S3Path):
                 upload_pickle_to_s3(results, pkl_filename)

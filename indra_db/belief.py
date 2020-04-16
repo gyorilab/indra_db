@@ -89,7 +89,7 @@ def populate_support(stmts, links):
     return
 
 
-def load_mock_statements(db):
+def load_mock_statements(db, hashes=None):
     """Generate a list of mock statements from the pa statement table."""
     # Initialize a dictionary of evidence keyed by hash.
     stmts_dict = {}
@@ -104,25 +104,43 @@ def load_mock_statements(db):
         stmts_dict[mk_hash].evidence.append(mev)
 
     # Handle the evidence from reading.
-    res_rdg = db.select_all([db.Reading.reader,
+    q_rdg = db.filter_query([db.Reading.reader,
                              db.RawUniqueLinks.pa_stmt_mk_hash,
                              db.RawUniqueLinks.raw_stmt_id],
                             *db.link(db.Reading, db.RawUniqueLinks))
+    if hashes is not None:
+        q_rdg = q_rdg.filter(db.RawUniqueLinks.pa_stmt_mk_hash.in_(hashes))
+    res_rdg = q_rdg.all()
+
     for src_api, mk_hash, sid in res_rdg:
         add_evidence(src_api, mk_hash, sid)
 
     # Handle the evidence from knowledge bases.
-    res_dbs = db.select_all([db.DBInfo.source_api,
+    q_dbs = db.filter_query([db.DBInfo.source_api,
                              db.DBInfo.db_name,
                              db.RawUniqueLinks.pa_stmt_mk_hash,
                              db.RawUniqueLinks.raw_stmt_id],
                             *db.link(db.DBInfo, db.RawUniqueLinks))
+    if hashes is not None:
+        q_dbs = q_dbs.filter(db.RawUniqueLinks.pa_stmt_mk_hash.in_(hashes))
+    res_dbs = q_dbs.all()
+
     for src_api, db_name, mk_hash, sid in res_dbs:
         add_evidence(src_api, mk_hash, sid, db_name)
 
     # Get the support links and populate
-    sup_links = db.select_all([db.PASupportLinks.supported_mk_hash,
-                               db.PASupportLinks.supporting_mk_hash])
+    sup_link_q = db.filter_query([db.PASupportLinks.supported_mk_hash,
+                                  db.PASupportLinks.supporting_mk_hash])
+    if hashes is not None:
+        # I only use a constraint on the supported hash. If this is used in the
+        # usual way where the hashes are part of a connected component, then
+        # adding another constraint would have no effect (but to slow down the
+        # query). Otherwise this is a bit arbitrary.
+        sup_link_q = sup_link_q.filter(
+            db.PASupportLinks.supported_mk_hash.in_(hashes)
+        )
+    sup_links = sup_link_q.all()
+
     populate_support(stmts_dict, sup_links)
 
     return list(stmts_dict.values())
@@ -135,14 +153,35 @@ def calculate_belief(stmts):
     be = BeliefEngine(scorer=scorer)
     be.set_prior_probs(stmts)
     be.set_hierarchy_probs(stmts)
-    return {s.matches_key(): s.belief for s in stmts}
+    return {str(s.get_hash()): s.belief for s in stmts}
 
 
-def get_belief(db=None):
+def get_belief(db=None, partition=True):
     if db is None:
         db = dbu.get_db('primary')
-    stmts = load_mock_statements(db)
-    return calculate_belief(stmts)
+
+    if partition:
+        import networkx as nx
+        hashes = {h for h, in db.select_all(db.PAStatements.mk_hash)}
+        link_pair = [db.PASupportLinks.supporting_mk_hash,
+                     db.PASupportLinks.supported_mk_hash]
+        links = {tuple(link) for link in db.select_all(link_pair)}
+        g = nx.Graph()
+        g.add_nodes_from(hashes)
+        g.add_edges_from(links)
+
+        group = set()
+        beliefs = {}
+        for c in nx.connected_components(g):
+            group |= c
+
+            if len(group) >= 100000:
+                stmts = load_mock_statements(db, hashes=group)
+                beliefs.update(calculate_belief(stmts))
+        return beliefs
+    else:
+        stmts = load_mock_statements(db)
+        return calculate_belief(stmts)
 
 
 if __name__ == '__main__':
@@ -158,9 +197,6 @@ if __name__ == '__main__':
                         help='Upload belief dict to the bigmech s3 bucket '
                              'instead of saving it locally')
     args = parser.parse_args()
-    fname = 's3:' + '/'.join([S3_SUBDIR,
-                              datetime.utcnow().strftime('%Y-%m-%d'),
-                              args.fname]) if args.s3 else args.fname
     belief_dict = get_belief()
     if args.s3:
         key = '/'.join([datetime.utcnow().strftime('%Y-%m-%d'), args.fname])

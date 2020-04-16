@@ -11,6 +11,7 @@ import argparse
 from datetime import datetime
 
 from indra_db import util as dbu
+from indra_db.util import S3Path
 from indra_db.util.dump_sif import upload_pickle_to_s3, S3_SUBDIR
 
 logger = logging.getLogger('db_belief')
@@ -161,8 +162,10 @@ if __name__ == '__main__':
                               datetime.utcnow().strftime('%Y-%m-%d'),
                               args.fname]) if args.s3 else args.fname
     belief_dict = get_belief()
-    if fname.startswith('s3:'):
-        upload_pickle_to_s3(obj=belief_dict, key=fname)
+    if args.s3:
+        key = '/'.join([datetime.utcnow().strftime('%Y-%m-%d'), args.fname])
+        s3_path = S3Path(S3_SUBDIR, key)
+        upload_pickle_to_s3(obj=belief_dict, s3_path=s3_path)
     else:
-        with open(fname, 'wb') as f:
+        with open(args.fname, 'wb') as f:
             pickle.dump(belief_dict, f)

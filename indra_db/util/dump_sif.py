@@ -301,7 +301,7 @@ def get_parser():
 
 
 def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
-             reload=False, reconvert=False, ro=None):
+             reload=False, reconvert=True, ro=None):
     if ro is None:
         ro = get_db('primary')
 

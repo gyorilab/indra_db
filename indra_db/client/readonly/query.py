@@ -14,7 +14,8 @@ from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
-from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map
+from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
+    SOURCE_GROUPS
 from indra_db.util import regularize_agent_id
 
 logger = logging.getLogger(__name__)
@@ -860,6 +861,10 @@ class SourceTypeCore(SourceCore):
     name = NotImplemented
     col = NotImplemented
 
+    def __init__(self, filter_evidence=True):
+        self.filter_evidence = filter_evidence
+        super(SourceTypeCore, self).__init__()
+
     def __str__(self):
         if not self._inverted:
             return f"has {self.name}"
@@ -871,6 +876,25 @@ class SourceTypeCore(SourceCore):
 
     def _get_constraint_json(self) -> dict:
         return {f'has_{self.name}_query': {f'_has_{self.name}': True}}
+
+    def _get_content_query(self, ro, mk_hashes_al, ev_limit):
+        cont_q = super(SourceTypeCore)._get_content_query(ro, mk_hashes_al,
+                                                          ev_limit)
+        if self.filter_evidence:
+            if self.col == 'has_rd':
+                my_src_group = SOURCE_GROUPS['reading']
+            elif self.col == 'has_db':
+                my_src_group = SOURCE_GROUPS['databases']
+            else:
+                raise RuntimeError("`col` class attribute not recognized.")
+
+            cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
+            if not self._inverted:
+                cont_q = cont_q.filter(ro.RawStmtSrc.src.in_(my_src_group))
+            else:
+                cont_q = cont_q.filter(ro.RawStmtSrc.src.notin_(my_src_group))
+
+        return cont_q
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert

@@ -801,12 +801,16 @@ class HasSources(SourceCore):
         A collection of strings, each string the canonical name for a source.
         The result will include statements that have evidence from ALL sources
         that you include.
+    filter_evidence : bool
+        Default is True. If True, apply this filter to each evidence as well,
+        if and when evidence is retrieved.
     """
-    def __init__(self, sources):
+    def __init__(self, sources, filter_evidence=True):
         empty = False
         if len(sources) == 0:
             empty = True
         self.sources = tuple(set(sources))
+        self.filter_evidence = filter_evidence
         super(HasSources, self).__init__(empty)
 
     def _copy(self):
@@ -819,7 +823,19 @@ class HasSources(SourceCore):
             return f"is not from one of {self.sources}"
 
     def _get_constraint_json(self) -> dict:
-        return {'has_source_query': {'sources': self.sources}}
+        return {'has_sources': {'sources': self.sources,
+                                'filter_evidence': self.filter_evidence}}
+
+    def _get_content_query(self, ro, mk_hashes_al, ev_limit):
+        cont_q = super(HasSources)._get_content_query(ro, mk_hashes_al,
+                                                      ev_limit)
+        if self.filter_evidence:
+            cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
+            if not self._inverted:
+                cont_q = cont_q.filter(ro.RawStmtSrc.src.in_(self.sources))
+            else:
+                cont_q = cont_q.filter(ro.RawStmtSrc.src.notin_(self.sources))
+        return cont_q
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert

@@ -803,10 +803,10 @@ class HasSources(SourceCore):
         The result will include statements that have evidence from ALL sources
         that you include.
     filter_evidence : bool
-        Default is True. If True, apply this filter to each evidence as well,
-        if and when evidence is retrieved.
+        Default is False. If True, apply this filter to each evidence as well,
+        if and when evidence is retrieved. If false, evidence is not filtered.
     """
-    def __init__(self, sources, filter_evidence=True):
+    def __init__(self, sources, filter_evidence=False):
         empty = False
         if len(sources) == 0:
             empty = True
@@ -861,7 +861,7 @@ class SourceTypeCore(SourceCore):
     name = NotImplemented
     col = NotImplemented
 
-    def __init__(self, filter_evidence=True):
+    def __init__(self, filter_evidence=False):
         self.filter_evidence = filter_evidence
         super(SourceTypeCore, self).__init__()
 

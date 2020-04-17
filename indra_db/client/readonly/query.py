@@ -745,9 +745,13 @@ class HasOnlySource(SourceCore):
     ----------
     only_source : str
         The only source that spawned the statement, e.g. signor, or reach.
+    filter_evidence : bool
+        Default is True. If True, apply this filter to each evidence as well,
+        if and when evidence is retrieved.
     """
-    def __init__(self, only_source):
+    def __init__(self, only_source, filter_evidence=True):
         self.only_source = only_source
+        self.filter_evidence = filter_evidence
         super(HasOnlySource, self).__init__()
 
     def __str__(self):
@@ -758,7 +762,23 @@ class HasOnlySource(SourceCore):
         return self.__class__(self.only_source)
 
     def _get_constraint_json(self) -> dict:
-        return {'only_source_query': {'only_source': self.only_source}}
+        return {'has_only_source': {'only_source': self.only_source,
+                                    'filter_evidence': self.filter_evidence}}
+
+    def _get_content_query(self, ro, mk_hashes_al, ev_limit):
+        cont_q = super(HasOnlySource)._get_content_query(ro, mk_hashes_al,
+                                                         ev_limit)
+        if self.filter_evidence:
+            cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
+            if not self._inverted:
+                cont_q = cont_q.filter(
+                    ro.RawStmtSrc.src == self.only_source
+                )
+            else:
+                cont_q = cont_q.filter(
+                    ro.RawStmtSrc.src.is_distinct_from(self.only_source)
+                )
+        return cont_q
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert

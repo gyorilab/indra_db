@@ -178,6 +178,7 @@ def get_belief(db=None, partition=True):
             if len(group) >= 100000:
                 stmts = load_mock_statements(db, hashes=group)
                 beliefs.update(calculate_belief(stmts))
+                group = set()
         return beliefs
     else:
         stmts = load_mock_statements(db)

@@ -10,7 +10,7 @@ import logging
 from collections import OrderedDict, Iterable, defaultdict
 
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-    except_, func, Integer, null
+    except_, func, null, String
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
@@ -244,18 +244,44 @@ class QueryCore(object):
         return QueryResult(set(evidence_totals.keys()), limit, offset,
                            evidence_totals, self.to_json())
 
-    def get_interactions(self, ro, limit=None, offset=None, best_first=True,
-                         detail_level='relations'):
+    def _get_name_query(self, ro, limit=None, offset=None, best_first=True):
+        mk_hashes_q = self.get_hash_query(ro)
+        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
+                                         best_first)
+
+        mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
+        q = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
+                              ro.NameMeta.ag_num, ro.NameMeta.type_num,
+                              ro.NameMeta.activity, ro.NameMeta.is_active,
+                              ro.SourceMeta.src_json)
+             .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
+                     ro.SourceMeta.mk_hash == mk_hashes_sq.c.mk_hash))
+        sq = q.subquery('names')
+        q = ro.session.query(
+            sq.c.mk_hash,
+            func.jsonb_object(
+                func.array_agg(sq.c.ag_num.cast(String)),
+                func.array_agg(sq.c.db_id)
+            ),
+            sq.c.type_num,
+            sq.c.activity,
+            sq.c.is_active,
+            sq.c.agent_count,
+            sq.c.src_json
+        ).group_by(
+            sq.c.mk_hash,
+            sq.c.type_num,
+            sq.c.activity,
+            sq.c.is_active,
+            sq.c.src_json
+        )
+        return q
+
+    def get_interactions(self, ro, limit=None, offset=None, best_first=True):
         """Get the simple interaction information from the Statements metadata.
 
-        There are three levels of detail:
-            hashes -> Each entry in the result corresponds to a single
-                    preassembled Statement, distinguished by its hash.
-            relations -> Each entry in the result corresponds to a relation,
-                    meaning an interaction type, and the names of the agents
-                    involved.
-            agents -> Each entry is simply a pair (or more) of Agents involved
-                    in an interaction.
+       Each entry in the result corresponds to a single preassembled Statement,
+       distinguished by its hash.
 
         Parameters
         ----------
@@ -270,38 +296,146 @@ class QueryCore(object):
             allows you to page through results.
         best_first : bool
             Return the best (most evidence) statements first.
-        detail_level : 'hashes', 'relations', or 'agents'
-            Select the granularity of the statements. See above description for
-            more details.
         """
         if self.empty:
             return QueryResult({}, limit, offset, {}, self.to_json())
 
-        mk_hashes_q = self.get_hash_query(ro)
-        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
-                                         best_first)
-
-        mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
-        q = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
-                              ro.NameMeta.ag_num, ro.NameMeta.type_num,
-                              ro.SourceMeta.src_json)
-             .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
-                     ro.SourceMeta.mk_hash == mk_hashes_sq.c.mk_hash))
-        if detail_level == 'relations':
-            sq = q.subquery('names')
-            q = ro.session.query(
-                func.jsonb_object(
-                    func.array_agg(sq.c.ag_num.cast(Integer)),
-                    func.array_agg(sq.c.db_id)
-                ),
-                sq.c.type_num
-            ).group_by(
-                sq.c.mk_hash,
-                sq.c.type_num
-            )
-            print(q)
+        q = self._get_name_query(ro, limit, offset, best_first)
         names = q.all()
-        return
+        results = {}
+        ev_totals = {}
+        for h, ag_json, type_num, activity, is_active, n_ag, src_json in names:
+            results[h] = {
+                'hash': h,
+                'id': str(h),
+                'agents': ag_json,
+                'type': ro_type_map.get_str(type_num),
+                'activity': activity,
+                'is_active': is_active,
+                'source_counts': src_json,
+            }
+            ev_totals[h] = sum(src_json.values())
+
+        return QueryResult(results, limit, offset, ev_totals, self.to_json())
+
+    def get_relations(self, ro, limit=None, offset=None, best_first=True):
+        """Get the agent and type information from the Statements metadata.
+
+         Each entry in the result corresponds to a relation, meaning an
+         interaction type, and the names of the agents involved.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+        """
+        if self.empty:
+            return QueryResult({}, limit, offset, {}, self.to_json())
+
+        names_q = self._get_name_query(ro, limit, offset, best_first)
+
+        sq = names_q.subquery('names')
+        q = ro.session.query(
+            sq.c.agent_json,
+            sq.c.type_num,
+            sq.c.activity,
+            sq.c.is_active,
+            sq.c.agent_count,
+            func.array_agg(sq.c.src_json)
+        ).group_by(
+            sq.c.agent_json,
+            sq.c.type_num,
+            sq.c.activity,
+            sq.c.is_active
+        )
+
+        names = q.all()
+        results = {}
+        ev_totals = {}
+        for ag_json, type_num, activity, is_active, n_ag, src_jsons in names:
+            ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
+            agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
+
+            stmt_type = ro_type_map.get_str(type_num)
+
+            key = stmt_type + agent_key
+
+            if key in results:
+                logger.warning("Something went weird.")
+
+            source_counts = defaultdict(lambda: 0)
+            for src_json in src_jsons:
+                for src, cnt in src_json.items():
+                    source_counts[src] += cnt
+            results[key] = {'id': key, 'source_counts': dict(source_counts),
+                            'agents': ag_json, 'type': stmt_type}
+            ev_totals[key] = sum(source_counts.values())
+
+        return QueryResult(results, limit, offset, ev_totals, self.to_json())
+
+    def get_agents(self, ro, limit=None, offset=None, best_first=True):
+        """Get the agent pairs from the Statements metadata.
+
+         Each entry is simply a pair (or more) of Agents involved in an
+         interaction.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+        """
+        if self.empty:
+            return QueryResult({}, limit, offset, {}, self.to_json())
+
+        names_q = self._get_name_query(ro, limit, offset, best_first)
+
+        sq = names_q.subquery('names')
+        q = ro.session.query(
+            sq.c.agent_json,
+            sq.c.agent_count,
+            func.array_agg(sq.c.src_json)
+        ).group_by(
+            sq.c.agent_json,
+            sq.c.agent_count
+        )
+        names = q.all()
+
+        results = {}
+        ev_totals = {}
+        for ag_json, n_ag, src_jsons in names:
+            ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
+            key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
+
+            if key in results:
+                logger.warning("Something went weird.")
+
+            source_counts = defaultdict(lambda: 0)
+            for src_json in src_jsons:
+                for src, cnt in src_json.items():
+                    source_counts[src] += cnt
+            results[key] = {'id': key, 'source_counts': dict(source_counts),
+                            'agents': ag_json}
+            ev_totals[key] = sum(source_counts.values())
+
+        return QueryResult(results, limit, offset, ev_totals, self.to_json())
 
     def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
                       best_first=True):

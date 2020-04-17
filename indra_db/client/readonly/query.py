@@ -196,8 +196,8 @@ class QueryCore(object):
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
 
-        # Do the difficult work of turning a query for hashes and ev_counts into
-        # a query for statement JSONs. Return the results.
+        # Do the difficult work of turning a query for hashes and ev_counts
+        # into a query for statement JSONs. Return the results.
         stmt_dict, ev_totals, returned_evidence, source_counts = \
             self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit)
         return StatementQueryResult(stmt_dict, limit, offset, ev_totals,
@@ -353,14 +353,8 @@ class QueryCore(object):
         raise NotImplementedError()
 
     @staticmethod
-    def _get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit):
-        """Turn a query for hashes into a query for statements.
-
-        In particular, this function retrieves refs, and the limited number of
-        evidence for each statement.
-        """
+    def _get_content_query(ro, mk_hashes_al, ev_limit):
         # Incorporate a link to the JSONs in the table.
-        mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
         pa_json_c = ro.FastRawPaLink.pa_json.label('pa_json')
         reading_id_c = ro.FastRawPaLink.reading_id.label('rid')
         frp_link = ro.FastRawPaLink.mk_hash == mk_hashes_al.c.mk_hash
@@ -375,6 +369,17 @@ class QueryCore(object):
         # Create the query.
         cont_q = ro.session.query(raw_json_c, pa_json_c, reading_id_c)
         cont_q = cont_q.filter(frp_link)
+
+        return cont_q
+
+    def _get_stmt_jsons_from_hashes_query(self, ro, mk_hashes_q, ev_limit):
+        """Turn a query for hashes into a query for statements.
+
+        In particular, this function retrieves refs, and the limited number of
+        evidence for each statement.
+        """
+        mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
+        cont_q = self._get_content_query(ro, mk_hashes_al, ev_limit)
 
         # If there is no evidence, whittle down the results so we only get one
         # pa_json for each hash.

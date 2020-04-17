@@ -1247,7 +1247,172 @@ class HasAgent(QueryCore):
         return qry
 
 
-class HasAnyType(QueryCore):
+class IntrusiveQueryCore(QueryCore):
+    """This is the parent of all queries that draw on info in all meta tables.
+
+    Thus, when using these queries in an Intersection, they are applied to each
+    sub query separately.
+    """
+    def _or_join_args(self, other):
+        raise NotImplementedError()
+
+    def _and_join_args(self, other):
+        raise NotImplementedError()
+
+    def _get_empty(self):
+        return self.__class__([])
+
+    def _do_or(self, other):
+        if isinstance(other, self.__class__) \
+                and self._inverted == other._inverted:
+            # Two type queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
+            if not self._inverted:
+                args, n_elem = self._or_join_args(other)
+                empty = n_elem == 0
+                full = False
+            else:
+                # RDML (Remember De Morgan's Law)
+                args, n_elem = self._and_join_args(other)
+                full = n_elem == 0
+                empty = False
+            res = self.__class__(*args)
+            res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
+            return res
+        elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return a full
+            # result trivially. (A or not A is anything)
+            return ~self._get_empty()
+        return super(self.__class__, self)._do_or(other)
+
+    def _do_and(self, other):
+        if isinstance(other, self.__class__) \
+                and self._inverted == other._inverted:
+            # Two type queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
+            if not self._inverted:
+                args, n_elem = self._and_join_args(other)
+                empty = n_elem == 0
+                full = False
+            else:
+                # RDML
+                args, n_elem = self._or_join_args(other)
+                full = n_elem == 0
+                empty = False
+            res = self.__class__(*args)
+            res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
+            return res
+        elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return a empty
+            # result trivially. (A and not A is nothing)
+            return self._get_empty()
+        return super(self.__class__, self)._do_and(other)
+
+
+class HasAnyNumAgents(IntrusiveQueryCore):
+    """Find Statements with this number of agents.
+
+    NOTE: when used in an Interaction with other queries, the agent number is
+    handled specially, with each sub-query having an agent_count constraint
+    added to it.
+
+    Parameters
+    ----------
+    """
+    def __init__(self, agent_nums):
+        for num in agent_nums:
+            try:
+                int(num)
+            except Exception:
+                raise ValueError(f"Could not cast {num} ({type(num)}) as an "
+                                 f"integer.")
+        self.agent_nums = agent_nums
+        super(HasAnyNumAgents, self).__init__(len(agent_nums) == 0)
+
+    def _copy(self):
+        return self.__class__(self.agent_nums)
+
+    def _or_join_args(self, other):
+        agent_nums = set(self.agent_nums) | set(other.agent_nums)
+        return [agent_nums], len(agent_nums)
+
+    def _and_join_args(self, other):
+        agent_nums = set(self.agent_nums) & set(other.agent_nums)
+        return [agent_nums], len(agent_nums)
+
+
+class HasAnyActivity(IntrusiveQueryCore):
+    """Find Statements with activity.
+
+    Setting this constraint will naturally limit you to ActiveForm type
+    Statements.
+
+    NOTE: when used in an Interaction with other queries, the activity
+    conditions are handled specially, with each sub-query having an activity
+    constraints added to it.
+    """
+    def __init__(self, activities=None, is_active=None):
+        empty = False
+        if activities is not None and len(activities) == 0:
+            empty = True
+        self.activities = activities
+        self.is_active = is_active
+        super(HasAnyActivity, self).__init__(empty)
+
+    def _copy(self):
+        self.__class__(self.activities, self.is_active)
+
+    def _get_empty(self):
+        return self.__class__([], is_active=self.is_active)
+
+    def _or_join_args(self, other):
+        activity_list = set(self.activities) | set(other.activities)
+
+        # TODO: Consider that is_active must be handled in & and | operations.
+        return [activity_list, self.is_active], len(activity_list)
+
+    def _and_join_args(self, other):
+        activity_list = set(self.activities) & set(other.activities)
+        return [activity_list, self.is_active], len(activity_list)
+
+
+class HasNumEvidence(IntrusiveQueryCore):
+    """Find Statements with one of a given number of evidence.
+
+    NOTE: when used in an Interaction with other queries, the evidence count is
+    handled specially, with each sub-query having an ev_count constraint
+    added to it.
+    """
+    def __init__(self, nums_of_evidence):
+        for num_evidence in nums_of_evidence:
+            if num_evidence == 0:
+                raise ValueError("Every Statement must have some evidence.")
+            try:
+                int(num_evidence)
+            except Exception:
+                raise ValueError(f"Could not cast {num_evidence} "
+                                 f"({type(num_evidence)}) as an integer.")
+
+        self.nums_of_evidence = nums_of_evidence
+        super(HasNumEvidence, self).__init__(len(nums_of_evidence) == 0)
+
+    def _copy(self):
+        return self.__class__(self.nums_of_evidence)
+
+    def _or_join_args(self, other):
+        ev_num_list = set(self.nums_of_evidence) | set(other.nums_of_evidence)
+        return [ev_num_list], len(ev_num_list)
+
+    def _and_join_args(self, other):
+        ev_num_list = set(self.nums_of_evidence) & set(other.nums_of_evidence)
+        return [ev_num_list], len(ev_num_list)
+
+
+class HasAnyType(IntrusiveQueryCore):
     """Find Statements that are one of a collection of types.
 
     For example, you can find Statements that are Phosphorylations or
@@ -1281,56 +1446,16 @@ class HasAnyType(QueryCore):
         self.stmt_types = tuple(st_set)
         super(HasAnyType, self).__init__(empty)
 
+    def _or_join_args(self, other):
+        type_list = set(self.stmt_types) | set(other.stmt_types)
+        return [type_list], len(type_list)
+
+    def _and_join_args(self, other):
+        type_list = set(self.stmt_types) & set(other.stmt_types)
+        return [type_list], len(type_list)
+
     def _copy(self):
         return self.__class__(self.stmt_types)
-
-    def _do_or(self, other):
-        if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            # Two type queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                type_list = set(self.stmt_types) | set(other.stmt_types)
-                empty = len(type_list) == 0
-                full = False
-            else:
-                # RDML (Remember De Morgan's Law)
-                type_list = set(self.stmt_types) & set(other.stmt_types)
-                full = len(type_list) == 0
-                empty = False
-            res = HasAnyType(type_list)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a full
-            # result trivially. (A or not A is anything)
-            return ~self.__class__([])
-        return super(HasAnyType, self)._do_or(other)
-
-    def _do_and(self, other):
-        if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            # Two type queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                type_list = set(self.stmt_types) & set(other.stmt_types)
-                empty = len(type_list) == 0
-                full = False
-            else:
-                # RDML
-                type_list = set(self.stmt_types) | set(other.stmt_types)
-                full = len(type_list) == 0
-                empty = False
-            res = HasAnyType(type_list)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a empty
-            # result trivially. (A and not A is nothing)
-            return self.__class__([])
-        return super(HasAnyType, self)._do_and(other)
 
     def __str__(self):
         invert_word = 'not ' if self._inverted else ''

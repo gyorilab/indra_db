@@ -786,8 +786,7 @@ class HasOnlySource(SourceCore):
         if not inverted:
             clause = meta.only_src.like(self.only_source)
         else:
-            clause = or_(meta.only_src.notlike(self.only_source),
-                         meta.only_src.is_(None))
+            clause = meta.only_src.is_distinct_from(self.only_source)
         return query.filter(clause)
 
 

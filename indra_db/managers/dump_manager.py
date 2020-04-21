@@ -81,7 +81,7 @@ class SourceCount(Dumper):
 
     def dump(self, continuing=False):
         db = get_db(self.db_label)
-        src_count = get_source_counts(self.get_s3_path(), db)
+        get_source_counts(self.get_s3_path(), db)
 
 
 class Readonly(Dumper):

@@ -119,13 +119,8 @@ def get_source_counts(pkl_filename=None, ro=None):
         pkl_filename = S3Path.from_string(pkl_filename)
     if not ro:
         ro = get_ro('primary-ro')
-    res = ro.select_all(ro.PaStmtSrc)
-    ev = {}
-    for r in res:
-        rd = r.__dict__
-        ev[rd['mk_hash']] = {k: v for k, v in rd.items() if
-                             k not in ['_sa_instance_state', 'mk_hash'] and
-                             rd[k] is not None}
+    ev = {h: j for h, j in ro.select_all([ro.SourceMeta.mk_hash,
+                                          ro.SourceMeta.src_json])}
 
     if pkl_filename:
         if isinstance(pkl_filename, S3Path):

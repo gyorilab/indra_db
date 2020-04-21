@@ -9,7 +9,7 @@ from indra_db.belief import get_belief
 from indra_db.config import CONFIG
 from indra_db.config import get_s3_dump
 from indra_db.util import get_db, get_ro, S3Path
-from indra_db.util.dump_sif import dump_sif
+from indra_db.util.dump_sif import dump_sif, get_source_counts
 
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,15 @@ class Belief(Dumper):
         belief_dict = get_belief(db)
         s3 = boto3.client('s3')
         s3.put_object(Body=json.dumps(belief_dict), **self.get_s3_path().kw())
+
+
+class SourceCount(Dumper):
+    name = 'source_count'
+    fmt = 'pkl'
+
+    def dump(self, continuing=False):
+        db = get_db(self.db_label)
+        src_count = get_source_counts(self.get_s3_path(), db)
 
 
 class Readonly(Dumper):

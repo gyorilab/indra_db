@@ -47,6 +47,9 @@ class MockStatement(object):
     def matches_key(self):
         return self.__mk_hash
 
+    def get_hash(self):
+        return self.__mk_hash
+
 
 class MockEvidence(object):
     """A class to imitate real INDRA Evidence for calculating belief."""

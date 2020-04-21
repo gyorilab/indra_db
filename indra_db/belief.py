@@ -175,7 +175,7 @@ def get_belief(db=None, partition=True):
         for c in nx.connected_components(g):
             group |= c
 
-            if len(group) >= 100000:
+            if len(group) >= 10000:
                 stmts = load_mock_statements(db, hashes=group)
                 beliefs.update(calculate_belief(stmts))
                 group = set()

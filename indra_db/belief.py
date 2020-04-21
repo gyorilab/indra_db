@@ -92,7 +92,7 @@ def populate_support(stmts, links):
     return
 
 
-def load_mock_statements(db, hashes=None):
+def load_mock_statements(db, hashes=None, sup_links=None):
     """Generate a list of mock statements from the pa statement table."""
     # Initialize a dictionary of evidence keyed by hash.
     stmts_dict = {}
@@ -132,17 +132,18 @@ def load_mock_statements(db, hashes=None):
         add_evidence(src_api, mk_hash, sid, db_name)
 
     # Get the support links and populate
-    sup_link_q = db.filter_query([db.PASupportLinks.supported_mk_hash,
-                                  db.PASupportLinks.supporting_mk_hash])
-    if hashes is not None:
-        # I only use a constraint on the supported hash. If this is used in the
-        # usual way where the hashes are part of a connected component, then
-        # adding another constraint would have no effect (but to slow down the
-        # query). Otherwise this is a bit arbitrary.
-        sup_link_q = sup_link_q.filter(
-            db.PASupportLinks.supported_mk_hash.in_(hashes)
-        )
-    sup_links = sup_link_q.all()
+    if sup_links is None:
+        sup_link_q = db.filter_query([db.PASupportLinks.supported_mk_hash,
+                                      db.PASupportLinks.supporting_mk_hash])
+        if hashes is not None:
+            # I only use a constraint on the supported hash. If this is used in
+            # the usual way where the hashes are part of a connected component,
+            # then adding another constraint would have no effect (but to slow
+            # down the query). Otherwise this is a bit arbitrary.
+            sup_link_q = sup_link_q.filter(
+                db.PASupportLinks.supported_mk_hash.in_(hashes)
+            )
+        sup_links = sup_link_q.all()
 
     populate_support(stmts_dict, sup_links)
 
@@ -179,7 +180,9 @@ def get_belief(db=None, partition=True):
             group |= c
 
             if len(group) >= 10000:
-                stmts = load_mock_statements(db, hashes=group)
+                sg = g.subgraph(group)
+                stmts = load_mock_statements(db, hashes=group,
+                                             sup_links=list(sg.edges))
                 beliefs.update(calculate_belief(stmts))
                 group = set()
         return beliefs

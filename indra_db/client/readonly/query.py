@@ -3,7 +3,7 @@ from itertools import combinations
 __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
            'MergeQueryCore', 'HasAgent', 'FromMeshId', 'InHashList',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
-           'SourceCore', 'SourceIntersection', 'HasAnyType']
+           'SourceCore', 'SourceIntersection', 'HasType']
 
 import json
 import logging
@@ -49,7 +49,7 @@ class QueryResult(object):
         self.query_json = query_json
 
     def json(self):
-        """Return the JSON representaion of the results."""
+        """Return the JSON representation of the results."""
         if not isinstance(self.results, dict) \
                 and not isinstance(self.results, list):
             json_results = list(self.results)
@@ -1253,6 +1253,11 @@ class IntrusiveQueryCore(QueryCore):
     Thus, when using these queries in an Intersection, they are applied to each
     sub query separately.
     """
+    def __init__(self, *args, **kwargs):
+        if not hasattr(self, '_value_tuple'):
+            self._value_tuple = NotImplemented
+        super(IntrusiveQueryCore, self).__init__(*args, **kwargs)
+
     def _or_join_args(self, other):
         raise NotImplementedError()
 
@@ -1262,19 +1267,22 @@ class IntrusiveQueryCore(QueryCore):
     def _get_empty(self):
         return self.__class__([])
 
+    def _copy(self):
+        return self.__class__(self._value_tuple)
+
     def _do_or(self, other):
         if isinstance(other, self.__class__) \
                 and self._inverted == other._inverted:
             # Two type queries of the same polarity can be merged, with some
             # care for whether they are both inverted or not.
             if not self._inverted:
-                args, n_elem = self._or_join_args(other)
-                empty = n_elem == 0
+                args = set(self._value_tuple) | set(other._value_tuple)
+                empty = len(args) == 0
                 full = False
             else:
                 # RDML (Remember De Morgan's Law)
-                args, n_elem = self._and_join_args(other)
-                full = n_elem == 0
+                args = set(self._value_tuple) & set(other._value_tuple)
+                full = len(args) == 0
                 empty = False
             res = self.__class__(*args)
             res._inverted = self._inverted
@@ -1293,13 +1301,13 @@ class IntrusiveQueryCore(QueryCore):
             # Two type queries of the same polarity can be merged, with some
             # care for whether they are both inverted or not.
             if not self._inverted:
-                args, n_elem = self._and_join_args(other)
-                empty = n_elem == 0
+                args = set(self._value_tuple) & set(other._value_tuple)
+                empty = len(args) == 0
                 full = False
             else:
                 # RDML
-                args, n_elem = self._or_join_args(other)
-                full = n_elem == 0
+                args = set(self._value_tuple) | set(other._value_tuple)
+                full = len(args) == 0
                 empty = False
             res = self.__class__(*args)
             res._inverted = self._inverted
@@ -1313,106 +1321,57 @@ class IntrusiveQueryCore(QueryCore):
         return super(self.__class__, self)._do_and(other)
 
 
-class HasAnyNumAgents(IntrusiveQueryCore):
-    """Find Statements with this number of agents.
+class HasNumAgents(IntrusiveQueryCore):
+    """Find Statements with any one of a listed number of agents.
 
-    NOTE: when used in an Interaction with other queries, the agent number is
+     For example, `HasNumAgents([1,3,4])` will return agents with either 2,
+     3, or 4 agents (the latter two mostly being complexes).
+
+    NOTE: when used in an Interaction with other queries, the agent numbers are
     handled specially, with each sub-query having an agent_count constraint
-    added to it.
+    applied to it.
 
     Parameters
     ----------
+    agent_nums : tuple
+        A list of integers, each indicating a number of agents.
     """
     def __init__(self, agent_nums):
-        for num in agent_nums:
-            try:
-                int(num)
-            except Exception:
-                raise ValueError(f"Could not cast {num} ({type(num)}) as an "
-                                 f"integer.")
+        agent_nums = tuple([int(n) for n in agent_nums])
+        if 0 in agent_nums:
+            raise ValueError("Every Statement must have at least one Agent.")
+
         self.agent_nums = agent_nums
-        super(HasAnyNumAgents, self).__init__(len(agent_nums) == 0)
-
-    def _copy(self):
-        return self.__class__(self.agent_nums)
-
-    def _or_join_args(self, other):
-        agent_nums = set(self.agent_nums) | set(other.agent_nums)
-        return [agent_nums], len(agent_nums)
-
-    def _and_join_args(self, other):
-        agent_nums = set(self.agent_nums) & set(other.agent_nums)
-        return [agent_nums], len(agent_nums)
-
-
-class HasAnyActivity(IntrusiveQueryCore):
-    """Find Statements with activity.
-
-    Setting this constraint will naturally limit you to ActiveForm type
-    Statements.
-
-    NOTE: when used in an Interaction with other queries, the activity
-    conditions are handled specially, with each sub-query having an activity
-    constraints added to it.
-    """
-    def __init__(self, activities=None, is_active=None):
-        empty = False
-        if activities is not None and len(activities) == 0:
-            empty = True
-        self.activities = activities
-        self.is_active = is_active
-        super(HasAnyActivity, self).__init__(empty)
-
-    def _copy(self):
-        self.__class__(self.activities, self.is_active)
-
-    def _get_empty(self):
-        return self.__class__([], is_active=self.is_active)
-
-    def _or_join_args(self, other):
-        activity_list = set(self.activities) | set(other.activities)
-
-        # TODO: Consider that is_active must be handled in & and | operations.
-        return [activity_list, self.is_active], len(activity_list)
-
-    def _and_join_args(self, other):
-        activity_list = set(self.activities) & set(other.activities)
-        return [activity_list, self.is_active], len(activity_list)
+        self._value_tuple = agent_nums
+        super(HasNumAgents, self).__init__(len(agent_nums) == 0)
 
 
 class HasNumEvidence(IntrusiveQueryCore):
     """Find Statements with one of a given number of evidence.
 
+    For example, HasNumEvidence([2,3,4]) will return Statements that have
+    either 2, 3, or 4 evidence.
+
     NOTE: when used in an Interaction with other queries, the evidence count is
     handled specially, with each sub-query having an ev_count constraint
     added to it.
+
+    Parameters
+    ----------
+    nums_of_evidence : tuple
+        A list of numbers greater than 0, each indicating a number of evidence.
     """
     def __init__(self, nums_of_evidence):
-        for num_evidence in nums_of_evidence:
-            if num_evidence == 0:
-                raise ValueError("Every Statement must have some evidence.")
-            try:
-                int(num_evidence)
-            except Exception:
-                raise ValueError(f"Could not cast {num_evidence} "
-                                 f"({type(num_evidence)}) as an integer.")
+        nums_of_evidence = tuple([int(n) for n in nums_of_evidence])
+        if 0 in nums_of_evidence:
+            raise ValueError("Each Statement must have at least one Evidence.")
 
         self.nums_of_evidence = nums_of_evidence
+        self._value_tuple = nums_of_evidence
         super(HasNumEvidence, self).__init__(len(nums_of_evidence) == 0)
 
-    def _copy(self):
-        return self.__class__(self.nums_of_evidence)
 
-    def _or_join_args(self, other):
-        ev_num_list = set(self.nums_of_evidence) | set(other.nums_of_evidence)
-        return [ev_num_list], len(ev_num_list)
-
-    def _and_join_args(self, other):
-        ev_num_list = set(self.nums_of_evidence) & set(other.nums_of_evidence)
-        return [ev_num_list], len(ev_num_list)
-
-
-class HasAnyType(IntrusiveQueryCore):
+class HasType(IntrusiveQueryCore):
     """Find Statements that are one of a collection of types.
 
     For example, you can find Statements that are Phosphorylations or
@@ -1444,7 +1403,7 @@ class HasAnyType(IntrusiveQueryCore):
                 sub_classes = get_all_descendants(stmt_class)
                 st_set |= {c.__name__ for c in sub_classes}
         self.stmt_types = tuple(st_set)
-        super(HasAnyType, self).__init__(empty)
+        super(HasType, self).__init__(empty)
 
     def _or_join_args(self, other):
         type_list = set(self.stmt_types) | set(other.stmt_types)
@@ -1658,7 +1617,7 @@ class Intersection(MergeQueryCore):
                     mergeable_groups[C].append(query)
                     break
             else:
-                if isinstance(query, HasAnyType):
+                if isinstance(query, HasType):
                     # Extract the type queries and merge them together as much
                     # as possible.
                     if not query._inverted:
@@ -1724,7 +1683,7 @@ class Intersection(MergeQueryCore):
                     for q in q_list:
                         all_empty = True
                         for sq in q.queries:
-                            if not isinstance(sq, HasAnyType):
+                            if not isinstance(sq, HasType):
                                 all_empty = False
                                 break
                             for tq in [self.type_query, self.not_type_query]:
@@ -1765,7 +1724,7 @@ class Intersection(MergeQueryCore):
         if not type_queries:
             type_queries = None
         queries = [q.get_hash_query(ro, type_queries) for q in self.queries
-                   if not q.full and not isinstance(q, HasAnyType)]
+                   if not q.full and not isinstance(q, HasType)]
         if not queries:
             if self.type_query and self.not_type_query:
                 queries = [self.type_query.get_hash_query(ro),
@@ -1828,7 +1787,7 @@ class Union(MergeQueryCore):
                     full = True
                 other_queries.add(query)
 
-        # Check if any of the resuling queries so far is a logical query of
+        # Check if any of the resulting queries so far is a logical query of
         # everything.
         full |= any(q.full for q in other_queries)
 
@@ -1857,6 +1816,7 @@ class Union(MergeQueryCore):
     def _merge(*queries):
         return union_all(*queries)
 
+    # noinspection SpellCheckingInspection
     def _get_table(self, ro):
         if self._mk_hashes_al is None:
             mk_hashes_q_list = []
@@ -1866,7 +1826,7 @@ class Union(MergeQueryCore):
 
                 # If it is a type query, merge it with the given type queries,
                 # or else pass the type queries along.
-                if isinstance(q, HasAnyType) and self._type_queries:
+                if isinstance(q, HasType) and self._type_queries:
                     for tq in self._type_queries:
                         q &= tq
                     if q.empty:

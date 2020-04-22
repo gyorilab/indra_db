@@ -66,7 +66,7 @@ class Sif(Dumper):
 
 class Belief(Dumper):
     name = 'belief'
-    fmt = 'pkl'
+    fmt = 'json'
 
     def dump(self, continuing=False):
         db = get_db(self.db_label)

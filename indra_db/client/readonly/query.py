@@ -1342,9 +1342,14 @@ class IntrusiveQueryCore(QueryCore):
         return query.filter(self._get_clause(meta))
 
     def _get_hash_query(self, ro, inject_queries=None):
+        if any(q.name == self.name for q in inject_queries):
+            raise ValueError(f"Cannot apply {self.name} queries to another "
+                             f"{self.name} query.")
+        q = self._apply_filter(self._get_table(ro), self._base_query(ro))
         if inject_queries is not None:
-            raise ValueError("Cannot apply type queries to type query.")
-        return self._apply_filter(self._get_table(ro), self._base_query(ro))
+            for other_in_q in inject_queries:
+                q = other_in_q._apply_filter(self._get_table(ro), q)
+        return q
 
 
 class HasNumAgents(IntrusiveQueryCore):

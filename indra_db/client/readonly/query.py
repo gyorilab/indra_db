@@ -1844,6 +1844,8 @@ class Union(MergeQueryCore):
                         q &= in_q
                     if q.empty:
                         continue
+                if not in_queries:
+                    in_queries = None
                 mkhq = q.get_hash_query(ro, in_queries)
                 mk_hashes_q_list.append(mkhq)
 

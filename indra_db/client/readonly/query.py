@@ -1716,16 +1716,14 @@ class Intersection(MergeQueryCore):
                              "Intersection, but handled as an intersected "
                              "query.")
 
-        type_queries = [tq for tq in [self.type_query, self.not_type_query]
-                        if tq is not None]
-        if not type_queries:
-            type_queries = None
-        queries = [q.get_hash_query(ro, type_queries) for q in self.queries
-                   if not q.full and not isinstance(q, HasType)]
+        in_queries = [q for d in self._in_queries.values() for q in d.values()]
+        if not in_queries:
+            in_queries = None
+        queries = [q.get_hash_query(ro, in_queries) for q in self.queries
+                   if not q.full and not isinstance(q, IntrusiveQueryCore)]
         if not queries:
-            if self.type_query and self.not_type_query:
-                queries = [self.type_query.get_hash_query(ro),
-                           self.not_type_query.get_hash_query(ro)]
+            if in_queries:
+                queries = [q.get_hash_query(ro) for q in in_queries]
                 self._mk_hashes_al = self._merge(*queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,

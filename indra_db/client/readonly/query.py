@@ -1343,7 +1343,8 @@ class IntrusiveQueryCore(QueryCore):
         return query.filter(self._get_clause(meta))
 
     def _get_hash_query(self, ro, inject_queries=None):
-        if any(q.name == self.name for q in inject_queries):
+        if inject_queries is not None \
+                and any(q.name == self.name for q in inject_queries):
             raise ValueError(f"Cannot apply {self.name} queries to another "
                              f"{self.name} query.")
         q = self._apply_filter(self._get_table(ro), self._base_query(ro))

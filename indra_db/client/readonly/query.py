@@ -1687,14 +1687,16 @@ class Intersection(MergeQueryCore):
                             if not isinstance(sub_q, IntrusiveQueryCore):
                                 all_empty = False
                                 break
-                            in_queries = [q for d in self._in_queries.values()
-                                          for q in d.values()
-                                          if q.name == sub_q.name]
-                            for in_q in in_queries:
-                                if in_q is None:
-                                    continue
+                            compare_ins = [q for d in self._in_queries.values()
+                                           for q in d.values()
+                                           if q.name == sub_q.name]
+                            if not compare_ins:
+                                all_empty = False
+                                break
+                            for in_q in compare_ins:
                                 if not (sub_q & in_q).empty:
                                     all_empty = False
+                                    break
                             if not all_empty:
                                 break
                         empty = all_empty

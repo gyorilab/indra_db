@@ -1593,8 +1593,7 @@ class Intersection(MergeQueryCore):
         mergeable_groups = {C: [] for C in mergeable_query_types}
         query_groups = defaultdict(list)
         filtered_queries = set()
-        self.type_query = None
-        self.not_type_query = None
+        self._in_queries = {'pos': {}, 'neg': {}}
         empty = False
         all_full = True
         for query in query_list:
@@ -1609,19 +1608,21 @@ class Intersection(MergeQueryCore):
                     mergeable_groups[C].append(query)
                     break
             else:
-                if isinstance(query, HasType):
-                    # Extract the type queries and merge them together as much
-                    # as possible.
+                if isinstance(query, IntrusiveQueryCore):
+                    # Extract the intrusive (type, agent number, evidence
+                    # number) queries, and merge them together as much as
+                    # possible.
+                    name = query.name
                     if not query._inverted:
-                        if self.type_query is None:
-                            self.type_query = query
+                        if name not in self._in_queries['pos']:
+                            self._in_queries['pos'][name] = query
                         else:
-                            self.type_query &= query
+                            self._in_queries['pos'][name] &= query
                     else:
-                        if self.not_type_query is None:
-                            self.not_type_query = query
+                        if name not in self._in_queries['neg']:
+                            self._in_queries['neg'][name] = query
                         else:
-                            self.not_type_query &= query
+                            self._in_queries['neg'][name] &= query
                 else:
                     query_groups[query.__class__].append(query)
                 filtered_queries.add(query)
@@ -1663,34 +1664,38 @@ class Intersection(MergeQueryCore):
                         if q1.is_inverse_of(q2):
                             empty = True
 
-                # Special care is needed to make sure my type queries don't
-                # identically wipe out everything in my Unions. Specifically, if
-                # the union has only type queries, and the intersection of every
-                # one of those type queries with every one of my type queries,
-                # then the result is an empty query, making this query empty.
-                # Furthermore, trying to apply that Union would result in an
-                # empty query and errors and headaches. And late nights
-                # debugging code.
-                if cls == Union and (self.type_query or self.not_type_query):
+                # Special care is needed to make sure my intrusive queries
+                # don't identically wipe out everything in my Unions.
+                # Specifically, if the union has only intrusive queries, and
+                # the intersection of every one each of the classes of
+                # intrusive query cancels with counterparts in my set of
+                # intrusive queries, then the result is an empty query, making
+                # this query empty. Furthermore, trying to apply that Union
+                # would result in an empty query and errors and headaches. And
+                # late nights debugging code.
+                if cls == Union and any(d for d in self._in_queries.values()):
                     for q in q_list:
                         all_empty = True
-                        for sq in q.queries:
-                            if not isinstance(sq, HasType):
+                        for sub_q in q.queries:
+                            if not isinstance(sub_q, IntrusiveQueryCore):
                                 all_empty = False
                                 break
-                            for tq in [self.type_query, self.not_type_query]:
-                                if tq is None:
+                            in_queries = [q for d in self._in_queries.values()
+                                          for q in d.values()
+                                          if q.name == sub_q.name]
+                            for in_q in in_queries:
+                                if in_q is None:
                                     continue
-                                if not (sq & tq).empty:
+                                if not (sub_q & in_q).empty:
                                     all_empty = False
                             if not all_empty:
                                 break
                         empty = all_empty
 
         # Check to see if the types overlap
-        if self.type_query and self.not_type_query:
-            if self.type_query.is_inverse_of(self.not_type_query):
-                empty = True
+        empty |= any(pq.is_inverse_of(self._in_queries['neg'][pn])
+                     for pn, pq in self._in_queries['pos'].items()
+                     if pn in self._in_queries['neg'])
 
         super(Intersection, self).__init__(filtered_queries, empty, all_full)
 

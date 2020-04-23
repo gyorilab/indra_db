@@ -1,7 +1,7 @@
 from itertools import combinations
 
 __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
-           'MergeQueryCore', 'HasAgent', 'FromMeshId', 'InHashList',
+           'MergeQueryCore', 'HasAgent', 'FromMeshId', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceCore', 'SourceIntersection', 'HasType']
 
@@ -751,7 +751,7 @@ class SourceIntersection(QueryCore):
         rem_hashes = set()
         class_groups = defaultdict(list)
         for sq in source_queries:
-            if isinstance(sq, InHashList):
+            if isinstance(sq, HasHash):
                 # Collect all hashes to include and those to exclude.
                 if not sq._inverted:
                     # This is a part of an intersection, so intersection is
@@ -778,19 +778,19 @@ class SourceIntersection(QueryCore):
             # successfully work out the logic without special communication
             # being necessary.
             empty = True
-            filtered_queries |= {InHashList(add_hashes),
-                                 ~InHashList(rem_hashes)}
+            filtered_queries |= {HasHash(add_hashes),
+                                 ~HasHash(rem_hashes)}
         else:
             # Check for added hashes and add a positive and an inverted hash
             # query for the net positive and net negative hashes.
             if add_hashes is not None:
                 if not add_hashes:
                     empty = True
-                filtered_queries.add(InHashList(add_hashes - rem_hashes))
+                filtered_queries.add(HasHash(add_hashes - rem_hashes))
                 rem_hashes -= add_hashes
 
             if rem_hashes:
-                filtered_queries.add(~InHashList(rem_hashes))
+                filtered_queries.add(~HasHash(rem_hashes))
 
         # Now add in all the other queries, removing those that cancel out.
         for q_list in class_groups.values():
@@ -1045,7 +1045,7 @@ class HasDatabases(SourceTypeCore):
     col = 'has_db'
 
 
-class InHashList(SourceCore):
+class HasHash(SourceCore):
     """Find Statements from a list of hashes.
 
     Parameters
@@ -1057,13 +1057,13 @@ class InHashList(SourceCore):
     def __init__(self, stmt_hashes):
         empty = len(stmt_hashes) == 0
         self.stmt_hashes = tuple(stmt_hashes)
-        super(InHashList, self).__init__(empty)
+        super(HasHash, self).__init__(empty)
 
     def _copy(self):
         return self.__class__(self.stmt_hashes)
 
     def _do_or(self, other):
-        if isinstance(other, InHashList) and self._inverted == other._inverted:
+        if isinstance(other, HasHash) and self._inverted == other._inverted:
             # Two hash queries of the same polarity can be merged, with some
             # care for whether they are both inverted or not.
             if not self._inverted:
@@ -1075,7 +1075,7 @@ class InHashList(SourceCore):
                 hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
                 full = len(hashes) == 0
                 empty = False
-            res = InHashList(hashes)
+            res = HasHash(hashes)
             res._inverted = self._inverted
             res.full = full
             res.empty = empty
@@ -1084,10 +1084,10 @@ class InHashList(SourceCore):
             # If the two queries are inverses, we can simply return a full
             # result trivially. (A or not A is anything)
             return ~self.__class__([])
-        return super(InHashList, self)._do_or(other)
+        return super(HasHash, self)._do_or(other)
 
     def _do_and(self, other):
-        if isinstance(other, InHashList) and self._inverted == other._inverted:
+        if isinstance(other, HasHash) and self._inverted == other._inverted:
             # Two hash queries of the same polarity can be merged, with some
             # care for whether they are both inverted or not.
             if not self._inverted:
@@ -1099,7 +1099,7 @@ class InHashList(SourceCore):
                 hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
                 full = len(hashes) == 0
                 empty = False
-            res = InHashList(hashes)
+            res = HasHash(hashes)
             res._inverted = self._inverted
             res.full = full
             res.empty = empty
@@ -1108,7 +1108,7 @@ class InHashList(SourceCore):
             # If the two queries are inverses, we can simply return an empty
             # result trivially. (A and not A is nothing)
             return self.__class__([])
-        return super(InHashList, self)._do_and(other)
+        return super(HasHash, self)._do_and(other)
 
     def __str__(self):
         return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
@@ -1766,7 +1766,7 @@ class Union(MergeQueryCore):
             if not query.empty:
                 all_empty = False
 
-            if isinstance(query, InHashList):
+            if isinstance(query, HasHash):
                 if not query._inverted:
                     pos_hash_queries.append(query)
                 else:

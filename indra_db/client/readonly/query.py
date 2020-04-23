@@ -1269,15 +1269,15 @@ class IntrusiveQueryCore(QueryCore):
             # Two type queries of the same polarity can be merged, with some
             # care for whether they are both inverted or not.
             if not self._inverted:
-                args = set(self._value_tuple) | set(other._value_tuple)
-                empty = len(args) == 0
+                merged_values = set(self._value_tuple) | set(other._value_tuple)
+                empty = len(merged_values) == 0
                 full = False
             else:
                 # RDML (Remember De Morgan's Law)
-                args = set(self._value_tuple) & set(other._value_tuple)
-                full = len(args) == 0
+                merged_values = set(self._value_tuple) & set(other._value_tuple)
+                full = len(merged_values) == 0
                 empty = False
-            res = self.__class__(*args)
+            res = self.__class__(merged_values)
             res._inverted = self._inverted
             res.full = full
             res.empty = empty
@@ -1294,15 +1294,15 @@ class IntrusiveQueryCore(QueryCore):
             # Two type queries of the same polarity can be merged, with some
             # care for whether they are both inverted or not.
             if not self._inverted:
-                args = set(self._value_tuple) & set(other._value_tuple)
-                empty = len(args) == 0
+                merged_values = set(self._value_tuple) & set(other._value_tuple)
+                empty = len(merged_values) == 0
                 full = False
             else:
                 # RDML
-                args = set(self._value_tuple) | set(other._value_tuple)
-                full = len(args) == 0
+                merged_values = set(self._value_tuple) | set(other._value_tuple)
+                full = len(merged_values) == 0
                 empty = False
-            res = self.__class__(*args)
+            res = self.__class__(merged_values)
             res._inverted = self._inverted
             res.full = full
             res.empty = empty

@@ -48,7 +48,7 @@ class QueryResult(object):
         self.offset = offset
         self.query_json = query_json
 
-    def json(self):
+    def json(self) -> dict:
         """Return the JSON representation of the results."""
         if not isinstance(self.results, dict) \
                 and not isinstance(self.results, list):
@@ -85,14 +85,14 @@ class StatementQueryResult(QueryResult):
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
 
-    def json(self):
+    def json(self) -> dict:
         """Get the JSON dump of the results."""
         json_dict = super(StatementQueryResult, self).json()
         json_dict.update({'returned_evidence': self.returned_evidence,
                           'source_counts': self.source_counts})
         return json_dict
 
-    def statements(self):
+    def statements(self) -> list:
         """Get a list of Statements from the results."""
         return stmts_from_json(list(self.results.values()))
 
@@ -107,7 +107,7 @@ class QueryCore(object):
         self.full = full
         self._inverted = False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         args = list(self._get_constraint_json().values())[0]
         arg_strs = [f'{k}={v}' for k, v in args.items()
                     if v is not None and not k.startswith('_')]
@@ -161,7 +161,7 @@ class QueryCore(object):
         return self.__invert__()
 
     def get_statements(self, ro, limit=None, offset=None, best_first=True,
-                       ev_limit=None):
+                       ev_limit=None) -> StatementQueryResult:
         """Get the statements that satisfy this query.
 
         Parameters
@@ -205,7 +205,8 @@ class QueryCore(object):
                                     returned_evidence, source_counts,
                                     self.to_json())
 
-    def get_hashes(self, ro, limit=None, offset=None, best_first=True):
+    def get_hashes(self, ro, limit=None, offset=None, best_first=True) \
+            -> QueryResult:
         """Get the hashes of statements that satisfy this query.
 
         Parameters
@@ -277,7 +278,8 @@ class QueryCore(object):
         )
         return q
 
-    def get_interactions(self, ro, limit=None, offset=None, best_first=True):
+    def get_interactions(self, ro, limit=None, offset=None, best_first=True) \
+            -> QueryResult:
         """Get the simple interaction information from the Statements metadata.
 
        Each entry in the result corresponds to a single preassembled Statement,
@@ -318,7 +320,8 @@ class QueryCore(object):
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
 
-    def get_relations(self, ro, limit=None, offset=None, best_first=True):
+    def get_relations(self, ro, limit=None, offset=None, best_first=True) \
+            -> QueryResult:
         """Get the agent and type information from the Statements metadata.
 
          Each entry in the result corresponds to a relation, meaning an
@@ -382,7 +385,8 @@ class QueryCore(object):
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
 
-    def get_agents(self, ro, limit=None, offset=None, best_first=True):
+    def get_agents(self, ro, limit=None, offset=None, best_first=True) \
+            -> QueryResult:
         """Get the agent pairs from the Statements metadata.
 
          Each entry is simply a pair (or more) of Agents involved in an
@@ -695,28 +699,13 @@ class QueryCore(object):
         return self._inverted != other._inverted
 
 
-def _get_raw_texts(stmt_json):
-    raw_text = []
-    agent_names = get_statement_by_name(stmt_json['type'])._agent_order
-    for ag_name in agent_names:
-        ag_value = stmt_json.get(ag_name, None)
-        if isinstance(ag_value, dict):
-            raw_text.append(ag_value['db_refs'].get('TEXT'))
-        elif ag_value is None:
-            raw_text.append(None)
-        else:
-            for ag in ag_value:
-                raw_text.append(ag['db_refs'].get('TEXT'))
-    return raw_text
-
-
 class SourceCore(QueryCore):
     """The core of all queries that use SourceMeta."""
 
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
 
-    def _do_and(self, other):
+    def _do_and(self, other) -> QueryCore:
         # Make sure that intersections of SourceCore children end up in
         # SourceIntersection.
         if isinstance(other, SourceCore):
@@ -725,7 +714,7 @@ class SourceCore(QueryCore):
             return SourceIntersection(other.source_queries + (self.copy(),))
         return super(SourceCore, self)._do_and(other)
 
-    def _copy(self):
+    def _copy(self) -> QueryCore:
         raise NotImplementedError()
 
     def _get_table(self, ro):
@@ -1845,3 +1834,18 @@ class Union(MergeQueryCore):
                 self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
                                           .alias(self.name))
         return self._mk_hashes_al
+
+
+def _get_raw_texts(stmt_json):
+    raw_text = []
+    agent_names = get_statement_by_name(stmt_json['type'])._agent_order
+    for ag_name in agent_names:
+        ag_value = stmt_json.get(ag_name, None)
+        if isinstance(ag_value, dict):
+            raw_text.append(ag_value['db_refs'].get('TEXT'))
+        elif ag_value is None:
+            raw_text.append(None)
+        else:
+            for ag in ag_value:
+                raw_text.append(ag['db_refs'].get('TEXT'))
+    return raw_text

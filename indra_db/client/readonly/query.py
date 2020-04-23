@@ -1760,30 +1760,27 @@ class Union(MergeQueryCore):
         # hash queries.
         other_queries = set()
         query_groups = defaultdict(list)
-        pos_hash_queries = []
-        neg_hash_queries = []
+        merge_grps = defaultdict(lambda: {True: [], False: []})
         full = False
         all_empty = True
         for query in query_list:
             if not query.empty:
                 all_empty = False
 
-            if isinstance(query, HasHash):
-                if not query._inverted:
-                    pos_hash_queries.append(query)
-                else:
-                    neg_hash_queries.append(query)
+            if isinstance(query, HasHash) \
+                    or isinstance(query, IntrusiveQueryCore):
+                merge_grps[query.__class__][query._inverted].append(query)
             else:
                 other_queries.add(query)
                 query_groups[query.__class__].append(query)
 
         # Merge up the hash queries.
-        for hash_query_group in [pos_hash_queries, neg_hash_queries]:
-            if len(hash_query_group) == 1:
-                other_queries.add(hash_query_group[0])
-            elif len(hash_query_group) > 1:
-                query = hash_query_group[0]
-                for other_query in hash_query_group[1:]:
+        for grp in (g for d in merge_grps.values() for g in d.values()):
+            if len(grp) == 1:
+                other_queries.add(grp[0])
+            elif len(grp) > 1:
+                query = grp[0]
+                for other_query in grp[1:]:
                     query |= other_query
                 if query.full:
                     full = True

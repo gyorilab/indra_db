@@ -3,7 +3,8 @@ from itertools import combinations
 __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
            'MergeQueryCore', 'HasAgent', 'FromMeshId', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
-           'SourceCore', 'SourceIntersection', 'HasType']
+           'SourceCore', 'SourceIntersection', 'HasType', 'IntrusiveQueryCore',
+           'HasNumAgents', 'HasNumEvidence']
 
 import json
 import logging

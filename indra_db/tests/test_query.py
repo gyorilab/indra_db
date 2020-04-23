@@ -217,7 +217,11 @@ def test_query_set_behavior():
         HasSources(['medscan']),
         HasType(['Phosphorylation', 'Activation']),
         HasType(['RegulateActivity'], include_subclasses=True),
-        HasType(['Complex'])
+        HasType(['Complex']),
+        HasNumAgents([2, 3]),
+        HasNumAgents([1]),
+        HasNumEvidence([10, 11]),
+        HasNumEvidence([1])
     ]
 
     failures = []

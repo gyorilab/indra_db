@@ -1253,24 +1253,27 @@ class IntrusiveQueryCore(QueryCore):
     Thus, when using these queries in an Intersection, they are applied to each
     sub query separately.
     """
-    def __init__(self, *args, **kwargs):
-        if not hasattr(self, '_value_tuple'):
-            self._value_tuple = NotImplemented
-        super(IntrusiveQueryCore, self).__init__(*args, **kwargs)
+    name = NotImplemented
+    list_name = NotImplemented
+    item_type = NotImplemented
+    col_name = NotImplemented
 
-    def _or_join_args(self, other):
-        raise NotImplementedError()
+    def __init__(self, value_list):
+        self._value_tuple = tuple([self.item_type(n)
+                                   for n in value_list])
+        setattr(self, self.list_name, self._value_tuple)
+        super(IntrusiveQueryCore, self).__init__(len(self._value_tuple) == 0)
 
-    def _and_join_args(self, other):
-        raise NotImplementedError()
-
-    def _get_empty(self):
+    def _get_empty(self) -> QueryCore:
         return self.__class__([])
 
-    def _copy(self):
+    def _copy(self) -> QueryCore:
         return self.__class__(self._value_tuple)
 
-    def _do_or(self, other):
+    def _get_constraint_json(self) -> dict:
+        return {self.name: {self.list_name: list(self._value_tuple)}}
+
+    def _do_or(self, other) -> QueryCore:
         if isinstance(other, self.__class__) \
                 and self._inverted == other._inverted:
             # Two type queries of the same polarity can be merged, with some
@@ -1295,7 +1298,7 @@ class IntrusiveQueryCore(QueryCore):
             return ~self._get_empty()
         return super(self.__class__, self)._do_or(other)
 
-    def _do_and(self, other):
+    def _do_and(self, other) -> QueryCore:
         if isinstance(other, self.__class__) \
                 and self._inverted == other._inverted:
             # Two type queries of the same polarity can be merged, with some
@@ -1320,6 +1323,40 @@ class IntrusiveQueryCore(QueryCore):
             return self._get_empty()
         return super(self.__class__, self)._do_and(other)
 
+    def _get_table(self, ro):
+        return ro.SourceMeta
+
+    def _get_query_values(self):
+        return self._value_tuple
+
+    def _get_clause(self, meta):
+        q_values = self._get_query_values()
+        col = getattr(meta, self.col_name)
+        if len(q_values) == 1:
+            if not self._inverted:
+                clause = col == q_values[0]
+            else:
+                clause = col != q_values[0]
+        else:
+            if not self._inverted:
+                clause = col.in_(q_values)
+            else:
+                clause = col.notin_(q_values)
+        return clause
+
+    def _apply_filter(self, meta, query):
+        """Apply the filter to the query.
+
+        Defined generically for application by other classes when included
+        in an Intersection.
+        """
+        return query.filter(self._get_clause(meta))
+
+    def _get_hash_query(self, ro, type_queries=None):
+        if type_queries is not None:
+            raise ValueError("Cannot apply type queries to type query.")
+        return self._apply_filter(self._get_table(ro), self._base_query(ro))
+
 
 class HasNumAgents(IntrusiveQueryCore):
     """Find Statements with any one of a listed number of agents.
@@ -1336,14 +1373,20 @@ class HasNumAgents(IntrusiveQueryCore):
     agent_nums : tuple
         A list of integers, each indicating a number of agents.
     """
-    def __init__(self, agent_nums):
-        agent_nums = tuple([int(n) for n in agent_nums])
-        if 0 in agent_nums:
-            raise ValueError("Every Statement must have at least one Agent.")
+    name = 'has_num_agents'
+    list_name = 'agent_nums'
+    item_type = int
+    col_name = 'agent_count'
 
-        self.agent_nums = agent_nums
-        self._value_tuple = agent_nums
-        super(HasNumAgents, self).__init__(len(agent_nums) == 0)
+    def __init__(self, agent_nums):
+        super(HasNumAgents, self).__init__(agent_nums)
+        if 0 in self.agent_nums:
+            raise ValueError(f"Each element of {self.list_name} must be "
+                             f"greater than 0.")
+
+    def __str__(self):
+        invert_word = 'not ' if self._inverted else ''
+        return f"number of agents {invert_word}in {self.agent_nums}"
 
 
 class HasNumEvidence(IntrusiveQueryCore):
@@ -1358,17 +1401,22 @@ class HasNumEvidence(IntrusiveQueryCore):
 
     Parameters
     ----------
-    nums_of_evidence : tuple
+    evidence_nums : tuple
         A list of numbers greater than 0, each indicating a number of evidence.
     """
-    def __init__(self, nums_of_evidence):
-        nums_of_evidence = tuple([int(n) for n in nums_of_evidence])
-        if 0 in nums_of_evidence:
+    name = 'has_num_evidence'
+    list_name = 'evidence_nums'
+    item_type = int
+    col_name = 'ev_count'
+
+    def __init__(self, evidence_nums):
+        super(HasNumEvidence, self).__init__(evidence_nums)
+        if 0 in self.evidence_nums:
             raise ValueError("Each Statement must have at least one Evidence.")
 
-        self.nums_of_evidence = nums_of_evidence
-        self._value_tuple = nums_of_evidence
-        super(HasNumEvidence, self).__init__(len(nums_of_evidence) == 0)
+    def __str__(self):
+        invert_word = 'not ' if self._inverted else ''
+        return f"number of evidence {invert_word}in {self.evidence_nums}"
 
 
 class HasType(IntrusiveQueryCore):
@@ -1389,72 +1437,27 @@ class HasType(IntrusiveQueryCore):
         (optional) default is False. If True, each Statement type given in the
         list will be expanded to include all of its sub classes.
     """
+    name = 'has_type'
+    list_name = 'stmt_types'
+    item_type = str
+    col_name = 'type_num'
+
     def __init__(self, stmt_types, include_subclasses=False):
-        empty = False
-        if len(stmt_types) == 0:
-            empty = True
-
-        st_set = set(stmt_types)
-
         # Do the expansion of sub classes, if requested.
+        st_set = set(stmt_types)
         if include_subclasses:
             for stmt_type in stmt_types:
                 stmt_class = get_statement_by_name(stmt_type)
                 sub_classes = get_all_descendants(stmt_class)
                 st_set |= {c.__name__ for c in sub_classes}
-        self.stmt_types = tuple(st_set)
-        super(HasType, self).__init__(empty)
-
-    def _or_join_args(self, other):
-        type_list = set(self.stmt_types) | set(other.stmt_types)
-        return [type_list], len(type_list)
-
-    def _and_join_args(self, other):
-        type_list = set(self.stmt_types) & set(other.stmt_types)
-        return [type_list], len(type_list)
-
-    def _copy(self):
-        return self.__class__(self.stmt_types)
+        super(HasType, self).__init__(st_set)
 
     def __str__(self):
         invert_word = 'not ' if self._inverted else ''
         return f"type {invert_word}in {self.stmt_types}"
 
-    def _get_constraint_json(self) -> dict:
-        return {'type_query': {'types': self.stmt_types}}
-
-    def _get_table(self, ro):
-        return ro.SourceMeta
-
-    def _get_type_nums(self):
+    def _get_query_values(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
-
-    def _get_clause(self, meta):
-        type_nums = self._get_type_nums()
-        if len(type_nums) == 1:
-            if not self._inverted:
-                clause = meta.type_num == type_nums[0]
-            else:
-                clause = meta.type_num != type_nums[0]
-        else:
-            if not self._inverted:
-                clause = meta.type_num.in_(type_nums)
-            else:
-                clause = meta.type_num.notin_(type_nums)
-        return clause
-
-    def _apply_filter(self, meta, query):
-        """Apply the filter to the query.
-
-        Defined generically for application by other classes when included
-        in an Intersection.
-        """
-        return query.filter(self._get_clause(meta))
-
-    def _get_hash_query(self, ro, type_queries=None):
-        if type_queries is not None:
-            raise ValueError("Cannot apply type queries to type query.")
-        return self._apply_filter(self._get_table(ro), self._base_query(ro))
 
 
 class FromMeshId(QueryCore):

@@ -1286,7 +1286,7 @@ class IntrusiveQueryCore(QueryCore):
             # If the two queries are inverses, we can simply return a full
             # result trivially. (A or not A is anything)
             return ~self._get_empty()
-        return super(self.__class__, self)._do_or(other)
+        return super(IntrusiveQueryCore, self)._do_or(other)
 
     def _do_and(self, other) -> QueryCore:
         if isinstance(other, self.__class__) \
@@ -1311,7 +1311,7 @@ class IntrusiveQueryCore(QueryCore):
             # If the two queries are inverses, we can simply return a empty
             # result trivially. (A and not A is nothing)
             return self._get_empty()
-        return super(self.__class__, self)._do_and(other)
+        return super(IntrusiveQueryCore, self)._do_and(other)
 
     def _get_table(self, ro):
         return ro.SourceMeta

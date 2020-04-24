@@ -140,7 +140,7 @@ readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3, 'ISI': 4}
 # Specify versions of readers, and preference. Later in the list is better.
 reader_versions = {
     'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
-                'October2018-linux', 'February2020-linux'],
+                'October2018-linux', 'February2020-linux', 'April2020-linux'],
     'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
     'trips': ['STATIC', '2019Nov14'],
     'isi': ['20180503'],

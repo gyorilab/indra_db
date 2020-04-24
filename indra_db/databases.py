@@ -143,7 +143,8 @@ reader_versions = {
                 'October2018-linux', 'February2020-linux'],
     'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
     'trips': ['STATIC', '2019Nov14'],
-    'isi': ['20180503']
+    'isi': ['20180503'],
+    'eidos': ['0.2.3-SNAPSHOT'],
 }
 
 

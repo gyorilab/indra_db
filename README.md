@@ -23,6 +23,12 @@ We have read all available content, and every day we run the following readers:
 - [REACH](https://github.com/clulab/reach)
 - [Sparser](https://github.com/ddmcdonald/sparser)
 
+we read all new content with the following readers:
+- [Eidos](https://github.com/clulab/eidos)
+
+we read a limited subset of new content with the following readers:
+- [TRIPS](http://trips.ihmc.us/parser/cgi/drum)
+
 on the latest content drawn from:
 - [PubMed](https://www.ncbi.nlm.nih.gov/pubmed/) - ~19 million abstracts and ~29 million titles
 - [PubMed Central](/www.ncbi.nlm.nih.gov/pmc/) - ~2.7 million fulltext
@@ -31,7 +37,6 @@ on the latest content drawn from:
 
 #### Other Readers
 We also include more or less static content extracted from the following readers:
-- [TRIPS](http://trips.ihmc.us/trac/drum/wiki/TripsDrumSystemInstallation)
 - [RLIMS-P](https://research.bioinformatics.udel.edu/rlimsp/)
 
 #### Other Databases

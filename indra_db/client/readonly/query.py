@@ -162,7 +162,8 @@ class QueryCore(object):
         return self.__invert__()
 
     def get_statements(self, ro, limit=None, offset=None, best_first=True,
-                       ev_limit=None) -> StatementQueryResult:
+                       ev_limit=None, evidence_filter=None) \
+            -> StatementQueryResult:
         """Get the statements that satisfy this query.
 
         Parameters
@@ -180,6 +181,9 @@ class QueryCore(object):
             Return the best (most evidence) statements first.
         ev_limit : int
             Limit the number of evidence returned for each statement.
+        evidence_filter : None or EvidenceFilter
+            If None, no filtering will be applied. Otherwise, an EvidenceFilter
+            class must be provided.
 
         Returns
         -------
@@ -201,7 +205,8 @@ class QueryCore(object):
         # Do the difficult work of turning a query for hashes and ev_counts
         # into a query for statement JSONs. Return the results.
         stmt_dict, ev_totals, returned_evidence, source_counts = \
-            self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit)
+            self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit,
+                                                   evidence_filter)
         return StatementQueryResult(stmt_dict, limit, offset, ev_totals,
                                     returned_evidence, source_counts,
                                     self.to_json())
@@ -512,7 +517,8 @@ class QueryCore(object):
 
         return cont_q
 
-    def _get_stmt_jsons_from_hashes_query(self, ro, mk_hashes_q, ev_limit):
+    def _get_stmt_jsons_from_hashes_query(self, ro, mk_hashes_q, ev_limit,
+                                          evidence_filter):
         """Turn a query for hashes into a query for statements.
 
         In particular, this function retrieves refs, and the limited number of
@@ -520,6 +526,8 @@ class QueryCore(object):
         """
         mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
         cont_q = self._get_content_query(ro, mk_hashes_al, ev_limit)
+        if evidence_filter is not None:
+            cont_q = evidence_filter.apply_filter(ro, cont_q)
 
         # If there is no evidence, whittle down the results so we only get one
         # pa_json for each hash.

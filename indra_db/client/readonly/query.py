@@ -204,10 +204,115 @@ class QueryCore(object):
 
         # Do the difficult work of turning a query for hashes and ev_counts
         # into a query for statement JSONs. Return the results.
-        stmt_dict, ev_totals, returned_evidence, source_counts = \
-            self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit,
-                                                   evidence_filter)
-        return StatementQueryResult(stmt_dict, limit, offset, ev_totals,
+        mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
+        cont_q = self._get_content_query(ro, mk_hashes_al, ev_limit)
+        if evidence_filter is not None:
+            cont_q = evidence_filter.apply_filter(ro, cont_q)
+
+        # If there is no evidence, whittle down the results so we only get one
+        # pa_json for each hash.
+        if ev_limit == 0:
+            cont_q = cont_q.distinct()
+
+        # If we have a limit on the evidence, we need to do a lateral join.
+        # If we are just getting all the evidence, or none of it, just put an
+        # alias on the subquery.
+        if ev_limit is not None:
+            cont_q = cont_q.limit(ev_limit)
+            json_content_al = cont_q.subquery().lateral('json_content')
+        else:
+            json_content_al = cont_q.subquery().alias('json_content')
+
+        # Join up with other tables to pull metadata.
+        stmts_q = (mk_hashes_al
+                   .outerjoin(json_content_al, true())
+                   .outerjoin(ro.ReadingRefLink,
+                              ro.ReadingRefLink.rid == json_content_al.c.rid)
+                   .outerjoin(ro.SourceMeta,
+                              ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
+
+        ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
+                         if not k.startswith('_')]
+
+        cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
+                mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
+                json_content_al.c.pa_json]
+        cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
+
+        # Execute the query.
+        selection = select(cols).select_from(stmts_q)
+
+        logger.debug("Executing sql to get statements:\n%s" % str(selection))
+
+        proxy = ro.session.connection().execute(selection)
+        res = proxy.fetchall()
+        if res:
+            logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
+        else:
+            logger.debug("res is empty.")
+
+        # Unpack the statements.
+        stmts_dict = OrderedDict()
+        ev_totals = OrderedDict()
+        source_counts = OrderedDict()
+        returned_evidence = 0
+        src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
+        for row in res:
+            returned_evidence += 1
+
+            # Unpack the row
+            row_gen = iter(row)
+
+            mk_hash = next(row_gen)
+            src_dict = dict.fromkeys(src_list, 0)
+            src_dict.update(next(row_gen))
+            ev_count = next(row_gen)
+            raw_json_bts = next(row_gen)
+            pa_json_bts = next(row_gen)
+            ref_dict = dict(zip(ref_link_keys, row_gen))
+
+            # Add a new statement if the hash is new.
+            if mk_hash not in stmts_dict.keys():
+                source_counts[mk_hash] = src_dict
+                ev_totals[mk_hash] = ev_count
+                stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
+                stmts_dict[mk_hash]['evidence'] = []
+
+            # Add annotations if not present.
+            if ev_limit != 0:
+                raw_json = json.loads(raw_json_bts.decode('utf-8'))
+                ev_json = raw_json['evidence'][0]
+                if 'annotations' not in ev_json.keys():
+                    ev_json['annotations'] = {}
+
+                # Add agents' raw text to annotations.
+                ev_json['annotations']['agents'] = \
+                    {'raw_text': _get_raw_texts(raw_json)}
+
+                # Add prior UUIDs to the annotations
+                if 'prior_uuids' not in ev_json['annotations'].keys():
+                    ev_json['annotations']['prior_uuids'] = []
+                ev_json['annotations']['prior_uuids'].append(raw_json['id'])
+
+                # Add and/or update text refs.
+                if 'text_refs' not in ev_json.keys():
+                    ev_json['text_refs'] = {}
+                if ref_dict['pmid']:
+                    ev_json['pmid'] = ref_dict['pmid']
+                elif 'PMID' in ev_json['text_refs']:
+                    del ev_json['text_refs']['PMID']
+                ev_json['text_refs'].update({k.upper(): v
+                                             for k, v in ref_dict.items()
+                                             if v is not None})
+
+                # Add the source dictionary.
+                if ref_dict['source']:
+                    ev_json['annotations']['content_source'] = ref_dict['source']
+
+                # Add the evidence JSON to the list.
+                stmts_dict[mk_hash]['evidence'].append(ev_json)
+
+        return StatementQueryResult(stmts_dict, limit, offset, ev_totals,
                                     returned_evidence, source_counts,
                                     self.to_json())
 
@@ -516,123 +621,6 @@ class QueryCore(object):
         cont_q = cont_q.filter(frp_link)
 
         return cont_q
-
-    def _get_stmt_jsons_from_hashes_query(self, ro, mk_hashes_q, ev_limit,
-                                          evidence_filter):
-        """Turn a query for hashes into a query for statements.
-
-        In particular, this function retrieves refs, and the limited number of
-        evidence for each statement.
-        """
-        mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
-        cont_q = self._get_content_query(ro, mk_hashes_al, ev_limit)
-        if evidence_filter is not None:
-            cont_q = evidence_filter.apply_filter(ro, cont_q)
-
-        # If there is no evidence, whittle down the results so we only get one
-        # pa_json for each hash.
-        if ev_limit == 0:
-            cont_q = cont_q.distinct()
-
-        # If we have a limit on the evidence, we need to do a lateral join.
-        # If we are just getting all the evidence, or none of it, just put an
-        # alias on the subquery.
-        if ev_limit is not None:
-            cont_q = cont_q.limit(ev_limit)
-            json_content_al = cont_q.subquery().lateral('json_content')
-        else:
-            json_content_al = cont_q.subquery().alias('json_content')
-
-        # Join up with other tables to pull metadata.
-        stmts_q = (mk_hashes_al
-                   .outerjoin(json_content_al, true())
-                   .outerjoin(ro.ReadingRefLink,
-                              ro.ReadingRefLink.rid == json_content_al.c.rid)
-                   .outerjoin(ro.SourceMeta,
-                              ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
-
-        ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
-                         if not k.startswith('_')]
-
-        cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
-                mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
-                json_content_al.c.pa_json]
-        cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
-
-        # Execute the query.
-        selection = select(cols).select_from(stmts_q)
-
-        logger.debug("Executing sql to get statements:\n%s" % str(selection))
-
-        proxy = ro.session.connection().execute(selection)
-        res = proxy.fetchall()
-        if res:
-            logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
-        else:
-            logger.debug("res is empty.")
-
-        # Unpack the statements.
-        stmts_dict = OrderedDict()
-        ev_totals = OrderedDict()
-        source_counts = OrderedDict()
-        returned_evidence = 0
-        src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
-        for row in res:
-            returned_evidence += 1
-
-            # Unpack the row
-            row_gen = iter(row)
-
-            mk_hash = next(row_gen)
-            src_dict = dict.fromkeys(src_list, 0)
-            src_dict.update(next(row_gen))
-            ev_count = next(row_gen)
-            raw_json_bts = next(row_gen)
-            pa_json_bts = next(row_gen)
-            ref_dict = dict(zip(ref_link_keys, row_gen))
-
-            # Add a new statement if the hash is new.
-            if mk_hash not in stmts_dict.keys():
-                source_counts[mk_hash] = src_dict
-                ev_totals[mk_hash] = ev_count
-                stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
-                stmts_dict[mk_hash]['evidence'] = []
-
-            # Add annotations if not present.
-            if ev_limit != 0:
-                raw_json = json.loads(raw_json_bts.decode('utf-8'))
-                ev_json = raw_json['evidence'][0]
-                if 'annotations' not in ev_json.keys():
-                    ev_json['annotations'] = {}
-
-                # Add agents' raw text to annotations.
-                ev_json['annotations']['agents'] = \
-                    {'raw_text': _get_raw_texts(raw_json)}
-
-                # Add prior UUIDs to the annotations
-                if 'prior_uuids' not in ev_json['annotations'].keys():
-                    ev_json['annotations']['prior_uuids'] = []
-                ev_json['annotations']['prior_uuids'].append(raw_json['id'])
-
-                # Add and/or update text refs.
-                if 'text_refs' not in ev_json.keys():
-                    ev_json['text_refs'] = {}
-                if ref_dict['pmid']:
-                    ev_json['pmid'] = ref_dict['pmid']
-                elif 'PMID' in ev_json['text_refs']:
-                    del ev_json['text_refs']['PMID']
-                ev_json['text_refs'].update({k.upper(): v
-                                             for k, v in ref_dict.items()
-                                             if v is not None})
-
-                # Add the source dictionary.
-                if ref_dict['source']:
-                    ev_json['annotations']['content_source'] = ref_dict['source']
-
-                # Add the evidence JSON to the list.
-                stmts_dict[mk_hash]['evidence'].append(ev_json)
-
-        return stmts_dict, ev_totals, returned_evidence, source_counts
 
     def __merge_queries(self, other, MergeClass):
         """This is the most general method for handling query merges.

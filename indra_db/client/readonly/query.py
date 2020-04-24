@@ -870,13 +870,9 @@ class HasOnlySource(SourceCore):
     ----------
     only_source : str
         The only source that spawned the statement, e.g. signor, or reach.
-    filter_evidence : bool
-        Default is True. If True, apply this filter to each evidence as well,
-        if and when evidence is retrieved.
     """
-    def __init__(self, only_source, filter_evidence=True):
+    def __init__(self, only_source):
         self.only_source = only_source
-        self.filter_evidence = filter_evidence
         super(HasOnlySource, self).__init__()
 
     def __str__(self):
@@ -887,23 +883,16 @@ class HasOnlySource(SourceCore):
         return self.__class__(self.only_source)
 
     def _get_constraint_json(self) -> dict:
-        return {'has_only_source': {'only_source': self.only_source,
-                                    'filter_evidence': self.filter_evidence}}
+        return {'has_only_source': {'only_source': self.only_source}}
 
-    def _get_content_query(self, ro, mk_hashes_al, ev_limit):
-        cont_q = super(HasOnlySource)._get_content_query(ro, mk_hashes_al,
-                                                         ev_limit)
-        if self.filter_evidence:
-            cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
-            if not self._inverted:
-                cont_q = cont_q.filter(
-                    ro.RawStmtSrc.src == self.only_source
-                )
-            else:
-                cont_q = cont_q.filter(
-                    ro.RawStmtSrc.src.is_distinct_from(self.only_source)
-                )
-        return cont_q
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src == self.only_source
+        else:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.is_distinct_from(self.only_source)
+        return EvidenceFilter.from_filter('raw_stmt_src', get_clause)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -926,16 +915,12 @@ class HasSources(SourceCore):
         A collection of strings, each string the canonical name for a source.
         The result will include statements that have evidence from ALL sources
         that you include.
-    filter_evidence : bool
-        Default is False. If True, apply this filter to each evidence as well,
-        if and when evidence is retrieved. If false, evidence is not filtered.
     """
-    def __init__(self, sources, filter_evidence=False):
+    def __init__(self, sources):
         empty = False
         if len(sources) == 0:
             empty = True
         self.sources = tuple(set(sources))
-        self.filter_evidence = filter_evidence
         super(HasSources, self).__init__(empty)
 
     def _copy(self):
@@ -948,19 +933,16 @@ class HasSources(SourceCore):
             return f"is not from one of {self.sources}"
 
     def _get_constraint_json(self) -> dict:
-        return {'has_sources': {'sources': self.sources,
-                                'filter_evidence': self.filter_evidence}}
+        return {'has_sources': {'sources': self.sources}}
 
-    def _get_content_query(self, ro, mk_hashes_al, ev_limit):
-        cont_q = super(HasSources)._get_content_query(ro, mk_hashes_al,
-                                                      ev_limit)
-        if self.filter_evidence:
-            cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
-            if not self._inverted:
-                cont_q = cont_q.filter(ro.RawStmtSrc.src.in_(self.sources))
-            else:
-                cont_q = cont_q.filter(ro.RawStmtSrc.src.notin_(self.sources))
-        return cont_q
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.in_(self.sources)
+        else:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.notin_(self.sources)
+        return EvidenceFilter.from_filter('raw_stmt_src', get_clause)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -985,8 +967,7 @@ class SourceTypeCore(SourceCore):
     name = NotImplemented
     col = NotImplemented
 
-    def __init__(self, filter_evidence=False):
-        self.filter_evidence = filter_evidence
+    def __init__(self):
         super(SourceTypeCore, self).__init__()
 
     def __str__(self):
@@ -1001,24 +982,22 @@ class SourceTypeCore(SourceCore):
     def _get_constraint_json(self) -> dict:
         return {f'has_{self.name}_query': {f'_has_{self.name}': True}}
 
-    def _get_content_query(self, ro, mk_hashes_al, ev_limit):
-        cont_q = super(SourceTypeCore)._get_content_query(ro, mk_hashes_al,
-                                                          ev_limit)
-        if self.filter_evidence:
-            if self.col == 'has_rd':
-                my_src_group = SOURCE_GROUPS['reading']
-            elif self.col == 'has_db':
-                my_src_group = SOURCE_GROUPS['databases']
-            else:
-                raise RuntimeError("`col` class attribute not recognized.")
+    def ev_filter(self):
+        if self.col == 'has_rd':
+            my_src_group = SOURCE_GROUPS['reading']
+        elif self.col == 'has_db':
+            my_src_group = SOURCE_GROUPS['databases']
+        else:
+            raise RuntimeError("`col` class attribute not recognized.")
 
-            cont_q = cont_q.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
-            if not self._inverted:
-                cont_q = cont_q.filter(ro.RawStmtSrc.src.in_(my_src_group))
-            else:
-                cont_q = cont_q.filter(ro.RawStmtSrc.src.notin_(my_src_group))
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.in_(my_src_group)
+        else:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.notin_(my_src_group)
 
-        return cont_q
+        return EvidenceFilter.from_filter('raw_stmt_src', get_clause)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -1465,7 +1444,7 @@ class FromMeshId(QueryCore):
         A canonical MeSH ID, of the "D" variety, e.g. "D000135".
     """
     def __init__(self, mesh_id):
-        if not mesh_id.startswith('D') and not mesh_id[1:].is_digit():
+        if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
             raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
                              "the rest must be a number." % mesh_id)
         self.mesh_id = mesh_id
@@ -1510,6 +1489,16 @@ class FromMeshId(QueryCore):
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
         return qry
+
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtMesh.mesh_num == self.mesh_num
+        else:
+            def get_clause(ro):
+                return ro.RawStmtMesh.mesh_num.is_distinct_from(self.mesh_num)
+
+        return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
 
 
 class MergeQueryCore(QueryCore):

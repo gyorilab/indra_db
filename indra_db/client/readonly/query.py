@@ -11,7 +11,7 @@ import logging
 from collections import OrderedDict, Iterable, defaultdict
 
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-    except_, func, null, String
+    except_, func, null, String, and_
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
@@ -1858,6 +1858,127 @@ class Union(MergeQueryCore):
                 self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
                                           .alias(self.name))
         return self._mk_hashes_al
+
+
+class _QueryEvidenceFilter:
+    def __init__(self, table_name, get_clause):
+        self.table_name = table_name
+        self.get_clause = get_clause
+
+    def join_table(self, ro, query, tables_joined=None):
+        if self.table_name == 'raw_stmt_src':
+            ret = query.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
+        elif self.table_name == 'raw_stmt_mesh':
+            ret = query.outerjoin(ro.RawStmtMesh,
+                                  ro.RawStmtMesh.sid == ro.FastRawPaLink.id,
+                                  join_to_left=True)
+        else:
+            raise ValueError(f"No join defined for readonly table "
+                             f"'{self.table_name}'")
+
+        if tables_joined is not None:
+            tables_joined.add(self.table_name)
+        return ret
+
+
+class EvidenceFilter:
+    """Object for handling filtering of evidence.
+
+    We need to be able to perform logical operations between evidence to handle
+    important cases:
+
+    HasSource(['reach']) & FromMeshId(['D0001'])
+    -> we might reasonably want to filter evidence for the second subquery but
+       not the first.
+
+    HasOnlySource(['reach']) & FromMeshId(['D00001'])
+    -> Here we would likely want to filter the evidence for both sub queries.
+
+    HasOnlySource(['reach']) | FromMeshId(['D000001'])
+    -> Not sure what this even means (its purpose)....not sure what we'd do for
+       evidence filtering when the original statements are or'ed
+
+    HasDatabases() & FromMeshId(['D000001'])
+    -> Here you COULDN'T perform an & on the evidence, because the two sources
+       are mutually exclusive (only readings connect to mesh annotations).
+       However it could make sense you would want to do an "or" between the
+       evidence, so the evidence is either from a database or from a mesh
+       annotated document.
+
+    "filter all the evidence" and "filter none of the evidence" should
+    definitely be options. Although "Filter for all" might run into usues with
+    the "HasDatabase and FromMeshId" scenario. I think no evidence filter should
+    be the default, and if you attempt a bogus "filter all evidence" (as with
+    that scenario) you get an error.
+    """
+
+    def __init__(self, filters=None, joiner='and'):
+        if filters is None:
+            filters = []
+        self.filters = filters
+        self.joiner = joiner
+
+    @classmethod
+    def from_filter(cls, table_name, get_clause):
+        return cls([_QueryEvidenceFilter(table_name, get_clause)])
+
+    def _merge(self, method, other):
+        if not isinstance(other, EvidenceFilter):
+            raise ValueError(f"Type {type(other)} cannot use __{method}__ with "
+                             f"{self.__class__.__name__}.")
+        if self.joiner == method:
+            if other.joiner == method or len(other.filters) == 1:
+                ret = EvidenceFilter(self.filters + other.filters)
+            else:
+                ret = EvidenceFilter(self.filters + [other])
+        else:
+            if other.joiner == method:
+                if len(self.filters) == 1:
+                    ret = EvidenceFilter(other.filters + self.filters)
+                else:
+                    ret = EvidenceFilter(other.filters + [self])
+            else:
+                if len(self.filters) == 1:
+                    if len(other.filters == 1):
+                        ret = EvidenceFilter(self.filters + other.filters)
+                    else:
+                        ret = EvidenceFilter(self.filters + [other])
+                else:
+                    if len(other.filters) == 1:
+                        ret = EvidenceFilter(other.filters + [self])
+                    else:
+                        ret = EvidenceFilter([self, other])
+        return ret
+
+    def __and__(self, other):
+        return self._merge('and', other)
+
+    def __or__(self, other):
+        return self._merge('or', other)
+
+    def _get_clause_list(self, ro):
+        return [f.get_clause(ro) for f in self.filters]
+
+    def get_clause(self, ro):
+        if self.joiner == 'and':
+            return and_(*self._get_clause_list(ro))
+        else:
+            return or_(*self._get_clause_list(ro))
+
+    def apply_filter(self, ro, query):
+        if self.joiner == 'and':
+            return query.filter(*self._get_clause_list(ro))
+        else:
+            return query.filter(self.get_clause(ro))
+
+    def join_table(self, ro, query, tables_joined=None):
+        if tables_joined is None:
+            tables_joined = set()
+
+        for ev_filter in self.filters:
+            query = ev_filter.join_table(ro, query, tables_joined)
+
+        return query
 
 
 def _get_raw_texts(stmt_json):

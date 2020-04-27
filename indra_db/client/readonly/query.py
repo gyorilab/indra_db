@@ -219,7 +219,7 @@ class QueryCore(object):
         # If we have a limit on the evidence, we need to do a lateral join.
         # If we are just getting all the evidence, or none of it, just put an
         # alias on the subquery.
-        if ev_limit is not None:
+        if ev_limit is not None and ev_limit != 0:
             cont_q = cont_q.limit(ev_limit)
             json_content_al = cont_q.subquery().lateral('json_content')
             stmts_q = (mk_hashes_al
@@ -626,7 +626,7 @@ class QueryCore(object):
             raw_json_c = ro.FastRawPaLink.raw_json.label('raw_json')
 
         # Create the query.
-        if ev_limit is None:
+        if ev_limit is None or ev_limit == 0:
             mk_hash_c = ro.FastRawPaLink.mk_hash.label('mk_hash')
             ev_count_c = mk_hashes_al.c.ev_count.label('ev_count')
             cont_q = ro.session.query(mk_hash_c, ev_count_c, raw_json_c,

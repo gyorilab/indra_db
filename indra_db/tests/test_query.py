@@ -3,6 +3,7 @@ import random
 from itertools import combinations, permutations, product
 
 from indra.statements import Agent, get_statement_by_name
+from indra_db.client.readonly.query import QueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map
 from indra_db.util import extract_agent_data, get_ro, get_db
 from indra_db.client.readonly.query import *
@@ -332,4 +333,58 @@ def test_query_set_behavior():
 def test_get_interactions():
     ro = get_db('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
-    query.get_interactions(ro, limit=10, detail_level='relations')
+    res = query.get_interactions(ro, limit=10, detail_level='relations')
+    assert isinstance(res, QueryResult)
+    assert len(res.results) == 10
+
+
+def test_evidence_filtering():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = ~HasOnlySource('medscan')
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert not any(ev.text_refs.get('READER') == 'medscan' for s in stmts
+                   for ev in s.evidence)
+
+
+def test_evidence_count_is_none():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_statements(ro, limit=2)
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    ev_list = stmts[0].evidence
+    assert len(ev_list) > 10
+    assert all(len(s.evidence) == res.evidence_totals[s.get_hash()]
+               for s in stmts)
+    assert res.returned_evidence == sum(res.evidence_totals.values())
+
+
+def test_evidence_count_is_10():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_statements(ro, limit=2, ev_limit=10)
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(len(s.evidence) <= 10 for s in stmts)
+    assert res.returned_evidence == 20
+    assert sum(res.evidence_totals.values()) > 20
+
+
+def test_evidence_count_is_0():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_statements(ro, limit=2, ev_limit=0)
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(len(s.evidence) == 0 for s in stmts)
+    assert res.returned_evidence == 0
+    assert sum(res.evidence_totals.values()) > 20

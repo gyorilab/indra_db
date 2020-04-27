@@ -207,6 +207,8 @@ class QueryCore(object):
         mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
         cont_q = self._get_content_query(ro, mk_hashes_al, ev_limit)
         if evidence_filter is not None:
+            cont_q = evidence_filter.join_table(ro, cont_q,
+                                                {'fast_raw_pa_link'})
             cont_q = evidence_filter.apply_filter(ro, cont_q)
 
         # If there is no evidence, whittle down the results so we only get one
@@ -220,23 +222,30 @@ class QueryCore(object):
         if ev_limit is not None:
             cont_q = cont_q.limit(ev_limit)
             json_content_al = cont_q.subquery().lateral('json_content')
+            stmts_q = (mk_hashes_al
+                       .outerjoin(json_content_al, true())
+                       .outerjoin(ro.SourceMeta,
+                                  ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
+            cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
+                    mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
+                    json_content_al.c.pa_json]
         else:
             json_content_al = cont_q.subquery().alias('json_content')
+            stmts_q = (json_content_al
+                       .outerjoin(ro.SourceMeta,
+                                  ro.SourceMeta.mk_hash == json_content_al.c.mk_hash))
+            cols = [json_content_al.c.mk_hash, ro.SourceMeta.src_json,
+                    json_content_al.c.ev_count, json_content_al.c.raw_json,
+                    json_content_al.c.pa_json]
 
-        # Join up with other tables to pull metadata.
-        stmts_q = (mk_hashes_al
-                   .outerjoin(json_content_al, true())
+            # Join up with other tables to pull metadata.
+        stmts_q = (stmts_q
                    .outerjoin(ro.ReadingRefLink,
-                              ro.ReadingRefLink.rid == json_content_al.c.rid)
-                   .outerjoin(ro.SourceMeta,
-                              ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
+                              ro.ReadingRefLink.rid == json_content_al.c.rid))
 
         ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
                          if not k.startswith('_')]
 
-        cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
-                mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
-                json_content_al.c.pa_json]
         cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
 
         # Execute the query.
@@ -617,7 +626,13 @@ class QueryCore(object):
             raw_json_c = ro.FastRawPaLink.raw_json.label('raw_json')
 
         # Create the query.
-        cont_q = ro.session.query(raw_json_c, pa_json_c, reading_id_c)
+        if ev_limit is None:
+            mk_hash_c = ro.FastRawPaLink.mk_hash.label('mk_hash')
+            ev_count_c = mk_hashes_al.c.ev_count.label('ev_count')
+            cont_q = ro.session.query(mk_hash_c, ev_count_c, raw_json_c,
+                                      pa_json_c, reading_id_c)
+        else:
+            cont_q = ro.session.query(raw_json_c, pa_json_c, reading_id_c)
         cont_q = cont_q.filter(frp_link)
 
         return cont_q

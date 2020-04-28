@@ -336,6 +336,9 @@ def test_get_interactions():
     res = query.get_interactions(ro, limit=10)
     assert isinstance(res, QueryResult)
     assert len(res.results) == 10
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(res.results)
 
 
 def test_get_relations():
@@ -344,6 +347,9 @@ def test_get_relations():
     res = query.get_relations(ro, limit=10)
     assert isinstance(res, QueryResult)
     assert len(res.results) <= 10, len(res.results)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(res.results)
 
 
 def test_get_agents():
@@ -352,6 +358,9 @@ def test_get_agents():
     res = query.get_agents(ro, limit=10)
     assert isinstance(res, QueryResult)
     assert len(res.results) <= 10, len(res.results)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(res.results)
 
 
 def test_evidence_filtering():
@@ -366,6 +375,9 @@ def test_evidence_filtering():
     assert len(stmts) == 2
     assert not any(ev.text_refs.get('READER') == 'medscan' for s in stmts
                    for ev in s.evidence)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
 
 
 def test_evidence_count_is_none():

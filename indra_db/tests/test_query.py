@@ -402,5 +402,6 @@ def test_evidence_count_is_0():
     stmts = res.statements()
     assert len(stmts) == 2
     assert all(len(s.evidence) == 0 for s in stmts)
-    assert res.returned_evidence == 0
-    assert sum(res.evidence_totals.values()) > 20
+    assert res.returned_evidence == 0, res.returned_evidence
+    assert sum(res.evidence_totals.values()) > 20, \
+        sum(res.evidence_totals.values())

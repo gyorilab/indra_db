@@ -279,6 +279,9 @@ class QueryCore(object):
             pa_json_bts = next(row_gen)
             ref_dict = dict(zip(ref_link_keys, row_gen))
 
+            if raw_json_bts is not None:
+                returned_evidence += 1
+
             # Add a new statement if the hash is new.
             if mk_hash not in stmts_dict.keys():
                 source_counts[mk_hash] = src_dict
@@ -624,7 +627,7 @@ class QueryCore(object):
         # If there is no evidence, don't get raw JSON, otherwise we need a col
         # for the raw JSON.
         if ev_limit == 0:
-            raw_json_c = null()
+            raw_json_c = null().label('raw_json')
         else:
             raw_json_c = ro.FastRawPaLink.raw_json.label('raw_json')
 

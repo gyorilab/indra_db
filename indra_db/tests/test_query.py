@@ -338,6 +338,22 @@ def test_get_interactions():
     assert len(res.results) == 10
 
 
+def test_get_relations():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_relations(ro, limit=10)
+    assert isinstance(res, QueryResult)
+    assert len(res.results) <= 10, len(res.results)
+
+
+def test_get_agents():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_agents(ro, limit=10)
+    assert isinstance(res, QueryResult)
+    assert len(res.results) <= 10, len(res.results)
+
+
 def test_evidence_filtering():
     ro = get_db('primary')
     q1 = HasAgent('TP53')

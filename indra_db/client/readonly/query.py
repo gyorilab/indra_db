@@ -12,6 +12,7 @@ from collections import OrderedDict, Iterable, defaultdict
 
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
     except_, func, null, String, and_
+from sqlalchemy.dialects.postgresql import JSONB
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
@@ -267,8 +268,6 @@ class QueryCore(object):
         returned_evidence = 0
         src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
         for row in res:
-            returned_evidence += 1
-
             # Unpack the row
             row_gen = iter(row)
 
@@ -387,14 +386,13 @@ class QueryCore(object):
             sq.c.type_num,
             sq.c.activity,
             sq.c.is_active,
-            sq.c.agent_count,
-            sq.c.src_json
+            sq.c.src_json.cast(JSONB).label('src_json')
         ).group_by(
             sq.c.mk_hash,
             sq.c.type_num,
             sq.c.activity,
             sq.c.is_active,
-            sq.c.src_json
+            sq.c.src_json.cast(JSONB)
         )
         return q
 

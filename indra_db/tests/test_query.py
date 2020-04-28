@@ -17,7 +17,7 @@ def make_agent_from_ref(ref):
     return Agent(name, db_refs=db_refs)
 
 
-def build_test_set():
+def _build_test_set():
     agents = [{'NAME': 'ERK', 'FPLX': 'ERK', 'TEXT': 'MAPK'},
               {'NAME': 'TP53', 'HGNC': '11998'},
               {'NAME': 'MEK', 'FPLX': 'MEK'},
@@ -192,7 +192,7 @@ class Counter:
 
 
 def test_query_set_behavior():
-    db = build_test_set()
+    db = _build_test_set()
     all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
     print(f"There are {len(all_hashes)} distinct hashes in the database.")
     lookup_hashes = random.sample(all_hashes, 5)
@@ -333,7 +333,7 @@ def test_query_set_behavior():
 def test_get_interactions():
     ro = get_db('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
-    res = query.get_interactions(ro, limit=10, detail_level='relations')
+    res = query.get_interactions(ro, limit=10)
     assert isinstance(res, QueryResult)
     assert len(res.results) == 10
 

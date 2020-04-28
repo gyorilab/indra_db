@@ -363,7 +363,7 @@ def test_get_agents():
     assert len(js['results']) == len(res.results)
 
 
-def test_evidence_filtering():
+def test_evidence_filtering_has_only_source():
     ro = get_db('primary')
     q1 = HasAgent('TP53')
     q2 = ~HasOnlySource('medscan')
@@ -375,6 +375,75 @@ def test_evidence_filtering():
     assert len(stmts) == 2
     assert not any(ev.text_refs.get('READER') == 'medscan' for s in stmts
                    for ev in s.evidence)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_has_source():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = HasSources(['reach', 'sparser'])
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(ev.text_refs.get('READER') in ['reach', 'sparser']
+               for s in stmts for ev in s.evidence)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_has_database():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = HasDatabases()
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(ev.text_refs.get('READER') is None
+               for s in stmts for ev in s.evidence)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_has_readings():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = HasReadings()
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=10,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(ev.text_refs.get('READER') is not None
+               for s in stmts for ev in s.evidence)
+    assert all(len(s.evidence) == 10 for s in stmts)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_mesh():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = FromMeshId('D001943')
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(len(s.evidence) < res.evidence_totals[s.get_hash()]
+               for s in stmts)
     js = res.json()
     assert 'results' in js
     assert len(js['results']) == len(stmts)

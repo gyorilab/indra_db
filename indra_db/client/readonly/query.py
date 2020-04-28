@@ -372,8 +372,8 @@ class QueryCore(object):
         mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
         q = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
                               ro.NameMeta.ag_num, ro.NameMeta.type_num,
-                              ro.NameMeta.activity, ro.NameMeta.is_active,
-                              ro.SourceMeta.src_json)
+                              ro.NameMeta.agent_count, ro.NameMeta.activity,
+                              ro.NameMeta.is_active, ro.SourceMeta.src_json)
              .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
                      ro.SourceMeta.mk_hash == mk_hashes_sq.c.mk_hash))
         sq = q.subquery('names')
@@ -382,14 +382,16 @@ class QueryCore(object):
             func.jsonb_object(
                 func.array_agg(sq.c.ag_num.cast(String)),
                 func.array_agg(sq.c.db_id)
-            ),
+            ).label('agent_json'),
             sq.c.type_num,
+            sq.c.agent_count,
             sq.c.activity,
             sq.c.is_active,
             sq.c.src_json.cast(JSONB).label('src_json')
         ).group_by(
             sq.c.mk_hash,
             sq.c.type_num,
+            sq.c.agent_count,
             sq.c.activity,
             sq.c.is_active,
             sq.c.src_json.cast(JSONB)
@@ -424,11 +426,11 @@ class QueryCore(object):
         names = q.all()
         results = {}
         ev_totals = {}
-        for h, ag_json, type_num, activity, is_active, n_ag, src_json in names:
+        for h, ag_json, type_num, n_ag, activity, is_active, src_json in names:
             results[h] = {
                 'hash': h,
                 'id': str(h),
-                'agents': ag_json,
+                'agents': {n: ag_json.get(str(n)) for n in range(n_ag)},
                 'type': ro_type_map.get_str(type_num),
                 'activity': activity,
                 'is_active': is_active,
@@ -468,13 +470,14 @@ class QueryCore(object):
         q = ro.session.query(
             sq.c.agent_json,
             sq.c.type_num,
+            sq.c.agent_count,
             sq.c.activity,
             sq.c.is_active,
-            sq.c.agent_count,
             func.array_agg(sq.c.src_json)
         ).group_by(
             sq.c.agent_json,
             sq.c.type_num,
+            sq.c.agent_count,
             sq.c.activity,
             sq.c.is_active
         )
@@ -482,7 +485,7 @@ class QueryCore(object):
         names = q.all()
         results = {}
         ev_totals = {}
-        for ag_json, type_num, activity, is_active, n_ag, src_jsons in names:
+        for ag_json, type_num, n_ag, activity, is_active, src_jsons in names:
             ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
@@ -497,8 +500,9 @@ class QueryCore(object):
             for src_json in src_jsons:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
+            ag_dict = {n: ag_json.get(str(n)) for n in range(n_ag)}
             results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': ag_json, 'type': stmt_type}
+                            'agents': ag_dict, 'type': stmt_type}
             ev_totals[key] = sum(source_counts.values())
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
@@ -553,8 +557,9 @@ class QueryCore(object):
             for src_json in src_jsons:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
+            ag_dict = {n: ag_json.get(str(n)) for n in range(n_ag)}
             results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': ag_json}
+                            'agents': ag_dict}
             ev_totals[key] = sum(source_counts.values())
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
@@ -1815,7 +1820,6 @@ class Union(MergeQueryCore):
     def _merge(*queries):
         return union_all(*queries)
 
-    # noinspection SpellCheckingInspection
     def _get_table(self, ro):
         if self._mk_hashes_al is None:
             mk_hashes_q_list = []

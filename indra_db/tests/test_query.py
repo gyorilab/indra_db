@@ -4,7 +4,8 @@ from itertools import combinations, permutations, product
 
 from indra.statements import Agent, get_statement_by_name
 from indra_db.client.readonly.query import QueryResult
-from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map
+from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
+    SOURCE_GROUPS
 from indra_db.util import extract_agent_data, get_ro, get_db
 from indra_db.client.readonly.query import *
 
@@ -407,7 +408,7 @@ def test_evidence_filtering_has_database():
     assert isinstance(res, StatementQueryResult)
     stmts = res.statements()
     assert len(stmts) == 2
-    assert all(ev.text_refs.get('READER') is None
+    assert all(ev.source_api not in SOURCE_GROUPS['reading']
                for s in stmts for ev in s.evidence)
     js = res.json()
     assert 'results' in js
@@ -424,7 +425,7 @@ def test_evidence_filtering_has_readings():
     assert isinstance(res, StatementQueryResult)
     stmts = res.statements()
     assert len(stmts) == 2
-    assert all(ev.text_refs.get('READER') is not None
+    assert all(ev.source_api in SOURCE_GROUPS['reading']
                for s in stmts for ev in s.evidence)
     assert all(len(s.evidence) == 10 for s in stmts)
     js = res.json()

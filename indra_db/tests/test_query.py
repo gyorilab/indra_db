@@ -391,7 +391,7 @@ def test_evidence_filtering_has_source():
     assert isinstance(res, StatementQueryResult)
     stmts = res.statements()
     assert len(stmts) == 2
-    assert all(ev.text_refs.get('READER') in ['reach', 'sparser']
+    assert all(ev.text_refs.get('READER') in ['REACH', 'SPARSER']
                for s in stmts for ev in s.evidence)
     js = res.json()
     assert 'results' in js

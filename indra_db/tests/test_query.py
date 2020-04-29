@@ -192,6 +192,32 @@ class Counter:
         self.section_correct = 0
 
 
+def test_has_sources():
+    ro = get_db('primary')
+    q = HasSources(['reach', 'sparser'])
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    assert len(res.results) == 5
+    stmts = res.statements()
+    res_json = res.json()
+    assert 'results' in res_json
+    assert len(stmts) == len(res.results)
+    assert all(sc[r] > 0 for sc in res.source_counts.values()
+               for r in ['reach', 'sparser'])
+
+
+def test_has_only_source():
+    ro = get_db('primary')
+    q = HasOnlySource('signor')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    res_json = res.json()
+    assert 'results' in res_json
+    stmts = res.statements()
+    assert len(stmts) == len(res.results)
+    assert all(src_cnt > 0 if src == 'signor' else src_cnt == 0
+               for sc in res.source_counts.values()
+               for src, src_cnt in sc.items())
+
+
 def test_query_set_behavior():
     db = _build_test_set()
     all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}

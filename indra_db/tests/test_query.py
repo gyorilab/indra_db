@@ -333,7 +333,7 @@ def test_query_set_behavior():
 
 def test_get_interactions():
     ro = get_db('primary')
-    query = HasAgent('TP53') - HasOnlySource('medscan')
+    query = HasAgent('TP53')
     res = query.get_interactions(ro, limit=10)
     assert isinstance(res, QueryResult)
     assert len(res.results) == 10
@@ -344,7 +344,7 @@ def test_get_interactions():
 
 def test_get_relations():
     ro = get_db('primary')
-    query = HasAgent('TP53') - HasOnlySource('medscan')
+    query = HasAgent('TP53')
     res = query.get_relations(ro, limit=10)
     assert isinstance(res, QueryResult)
     assert len(res.results) <= 10, len(res.results)
@@ -355,7 +355,7 @@ def test_get_relations():
 
 def test_get_agents():
     ro = get_db('primary')
-    query = HasAgent('TP53') - HasOnlySource('medscan')
+    query = HasAgent('TP53')
     res = query.get_agents(ro, limit=10)
     assert isinstance(res, QueryResult)
     assert len(res.results) <= 10, len(res.results)

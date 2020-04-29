@@ -1875,8 +1875,7 @@ class _QueryEvidenceFilter:
             ret = query.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
         elif self.table_name == 'raw_stmt_mesh':
             ret = query.outerjoin(ro.RawStmtMesh,
-                                  ro.RawStmtMesh.sid == ro.FastRawPaLink.id,
-                                  join_to_left=True)
+                                  ro.RawStmtMesh.sid == ro.FastRawPaLink.id)
         else:
             raise ValueError(f"No join defined for readonly table "
                              f"'{self.table_name}'")
@@ -1944,7 +1943,7 @@ class EvidenceFilter:
                     ret = EvidenceFilter(other.filters + [self])
             else:
                 if len(self.filters) == 1:
-                    if len(other.filters == 1):
+                    if len(other.filters) == 1:
                         ret = EvidenceFilter(self.filters + other.filters)
                     else:
                         ret = EvidenceFilter(self.filters + [other])

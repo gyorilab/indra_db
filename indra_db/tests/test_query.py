@@ -450,6 +450,20 @@ def test_evidence_filtering_mesh():
     assert len(js['results']) == len(stmts)
 
 
+def test_evidence_filtering_pairs():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q_list = [~HasOnlySource('medscan'), HasSources(['reach', 'sparser']),
+              HasDatabases(), HasReadings(), FromMeshId('D001943')]
+    for q2, q3 in combinations(q_list, 2):
+        query = q1 & q2 & q3
+        ev_filter = q2.ev_filter() & q3.ev_filter()
+        query.get_statements(ro, limit=2, evidence_filter=ev_filter)
+
+        ev_filter = q2.ev_filter() | q3.ev_filter()
+        query.get_statements(ro, limit=2, evidence_filter=ev_filter)
+
+
 def test_evidence_count_is_none():
     ro = get_db('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')

@@ -126,8 +126,13 @@ def get_reading_stmt_dict(db, clauses=None, get_full_stmts=True):
 
 
 # Specify sources of fulltext content, and order priorities.
-text_content_sources = [('pubmed', 'title'), ('pubmed', 'abstract'),
-                        ('elsevier', 'fulltext'), ('manuscripts', 'fulltext'),
+text_content_sources = [('pubmed', 'title'),
+                        ('cord19_abstract', 'abstract'),
+                        ('pubmed', 'abstract'),
+                        ('cord19_pdf', 'fulltext'),
+                        ('elsevier', 'fulltext'),
+                        ('cord19_pmc_xml', 'fulltext'),
+                        ('manuscripts', 'fulltext'),
                         ('pmc_oa', 'fulltext')]
 
 

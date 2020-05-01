@@ -279,6 +279,14 @@ class QueryCore(object):
             pa_json_bts = next(row_gen)
             ref_dict = dict(zip(ref_link_keys, row_gen))
 
+            if pa_json_bts is None:
+                logger.warning("Row returned without pa_json. This likely "
+                               "indicates that an over-zealous evidence filter "
+                               "was used, which filtered out all evidence. "
+                               "This case is not currently handled, and the "
+                               "statement will have to be dropped.")
+                continue
+
             if raw_json_bts is not None:
                 returned_evidence += 1
 

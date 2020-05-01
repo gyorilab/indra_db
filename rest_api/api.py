@@ -18,7 +18,7 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel, get_all_descendants
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, StatementQueryResult
+    HasOnlySource, StatementQueryResult, HasHash, QueryCore
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -76,16 +76,16 @@ def render_my_template(template, title, **kwargs):
     return env.get_template(template).render(**kwargs)
 
 
-def _query_wrapper(f):
+def _query_wrapper(get_db_query):
     logger.info("Calling outer wrapper.")
 
-    @wraps(f)
+    @wraps(get_db_query)
     @jwt_optional
     def decorator(*args, **kwargs):
-
         tracker = LogTracker()
         start_time = datetime.now()
-        logger.info("Got query for %s at %s!" % (f.__name__, start_time))
+        logger.info("Got query for %s at %s!"
+                    % (get_db_query.__name__, start_time))
 
         web_query = request.args.copy()
         offs = web_query.pop('offset', None)
@@ -106,23 +106,33 @@ def _query_wrapper(f):
                 has[resource] |= role.permissions.get(resource, False)
         logger.info('Auths: %s' % str(has))
 
-        # Avoid loading medscan:
-        censured_sources = set()
-        if not has['medscan']:
-            censured_sources.add('medscan')
-
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
-                    % (f.__name__, sec_since(start_time)))
-        result = f(web_query, offs, max_stmts, ev_lim, best_first,
-                   censured_sources, *args, **kwargs)
-        if isinstance(result, Response):
-            return result
-        elif not isinstance(result, StatementQueryResult):
-            raise RuntimeError("Result should be StatementQueryResult.")
+                    % (get_db_query.__name__, sec_since(start_time)))
+        db_query = get_db_query(web_query)
+        if isinstance(db_query, Response):
+            return db_query
+        elif not isinstance(db_query, QueryCore):
+            raise RuntimeError("Result should be a child of QueryCore.")
+
+        if ev_lim is None:
+            if get_db_query is get_statement_by_hash:
+                ev_lim = 10000
+            else:
+                ev_lim = 10
+
+        ev_filter = None
+        if not has['medscan']:
+            minus_q = HasOnlySource('medscan')
+            db_query -= minus_q
+            ev_filter &= minus_q.ev_filter()
+
+        result = db_query.get_statements(offset=offs, limit=max_stmts,
+                                         ev_limit=ev_lim, best_first=best_first,
+                                         evidence_filter=ev_filter)
 
         logger.info("Finished function %s after %s seconds."
-                    % (f.__name__, sec_since(start_time)))
+                    % (get_db_query.__name__, sec_since(start_time)))
 
         # Handle any necessary redactions
         res_json = result.json()
@@ -155,7 +165,7 @@ def _query_wrapper(f):
                     f"evidence.")
 
         logger.info("Finished redacting evidence for %s after %s seconds."
-                    % (f.__name__, sec_since(start_time)))
+                    % (get_db_query.__name__, sec_since(start_time)))
 
         # Get counts of the curations for the resulting statements.
         if w_cur_counts:
@@ -320,14 +330,11 @@ def get_statements_query_format():
 
 @dep_route('/statements/from_agents', methods=['GET'])
 @_query_wrapper
-def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
-                   censured_sources):
+def get_statements(query_dict):
     """Get some statements constrained by query."""
     logger.info("Getting query details.")
     db_query = None
     num_agents = 0
-    if ev_limit is None:
-        ev_limit = 10
     try:
         # Get the agents without specified locations (subject or object).
         free_agents = (ag for ag_gen in [query_dict.poplist('agent'),
@@ -381,50 +388,28 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
                        % list(query_dict.keys()), 400))
         return
 
-    ev_filter = None
-    if censured_sources:
-        for src in censured_sources:
-            minus_q = HasOnlySource(src)
-            db_query -= minus_q
-            ev_filter &= minus_q.ev_filter()
-
-    return db_query.get_statements(limit=max_stmts, ev_limit=ev_limit,
-                                   best_first=best_first,
-                                   evidence_filter=ev_filter)
+    return db_query
 
 
 @dep_route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
-def get_statements_by_hashes(query_dict, offs, max_stmts, ev_lim, best_first,
-                             censured_sources):
-    if ev_lim is None:
-        ev_lim = 20
+def get_statements_by_hashes(query_dict):
     hashes = request.json.get('hashes')
     if not hashes:
         logger.error("No hashes provided!")
         abort(Response("No hashes given!", 400))
-    if len(hashes) > max_stmts:
+    if len(hashes) > MAX_STATEMENTS:
         logger.error("Too many hashes given!")
-        abort(Response("Too many hashes given, %d allowed." % max_stmts,
+        abort(Response("Too many hashes given, %d allowed." % MAX_STATEMENTS,
                        400))
 
-    result = get_statement_jsons_from_hashes(hashes, max_stmts=max_stmts,
-                                             offset=offs, ev_limit=ev_lim,
-                                             best_first=best_first,
-                                             censured_sources=censured_sources)
-    return result
+    return HasHash(hashes)
 
 
 @dep_route('/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
-def get_statement_by_hash(query_dict, offs, max_stmts, ev_limit, best_first,
-                          censured_sources, hash_val):
-    if ev_limit is None:
-        ev_limit = 10000
-    return get_statement_jsons_from_hashes([hash_val], max_stmts=max_stmts,
-                                           offset=offs, ev_limit=ev_limit,
-                                           best_first=best_first,
-                                           censured_sources=censured_sources)
+def get_statement_by_hash(query_dict, hash_val):
+    return HasHash([hash_val])
 
 
 @dep_route('/statements/from_papers', methods=['POST'])

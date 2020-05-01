@@ -1277,6 +1277,26 @@ class HasAgent(QueryCore):
         return qry
 
 
+class FromPapers(QueryCore):
+    """Find Statements that have evidence from particular papers."""
+    def __init__(self, paper_list):
+        self.paper_list = paper_list
+        super(FromPapers, self).__init__(len(paper_list) == 0)
+
+    def __str__(self) -> str:
+        ret = 'not ' if self._inverted else ''
+        return ret + f"from papers {self.paper_list}"
+
+    def _copy(self) -> QueryCore:
+        return self.__class__(self.paper_list)
+
+    def _get_constraint_json(self) -> dict:
+        return {'from_papers': {'paper_list': self.paper_list}}
+
+    def _get_table(self, ro):
+        pass
+
+
 class IntrusiveQueryCore(QueryCore):
     """This is the parent of all queries that draw on info in all meta tables.
 

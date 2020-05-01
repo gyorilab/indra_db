@@ -916,7 +916,7 @@ class HasOnlySource(SourceCore):
                 return ro.RawStmtSrc.src == self.only_source
         else:
             def get_clause(ro):
-                return ro.RawStmtSrc.src.is_distinct_from(self.only_source)
+                return ro.RawStmtSrc.src != self.only_source
         return EvidenceFilter.from_filter('raw_stmt_src', get_clause)
 
     def _apply_filter(self, ro, query, invert=False):
@@ -1217,7 +1217,7 @@ class HasAgent(QueryCore):
             role_num = ro_role_map.get_int(self.role)
             qry = qry.filter(meta.role_num == role_num)
         elif self.agent_num is not None:
-            qry = qry.filter(meta.agent_num == self.agent_num)
+            qry = qry.filter(meta.ag_num == self.agent_num)
 
         # Apply the type searches, and invert if needed..
         if not self._inverted:

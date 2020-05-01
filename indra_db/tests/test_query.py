@@ -1,8 +1,9 @@
 import json
 import random
+from collections import defaultdict
 from itertools import combinations, permutations, product
 
-from indra.statements import Agent, get_statement_by_name
+from indra.statements import Agent, get_statement_by_name, get_all_descendants
 from indra_db.client.readonly.query import QueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
     SOURCE_GROUPS
@@ -211,11 +212,127 @@ def test_has_only_source():
     res = q.get_statements(ro, limit=5, ev_limit=8)
     res_json = res.json()
     assert 'results' in res_json
+    assert set(res.results.keys()) == set(res.source_counts.keys())
     stmts = res.statements()
     assert len(stmts) == len(res.results)
     assert all(src_cnt > 0 if src == 'signor' else src_cnt == 0
                for sc in res.source_counts.values()
                for src, src_cnt in sc.items())
+
+
+def test_has_readings():
+    ro = get_db('primary')
+    q = HasReadings()
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    for sc in res.source_counts.values():
+        for src, cnt in sc.items():
+            if src in SOURCE_GROUPS['reading'] and cnt > 0:
+                break
+        else:
+            assert False, f"No readings found in: {sc}"
+    assert set(res.results.keys()) == set(res.source_counts.keys())
+    stmts = res.statements()
+    assert len(stmts) == len(res.results)
+
+
+def test_has_databases():
+    ro = get_db('primary')
+    q = HasDatabases()
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    for sc in res.source_counts.values():
+        for src, cnt in sc.items():
+            if src in SOURCE_GROUPS['databases'] and cnt > 0:
+                break
+        else:
+            assert False, f"No databases found in: {sc}"
+    assert set(res.results.keys()) == set(res.source_counts.keys())
+    stmts = res.statements()
+    assert len(stmts) == len(res.results)
+
+
+def test_has_hash():
+    ro = get_db('primary')
+    hashes = {h for h, in ro.session.query(ro.SourceMeta.mk_hash).limit(10)}
+    q = HasHash(hashes)
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    assert set(res.results.keys()) < hashes
+    assert set(res.results.keys()) == set(res.source_counts.keys())
+
+
+def test_has_agent():
+    ro = get_db('primary')
+    q = HasAgent('RAS')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all('RAS' in [ag.name for ag in s.agent_list() if ag is not None]
+               for s in stmts)
+
+    q = HasAgent('MEK', namespace='FPLX', role='SUBJECT')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all('MEK' == s.agent_list(deep_sorted=True)[0].db_refs['FPLX']
+               for s in stmts)
+
+    q = HasAgent('CHEBI:63637', namespace='CHEBI', agent_num=3)
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    for s in stmts:
+        ag = s.agent_list(deep_sorted=True)[3]
+        assert ag.name == 'vemurafenib'
+        assert ag.db_refs['CHEBI'] == 'CHEBI:63637'
+
+
+def test_has_num_agents():
+    ro = get_db('primary')
+    q = HasNumAgents((1, 2))
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all(len(s.agent_list()) in (1, 2) for s in stmts)
+
+    q = HasNumAgents((6,))
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all(sum([ag is not None for ag in s.agent_list()]) == 6
+               for s in stmts)
+
+
+def test_num_evidence():
+    ro = get_db('primary')
+    q = HasNumEvidence(tuple(range(5, 10)))
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    assert all(5 <= n < 10 for n in res.evidence_totals.values())
+    stmts = res.statements()
+    assert all(5 < len(s.evidence) <= 8 for s in stmts)
+
+
+def test_has_type():
+    ro = get_db('primary')
+    q = HasType(['Phosphorylation', 'Activation'])
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all(s.__class__.__name__ in ('Phosphorylation', 'Activation')
+               for s in stmts)
+
+    type_list = ['SelfModification', 'RegulateAmount', 'Translocation']
+    q = HasType(type_list, include_subclasses=True)
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    types = {t for bt in (get_statement_by_name(n) for n in type_list)
+             for t in [bt] + get_all_descendants(bt)}
+    assert all(type(s) in types for s in stmts)
+
+
+def test_from_mesh():
+    ro = get_db('primary')
+    q = FromMeshId('D001943')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    mm_entries = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num],
+                               ro.MeshMeta.mk_hash.in_(set(res.results.keys())))
+    mm_dict = defaultdict(list)
+    for h, mn in mm_entries:
+        mm_dict[h].append(mn)
+
+    assert all(1943 in mn_list for mn_list in mm_dict.values())
 
 
 def test_query_set_behavior():

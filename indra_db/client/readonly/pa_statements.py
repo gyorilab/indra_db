@@ -1,6 +1,4 @@
-__all__ = ['get_statement_jsons_from_agents',
-           'get_statement_jsons_from_hashes',
-           'get_statement_jsons_from_papers']
+__all__ = ['get_statement_jsons_from_papers']
 
 import json
 import logging
@@ -23,138 +21,6 @@ logger = logging.getLogger(__name__)
 
 snowflakes = ['Complex', 'Translocation', 'ActiveForm', 'Conversion',
               'Autophosphorylation']
-
-
-@clockit
-def get_statement_jsons_from_agents(agents=None, stmt_type=None, ro=None,
-                                    strict=False, **kwargs):
-    """Get json's for statements given agent refs and Statement type.
-
-    Parameters
-    ----------
-    agents : list[(<role>, <id>, <namespace>)]
-        A list of agents, each specified by a tuple of information including:
-        the `role`, which can be 'subject', 'object', or None, an `id`, such as
-        the HGNC id, a CHEMBL id, or a FPLX id, etc, and the
-        `namespace` which specifies which of the above is given in `id`.
-
-        Some examples:
-            (None, 'MEK', 'FPLX')
-            ('object', '11998', 'HGNC')
-            ('subject', 'MAP2K1', 'TEXT')
-
-        Note that you will get the logical AND of the conditions given, in
-        other words, each Statement will satisfy all constraints.
-    stmt_type : str or None
-        The type of statement to retrieve, e.g. 'Phosphorylation'. If None, no
-        type restriction is imposed.
-    ro : :py:class:`ReadonlyDatabaseManager`
-        Optionally specify a database manager that attaches to something
-        besides the primary database, for example a local database instance.
-    strict: bool
-        Indicate whether you want to strictly match your search, e.g. if you
-        query for statements with object ERK of type Phosphorylation, if strict
-        is False, you would, among other things, get MEK phosphorylates ERK, but
-        if strict is True, you would only get statements where the subject is
-        None.
-
-    Some keyword arguments are passed directly to a lower level function:
-
-    Other Parameters (kwargs)
-    -------------------------
-    max_stmts : int or None
-        Limit the number of statements queried. If None, no restriction is
-        applied.
-    offset : int or None
-        Start reading statements by a given offset. If None, no offset is
-        applied. Most commonly used in conjunction with `max_stmts`.
-    ev_limit : int or None
-        Limit the amount of evidence returned per Statement.
-    best_first : bool
-        If True, the preassembled statements will be sorted by the amount of
-        evidence they have, and those with the most evidence will be
-        prioritized. When using `max_stmts`, this means you will get the "best"
-        statements. If False, statements will be queried in arbitrary order.
-
-    Returns
-    -------
-    A dictionary data structure containing, among other metadata, a dict of
-    statement jsons under the key 'statements', themselves keyed by their
-    shallow matches-key hashes.
-    """
-    # First look for statements matching the role'd agents.
-    if ro is None:
-        ro = get_ro('primary')
-
-    logger.debug("Constructing query to search for agents of type %s "
-                 "with agents: %s." % (stmt_type, agents))
-
-    mk_hashes_q, mk_hashes_al = _make_mk_hashes_query(ro, agents, stmt_type)
-
-    ret = _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q,
-                                               mk_hashes_alias=mk_hashes_al,
-                                               **kwargs)
-
-    # This is all a bit of a hack. I should figure out a way to work this
-    # into the SQL query.
-    if strict:
-
-        # This is the dict we're comparing to, representing type and number of
-        # agents.
-        compare_dict = {tpl: agents.count(tpl) for tpl in agents}
-
-        # We also need to know overall what grounding entities are present in
-        # the original query, so we know which things to pick up.
-        entity_group = {tpl[1:] for tpl in agents}
-
-        # This will be a cache of the agent orders, which we look up from
-        # Statement objects.
-        type_agent_order_dict = {}
-
-        # Iterate over all the statements.
-        old_L = len(ret['statements'])
-        for h, stmt_json in ret['statements'].copy().items():
-            # Get the agent order from the Statement class, if we don't have it.
-            if stmt_json['type'] not in type_agent_order_dict:
-                type_agent_order_dict[stmt_json['type']] = \
-                    get_statement_by_name(stmt_json['type'])._agent_order
-            agent_order = type_agent_order_dict[stmt_json['type']]
-
-            # Build up the dict for this statement to be compared.
-            this_dict = {}
-            for role, ag_obj in _iter_agents(stmt_json, agent_order):
-                name_key = (role, ag_obj['name'], 'NAME')
-                if name_key[1:] in entity_group:
-                    if name_key not in this_dict:
-                        this_dict[name_key] = 0
-                    this_dict[name_key] += 1
-                    continue
-
-                for ag_tpl in ag_obj['db_refs'].items():
-                    if ag_tpl in entity_group:
-                        key = (role,) + ag_tpl
-                        if key not in this_dict:
-                            this_dict[key] = 0
-                        this_dict[(role,) + ag_tpl] += 1
-                        break
-                else:
-                    match = False
-                    break
-            else:
-                # If it doesn't match, remove it.
-                match = this_dict == compare_dict
-
-            if not match:
-                ret['total_evidence'] -= ret['evidence_totals'][h]
-                ret['evidence_returned'] -= len(stmt_json['evidence'])
-                del ret['statements'][h]
-                del ret['evidence_totals'][h]
-                del ret['source_counts'][h]
-
-        logger.info("Removed %d statements for not matching, based on strict"
-                    % (old_L - len(ret['statements'])))
-
-    return ret
 
 
 def _iter_agents(stmt_json, agent_order):
@@ -244,17 +110,6 @@ def get_statement_jsons_from_papers(paper_refs, ro=None, **kwargs):
                                                 mk_hash_obj=ro.EvidenceCounts.mk_hash,
                                                 ev_count_obj=ro.EvidenceCounts.ev_count,
                                                 **kwargs)
-
-
-@clockit
-def get_statement_jsons_from_hashes(mk_hashes, ro=None, **kwargs):
-    """Get statement jsons using the appropriate hashes."""
-    if ro is None:
-        ro = get_ro('primary')
-    mk_hash_ints = [int(h) for h in mk_hashes]
-    mk_hashes_q = (ro.session.query(ro.PaMeta.mk_hash, ro.PaMeta.ev_count)
-                   .filter(ro.PaMeta.mk_hash.in_(mk_hash_ints)))
-    return _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, **kwargs)
 
 
 # =============================================================================
@@ -426,57 +281,3 @@ def _get_pa_stmt_jsons_w_mkhash_subquery(ro, mk_hashes_q, best_first=True,
 
 def _labelled_hash_and_count(meta):
     return meta.mk_hash.label('mk_hash'), meta.ev_count.label('ev_count')
-
-
-def _make_mesh_hashes_query(ro, mesh_ids):
-    """Convert structure of the form (('A', '&', 'B'), '|' 'C') into query."""
-
-
-    pass
-
-
-def _make_mk_hashes_query(ro, agents, stmt_type):
-
-    queries = []
-    for role, ag_dbid, ns in agents:
-        # Make the id match paradigms for the database.
-        ag_dbid = regularize_agent_id(ag_dbid, ns)
-
-        # Sanitize wildcards.
-        for char in ['%', '_']:
-            ag_dbid = ag_dbid.replace(char, '\%s' % char)
-
-        # Create this query (for this agent)
-        if ns == 'NAME':
-            q = (ro.session
-                 .query(*_labelled_hash_and_count(ro.NameMeta))
-                 .filter(ro.NameMeta.db_id.like(ag_dbid)))
-            meta = ro.NameMeta
-        elif ns == 'TEXT':
-            q = (ro.session
-                 .query(*_labelled_hash_and_count(ro.TextMeta))
-                 .filter(ro.TextMeta.db_id.like(ag_dbid)))
-            meta = ro.TextMeta
-        else:
-            q = (ro.session
-                 .query(*_labelled_hash_and_count(ro.OtherMeta))
-                 .filter(ro.OtherMeta.db_id.like(ag_dbid)))
-            if ns is not None:
-                q = q.filter(ro.OtherMeta.db_name.like(ns))
-            meta = ro.OtherMeta
-
-        if stmt_type is not None:
-            q = q.filter(meta.type.like(stmt_type))
-
-        if role is not None:
-            q = q.filter(meta.role == role.upper())
-
-        # Intersect with the previous query.
-        queries.append(q)
-
-    assert queries, \
-        "No queries formed from agents=%s, stmt_type=%s." % (agents, stmt_type)
-
-    mk_hashes_al = intersect_all(*queries).alias('intersection')
-    mk_hashes_q = ro.session.query(mk_hashes_al)
-    return mk_hashes_q, mk_hashes_al

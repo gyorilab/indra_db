@@ -17,6 +17,8 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
     _format_stmt_text
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel, get_all_descendants
+from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
+    HasOnlySource, StatementQueryResult
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -85,19 +87,20 @@ def _query_wrapper(f):
         start_time = datetime.now()
         logger.info("Got query for %s at %s!" % (f.__name__, start_time))
 
-        query = request.args.copy()
-        offs = query.pop('offset', None)
-        ev_lim = query.pop('ev_limit', None)
-        best_first = query.pop('best_first', 'true').lower() == 'true'
-        max_stmts = min(int(query.pop('max_stmts', MAX_STATEMENTS)),
+        web_query = request.args.copy()
+        offs = web_query.pop('offset', None)
+        ev_lim = web_query.pop('ev_limit', None)
+        best_first = web_query.pop('best_first', 'true').lower() == 'true'
+        max_stmts = min(int(web_query.pop('max_stmts', MAX_STATEMENTS)),
                         MAX_STATEMENTS)
-        fmt = query.pop('format', 'json')
-        w_english = query.pop('with_english', 'false').lower() == 'true'
-        w_cur_counts = query.pop('with_cur_counts', 'false').lower() == 'true'
+        fmt = web_query.pop('format', 'json')
+        w_english = web_query.pop('with_english', 'false').lower() == 'true'
+        w_cur_counts = \
+            web_query.pop('with_cur_counts', 'false').lower() == 'true'
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
-        user, roles = resolve_auth(query)
+        user, roles = resolve_auth(web_query)
         for role in roles:
             for resource in has.keys():
                 has[resource] |= role.permissions.get(resource, False)
@@ -111,27 +114,27 @@ def _query_wrapper(f):
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
-        result = f(query, offs, max_stmts, ev_lim, best_first,
+        result = f(web_query, offs, max_stmts, ev_lim, best_first,
                    censured_sources, *args, **kwargs)
         if isinstance(result, Response):
             return result
+        elif not isinstance(result, StatementQueryResult):
+            raise RuntimeError("Result should be StatementQueryResult.")
 
         logger.info("Finished function %s after %s seconds."
                     % (f.__name__, sec_since(start_time)))
 
         # Handle any necessary redactions
-        stmts_json = result.pop('statements')
+        res_json = result.json()
+        stmts_json = res_json.pop('results')
         elsevier_redactions = 0
-        source_counts = result['source_counts']
+        source_counts = result.source_counts
         if not all(has.values()) or fmt == 'json-js' or w_english:
             for h, stmt_json in stmts_json.copy().items():
                 if w_english:
                     stmt = stmts_from_json([stmt_json])[0]
                     stmt_json['english'] = _format_stmt_text(stmt)
                     stmt_json['evidence'] = _format_evidence_text(stmt)
-
-                if not has['medscan']:
-                    source_counts[h].pop('medscan', None)
 
                 if has['elsevier'] and fmt != 'json-js' and not w_english:
                     continue
@@ -189,8 +192,9 @@ def _query_wrapper(f):
                                            source_counts, title=title,
                                            db_rest_url=request.url_root[:-1])
             idbr_template = env.get_template('idbr_statements_view.html')
+            identity = user.identity() if user else None
             content = html_assembler.make_model(idbr_template,
-                identity=user.identity() if user else None)
+                                                identity=identity)
             if tracker.get_messages():
                 level_stats = ['%d %ss' % (n, lvl.lower())
                                for lvl, n in tracker.get_level_stats().items()]
@@ -320,29 +324,55 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
                    censured_sources):
     """Get some statements constrained by query."""
     logger.info("Getting query details.")
+    db_query = None
+    num_agents = 0
     if ev_limit is None:
         ev_limit = 10
     try:
         # Get the agents without specified locations (subject or object).
-        free_agents = [process_agent(ag)
-                       for ag in query_dict.poplist('agent')]
-        ofaks = {k for k in query_dict.keys() if k.startswith('agent')}
-        free_agents += [process_agent(query_dict.pop(k)) for k in ofaks]
+        free_agents = (ag for ag_gen in [query_dict.poplist('agent'),
+                                         (query_dict.pop(k)
+                                          for k in {k for k in query_dict.keys()
+                                                    if k.startswith('agent')})]
+                       for ag in ag_gen)
+        for raw_ag in free_agents:
+            num_agents += 1
+            ag, ns = process_agent(raw_ag)
+            new_q = HasAgent(ag, namespace=ns)
+            if db_query is None:
+                db_query = new_q
+            else:
+                db_query &= new_q
 
         # Get the agents with specified roles.
-        roled_agents = {role: process_agent(query_dict.pop(role))
-                        for role in ['subject', 'object']
-                        if query_dict.get(role) is not None}
+        for role in ['subject', 'object']:
+            num_agents += 1
+            raw_ag = query_dict.pop(role)
+            if raw_ag is None:
+                continue
+            ag, ns = process_agent(raw_ag)
+            new_q = HasAgent(ag, namespace=ns, role=role.upper())
+            if db_query is None:
+                db_query = new_q
+            else:
+                db_query &= new_q
     except DbAPIError as e:
         logger.exception(e)
         abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
         return
 
+    if db_query is None:
+        abort(Response('No agents found in request.', 400))
+
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
+    if act_raw is not None:
+        act = make_statement_camel(act_raw)
+        db_query &= HasType([act])
 
     # Get whether the user wants a strict match
-    strict = query_dict.pop('strict', 'false').lower() == 'true'
+    if query_dict.pop('strict', 'false').lower() == 'true':
+        db_query &= HasNumAgents((num_agents,))
 
     # If there was something else in the query, there shouldn't be, so
     # someone's probably confused.
@@ -351,9 +381,16 @@ def get_statements(query_dict, offs, max_stmts, ev_limit, best_first,
                        % list(query_dict.keys()), 400))
         return
 
-    return _answer_binary_query(act_raw, roled_agents, free_agents, offs,
-                                max_stmts, ev_limit, best_first, strict,
-                                censured_sources)
+    ev_filter = None
+    if censured_sources:
+        for src in censured_sources:
+            minus_q = HasOnlySource(src)
+            db_query -= minus_q
+            ev_filter &= minus_q.ev_filter()
+
+    return db_query.get_statements(limit=max_stmts, ev_limit=ev_limit,
+                                   best_first=best_first,
+                                   evidence_filter=ev_filter)
 
 
 @dep_route('/statements/from_hashes', methods=['POST'])

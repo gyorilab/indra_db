@@ -664,3 +664,20 @@ def test_evidence_count_is_0():
     assert res.returned_evidence == 0, res.returned_evidence
     assert sum(res.evidence_totals.values()) > 20, \
         sum(res.evidence_totals.values())
+
+
+def test_real_world_examples():
+    ro = get_db('primary')
+    query = (HasAgent('MEK', namespace='FPLX', role='SUBJECT')
+             & HasAgent('ERK', namespace='FPLX', role='OBJECT')
+             & HasType(['Phosphorylation'])
+             - HasOnlySource('medscan'))
+    ev_filter = HasOnlySource('medscan').invert().ev_filter()
+    res = query.get_statements(ro, limit=100, ev_limit=10,
+                               evidence_filter=ev_filter)
+    assert len(res.results)
+
+    query = HasAgent('RAS') & HasAgent('RAF') & HasNumAgents((3,))
+    res = query.get_statements(ro, limit=100, ev_limit=10)
+    stmts = res.statements()
+    assert len(stmts)

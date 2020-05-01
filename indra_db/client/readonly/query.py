@@ -18,7 +18,7 @@ from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
 from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
     SOURCE_GROUPS
-from indra_db.util import regularize_agent_id
+from indra_db.util import regularize_agent_id, get_ro
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class QueryCore(object):
         """
         return self.__invert__()
 
-    def get_statements(self, ro, limit=None, offset=None, best_first=True,
+    def get_statements(self, ro=None, limit=None, offset=None, best_first=True,
                        ev_limit=None, evidence_filter=None) \
             -> StatementQueryResult:
         """Get the statements that satisfy this query.
@@ -192,6 +192,9 @@ class QueryCore(object):
             An object holding the JSON result from the database, as well as the
             metadata for the query.
         """
+        if ro is None:
+            ro = get_ro('primary')
+
         # If the result is by definition empty, save ourselves time and work.
         if self.empty:
             return StatementQueryResult({}, limit, offset, {}, 0, {},
@@ -335,7 +338,7 @@ class QueryCore(object):
                                     returned_evidence, source_counts,
                                     self.to_json())
 
-    def get_hashes(self, ro, limit=None, offset=None, best_first=True) \
+    def get_hashes(self, ro=None, limit=None, offset=None, best_first=True) \
             -> QueryResult:
         """Get the hashes of statements that satisfy this query.
 
@@ -359,6 +362,9 @@ class QueryCore(object):
             An object holding the results of the query, as well as the metadata
             for the query definition.
         """
+        if ro is None:
+            ro = get_ro('primary')
+
         # If the result is by definition empty, save time and effort.
         if self.empty:
             return QueryResult(set(), limit, offset, {}, self.to_json())
@@ -409,7 +415,7 @@ class QueryCore(object):
         )
         return q
 
-    def get_interactions(self, ro, limit=None, offset=None, best_first=True) \
+    def get_interactions(self, ro=None, limit=None, offset=None, best_first=True) \
             -> QueryResult:
         """Get the simple interaction information from the Statements metadata.
 
@@ -430,6 +436,9 @@ class QueryCore(object):
         best_first : bool
             Return the best (most evidence) statements first.
         """
+        if ro is None:
+            ro = get_ro('primary')
+
         if self.empty:
             return QueryResult({}, limit, offset, {}, self.to_json())
 
@@ -451,7 +460,7 @@ class QueryCore(object):
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
 
-    def get_relations(self, ro, limit=None, offset=None, best_first=True) \
+    def get_relations(self, ro=None, limit=None, offset=None, best_first=True) \
             -> QueryResult:
         """Get the agent and type information from the Statements metadata.
 
@@ -472,6 +481,9 @@ class QueryCore(object):
         best_first : bool
             Return the best (most evidence) statements first.
         """
+        if ro is None:
+            ro = get_ro('primary')
+
         if self.empty:
             return QueryResult({}, limit, offset, {}, self.to_json())
 
@@ -518,7 +530,7 @@ class QueryCore(object):
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
 
-    def get_agents(self, ro, limit=None, offset=None, best_first=True) \
+    def get_agents(self, ro=None, limit=None, offset=None, best_first=True) \
             -> QueryResult:
         """Get the agent pairs from the Statements metadata.
 
@@ -539,6 +551,9 @@ class QueryCore(object):
         best_first : bool
             Return the best (most evidence) statements first.
         """
+        if ro is None:
+            ro = get_ro('primary')
+
         if self.empty:
             return QueryResult({}, limit, offset, {}, self.to_json())
 

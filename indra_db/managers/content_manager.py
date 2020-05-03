@@ -297,7 +297,7 @@ class ContentManager(object):
         for id_type in match_id_types:
             id_list = [entry[id_idx(id_type)] for entry in tr_data_set
                        if entry[id_idx(id_type)] is not None]
-            # Add SqlAlchemy filter clause based on the ID list for this ID type
+            # Add SqlAlchemy filter clause based on ID list for this ID type
             if id_list:
                 if id_type == 'pmid':
                     term = db.TextRef.pmid_in(id_list, filter_ids=True)

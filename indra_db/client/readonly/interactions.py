@@ -11,6 +11,11 @@ def stmt_from_interaction(interaction):
     if interaction['type'] == 'Complex':
         agents = [Agent(name) for name in interaction['agents'].values()]
         stmt = StmtClass(agents)
+    elif interaction['type'] == 'ActiveForm':
+        name = interaction['agents'][0]
+        agent = Agent(name)
+        stmt = StmtClass(agent, interaction['activity'],
+                         interaction['is_active'])
     else:
         agents = [Agent(interaction['agents'][i])
                   if interaction['agents'].get(i)

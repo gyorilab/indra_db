@@ -333,48 +333,37 @@ def get_statements_query_format():
                               endpoint=request.url_root)
 
 
-@dep_route('/statements/from_agents', methods=['GET'])
-@_query_wrapper
-def get_statements(query_dict):
-    """Get some statements constrained by query."""
-    logger.info("Getting query details.")
+def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     db_query = None
     num_agents = 0
-    try:
-        # Get the agents without specified locations (subject or object).
-        free_agents = (ag for ag_gen in [query_dict.poplist('agent'),
-                                         (query_dict.pop(k)
-                                          for k in {k for k in query_dict.keys()
-                                                    if k.startswith('agent')})]
-                       for ag in ag_gen)
-        for raw_ag in free_agents:
-            num_agents += 1
-            ag, ns = process_agent(raw_ag)
-            new_q = HasAgent(ag, namespace=ns)
-            if db_query is None:
-                db_query = new_q
-            else:
-                db_query &= new_q
 
-        # Get the agents with specified roles.
-        for role in ['subject', 'object']:
-            num_agents += 1
-            raw_ag = query_dict.pop(role)
-            if raw_ag is None:
-                continue
-            ag, ns = process_agent(raw_ag)
-            new_q = HasAgent(ag, namespace=ns, role=role.upper())
-            if db_query is None:
-                db_query = new_q
-            else:
-                db_query &= new_q
-    except DbAPIError as e:
-        logger.exception(e)
-        abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
-        return
+    # Get the agents without specified locations (subject or object).
+    free_agents = (ag for ag_gen in [query_dict.poplist('agent'),
+                                     (query_dict.pop(k)
+                                      for k in {k for k in query_dict.keys()
+                                                if k.startswith('agent')})]
+                   for ag in ag_gen)
+    for raw_ag in free_agents:
+        num_agents += 1
+        ag, ns = process_agent(raw_ag)
+        new_q = HasAgent(ag, namespace=ns)
+        if db_query is None:
+            db_query = new_q
+        else:
+            db_query &= new_q
 
-    if db_query is None:
-        abort(Response('No agents found in request.', 400))
+    # Get the agents with specified roles.
+    for role in ['subject', 'object']:
+        num_agents += 1
+        raw_ag = query_dict.pop(role, None)
+        if raw_ag is None:
+            continue
+        ag, ns = process_agent(raw_ag)
+        new_q = HasAgent(ag, namespace=ns, role=role.upper())
+        if db_query is None:
+            db_query = new_q
+        else:
+            db_query &= new_q
 
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
@@ -386,11 +375,25 @@ def get_statements(query_dict):
     if query_dict.pop('strict', 'false').lower() == 'true':
         db_query &= HasNumAgents((num_agents,))
 
-    # If there was something else in the query, there shouldn't be, so
-    # someone's probably confused.
-    if query_dict:
-        abort(Response("Unrecognized query options; %s."
-                       % list(query_dict.keys()), 400))
+    if require and (db_query is None
+                    or set(require) > set(db_query.get_component_queries())):
+        raise DbAPIError(f"Required query elements not found: {require}")
+
+    if query_dict and empty_web_query:
+        raise DbAPIError(f"Invalid query options: {query_dict.keys()}.")
+
+    return db_query
+
+
+@dep_route('/statements/from_agents', methods=['GET'])
+@_query_wrapper
+def get_statements(query_dict):
+    """Get some statements constrained by query."""
+    logger.info("Getting query details.")
+    try:
+        db_query = _db_query_from_web_query(query_dict, {'HasAgent'}, True)
+    except Exception as e:
+        abort(Response(f'Problem forming query: {e}', 400))
         return
 
     return db_query

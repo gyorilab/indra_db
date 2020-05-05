@@ -460,7 +460,8 @@ class QueryCore(object):
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
 
-    def get_relations(self, ro=None, limit=None, offset=None, best_first=True) \
+    def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
+                      with_hashes=False) \
             -> QueryResult:
         """Get the agent and type information from the Statements metadata.
 
@@ -480,6 +481,9 @@ class QueryCore(object):
             allows you to page through results.
         best_first : bool
             Return the best (most evidence) statements first.
+        with_hashes : bool
+            Default is False. If True, retrieve all the hashes that fit within
+            each relational grouping.
         """
         if ro is None:
             ro = get_ro('primary')
@@ -496,7 +500,8 @@ class QueryCore(object):
             sq.c.agent_count,
             sq.c.activity,
             sq.c.is_active,
-            func.array_agg(sq.c.src_json)
+            func.array_agg(sq.c.src_json),
+            func.array_agg(sq.c.mk_hash) if with_hashes else null()
         ).group_by(
             sq.c.agent_json,
             sq.c.type_num,
@@ -508,7 +513,7 @@ class QueryCore(object):
         names = q.all()
         results = {}
         ev_totals = {}
-        for ag_json, type_num, n_ag, activity, is_active, src_jsons in names:
+        for ag_json, type_num, n_ag, activity, is_active, srcs, hashes in names:
             ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
@@ -517,20 +522,23 @@ class QueryCore(object):
             key = stmt_type + agent_key
 
             if key in results:
-                logger.warning("Something went weird.")
+                logger.warning("Something went weird processing relations.")
 
             source_counts = defaultdict(lambda: 0)
-            for src_json in src_jsons:
+            for src_json in srcs:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
             ag_dict = {n: ag_json.get(str(n)) for n in range(n_ag)}
             results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': ag_dict, 'type': stmt_type}
+                            'agents': ag_dict, 'type': stmt_type,
+                            'activity': activity, 'is_active': is_active,
+                            'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
 
-    def get_agents(self, ro=None, limit=None, offset=None, best_first=True) \
+    def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
+                   with_hashes=False) \
             -> QueryResult:
         """Get the agent pairs from the Statements metadata.
 
@@ -550,6 +558,9 @@ class QueryCore(object):
             allows you to page through results.
         best_first : bool
             Return the best (most evidence) statements first.
+        with_hashes : bool
+            Default is False. If True, retrieve all the hashes that fit within
+            each agent pair grouping.
         """
         if ro is None:
             ro = get_ro('primary')
@@ -563,7 +574,8 @@ class QueryCore(object):
         q = ro.session.query(
             sq.c.agent_json,
             sq.c.agent_count,
-            func.array_agg(sq.c.src_json)
+            func.array_agg(sq.c.src_json),
+            func.array_agg(sq.c.mk_hash) if with_hashes else null()
         ).group_by(
             sq.c.agent_json,
             sq.c.agent_count
@@ -572,12 +584,13 @@ class QueryCore(object):
 
         results = {}
         ev_totals = {}
-        for ag_json, n_ag, src_jsons in names:
+        for ag_json, n_ag, src_jsons, hashes in names:
             ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
             if key in results:
-                logger.warning("Something went weird.")
+                logger.warning("Something went weird processing results for "
+                               "agents.")
 
             source_counts = defaultdict(lambda: 0)
             for src_json in src_jsons:
@@ -585,7 +598,7 @@ class QueryCore(object):
                     source_counts[src] += cnt
             ag_dict = {n: ag_json.get(str(n)) for n in range(n_ag)}
             results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': ag_dict}
+                            'agents': ag_dict, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())

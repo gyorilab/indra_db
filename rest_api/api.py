@@ -109,7 +109,7 @@ def _query_wrapper(get_db_query):
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
                     % (get_db_query.__name__, sec_since(start_time)))
-        db_query = get_db_query(web_query)
+        db_query = get_db_query(web_query, *args, **kwargs)
         if isinstance(db_query, Response):
             return db_query
         elif not isinstance(db_query, QueryCore):

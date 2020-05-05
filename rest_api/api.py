@@ -518,23 +518,6 @@ def get_metadata(level):
             has[resource] |= role.permissions.get(resource, False)
     logger.info('Auths: %s' % str(has))
 
-    logger.info("Getting query details.")
-    try:
-        # Get the agents without specified locations (subject or object).
-        agents = [(None,) + process_agent(ag)
-                  for ag in query.poplist('agent')]
-        ofaks = {k for k in query.keys() if k.startswith('agent')}
-        agents += [(None,) + process_agent(query.pop(k)) for k in ofaks]
-
-        # Get the agents with specified roles.
-        agents += [(role,) + process_agent(query.pop(role))
-                   for role in ['subject', 'object']
-                   if query.get(role) is not None]
-    except DbAPIError as e:
-        logger.exception(e)
-        abort(Response('Failed to make agents from names: %s\n' % str(e), 400))
-        return
-
     def pop(k, default=None, type_cast=None):
         if isinstance(default, bool):
             val = query.pop(k, str(default).lower()) == 'true'
@@ -546,45 +529,71 @@ def get_metadata(level):
         return val
 
     w_curations = pop('with_cur_counts', False)
-    stmt_type = pop('type', type_cast=make_statement_camel)
-    max_relations = pop('limit', type_cast=int)
-    offset = pop('offset', type_cast=int)
-    best_first = pop('best_first', True)
-    res = get_interaction_jsons_from_agents(agents=agents, detail_level=level,
-                                            stmt_type=stmt_type,
-                                            max_relations=max_relations,
-                                            offset=offset,
-                                            best_first=best_first)
+
+    kwargs = dict(limit=pop('limit', type_cast=int),
+                  offset=pop('offset', type_cast=int),
+                  best_first=pop('best_first', True))
+    try:
+        db_query = _db_query_from_web_query(query, {'HasAgent'}, True)
+    except Exception as e:
+        abort(Response(f'Problem forming query: {e}', 400))
+        return
+
+    if not has['medscan']:
+        db_query -= HasOnlySource('medscan')
+
+    if level == 'hashes':
+        res = db_query.get_interactions(**kwargs)
+    elif level == 'relations':
+        res = db_query.get_relations(with_hashes=w_curations, **kwargs)
+    elif level == 'agents':
+        res = db_query.get_agents(with_hashes=w_curations, **kwargs)
+    else:
+        abort(Response(f'Invalid level: {level}'))
+        return
 
     dt = (datetime.utcnow() - start).total_seconds()
-    logger.info("Got %s results after %.2f." % (len(res), dt))
+    logger.info("Got %s results after %.2f." % (len(res.results), dt))
 
-    # Currently, a hash could get through (in one of the less detailed results)
-    # that is entirely dependent on medscan.
-    if not has['medscan']:
-        censored_res = []
-        for entry in res['relations']:
-            entry['total_count'] -= entry['source_counts'].pop('medscan', 0)
-            if entry['source_counts']:
-                censored_res.append(entry)
-        res['relations'] = censored_res
+    res_list = []
+    for key, entry in res.results.items():
+        # Filter medscan from source counts.
+        if not has['medscan']:
+            res.evidence_totals[key] -= entry['source_counts'].pop('medscan', 0)
+            entry['total_count'] = res.evidence_totals[key]
+            if not entry['source_counts']:
+                logger.warning("Censored content present.")
+                continue
 
-    for entry in res['relations']:
-        if entry['type'] == 'ActiveForm':
-            entry['english'] = entry['agents'][0] + ' has active form.'
+        # Create english
+        if level == 'agents':
+            ag_dict = entry['agents']
+            if len(ag_dict) == 0:
+                eng = ''
+            else:
+                ag_list = list(ag_dict.values())
+                eng = ag_list[0]
+                if len(ag_dict) > 1:
+                    eng += ' interacts with ' + ag_list[1]
+                    if len(ag_dict) > 3:
+                        eng += ', ' + ', '.join(ag_list[2:-1])
+                    if len(ag_dict) > 2:
+                        eng += ', and ' + ag_list[-1]
         else:
-            entry['english'] = \
-                EnglishAssembler([stmt_from_interaction(entry)]).make_model()
+            eng = EnglishAssembler([stmt_from_interaction(entry)]).make_model()
+        entry['english'] = eng
+
+        res_list.append(entry)
 
     # Look up curations, if result with_curations was set.
     if w_curations:
         rel_hash_lookup = {}
         if level == 'hashes':
-            for rel in res['relations']:
+            for rel in res_list:
                 rel['cur_count'] = 0
                 rel_hash_lookup[rel['hash']] = rel
         else:
-            for rel in res['relations']:
+            for rel in res_list:
                 for h in rel['hashes']:
                     rel['cur_count'] = 0
                     rel_hash_lookup[h] = rel
@@ -595,9 +604,9 @@ def get_metadata(level):
     # Finish up the query.
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Returning with %s results after %.2f seconds."
-                % (len(res), dt))
+                % (len(res_list), dt))
 
-    resp = Response(json.dumps(res),
+    resp = Response(json.dumps(res_list),
                     mimetype='application/json')
 
     dt = (datetime.utcnow() - start).total_seconds()

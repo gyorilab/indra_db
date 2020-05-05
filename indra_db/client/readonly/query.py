@@ -628,6 +628,10 @@ class QueryCore(object):
         """Get the custom constraint JSONs from the subclass"""
         raise NotImplementedError()
 
+    def get_component_queries(self) -> list:
+        """Get a list of the query elements included, in no particular order."""
+        return [self.__class__.__name__]
+
     def _get_table(self, ro):
         raise NotImplementedError()
 
@@ -896,6 +900,10 @@ class SourceIntersection(QueryCore):
     def _get_constraint_json(self) -> dict:
         query_list = [q.to_json() for q in self.source_queries]
         return {'multi_source_query': {'source_queries': query_list}}
+
+    def get_component_queries(self) -> list:
+        return [q.__class__.__name__ for q in self.source_queries] \
+               + [self.__class__.__name__]
 
     def _get_table(self, ro):
         return ro.SourceMeta
@@ -1609,6 +1617,12 @@ class MergeQueryCore(QueryCore):
 
     def _get_constraint_json(self) -> dict:
         return {f'{self.name}_query': [q.to_json() for q in self.queries]}
+
+    def get_component_queries(self) -> list:
+        type_list = []
+        for q in self.queries:
+            type_list += q.get_component_queries()
+        return type_list + [self.__class__.__name__]
 
     def _hash_count_pair(self, ro) -> tuple:
         mk_hashes_al = self._get_table(ro)

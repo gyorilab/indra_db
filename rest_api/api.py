@@ -16,18 +16,17 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
     stmts_from_json, HtmlAssembler, SOURCE_COLORS, _format_evidence_text, \
     _format_stmt_text
 from indra.assemblers.english import EnglishAssembler
-from indra.statements import make_statement_camel, get_all_descendants
+from indra.statements import make_statement_camel
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, StatementQueryResult, HasHash, QueryCore
+    HasOnlySource, HasHash, QueryCore
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
 from indra_db.exceptions import BadHashError
-from indra_db.client import get_statement_jsons_from_hashes, \
-    get_statement_jsons_from_papers, submit_curation, \
-    get_interaction_jsons_from_agents, stmt_from_interaction, get_curations
-from .util import process_agent, _answer_binary_query, DbAPIError, LogTracker, \
-    sec_since, get_source, get_s3_client, gilda_ground
+from indra_db.client import get_statement_jsons_from_papers, submit_curation,\
+    stmt_from_interaction, get_curations
+from .util import process_agent, DbAPIError, LogTracker, sec_since, get_source,\
+    get_s3_client, gilda_ground
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)

@@ -121,11 +121,12 @@ def _query_wrapper(get_db_query):
             else:
                 ev_lim = 10
 
-        ev_filter = None
         if not has['medscan']:
-            minus_q = HasOnlySource('medscan')
-            db_query -= minus_q
-            ev_filter &= minus_q.ev_filter()
+            minus_q = ~HasOnlySource('medscan')
+            db_query &= minus_q
+            ev_filter = minus_q.ev_filter()
+        else:
+            ev_filter = None
 
         result = db_query.get_statements(offset=offs, limit=max_stmts,
                                          ev_limit=ev_lim, best_first=best_first,
@@ -148,6 +149,9 @@ def _query_wrapper(get_db_query):
 
                 if has['elsevier'] and fmt != 'json-js' and not w_english:
                     continue
+
+                if not has['medscan']:
+                    source_counts[h].pop('medscan', 0)
 
                 for ev_json in stmt_json['evidence'][:]:
                     if fmt == 'json-js':

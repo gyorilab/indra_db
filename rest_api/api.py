@@ -188,21 +188,22 @@ def _query_wrapper(get_db_query):
                         ev_json['num_curations'] = \
                             ev_json.get('num_curations', 0) + 1
                         break
-            result['num_curations'] = cur_counts
+            res_json['num_curations'] = cur_counts
 
-        # Add derived values to the result.
-        result['offset'] = offs
-        result['evidence_limit'] = ev_lim
-        result['statement_limit'] = MAX_STATEMENTS
-        result['statements_returned'] = len(stmts_json)
-        result['end_of_statements'] = (len(stmts_json) < MAX_STATEMENTS)
-        result['statements_removed'] = 0
+        # Add derived values to the res_json.
+        res_json['offset'] = offs
+        res_json['evidence_limit'] = ev_lim
+        res_json['statement_limit'] = MAX_STATEMENTS
+        res_json['statements_returned'] = len(stmts_json)
+        res_json['end_of_statements'] = (len(stmts_json) < MAX_STATEMENTS)
+        res_json['statements_removed'] = 0
+        res_json['evidence_returned'] = result.returned_evidence
 
         if fmt == 'html':
             title = TITLE + ': ' + 'Results'
-            ev_totals = result.pop('evidence_totals')
+            ev_totals = res_json.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
-            html_assembler = HtmlAssembler(stmts, result, ev_totals,
+            html_assembler = HtmlAssembler(stmts, res_json, ev_totals,
                                            source_counts, title=title,
                                            db_rest_url=request.url_root[:-1])
             idbr_template = env.get_template('idbr_statements_view.html')
@@ -216,17 +217,17 @@ def _query_wrapper(get_db_query):
                 content = html_assembler.append_warning(msg)
             mimetype = 'text/html'
         else:  # Return JSON for all other values of the format argument
-            result.update(tracker.get_level_stats())
-            result['statements'] = stmts_json
-            result['source_counts'] = source_counts
-            content = json.dumps(result)
+            res_json.update(tracker.get_level_stats())
+            res_json['statements'] = stmts_json
+            res_json['source_counts'] = source_counts
+            content = json.dumps(res_json)
             mimetype = 'application/json'
 
         resp = Response(content, mimetype=mimetype)
         logger.info("Exiting with %d statements with %d/%d evidence of size "
                     "%f MB after %s seconds."
-                    % (result['statements_returned'],
-                       result['evidence_returned'], result['total_evidence'],
+                    % (res_json['statements_returned'],
+                       res_json['evidence_returned'], res_json['total_evidence'],
                        sys.getsizeof(resp.data) / 1e6, sec_since(start_time)))
         return resp
 

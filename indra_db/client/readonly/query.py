@@ -1015,6 +1015,18 @@ class HasSources(SourceCore):
     def _copy(self):
         return self.__class__(self.sources)
 
+    def _get_empty(self):
+        return self.__class__([])
+
+    def _get_list(self):
+        return self.sources
+
+    def _do_and(self, other) -> QueryCore:
+        return self._merge_lists(True, other, super(HasSources, self)._do_and)
+
+    def _do_or(self, other) -> QueryCore:
+        return self._merge_lists(False, other, super(HasSources, self)._do_or)
+
     def __str__(self):
         if not self._inverted:
             return f"is from all of {self.sources}"

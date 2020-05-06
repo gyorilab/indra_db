@@ -375,8 +375,8 @@ def test_query_set_behavior():
         HasType(['Complex']),
         HasNumAgents([2, 3]),
         HasNumAgents([1]),
-        HasNumEvidence([10, 11]),
-        HasNumEvidence([1])
+        HasNumEvidence([10, 20]),
+        HasNumEvidence([27])
     ]
 
     failures = []

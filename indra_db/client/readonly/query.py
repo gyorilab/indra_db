@@ -4,7 +4,7 @@ __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
            'MergeQueryCore', 'HasAgent', 'FromMeshId', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceCore', 'SourceIntersection', 'HasType', 'IntrusiveQueryCore',
-           'HasNumAgents', 'HasNumEvidence']
+           'HasNumAgents', 'HasNumEvidence', 'FromPapers']
 
 import json
 import logging
@@ -1306,10 +1306,25 @@ class HasAgent(QueryCore):
 
 
 class FromPapers(QueryCore):
-    """Find Statements that have evidence from particular papers."""
+    """Find Statements that have evidence from particular papers.
+
+    Parameters
+    ----------
+    paper_list : list[(<id_type>, <paper_id>)]
+        A list of tuples, where each tuple indicates and id-type (e.g. 'pmid')
+        and an id value for a particular paper.
+
+    Returns
+    -------
+    A dictionary data structure containing, among other metadata, a dict of
+    statement jsons under the key 'statements', themselves keyed by their
+    shallow matches-key hashes.
+    """
+    list_name = 'paper_list'
+
     def __init__(self, paper_list):
-        self.paper_list = paper_list
-        super(FromPapers, self).__init__(len(paper_list) == 0)
+        self.paper_list = tuple(set(paper_list))
+        super(FromPapers, self).__init__(len(self.paper_list) == 0)
 
     def __str__(self) -> str:
         ret = 'not ' if self._inverted else ''
@@ -1318,11 +1333,57 @@ class FromPapers(QueryCore):
     def _copy(self) -> QueryCore:
         return self.__class__(self.paper_list)
 
+    def _get_empty(self):
+        return self.__class__([])
+
+    def _get_list(self):
+        return getattr(self, self.list_name)
+
+    def _do_and(self, other) -> QueryCore:
+        return self._merge_lists(True, other, super(FromPapers, self)._do_and)
+
+    def _do_or(self, other) -> QueryCore:
+        return self._merge_lists(False, other, super(FromPapers, self)._do_or)
+
     def _get_constraint_json(self) -> dict:
         return {'from_papers': {'paper_list': self.paper_list}}
 
     def _get_table(self, ro):
-        pass
+        return ro.EvidenceCounts
+
+    def _get_hash_query(self, ro, inject_queries=None):
+        # Create a sub-query on the reading metadata
+        q = ro.session.query(ro.ReadingRefLink.rid.label('rid'))
+        conditions = []
+        for id_type, paper_id in self.paper_list:
+            if paper_id is None:
+                logger.warning("Got paper with id None.")
+                continue
+
+            # TODO: upgrade this to use new id formatting. This will require
+            # updating the ReadingRefLink table in the readonly build.
+            tbl_attr = getattr(ro.ReadingRefLink, id_type)
+            if not self._inverted:
+                if id_type in ['trid', 'tcid']:
+                    conditions.append(tbl_attr == int(paper_id))
+                else:
+                    conditions.append(tbl_attr.like(paper_id))
+                q = q.filter(or_(*conditions))
+            else:
+                if id_type in ['trid', 'tcid']:
+                    conditions.append(tbl_attr != int(paper_id))
+                else:
+                    conditions.append(tbl_attr.notlike(paper_id))
+                # RDML (implicit "and")
+                q = q.filter(*conditions)
+
+        sub_al = q.subquery('reading_ids')
+
+        # Map the reading metadata query to mk_hashes with statement counts.
+        qry = (self._base_query(ro)
+               .filter(ro.EvidenceCounts.mk_hash == ro.FastRawPaLink.mk_hash,
+                       ro.FastRawPaLink.reading_id == sub_al.c.rid))
+        return qry
 
 
 class IntrusiveQueryCore(QueryCore):

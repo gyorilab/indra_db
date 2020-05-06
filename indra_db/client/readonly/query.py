@@ -739,6 +739,34 @@ class QueryCore(object):
 
         return self._do_or(other)
 
+    def _merge_lists(self, is_and, other, fallback):
+        if isinstance(other, self.__class__) \
+                and self._inverted == other._inverted:
+            # Two type queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
+            my_set = set(self._get_list())
+            yo_set = set(other._get_list())
+            if not self._inverted:
+                merged_values = my_set & yo_set if is_and else my_set | yo_set
+                empty = len(merged_values) == 0
+                full = False
+            else:
+                # RDML
+                merged_values = my_set | yo_set if is_and else my_set & yo_set
+                full = len(merged_values) == 0
+                empty = False
+            res = self.__class__(merged_values)
+            res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
+            return res
+        elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return a empty
+            # result trivially. (A and not A is nothing)
+            return self._get_empty() if is_and else ~self._get_empty()
+
+        return fallback(other)
+
     def __sub__(self, other):
         # Subtraction is the same as "and not"
         return self._do_and(~other)

@@ -1123,6 +1123,8 @@ class HasHash(SourceCore):
         A collection of integers, where each integer is a shallow matches key
         hash of a Statement (frequently simply called "mk_hash" or "hash")
     """
+    list_name = 'stmt_hashes'
+
     def __init__(self, stmt_hashes):
         empty = len(stmt_hashes) == 0
         self.stmt_hashes = tuple(stmt_hashes)
@@ -1131,59 +1133,23 @@ class HasHash(SourceCore):
     def _copy(self):
         return self.__class__(self.stmt_hashes)
 
-    def _do_or(self, other):
-        if isinstance(other, HasHash) and self._inverted == other._inverted:
-            # Two hash queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
-                empty = len(hashes) == 0
-                full = False
-            else:
-                # Recall De Morgan's Law.
-                hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
-                full = len(hashes) == 0
-                empty = False
-            res = HasHash(hashes)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a full
-            # result trivially. (A or not A is anything)
-            return ~self.__class__([])
-        return super(HasHash, self)._do_or(other)
-
-    def _do_and(self, other):
-        if isinstance(other, HasHash) and self._inverted == other._inverted:
-            # Two hash queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
-                empty = len(hashes) == 0
-                full = False
-            else:
-                # RDML
-                hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
-                full = len(hashes) == 0
-                empty = False
-            res = HasHash(hashes)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return an empty
-            # result trivially. (A and not A is nothing)
-            return self.__class__([])
-        return super(HasHash, self)._do_and(other)
-
     def __str__(self):
         return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
 
     def _get_constraint_json(self) -> dict:
         return {"hash_query": {'hashes': list(self.stmt_hashes)}}
+
+    def _get_empty(self):
+        return self.__class__([])
+
+    def _get_list(self):
+        return getattr(self, self.list_name)
+
+    def _do_and(self, other) -> QueryCore:
+        return self._merge_lists(True, other, super(HasHash, self)._do_and)
+
+    def _do_or(self, other) -> QueryCore:
+        return self._merge_lists(False, other, super(HasHash, self)._do_or)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -1398,75 +1364,37 @@ class IntrusiveQueryCore(QueryCore):
     col_name = NotImplemented
 
     def __init__(self, value_list):
-        self._value_tuple = tuple([self.item_type(n)
-                                   for n in value_list])
-        setattr(self, self.list_name, self._value_tuple)
-        super(IntrusiveQueryCore, self).__init__(len(self._value_tuple) == 0)
+        value_tuple = tuple([self.item_type(n) for n in value_list])
+        setattr(self, self.list_name, value_tuple)
+        super(IntrusiveQueryCore, self).__init__(len(value_tuple) == 0)
 
     def _get_empty(self) -> QueryCore:
         return self.__class__([])
 
     def _copy(self) -> QueryCore:
-        return self.__class__(self._value_tuple)
+        return self.__class__(self._get_list())
 
-    def _get_constraint_json(self) -> dict:
-        return {self.name: {self.list_name: list(self._value_tuple)}}
-
-    def _do_or(self, other) -> QueryCore:
-        if isinstance(other, self.__class__) \
-                and self._inverted == other._inverted:
-            # Two type queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                merged_values = set(self._value_tuple) | set(other._value_tuple)
-                empty = len(merged_values) == 0
-                full = False
-            else:
-                # RDML (Remember De Morgan's Law)
-                merged_values = set(self._value_tuple) & set(other._value_tuple)
-                full = len(merged_values) == 0
-                empty = False
-            res = self.__class__(merged_values)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a full
-            # result trivially. (A or not A is anything)
-            return ~self._get_empty()
-        return super(IntrusiveQueryCore, self)._do_or(other)
+    def _get_list(self):
+        return getattr(self, self.list_name)
 
     def _do_and(self, other) -> QueryCore:
-        if isinstance(other, self.__class__) \
-                and self._inverted == other._inverted:
-            # Two type queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                merged_values = set(self._value_tuple) & set(other._value_tuple)
-                empty = len(merged_values) == 0
-                full = False
-            else:
-                # RDML
-                merged_values = set(self._value_tuple) | set(other._value_tuple)
-                full = len(merged_values) == 0
-                empty = False
-            res = self.__class__(merged_values)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a empty
-            # result trivially. (A and not A is nothing)
-            return self._get_empty()
-        return super(IntrusiveQueryCore, self)._do_and(other)
+        return self._merge_lists(True, other,
+                                 super(IntrusiveQueryCore, self)._do_and)
+
+    def _do_or(self, other) -> QueryCore:
+        return self._merge_lists(False, other,
+                                 super(IntrusiveQueryCore, self)._do_or)
+
+    def _get_constraint_json(self) -> dict:
+        return {self.name: {self.list_name: list(self._get_list())}}
 
     def _get_table(self, ro):
         return ro.SourceMeta
 
     def _get_query_values(self):
-        return self._value_tuple
+        # This method can be subclassed in case values need to be processed
+        # before the query, a la HasType
+        return self._get_list()
 
     def _get_clause(self, meta):
         q_values = self._get_query_values()

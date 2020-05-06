@@ -1701,7 +1701,7 @@ class Intersection(MergeQueryCore):
         # Look for groups of queries that can be merged otherwise, and gather
         # up the type queries for special handling. Also, check to see if any
         # queries are empty, in which case the net query is necessarily empty.
-        mergeable_query_types = [SourceIntersection, SourceCore]
+        mergeable_query_types = [SourceIntersection, SourceCore, FromPapers]
         mergeable_groups = {C: [] for C in mergeable_query_types}
         query_groups = defaultdict(list)
         filtered_queries = set()
@@ -1867,6 +1867,7 @@ class Union(MergeQueryCore):
         # hash queries.
         other_queries = set()
         query_groups = defaultdict(list)
+        mergeable_types = (HasSources, HasHash, FromPapers, IntrusiveQueryCore)
         merge_grps = defaultdict(lambda: {True: [], False: []})
         full = False
         all_empty = True
@@ -1874,8 +1875,7 @@ class Union(MergeQueryCore):
             if not query.empty:
                 all_empty = False
 
-            if isinstance(query, HasHash) \
-                    or isinstance(query, IntrusiveQueryCore):
+            if any(isinstance(query, t) for t in mergeable_types):
                 merge_grps[query.__class__][query._inverted].append(query)
             else:
                 other_queries.add(query)

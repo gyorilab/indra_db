@@ -347,9 +347,11 @@ def test_from_mesh():
 
 def test_query_set_behavior():
     db = _build_test_set()
-    all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
+    all_hashes = {h for h, in db.select_all(db.SourceMeta.mk_hash)}
+    all_source_counts = {c for c, in db.select_all(db.SourceMeta.ev_count)}
     print(f"There are {len(all_hashes)} distinct hashes in the database.")
     lookup_hashes = random.sample(all_hashes, 5)
+    lookup_src_cnts = random.sample(all_source_counts, 3)
 
     c = Counter()
 
@@ -375,8 +377,8 @@ def test_query_set_behavior():
         HasType(['Complex']),
         HasNumAgents([2, 3]),
         HasNumAgents([1]),
-        HasNumEvidence([10, 20]),
-        HasNumEvidence([27])
+        HasNumEvidence(lookup_src_cnts[:-1]),
+        HasNumEvidence(lookup_src_cnts[-1:])
     ]
 
     failures = []

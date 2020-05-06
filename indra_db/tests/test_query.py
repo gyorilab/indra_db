@@ -282,6 +282,16 @@ def test_has_agent():
         assert ag.db_refs['CHEBI'] == 'CHEBI:63637'
 
 
+def test_from_papers():
+    ro = get_db('primary')
+    pmid = '27014235'
+    q = FromPapers([('pmid', pmid)])
+    res = q.get_statements(ro, limit=5)
+    assert res.statements()
+    assert all(any(ev.text_refs.get('PMID') == pmid for ev in s.evidence)
+               for s in res.statements())
+
+
 def test_has_num_agents():
     ro = get_db('primary')
     q = HasNumAgents((1, 2))

@@ -332,24 +332,31 @@ def get_statements_query_format():
                               endpoint=request.url_root)
 
 
+class EmptyDBQuery:
+    def __and__(self, other):
+        if not isinstance(other, QueryCore):
+            raise TypeError(f"Cannot perform __and__ operation with "
+                            f"{type(other)} and EmptyDBQuery.")
+        return other
+
+    def __or__(self, other):
+        if not isinstance(other, QueryCore):
+            raise TypeError(f"Cannot perform __or__ operation with "
+                            f"{type(other)} and EmptyDBQuery.")
+        return other
+
+
 def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
-    db_query = None
+    db_query = EmptyDBQuery()
     num_agents = 0
 
     # Get the agents without specified locations (subject or object).
-    free_agents = (ag for ag_gen in [query_dict.poplist('agent'),
-                                     (query_dict.pop(k)
-                                      for k in {k for k in query_dict.keys()
-                                                if k.startswith('agent')})]
-                   for ag in ag_gen)
+    free_agents = (query_dict.pop(k) for k in {k for k in query_dict.keys()
+                                               if k.startswith('agent')})
     for raw_ag in free_agents:
         num_agents += 1
         ag, ns = process_agent(raw_ag)
-        new_q = HasAgent(ag, namespace=ns)
-        if db_query is None:
-            db_query = new_q
-        else:
-            db_query &= new_q
+        db_query &= HasAgent(ag, namespace=ns)
 
     # Get the agents with specified roles.
     for role in ['subject', 'object']:
@@ -358,11 +365,7 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
         if raw_ag is None:
             continue
         ag, ns = process_agent(raw_ag)
-        new_q = HasAgent(ag, namespace=ns, role=role.upper())
-        if db_query is None:
-            db_query = new_q
-        else:
-            db_query &= new_q
+        db_query &= HasAgent(ag, namespace=ns, role=role.upper())
 
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
@@ -373,6 +376,29 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     # Get whether the user wants a strict match
     if query_dict.pop('strict', 'false').lower() == 'true':
         db_query &= HasNumAgents((num_agents,))
+
+    # Unpack hashes, if present.
+    hashes = query_dict.pop('hashes', None)
+    if hashes:
+        db_query &= HasHash(hashes)
+
+    # Unpack paper ids, if present:
+    id_tpls = set()
+    for id_dict in query_dict.pop('paper_ids', []):
+        val = id_dict['id']
+        typ = id_dict['type']
+
+        # Turn tcids and trids into integers.
+        id_val = int(val) if typ in ['tcid', 'trid'] else val
+
+        id_tpls.add((typ, id_val))
+    if id_tpls:
+        db_query &= FromPapers(id_tpls)
+
+    if isinstance(db_query, EmptyDBQuery):
+        raise DbAPIError(f"No arguments from web query {query_dict} mapped to "
+                         f"db query.")
+    assert isinstance(db_query, QueryCore), "Somehow db_query is not QueryCore."
 
     if require and (db_query is None
                     or set(require) > set(db_query.get_component_queries())):
@@ -390,7 +416,10 @@ def get_statements(query_dict):
     """Get some statements constrained by query."""
     logger.info("Getting query details.")
     try:
-        db_query = _db_query_from_web_query(query_dict, {'HasAgent'}, True)
+        inp_dict = {f'agent{i}': ag
+                    for i, ag in enumerate(query_dict.poplist('agent'))}
+        inp_dict.update(query_dict)
+        db_query = _db_query_from_web_query(inp_dict, {'HasAgent'}, True)
     except Exception as e:
         abort(Response(f'Problem forming query: {e}', 400))
         return
@@ -410,13 +439,13 @@ def get_statements_by_hashes(query_dict):
         abort(Response("Too many hashes given, %d allowed." % MAX_STATEMENTS,
                        400))
 
-    return HasHash(hashes)
+    return _db_query_from_web_query({'hashes': hashes})
 
 
 @dep_route('/statements/from_hash/<hash_val>', methods=['GET'])
 @_query_wrapper
 def get_statement_by_hash(query_dict, hash_val):
-    return HasHash([hash_val])
+    return _db_query_from_web_query({'hashes': [hash_val]})
 
 
 @dep_route('/statements/from_papers', methods=['POST'])

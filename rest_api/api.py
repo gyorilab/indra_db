@@ -18,13 +18,13 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, HasHash, QueryCore
+    HasOnlySource, HasHash, QueryCore, FromPapers
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
 from indra_db.exceptions import BadHashError
-from indra_db.client import get_statement_jsons_from_papers, submit_curation,\
-    stmt_from_interaction, get_curations
+from indra_db.client import submit_curation, stmt_from_interaction,\
+    get_curations
 from .util import process_agent, DbAPIError, LogTracker, sec_since, get_source,\
     get_s3_client, gilda_ground
 
@@ -450,36 +450,14 @@ def get_statement_by_hash(query_dict, hash_val):
 
 @dep_route('/statements/from_papers', methods=['POST'])
 @_query_wrapper
-def get_paper_statements(query_dict, offs, max_stmts, ev_limit, best_first,
-                         censured_sources):
+def get_paper_statements(query_dict):
     """Get Statements from a papers with the given ids."""
-    if ev_limit is None:
-        ev_limit = 10
-
     # Get the paper id.
     ids = request.json.get('ids')
     if not ids:
         logger.error("No ids provided!")
         abort(Response("No ids in request!", 400))
-
-    # Format the ids.
-    id_tpls = set()
-    for id_dict in ids:
-        val = id_dict['id']
-        typ = id_dict['type']
-
-        # Turn tcids and trids into integers.
-        id_val = int(val) if typ in ['tcid', 'trid'] else val
-
-        id_tpls.add((typ, id_val))
-
-    # Now get the statements.
-    logger.info('Getting statements for %d papers.' % len(id_tpls))
-    result = get_statement_jsons_from_papers(id_tpls, max_stmts=max_stmts,
-                                             offset=offs, ev_limit=ev_limit,
-                                             best_first=best_first,
-                                             censured_sources=censured_sources)
-    return result
+    return _db_query_from_web_query({'paper_ids': ids})
 
 
 @dep_route('/curation', methods=['GET'])

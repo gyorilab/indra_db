@@ -1317,9 +1317,7 @@ class FromPapers(QueryCore):
     def _get_table(self, ro):
         return ro.EvidenceCounts
 
-    def _get_hash_query(self, ro, inject_queries=None):
-        # Create a sub-query on the reading metadata
-        q = ro.session.query(ro.ReadingRefLink.rid.label('rid'))
+    def _get_conditions(self, ro):
         conditions = []
         for id_type, paper_id in self.paper_list:
             if paper_id is None:
@@ -1334,14 +1332,22 @@ class FromPapers(QueryCore):
                     conditions.append(tbl_attr == int(paper_id))
                 else:
                     conditions.append(tbl_attr.like(paper_id))
-                q = q.filter(or_(*conditions))
             else:
                 if id_type in ['trid', 'tcid']:
                     conditions.append(tbl_attr != int(paper_id))
                 else:
                     conditions.append(tbl_attr.notlike(paper_id))
-                # RDML (implicit "and")
-                q = q.filter(*conditions)
+        return conditions
+
+    def _get_hash_query(self, ro, inject_queries=None):
+        # Create a sub-query on the reading metadata
+        q = ro.session.query(ro.ReadingRefLink.rid.label('rid'))
+        conditions = self._get_conditions(ro)
+        if not self._inverted:
+            q = q.filter(or_(*conditions))
+        else:
+            # RDML (implicit "and")
+            q = q.filter(*conditions)
 
         sub_al = q.subquery('reading_ids')
 

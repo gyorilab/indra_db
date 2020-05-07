@@ -18,7 +18,7 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, HasHash, QueryCore, FromPapers, FromMeshId
+    HasOnlySource, HasHash, QueryCore, FromPapers, FromMeshId, EvidenceFilter
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -350,6 +350,9 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     db_query = EmptyDBQuery()
     num_agents = 0
 
+    filter_ev = query_dict.pop('filter_ev', 'false').lower() == 'true'
+    ev_filter = EvidenceFilter()
+
     # Get the agents without specified locations (subject or object).
     free_agents = (query_dict.pop(k) for k in {k for k in query_dict.keys()
                                                if k.startswith('agent')})
@@ -390,14 +393,20 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
 
         # Turn tcids and trids into integers.
         id_val = int(val) if typ in ['tcid', 'trid'] else val
-
         id_tpls.add((typ, id_val))
+
     if id_tpls:
-        db_query &= FromPapers(id_tpls)
+        paper_q = FromPapers(id_tpls)
+        db_query &= paper_q
+        if filter_ev:
+            ev_filter &= paper_q.ev_filter()
 
     # Unpack mesh ids.
     for mesh_id in query_dict.pop('mesh_ids', []):
-        db_query &= FromMeshId(mesh_id)
+        mesh_q = FromMeshId(mesh_id)
+        db_query &= mesh_q
+        if filter_ev:
+            ev_filter &= mesh_q.ev_filter()
 
     # Check for health of the resulting query, and some other things.
     if isinstance(db_query, EmptyDBQuery):

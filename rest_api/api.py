@@ -432,7 +432,8 @@ def get_statements(query_dict):
     try:
         inp_dict = {f'agent{i}': ag
                     for i, ag in enumerate(query_dict.poplist('agent'))}
-        inp_dict['mesh_ids'] = query_dict.pop('mesh_ids').split(',')
+        inp_dict['mesh_ids'] = \
+            {m for m in query_dict.pop('mesh_ids', '').split(',') if m}
         inp_dict.update(query_dict)
         db_query = _db_query_from_web_query(inp_dict, {'HasAgent'}, True)
     except Exception as e:

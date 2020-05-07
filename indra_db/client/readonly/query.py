@@ -4,7 +4,7 @@ __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
            'MergeQueryCore', 'HasAgent', 'FromMeshId', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceCore', 'SourceIntersection', 'HasType', 'IntrusiveQueryCore',
-           'HasNumAgents', 'HasNumEvidence', 'FromPapers']
+           'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter']
 
 import json
 import logging

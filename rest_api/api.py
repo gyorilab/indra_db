@@ -18,7 +18,7 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, HasHash, QueryCore, FromPapers
+    HasOnlySource, HasHash, QueryCore, FromPapers, FromMeshId
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -395,6 +395,11 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     if id_tpls:
         db_query &= FromPapers(id_tpls)
 
+    # Unpack mesh ids.
+    for mesh_id in query_dict.pop('mesh_ids', []):
+        db_query &= FromMeshId(mesh_id)
+
+    # Check for health of the resulting query, and some other things.
     if isinstance(db_query, EmptyDBQuery):
         raise DbAPIError(f"No arguments from web query {query_dict} mapped to "
                          f"db query.")
@@ -418,6 +423,7 @@ def get_statements(query_dict):
     try:
         inp_dict = {f'agent{i}': ag
                     for i, ag in enumerate(query_dict.poplist('agent'))}
+        inp_dict['mesh_ids'] = query_dict.pop('mesh_ids').split(',')
         inp_dict.update(query_dict)
         db_query = _db_query_from_web_query(inp_dict, {'HasAgent'}, True)
     except Exception as e:
@@ -457,7 +463,8 @@ def get_paper_statements(query_dict):
     if not ids:
         logger.error("No ids provided!")
         abort(Response("No ids in request!", 400))
-    return _db_query_from_web_query({'paper_ids': ids})
+    mesh_ids = request.json.get('mesh_ids', [])
+    return _db_query_from_web_query({'paper_ids': ids, 'mesh_ids': mesh_ids})
 
 
 @dep_route('/curation', methods=['GET'])

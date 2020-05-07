@@ -1357,6 +1357,15 @@ class FromPapers(QueryCore):
                        ro.FastRawPaLink.reading_id == sub_al.c.rid))
         return qry
 
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return or_(*self._get_conditions(ro))
+        else:
+            def get_clause(ro):
+                return and_(*self._get_conditions(ro))
+        return EvidenceFilter.from_filter('reading_ref_link', get_clause)
+
 
 class IntrusiveQueryCore(QueryCore):
     """This is the parent of all queries that draw on info in all meta tables.
@@ -1969,6 +1978,11 @@ class _QueryEvidenceFilter:
         elif self.table_name == 'raw_stmt_mesh':
             ret = query.outerjoin(ro.RawStmtMesh,
                                   ro.RawStmtMesh.sid == ro.FastRawPaLink.id)
+        elif self.table_name == 'reading_ref_link':
+            ret = query.outerjoin(
+                ro.ReadingRefLink,
+                ro.ReadingRefLink.rid == ro.FastRawPaLink.reading_id
+            )
         else:
             raise ValueError(f"No join defined for readonly table "
                              f"'{self.table_name}'")

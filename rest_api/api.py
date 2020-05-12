@@ -581,8 +581,9 @@ def get_metadata(level):
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Got %s results after %.2f." % (len(res.results), dt))
 
+    ret = res.json()
     res_list = []
-    for key, entry in res.results.items():
+    for key, entry in ret.pop('results').items():
         # Filter medscan from source counts.
         if not has['medscan']:
             res.evidence_totals[key] -= entry['source_counts'].pop('medscan', 0)
@@ -632,8 +633,8 @@ def get_metadata(level):
     logger.info("Returning with %s results after %.2f seconds."
                 % (len(res_list), dt))
 
-    resp = Response(json.dumps(res_list),
-                    mimetype='application/json')
+    ret['relations'] = res_list
+    resp = Response(json.dumps(ret), mimetype='application/json')
 
     dt = (datetime.utcnow() - start).total_seconds()
     logger.info("Result prepared after %.2f seconds." % dt)

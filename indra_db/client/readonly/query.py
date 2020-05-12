@@ -99,6 +99,11 @@ class StatementQueryResult(QueryResult):
         return stmts_from_json(list(self.results.values()))
 
 
+def _make_agent_dict(ag_dict):
+    return {n: ag_dict.get(str(n))
+            for n in range(int(max(ag_dict.keys())) + 1)}
+
+
 class QueryCore(object):
     """The core class for all queries; not functional on its own."""
 
@@ -450,7 +455,7 @@ class QueryCore(object):
             results[h] = {
                 'hash': h,
                 'id': str(h),
-                'agents': {n: ag_json.get(str(n)) for n in range(n_ag)},
+                'agents': _make_agent_dict(ag_json),
                 'type': ro_type_map.get_str(type_num),
                 'activity': activity,
                 'is_active': is_active,
@@ -528,11 +533,10 @@ class QueryCore(object):
             for src_json in srcs:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
-            ag_dict = {n: ag_json.get(str(n)) for n in range(n_ag)}
             results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': ag_dict, 'type': stmt_type,
-                            'activity': activity, 'is_active': is_active,
-                            'hashes': hashes}
+                            'agents': _make_agent_dict(ag_json),
+                            'type': stmt_type, 'activity': activity,
+                            'is_active': is_active, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())
@@ -596,9 +600,9 @@ class QueryCore(object):
             for src_json in src_jsons:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
-            ag_dict = {n: ag_json.get(str(n)) for n in range(n_ag)}
             results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': ag_dict, 'hashes': hashes}
+                            'agents': _make_agent_dict(ag_json),
+                            'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
 
         return QueryResult(results, limit, offset, ev_totals, self.to_json())

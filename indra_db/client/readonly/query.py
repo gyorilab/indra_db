@@ -28,6 +28,20 @@ class QueryResult(object):
 
     This class standardizes the results of queries to the readonly database.
 
+    Parameters
+    ----------
+    results : dict
+        The results of the query keyed by unique IDs (mk_hash for PA Statements,
+        IDs for Raw Statements, etc.)
+    limit : int
+        The limit that was applied to this query.
+    offset_comp : int
+        The next offset that would be appropriate if this is a paging query.
+    evidence_totals : dict
+        The total numbers of evidence for each element.
+    query_json : dict
+        A description of the query that was used.
+
     Attributes
     ----------
     results : dict
@@ -35,10 +49,14 @@ class QueryResult(object):
         IDs for Raw Statements, etc.)
     limit : int
         The limit that was applied to this query.
+    next_offset : int
+        The next offset that would be appropriate if this is a paging query.
+    evidence_totals : dict
+        The total numbers of evidence for each element.
     query_json : dict
         A description of the query that was used.
     """
-    def __init__(self, results, limit: int, offset: int,
+    def __init__(self, results, limit: int, offset: int, offset_comp: int,
                  evidence_totals: dict, query_json: dict):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
@@ -48,6 +66,10 @@ class QueryResult(object):
         self.total_evidence = sum(self.evidence_totals.values())
         self.limit = limit
         self.offset = offset
+        if limit is None or offset_comp < limit:
+            self.next_offset = None
+        else:
+            self.next_offset = (0 if offset is None else offset) + offset_comp
         self.query_json = query_json
 
     def json(self) -> dict:
@@ -58,7 +80,8 @@ class QueryResult(object):
         else:
             json_results = self.results
         return {'results': json_results, 'limit': self.limit,
-                'offset': self.offset, 'query': self.query_json,
+                'offset': self.offset, 'next_offset': self.next_offset,
+                'query': self.query_json,
                 'evidence_totals': self.evidence_totals,
                 'total_evidence': self.total_evidence}
 
@@ -82,7 +105,8 @@ class StatementQueryResult(QueryResult):
     def __init__(self, results: dict, limit: int, offset: int,
                  evidence_totals: dict, returned_evidence: int,
                  source_counts: dict, query_json: dict):
-        super(StatementQueryResult, self).__init__(results, limit, offset,
+        super(StatementQueryResult, self).__init__(results, limit,
+                                                   offset, len(results),
                                                    evidence_totals, query_json)
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
@@ -383,8 +407,9 @@ class QueryCore(object):
         # Make the query, and package the results.
         result = mk_hashes_q.all()
         evidence_totals = {h: cnt for h, cnt in result}
-        return QueryResult(set(evidence_totals.keys()), limit, offset,
-                           evidence_totals, self.to_json())
+
+        return QueryResult(list(evidence_totals.keys()), limit, offset,
+                           len(result), evidence_totals, self.to_json())
 
     def _get_name_query(self, ro, limit=None, offset=None, best_first=True):
         mk_hashes_q = self.get_hash_query(ro)
@@ -463,7 +488,8 @@ class QueryCore(object):
             }
             ev_totals[h] = sum(src_json.values())
 
-        return QueryResult(results, limit, offset, ev_totals, self.to_json())
+        return QueryResult(results, limit, offset, len(results), ev_totals,
+                           self.to_json())
 
     def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
                       with_hashes=False) \
@@ -518,6 +544,7 @@ class QueryCore(object):
         names = q.all()
         results = {}
         ev_totals = {}
+        num_hashes = 0
         for ag_json, type_num, n_ag, activity, is_active, srcs, hashes in names:
             ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
@@ -538,8 +565,10 @@ class QueryCore(object):
                             'type': stmt_type, 'activity': activity,
                             'is_active': is_active, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
+            num_hashes += len(hashes)
 
-        return QueryResult(results, limit, offset, ev_totals, self.to_json())
+        return QueryResult(results, limit, offset, num_hashes, ev_totals,
+                           self.to_json())
 
     def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
                    with_hashes=False) \
@@ -588,6 +617,7 @@ class QueryCore(object):
 
         results = {}
         ev_totals = {}
+        num_hashes = 0
         for ag_json, n_ag, src_jsons, hashes in names:
             ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
@@ -604,8 +634,10 @@ class QueryCore(object):
                             'agents': _make_agent_dict(ag_json),
                             'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
+            num_hashes += len(hashes)
 
-        return QueryResult(results, limit, offset, ev_totals, self.to_json())
+        return QueryResult(results, limit, offset, num_hashes, ev_totals,
+                           self.to_json())
 
     def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
                       best_first=True):

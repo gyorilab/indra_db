@@ -19,7 +19,7 @@ logger = logging.getLogger('util-insert')
 
 
 def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
-                      num_per_yield=100):
+                      num_per_yield=100, commit=True):
     """Insert agents for statements that don't have any agents.
 
     Parameters
@@ -38,6 +38,9 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     num_per_yield : int
         To conserve memory, statements are loaded in batches of `num_per_yeild`
         using the `yeild_per` feature of sqlalchemy queries.
+    commit : bool
+        Optionally do not commit at the end. Default is True, meaning a commit
+        will be executed.
     """
     ref_tuples = []
     mod_tuples = []
@@ -82,7 +85,8 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     db.copy('raw_muts', mut_tuples,
             ('stmt_id', 'ag_num', 'position', 'residue_from', 'residue_to'),
             commit=False)
-    db.commit_copy('Error copying raw agents, mods, and muts.')
+    if commit:
+        db.commit_copy('Error copying raw agents, mods, and muts.')
     return
 
 

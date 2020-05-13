@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from indra.statements import Statement
 from indra_db.reading.read_db import DatabaseStatementData, generate_reading_id
-from indra_db.util import S3Path, get_db
+from indra_db.util import S3Path, get_db, insert_raw_agents
 
 logger = logging.getLogger(__name__)
 
@@ -82,21 +82,25 @@ class XddManager:
         r_cols = ('id', 'text_content_id', 'reader', 'reader_version',
                   'format', 'batch_id')
         s_rows = set()
+        rd_batch_id = db.make_copy_batch_id()
+        stmt_batch_id = db.make_copy_batch_id()
+        stmts = []
         for trid, trid_set in self.statements.items():
             for reader, stmt_list in trid_set.items():
                 tcid = tcid_lookup[trid]
                 reader_version = self.reader_versions[reader.upper()]
                 reading_id = generate_reading_id(tcid, reader, reader_version)
                 r_rows.add((reading_id, tcid, reader.upper(), reader_version,
-                            'xdd', db.make_copy_batch_id()))
+                            'xdd', rd_batch_id))
                 for sj in stmt_list:
                     stmt = Statement._from_json(sj)
+                    stmts.append(stmt)
                     sd = DatabaseStatementData(
                         stmt,
                         reading_id,
                         indra_version=self.indra_version
                     )
-                    s_rows.add(sd.make_tuple(db.make_copy_batch_id()))
+                    s_rows.add(sd.make_tuple(stmt_batch_id))
 
         print("Dumping reading.")
         db.copy_lazy('reading', r_rows, r_cols, commit=False)
@@ -104,6 +108,9 @@ class XddManager:
         print("Dumping raw statements.")
         db.copy_lazy('raw_statements', s_rows,
                      DatabaseStatementData.get_cols(), commit=False)
+        if len(stmts):
+            insert_raw_agents(db, stmt_batch_id, stmts, verbose=False,
+                              commit=False)
 
         update_rows = [(json.dumps(self.reader_versions), self.indra_version,
                         group.key[:-1])

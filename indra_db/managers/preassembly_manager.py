@@ -176,7 +176,7 @@ class PreassemblyManager(object):
         evidence_links = defaultdict(lambda: set())
         agent_tuples = set()
         for s in cleaned_stmts:
-            h = shash(s)
+            h = s.get_hash(refresh=True)
 
             # If this statement is new, make it.
             if h not in mk_done and h not in new_mk_set:

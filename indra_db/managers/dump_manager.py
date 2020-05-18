@@ -84,6 +84,19 @@ class SourceCount(Dumper):
         get_source_counts(self.get_s3_path(), db)
 
 
+class FullPA(Dumper):
+    name = 'full_pa'
+    fmt = 'json'
+
+    def dump(self, continuing=False):
+        db = get_db(self.db_label)
+        query_res = db.filter_query(db.FastRaw)
+        # todo test if it's possible to skip str -> json -> str steps
+        json_list = [json.loads(js[0]) for js in query_res.all()]
+        s3 = boto3.client('s3')
+        s3.put_object(Body=json.dumps(json_list), **self.get_s3_path().kw())
+
+
 class Readonly(Dumper):
     name = 'readonly'
     fmt = 'dump'

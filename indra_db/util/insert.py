@@ -344,7 +344,7 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
     if do_copy:
         db.copy('pa_statements', stmt_data, cols, commit=False)
         db.copy('pa_activity', activity_rows,
-                ('mk_hash', 'activity', 'is_active'), commit=commit)
+                ('stmt_mk_hash', 'activity', 'is_active'), commit=commit)
     else:
         db.insert_many('pa_statements', stmt_data, cols=cols)
     if not ignore_agents:

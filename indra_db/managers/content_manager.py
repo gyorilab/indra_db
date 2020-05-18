@@ -420,8 +420,10 @@ class ContentManager(object):
                     else:
                         # Check to see that all the ids agree. If not, report
                         # it in the review.txt file.
-                        if tr_new[i] is not None \
-                         and tr_new[i] != getattr(tr, id_type).strip().upper():
+                        new_id = get_clean_id(db, id_type, tr_new[i])
+                        if new_id is None:
+                            continue
+                        elif new_id != getattr(tr, id_type):
                             self.add_to_review(
                                 'conflicting ids',
                                 'Got conflicting %s: in db %s vs %s.'

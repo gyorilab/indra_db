@@ -14,6 +14,7 @@ from functools import wraps
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
 from os import path, remove, rename, listdir
+
 from indra.literature.crossref_client import get_publisher
 from indra.literature.pubmed_client import get_metadata_for_ids
 from indra.literature.elsevier_client import download_article_from_ids
@@ -183,6 +184,16 @@ class _NihFtpClient(object):
         return contents
 
 
+def get_clean_id(db, id_type, id_val):
+    if id_type == 'pmid':
+        id_val, _ = db.TextRef.process_pmid(id_val)
+    elif id_type == 'pmcid':
+        id_val, _, _ = db.TextRef.process_pmcid(id_val)
+    elif id_type == 'doi':
+        id_val, _, _ = db.TextRef.process_doi(id_val)
+    return id_val
+
+
 class ContentManager(object):
     """Abstract class for all upload/update managers.
 
@@ -329,10 +340,20 @@ class ContentManager(object):
         # type, for example tr_data_idx_dict['pmid'][<a pmid>] will get the
         # tuple with all the id data.
         logger.debug("Building index of new data...")
-        tr_data_idx_dict = {id_type: {e[id_idx(id_type)]: e
-                                      for e in tr_data_set
-                                      if e[id_idx(id_type)] is not None}
-                            for id_type in self.tr_cols}
+        tr_data_idx_dict = {}
+        for id_type in self.tr_cols:
+            tr_data_idx = {}
+            for entry in tr_data_set:
+                id_val = entry[id_idx(id_type)]
+                try:
+                    id_val = get_clean_id(db, id_type, id_val)
+                except Exception as err:
+                    logger.warning(f"Id of type {id_type} malformed: {id_val}")
+
+                if id_val is not None:
+                    tr_data_idx[id_val] = entry
+            tr_data_idx_dict[id_type] = tr_data_idx
+            del tr_data_idx
 
         # Look for updates to the existing text refs
         logger.debug("Beginning to iterate over text refs...")
@@ -399,8 +420,10 @@ class ContentManager(object):
                     else:
                         # Check to see that all the ids agree. If not, report
                         # it in the review.txt file.
-                        if tr_new[i] is not None \
-                         and tr_new[i] != getattr(tr, id_type).strip().upper():
+                        new_id = get_clean_id(db, id_type, tr_new[i])
+                        if new_id is None:
+                            continue
+                        elif new_id != getattr(tr, id_type):
                             self.add_to_review(
                                 'conflicting ids',
                                 'Got conflicting %s: in db %s vs %s.'

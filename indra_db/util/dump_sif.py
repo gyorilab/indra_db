@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 from indra.util.aws import get_s3_client
 from indra_db.schemas.readonly_schema import ro_type_map
+from indra.statements.agent import default_ns_order
 
 try:
     import pandas as pd
@@ -25,22 +26,8 @@ logger = logging.getLogger(__name__)
 S3_SIF_BUCKET = 'bigmech'
 S3_SUBDIR = 'indra_db_sif_dump'
 
-NS_PRIORITY_LIST = (
-    'FPLX',
-    'MIRBASE',
-    'HGNC',
-    'GO',
-    'MESH',
-    'HMDB',
-    'CHEBI',
-    'PUBCHEM',
-)
-
-
-# All namespaces here (except NAME) should also be included in the
-# NS_PRIORITY_LIST above
-NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
-           'PUBCHEM')
+NS_PRIORITY_LIST = tuple(default_ns_order)
+NS_LIST = ('NAME', ) + NS_PRIORITY_LIST
 
 
 def _pseudo_key(fname, ymd_date):

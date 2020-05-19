@@ -19,6 +19,7 @@ class XddManager:
     def __init__(self):
         self.groups = None
         self.statements = None
+        self.text_content = None
 
     def load_groups(self, db):
         logger.info("Finding groups that have not been handled yet.")
@@ -34,6 +35,7 @@ class XddManager:
         logger.info("Loading statements.")
         s3 = boto3.client('s3')
         self.statements = defaultdict(lambda: defaultdict(list))
+        self.text_content = {}
         for group in self.groups:
             logger.info(f"Processing {group.key}")
             file_pair_dict = _get_file_pairs_from_group(s3, group)
@@ -41,6 +43,7 @@ class XddManager:
                 logger.info(f"Loading {run_id}")
                 doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
                               for bib in bibs if 'identifier' in bib}
+                pub_lookup = {bib['_xddid']: bib['publisher'] for bib in bibs}
                 dois = {doi for doi in doi_lookup.values()}
                 trids = _get_trids_from_dois(db, dois)
 
@@ -60,13 +63,16 @@ class XddManager:
                     ev['text_refs']['XDD_GROUP_ID'] = group.key
 
                     self.statements[trid][ev['text_refs']['READER']].append(sj)
+                    if trid not in self.text_content:
+                        self.text_content[trid] = \
+                            (trid, 'xdd', 'xdd', 'fulltext',
+                             pub_lookup[xddid] == 'bioRxiv')
         return
 
     def dump_statements(self, db):
-        logger.info("Dumping statements.")
-        tc_rows = {(trid, 'xdd', 'xdd', 'fulltext')
-                   for trid in self.statements.keys()}
-        tc_cols = ('text_ref_id', 'source', 'format', 'text_type')
+        tc_rows = set(self.text_content.values())
+        tc_cols = ('text_ref_id', 'source', 'format', 'text_type', 'preprint')
+        logger.info(f"Dumping {len(tc_rows)} text content.")
         db.copy_lazy('text_content', tc_rows, tc_cols)
 
         # Look up tcids for newly entered content.

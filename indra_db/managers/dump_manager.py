@@ -1,10 +1,12 @@
 import re
 import json
 import boto3
+import pickle
 import logging
 from datetime import datetime
 from argparse import ArgumentParser
 
+from indra.statements.io import stmts_from_json
 from indra_db.belief import get_belief
 from indra_db.config import CONFIG
 from indra_db.config import get_s3_dump
@@ -95,6 +97,19 @@ class FullPA(Dumper):
         json_list = [json.loads(js[0]) for js in query_res.all()]
         s3 = boto3.client('s3')
         s3.put_object(Body=json.dumps(json_list), **self.get_s3_path().kw())
+
+
+class FullPaStmts(Dumper):
+    name = 'full_pa_stmts'
+    fmt = 'pkl'
+
+    def dump(self, continuing=False):
+        db = get_db(self.db_label)
+        query_res = db.filter_query(db.FastRaw)
+        stmt_list = stmts_from_json([json.loads(js[0]) for js in
+                                     query_res.all()])
+        s3 = boto3.client('s3')
+        s3.put_object(Body=pickle.dumps(stmt_list), **self.get_s3_path().kw())
 
 
 class Readonly(Dumper):

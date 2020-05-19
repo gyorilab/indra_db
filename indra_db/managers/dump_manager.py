@@ -266,6 +266,9 @@ def main():
         logger.info("Dumping sif from the readonly schema on principal.")
         Sif(use_principal=True).dump(continuing=args.allow_continue)
 
+        logger.info("Dumping all PA Statements as a pickle.")
+        FullPaStmts(use_principal=True).dump(continuing=args.allow_continue)
+
         logger.info("Dumping belief.")
         Belief().dump(continuing=args.allow_continue)
         dump_file = ro_dumper.get_s3_path()

@@ -246,9 +246,10 @@ def get_schema(Base):
         source = Column(String(250), nullable=False)
         format = Column(String(250), nullable=False)
         text_type = Column(String(250), nullable=False)
-        content = Column(BYTEA, nullable=False)
+        content = Column(BYTEA)
         insert_date = Column(DateTime, default=func.now())
         last_updated = Column(DateTime, onupdate=func.now())
+        preprint = Column(Boolean)
         __table_args__ = (
             UniqueConstraint('text_ref_id', 'source', 'format',
                              'text_type', name='content-uniqueness'),

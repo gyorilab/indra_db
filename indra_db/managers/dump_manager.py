@@ -86,8 +86,8 @@ class SourceCount(Dumper):
         get_source_counts(self.get_s3_path(), db)
 
 
-class FullPA(Dumper):
-    name = 'full_pa'
+class FullPaJson(Dumper):
+    name = 'full_pa_json'
     fmt = 'json'
 
     def dump(self, continuing=False):

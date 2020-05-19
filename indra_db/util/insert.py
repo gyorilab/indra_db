@@ -45,34 +45,39 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     ref_tuples = []
     mod_tuples = []
     mut_tuples = []
-    if not stmts:
-        tbls = [db.RawStatements.id, db.RawStatements]
+    cur = db._conn.cursor()
+    if stmts is None:
+        s_col = 'json'
         stmt_dict = None
     else:
-        tbls = [db.RawStatements.id, db.RawStatements.uuid]
+        s_col = 'uuid'
         stmt_dict = {s.uuid: s for s in stmts}
 
-    q = db.filter_query(tbls, db.RawStatements.batch_id == batch_id)
+    cur.execute(f'SELECT id, {s_col} FROM raw_statements WHERE batch_id=%s',
+                (batch_id,))
     if verbose:
-        num_stmts = q.count()
+        num_stmts = cur.rowcount
         print("Loading:", end='', flush=True)
 
-    db_stmts = q.yield_per(num_per_yield)
+    i = 0
+    res_list = cur.fetchmany(num_per_yield)
+    while res_list:
+        for stmt_id, db_stmt in res_list:
+            if stmts is None:
+                stmt = get_statement_object(db_stmt)
+            else:
+                stmt = stmt_dict[db_stmt]
 
-    for i, (stmt_id, db_stmt) in enumerate(db_stmts):
-        if stmts is None:
-            stmt = get_statement_object(db_stmt)
-        else:
-            stmt = stmt_dict[db_stmt]
+            ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
+            ref_tuples.extend(ref_data)
+            mod_tuples.extend(mod_data)
+            mut_tuples.extend(mut_data)
 
-        ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
-        ref_tuples.extend(ref_data)
-        mod_tuples.extend(mod_data)
-        mut_tuples.extend(mut_data)
-
-        # Optionally print another tick on the progress bar.
-        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
-            print('|', end='', flush=True)
+            # Optionally print another tick on the progress bar.
+            if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
+                print('|', end='', flush=True)
+            i += 1
+        res_list = cur.fetchmany(num_per_yield)
 
     if verbose and num_stmts > 25:
         print()

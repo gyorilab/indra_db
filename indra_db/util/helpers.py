@@ -14,7 +14,11 @@ logger = logging.getLogger('util-helpers')
 
 def get_statement_object(db_stmt):
     """Get an INDRA Statement object from a db_stmt."""
-    return Statement._from_json(json.loads(db_stmt.json.decode('utf-8')))
+    if isinstance(db_stmt, bytes):
+        jb = db_stmt
+    else:
+        jb = db_stmt.json
+    return Statement._from_json(json.loads(jb.decode('utf-8')))
 
 
 def _set_evidence_text_ref(stmt, tr):

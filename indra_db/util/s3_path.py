@@ -15,11 +15,29 @@ class S3Path(object):
                 key = key[1:]
         self.key = key
 
-    def kw(self):
+    def kw(self, prefix=False):
         ret = {'Bucket': self.bucket}
         if self.key:
-            ret['Key'] = self.key
+            if prefix:
+                ret['Prefix'] = self.key
+            else:
+                ret['Key'] = self.key
         return ret
+
+    def get(self, s3):
+        if not self.key:
+            raise ValueError("Cannot get key-less s3 path.")
+        return s3.get_object(**self.kw())
+
+    def list_objects(self, s3):
+        raw_res = s3.list_objects_v2(**self.kw(prefix=True))
+        return [self.__class__(self.bucket, e['Key'])
+                for e in raw_res['Contents']]
+
+    def list_prefixes(self, s3):
+        raw_res = s3.list_objects_v2(Delimiter='/', **self.kw(prefix=True))
+        return [self.__class__(self.bucket, e['Prefix'])
+                for e in raw_res['CommonPrefixes']]
 
     def get_element_path(self, *subkeys):
         args = []

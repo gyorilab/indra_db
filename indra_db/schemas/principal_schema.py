@@ -5,7 +5,7 @@ import logging
 from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
      Boolean, DateTime, func, BigInteger, or_, tuple_
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import BYTEA, INET
+from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB
 
 from indra_db.schemas.mixins import IndraDBTable
 from indra_db.schemas.indexes import StringIndex, BtreeIndex
@@ -59,6 +59,26 @@ def get_schema(Base):
             UniqueConstraint('pmid', 'pmcid', name='pmid-pmcid'),
             UniqueConstraint('pmcid', 'doi', name='pmcid-doi')
         )
+
+        def __repr__(self):
+            terms = [f'id={self.id}']
+            for col in ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']:
+                if getattr(self, col) is not None:
+                    terms.append(f'{col}={getattr(self, col)}')
+                if len(terms) > 2:
+                    break
+            return f'{self.__class__.__name__}({", ".join(terms)})'
+
+        @classmethod
+        def new(cls, pmid=None, pmcid=None, doi=None, pii=None, url=None,
+                manuscript_id=None):
+            pmid, pmid_num = cls.process_pmid(pmid)
+            pmcid, pmcid_num, pmcid_version = cls.process_pmcid(pmcid)
+            doi, doi_ns, doi_id = cls.process_doi(doi)
+            return cls(pmid=pmid, pmid_num=pmid_num, pmcid=pmcid,
+                       pmcid_num=pmcid_num, pmcid_version=pmcid_version,
+                       doi=doi, doi_ns=doi_ns, doi_id=doi_id, pii=pii, url=url,
+                       manuscript_id=manuscript_id)
 
         @staticmethod
         def process_pmid(pmid):
@@ -226,9 +246,10 @@ def get_schema(Base):
         source = Column(String(250), nullable=False)
         format = Column(String(250), nullable=False)
         text_type = Column(String(250), nullable=False)
-        content = Column(BYTEA, nullable=False)
+        content = Column(BYTEA)
         insert_date = Column(DateTime, default=func.now())
         last_updated = Column(DateTime, onupdate=func.now())
+        preprint = Column(Boolean)
         __table_args__ = (
             UniqueConstraint('text_ref_id', 'source', 'format',
                              'text_type', name='content-uniqueness'),
@@ -268,6 +289,16 @@ def get_schema(Base):
         earliest_datetime = Column(DateTime)
         latest_datetime = Column(DateTime, nullable=False)
     table_dict[ReadingUpdates.__tablename__] = ReadingUpdates
+
+    class XddUpdates(Base, IndraDBTable):
+        __tablename__ = 'xdd_updates'
+        _always_disp = ['day_str']
+        id = Column(Integer, primary_key=True)
+        reader_versions = Column(JSONB)
+        indra_version = Column(String)
+        day_str = Column(String, nullable=False, unique=True)
+        processed_date = Column(DateTime, default=func.now())
+    table_dict[XddUpdates.__tablename__] = XddUpdates
 
     class DBInfo(Base, IndraDBTable):
         __tablename__ = 'db_info'

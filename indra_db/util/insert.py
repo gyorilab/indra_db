@@ -19,7 +19,7 @@ logger = logging.getLogger('util-insert')
 
 
 def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
-                      num_per_yield=100):
+                      num_per_yield=100, commit=True):
     """Insert agents for statements that don't have any agents.
 
     Parameters
@@ -38,38 +38,46 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     num_per_yield : int
         To conserve memory, statements are loaded in batches of `num_per_yeild`
         using the `yeild_per` feature of sqlalchemy queries.
+    commit : bool
+        Optionally do not commit at the end. Default is True, meaning a commit
+        will be executed.
     """
     ref_tuples = []
     mod_tuples = []
     mut_tuples = []
-    if not stmts:
-        tbls = [db.RawStatements.id, db.RawStatements]
+    cur = db._conn.cursor()
+    if stmts is None:
+        s_col = 'json'
         stmt_dict = None
     else:
-        tbls = [db.RawStatements.id, db.RawStatements.uuid]
+        s_col = 'uuid'
         stmt_dict = {s.uuid: s for s in stmts}
 
-    q = db.filter_query(tbls, db.RawStatements.batch_id == batch_id)
+    cur.execute(f'SELECT id, {s_col} FROM raw_statements WHERE batch_id=%s',
+                (batch_id,))
     if verbose:
-        num_stmts = q.count()
+        num_stmts = cur.rowcount
         print("Loading:", end='', flush=True)
 
-    db_stmts = q.yield_per(num_per_yield)
+    i = 0
+    res_list = cur.fetchmany(num_per_yield)
+    while res_list:
+        for stmt_id, db_stmt in res_list:
+            if stmts is None:
+                stmt = get_statement_object(db_stmt)
+            else:
+                stmt = stmt_dict[db_stmt]
 
-    for i, (stmt_id, db_stmt) in enumerate(db_stmts):
-        if stmts is None:
-            stmt = get_statement_object(db_stmt)
-        else:
-            stmt = stmt_dict[db_stmt]
+            ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
+            ref_tuples.extend(ref_data)
+            mod_tuples.extend(mod_data)
+            mut_tuples.extend(mut_data)
 
-        ref_data, mod_data, mut_data = extract_agent_data(stmt, stmt_id)
-        ref_tuples.extend(ref_data)
-        mod_tuples.extend(mod_data)
-        mut_tuples.extend(mut_data)
-
-        # Optionally print another tick on the progress bar.
-        if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
-            print('|', end='', flush=True)
+            # Optionally print another tick on the progress bar.
+            if verbose and num_stmts > 25 and i % (num_stmts//25) == 0:
+                print('|', end='', flush=True)
+            i += 1
+        res_list = cur.fetchmany(num_per_yield)
 
     if verbose and num_stmts > 25:
         print()
@@ -82,7 +90,8 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     db.copy('raw_muts', mut_tuples,
             ('stmt_id', 'ag_num', 'position', 'residue_from', 'residue_to'),
             commit=False)
-    db.commit_copy('Error copying raw agents, mods, and muts.')
+    if commit:
+        db.commit_copy('Error copying raw agents, mods, and muts.')
     return
 
 

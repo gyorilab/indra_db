@@ -108,10 +108,10 @@ class XddManager:
                     )
                     s_rows.add(sd.make_tuple(stmt_batch_id))
 
-        print("Dumping reading.")
+        logger.info(f"Dumping {len(r_rows)} readings.")
         db.copy_lazy('reading', r_rows, r_cols, commit=False)
 
-        print("Dumping raw statements.")
+        logger.info(f"Dumping {len(s_rows)} raw statements.")
         db.copy_lazy('raw_statements', s_rows,
                      DatabaseStatementData.get_cols(), commit=False)
         if len(stmts):
@@ -164,8 +164,8 @@ def _get_trids_from_dois(db, dois):
     # Add new dois (if any)
     new_dois = set(dois) - {tr.doi.upper() for tr in tr_list}
     if new_dois:
-        logger.info("Adding new text refs.")
         new_trs = [db.TextRef.new(doi=doi) for doi in new_dois]
+        logger.info(f"Adding {len(new_trs)} new text refs.")
         db.session.add_all(new_trs)
         db.session.commit()
         tr_list += new_trs

@@ -125,7 +125,7 @@ class StatementQueryResult(QueryResult):
 
 def _make_agent_dict(ag_dict):
     return {n: ag_dict[str(n)]
-            for n in range(int(max(ag_dict.keys())) + 1),
+            for n in range(int(max(ag_dict.keys())) + 1)
             if str(n) in ag_dict}
 
 

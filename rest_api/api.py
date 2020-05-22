@@ -363,10 +363,10 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
 
     # Get the agents with specified roles.
     for role in ['subject', 'object']:
-        num_agents += 1
         raw_ag = query_dict.pop(role, None)
         if raw_ag is None:
             continue
+        num_agents += 1
         ag, ns = process_agent(raw_ag)
         db_query &= HasAgent(ag, namespace=ns, role=role.upper())
 

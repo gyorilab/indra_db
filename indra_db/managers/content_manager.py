@@ -943,30 +943,24 @@ class PmcManager(_NihManager):
         if not len(tc_data):
             return []
 
-        logger.debug("Getting text refs for pmcid->trid dict..")
-        tref_list = db.select_all(
-            db.TextRef,
-            db.TextRef.pmcid.in_(arc_pmcid_list)
-            )
-        pmcid_trid_dict = {
-            pmcid: trid for (pmcid, trid) in
-            db.get_values(tref_list, ['pmcid', 'id'])
-            }
-
-        # This should be a very small list, in general.
-        logger.debug('Finding existing text content from db.')
-        existing_tcs = db.select_all(
-            db.TextContent,
-            db.TextContent.text_ref_id.in_(pmcid_trid_dict.values()),
+        logger.info("Getting text refs for pmcid->trid dict..")
+        existing_tc_meta = db.select_all(
+            [db.TextRef.pmcid, db.TextRef.id, db.TextContent.text_type],
+            db.TextRef.pmcid_in(arc_pmcid_list),
+            db.TextContent.text_ref_id == db.TextRef.id,
             db.TextContent.source == self.my_source,
             db.TextContent.format == formats.XML
             )
+
+        pmcid_trid_dict = {pmcid: trid for pmcid, trid, _ in existing_tc_meta}
+
+        # This should be a very small list, in general.
         existing_tc_records = [
-            (tc.text_ref_id, tc.source, tc.format, tc.text_type)
-            for tc in existing_tcs
+            (trid, self.my_source, formats.XML, text_type)
+            for _, trid, text_type in existing_tc_meta
             ]
-        logger.debug("Found %d existing records on the db."
-                     % len(existing_tc_records))
+        logger.info("Found %d existing records on the db."
+                    % len(existing_tc_records))
         tc_records = []
         for tc in tc_data:
             if tc['pmcid'] not in pmcid_trid_dict.keys():

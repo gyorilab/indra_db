@@ -56,6 +56,24 @@ class Dumper(object):
                                            '%s.%s' % (self.name, self.fmt))
         return s3_path
 
+    @classmethod
+    def is_dump_path(cls, s3_path):
+        s3_base = get_s3_dump()
+        if s3_base.bucket != s3_path.bucket:
+            return False
+        if s3_base.key not in s3_path.key:
+            return False
+        if cls.name not in s3_path.key:
+            return False
+        return True
+
+    @classmethod
+    def from_list(cls, s3_path_list):
+        for p in s3_path_list:
+            if cls.is_dump_path(p):
+                return p
+        return None
+
     def dump(self, continuing=False):
         raise NotImplementedError()
 
@@ -338,24 +356,38 @@ def main():
         starter = Start()
         starter.dump(continuing=args.allow_continue)
 
-        logger.info("Generating readonly schema (est. a long time)")
-        ro_dumper = Readonly(date_stamp=starter.date_stamp)
-        ro_dumper.dump(continuing=args.allow_continue)
+        ro_dumper = Readonly.from_list(starter.manifest)
+        if not args.allow_continue or not ro_dumper:
+            logger.info("Generating readonly schema (est. a long time)")
+            assert False, 'moooo'
+            ro_dumper = Readonly(date_stamp=starter.date_stamp)
+            ro_dumper.dump(continuing=args.allow_continue)
+        else:
+            logger.info("Readonly dump exists, skipping.")
 
-        logger.info("Dumping sif from the readonly schema on principal.")
-        Sif(use_principal=True, date_stamp=starter.date_stamp)\
-            .dump(continuing=args.allow_continue)
+        if not args.allow_continue or not Sif.from_list(starter.manifest):
+            logger.info("Dumping sif from the readonly schema on principal.")
+            Sif(use_principal=True, date_stamp=starter.date_stamp)\
+                .dump(continuing=args.allow_continue)
+        else:
+            logger.info("Sif dump exists, skipping.")
 
-        logger.info("Dumping all PA Statements as a pickle.")
-        FullPaStmts(date_stamp=starter.date_stamp)\
-            .dump(continuing=args.allow_continue)
+        if not args.allow_continue \
+                or not FullPaStmts.from_list(starter.manifest):
+            logger.info("Dumping all PA Statements as a pickle.")
+            FullPaStmts(date_stamp=starter.date_stamp)\
+                .dump(continuing=args.allow_continue)
+        else:
+            logger.info("Statement dump exists, skipping.")
 
-        logger.info("Dumping belief.")
-        Belief(date_stamp=starter.date_stamp)\
-            .dump(continuing=args.allow_continue)
+        if not args.allow_continue or not Belief.from_list(starter.manifest):
+            logger.info("Dumping belief.")
+            Belief(date_stamp=starter.date_stamp)\
+                .dump(continuing=args.allow_continue)
+        else:
+            logger.info("Belief dump exists, skipping.")
 
         End(date_stamp=starter.date_stamp).dump(continuing=args.allow_continue)
-        dump_file = ro_dumper.get_s3_path()
     else:
         dumps = list_dumps()
 
@@ -363,15 +395,13 @@ def main():
         s3 = boto3.client('s3')
         for dump in sorted(dumps, reverse=True):
             manifest = dump.list_objects(s3)
-            for dump_file in manifest:
-                if Readonly.name in dump_file.key:
-                    # dump_file will be the file we want, leave it assigned.
-                    break
-            else:
-                continue
-            break
+            ro_dumper = Readonly.from_list(manifest)
+            if ro_dumper is not None:
+                # ro_dumper will be the file we want, leave it assigned.
+                break
         else:
             raise Exception("Could not find any suitable readonly dumps.")
+    dump_file = ro_dumper.get_s3_path()
 
     if not args.dump_only:
         load_readonly_dump(args.database, args.readonly, dump_file)

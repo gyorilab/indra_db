@@ -29,20 +29,23 @@ class Dumper(object):
     name = NotImplemented
     fmt = NotImplemented
 
-    def __init__(self, db_label='primary'):
+    def __init__(self, db_label='primary', date=None):
         self.db_label = db_label
         self.s3_dump_path = None
+        if date is None:
+            self.date_stamp = datetime.now().strftime('%Y-%m-%d')
+        else:
+            self.date_stamp = date.strftime('%Y-%m-%d')
 
     def get_s3_path(self):
         if self.s3_dump_path is None:
             self.s3_dump_path = self._gen_s3_name()
         return self.s3_dump_path
 
-    @classmethod
-    def _gen_s3_name(cls):
+    def _gen_s3_name(self):
         s3_base = get_s3_dump()
-        dt_ts = datetime.now().strftime('%Y-%m-%d')
-        s3_path = s3_base.get_element_path(dt_ts, '%s.%s' % (cls.name, cls.fmt))
+        s3_path = s3_base.get_element_path(self.date_stamp,
+                                           '%s.%s' % (self.name, self.fmt))
         return s3_path
 
     def dump(self, continuing=False):

@@ -52,6 +52,34 @@ class Dumper(object):
         raise NotImplementedError()
 
 
+class Start(Dumper):
+    name = 'start'
+    fmt = 'json'
+
+    def dump(self, continuing=False):
+        s3 = boto3.client('s3')
+        s3.put_object(
+            Body=json.dumps(
+                {'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            ),
+            **self.get_s3_path().kw()
+        )
+
+
+class End(Dumper):
+    name = 'end'
+    fmt = 'json'
+
+    def dump(self, continuing=False):
+        s3 = boto3.client('s3')
+        s3.put_object(
+            Body=json.dumps(
+                {'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            ),
+            **self.get_s3_path().kw()
+        )
+
+
 class Sif(Dumper):
     name = 'sif'
     fmt = 'pkl'
@@ -262,6 +290,8 @@ def main():
         principal_db.drop_schema('readonly')
 
     if not args.load_only:
+        Start().dump(continuing=args.allow_continue)
+
         logger.info("Generating readonly schema (est. a long time)")
         ro_dumper = Readonly()
         ro_dumper.dump(continuing=args.allow_continue)
@@ -274,6 +304,8 @@ def main():
 
         logger.info("Dumping belief.")
         Belief().dump(continuing=args.allow_continue)
+
+        End().dump(continuing=args.allow_continue)
         dump_file = ro_dumper.get_s3_path()
     else:
         dump_file = principal_db.get_latest_dump_file()

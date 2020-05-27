@@ -898,7 +898,7 @@ class PmcManager(_NihManager):
     def get_missing_pmids(self, db, tr_data):
         "Try to get missing pmids using the pmc client."
 
-        logger.debug("Getting missing pmids.")
+        logger.info("Getting missing pmids.")
 
         missing_pmid_entries = []
         for tr_entry in tr_data:
@@ -944,20 +944,19 @@ class PmcManager(_NihManager):
             return []
 
         logger.info("Getting text refs for pmcid->trid dict..")
-        existing_tc_meta = db.select_all(
-            [db.TextRef.pmcid, db.TextRef.id, db.TextContent.text_type],
-            db.TextRef.pmcid_in(arc_pmcid_list),
-            db.TextContent.text_ref_id == db.TextRef.id,
-            db.TextContent.source == self.my_source,
-            db.TextContent.format == formats.XML
-            )
+        existing_tc_meta = (db.session.query(db.TextRef.pmcid, db.TextRef.id,
+                                             db.TextContent.text_type)
+                            .outerjoin(db.TextContent)
+                            .filter(db.TextRef.pmcid_in(arc_pmcid_list),
+                                    db.TextContent.source == self.my_source,
+                                    db.TextContent.format == formats.XML))
 
         pmcid_trid_dict = {pmcid: trid for pmcid, trid, _ in existing_tc_meta}
 
         # This should be a very small list, in general.
         existing_tc_records = [
             (trid, self.my_source, formats.XML, text_type)
-            for _, trid, text_type in existing_tc_meta
+            for _, trid, text_type in existing_tc_meta if text_type is not None
             ]
         logger.info("Found %d existing records on the db."
                     % len(existing_tc_records))

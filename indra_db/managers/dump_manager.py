@@ -99,7 +99,7 @@ class FullPaJson(Dumper):
             ro = get_db(self.db_label)
         else:
             ro = get_ro(self.db_label)
-        query_res = ro.filter_query(ro.FastRawPaLink.pa_json.distinct())
+        query_res = ro.session.query(ro.FastRawPaLink.pa_json.distinct())
         json_list = [json.loads(js[0]) for js in query_res.all()]
         s3 = boto3.client('s3')
         s3.put_object(Body=json.dumps(json_list), **self.get_s3_path().kw())
@@ -118,7 +118,7 @@ class FullPaStmts(Dumper):
             ro = get_db(self.db_label)
         else:
             ro = get_ro(self.db_label)
-        query_res = ro.filter_query(ro.FastRawPaLink.pa_json.distinct())
+        query_res = ro.session.query(ro.FastRawPaLink.pa_json.distinct())
         stmt_list = stmts_from_json([json.loads(js[0]) for js in
                                      query_res.all()])
         s3 = boto3.client('s3')

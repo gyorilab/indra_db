@@ -1315,6 +1315,10 @@ class PmcOA(PmcManager):
                                  '%Y-%m-%d %H:%M:%S')
             > min_datetime
             }
+        done_sfs = db.select_all(db.SourceFile,
+                                 db.SourceFile.source == self.my_source,
+                                 db.SourceFile.load_date > min_datetime)
+        fpath_set -= {sf.name for sf in done_sfs}
 
         # Upload these archives.
         logger.info("Updating the database with %d articles." % len(fpath_set))

@@ -476,6 +476,10 @@ class DbApiTestCase(unittest.TestCase):
         self.__time_query('post', 'curation/submit/12345?test', tag='test',
                           curator='tester', text='This is text.')
 
+    def test_interaction_query(self):
+        self.__time_query('get', 'metadata/relations/from_agents',
+                          'agent0=mek%40AUTO&limit=50&with_cur_counts=true')
+
 
 if __name__ == '__main__':
     unittest.main()

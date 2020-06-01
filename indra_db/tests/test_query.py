@@ -1,10 +1,13 @@
 import json
 import random
+from collections import defaultdict
 from itertools import combinations, permutations, product
 
-from indra.statements import Agent, get_statement_by_name
-from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map
-from indra_db.util import extract_agent_data
+from indra.statements import Agent, get_statement_by_name, get_all_descendants
+from indra_db.client.readonly.query import QueryResult
+from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
+    SOURCE_GROUPS
+from indra_db.util import extract_agent_data, get_ro, get_db
 from indra_db.client.readonly.query import *
 
 from indra_db.tests.util import get_temp_db
@@ -16,7 +19,7 @@ def make_agent_from_ref(ref):
     return Agent(name, db_refs=db_refs)
 
 
-def build_test_set():
+def _build_test_set():
     agents = [{'NAME': 'ERK', 'FPLX': 'ERK', 'TEXT': 'MAPK'},
               {'NAME': 'TP53', 'HGNC': '11998'},
               {'NAME': 'MEK', 'FPLX': 'MEK'},
@@ -190,11 +193,165 @@ class Counter:
         self.section_correct = 0
 
 
+def test_has_sources():
+    ro = get_db('primary')
+    q = HasSources(['reach', 'sparser'])
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    assert len(res.results) == 5
+    stmts = res.statements()
+    res_json = res.json()
+    assert 'results' in res_json
+    assert len(stmts) == len(res.results)
+    assert all(sc[r] > 0 for sc in res.source_counts.values()
+               for r in ['reach', 'sparser'])
+
+
+def test_has_only_source():
+    ro = get_db('primary')
+    q = HasOnlySource('signor')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    res_json = res.json()
+    assert 'results' in res_json
+    assert set(res.results.keys()) == set(res.source_counts.keys())
+    stmts = res.statements()
+    assert len(stmts) == len(res.results)
+    assert all(src_cnt > 0 if src == 'signor' else src_cnt == 0
+               for sc in res.source_counts.values()
+               for src, src_cnt in sc.items())
+
+
+def test_has_readings():
+    ro = get_db('primary')
+    q = HasReadings()
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    for sc in res.source_counts.values():
+        for src, cnt in sc.items():
+            if src in SOURCE_GROUPS['reading'] and cnt > 0:
+                break
+        else:
+            assert False, f"No readings found in: {sc}"
+    assert set(res.results.keys()) == set(res.source_counts.keys())
+    stmts = res.statements()
+    assert len(stmts) == len(res.results)
+
+
+def test_has_databases():
+    ro = get_db('primary')
+    q = HasDatabases()
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    for sc in res.source_counts.values():
+        for src, cnt in sc.items():
+            if src in SOURCE_GROUPS['databases'] and cnt > 0:
+                break
+        else:
+            assert False, f"No databases found in: {sc}"
+    assert set(res.results.keys()) == set(res.source_counts.keys())
+    stmts = res.statements()
+    assert len(stmts) == len(res.results)
+
+
+def test_has_hash():
+    ro = get_db('primary')
+    hashes = {h for h, in ro.session.query(ro.SourceMeta.mk_hash).limit(10)}
+    q = HasHash(hashes)
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    assert set(res.results.keys()) < hashes
+    assert set(res.results.keys()) == set(res.source_counts.keys())
+
+
+def test_has_agent():
+    ro = get_db('primary')
+    q = HasAgent('RAS')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all('RAS' in [ag.name for ag in s.agent_list() if ag is not None]
+               for s in stmts)
+
+    q = HasAgent('MEK', namespace='FPLX', role='SUBJECT')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all('MEK' == s.agent_list(deep_sorted=True)[0].db_refs['FPLX']
+               for s in stmts)
+
+    q = HasAgent('CHEBI:63637', namespace='CHEBI', agent_num=3)
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    for s in stmts:
+        ag = s.agent_list(deep_sorted=True)[3]
+        assert ag.name == 'vemurafenib'
+        assert ag.db_refs['CHEBI'] == 'CHEBI:63637'
+
+
+def test_from_papers():
+    ro = get_db('primary')
+    pmid = '27014235'
+    q = FromPapers([('pmid', pmid)])
+    res = q.get_statements(ro, limit=5)
+    assert res.statements()
+    assert all(any(ev.text_refs.get('PMID') == pmid for ev in s.evidence)
+               for s in res.statements())
+
+
+def test_has_num_agents():
+    ro = get_db('primary')
+    q = HasNumAgents((1, 2))
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all(len(s.agent_list()) in (1, 2) for s in stmts)
+
+    q = HasNumAgents((6,))
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all(sum([ag is not None for ag in s.agent_list()]) == 6
+               for s in stmts)
+
+
+def test_num_evidence():
+    ro = get_db('primary')
+    q = HasNumEvidence(tuple(range(5, 10)))
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    assert all(5 <= n < 10 for n in res.evidence_totals.values())
+    stmts = res.statements()
+    assert all(5 < len(s.evidence) <= 8 for s in stmts)
+
+
+def test_has_type():
+    ro = get_db('primary')
+    q = HasType(['Phosphorylation', 'Activation'])
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    assert all(s.__class__.__name__ in ('Phosphorylation', 'Activation')
+               for s in stmts)
+
+    type_list = ['SelfModification', 'RegulateAmount', 'Translocation']
+    q = HasType(type_list, include_subclasses=True)
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    stmts = res.statements()
+    types = {t for bt in (get_statement_by_name(n) for n in type_list)
+             for t in [bt] + get_all_descendants(bt)}
+    assert all(type(s) in types for s in stmts)
+
+
+def test_from_mesh():
+    ro = get_db('primary')
+    q = FromMeshId('D001943')
+    res = q.get_statements(ro, limit=5, ev_limit=8)
+    mm_entries = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num],
+                               ro.MeshMeta.mk_hash.in_(set(res.results.keys())))
+    mm_dict = defaultdict(list)
+    for h, mn in mm_entries:
+        mm_dict[h].append(mn)
+
+    assert all(1943 in mn_list for mn_list in mm_dict.values())
+
+
 def test_query_set_behavior():
-    db = build_test_set()
-    all_hashes = {h for h, in db.select_all(db.NameMeta.mk_hash)}
+    db = _build_test_set()
+    all_hashes = {h for h, in db.select_all(db.SourceMeta.mk_hash)}
+    all_source_counts = {c for c, in db.select_all(db.SourceMeta.ev_count)}
     print(f"There are {len(all_hashes)} distinct hashes in the database.")
     lookup_hashes = random.sample(all_hashes, 5)
+    lookup_src_cnts = random.sample(all_source_counts, 3)
 
     c = Counter()
 
@@ -206,18 +363,22 @@ def test_query_set_behavior():
         HasAgent('TP53', role='SUBJECT'),
         HasAgent('ERK', namespace='FPLX', role='OBJECT'),
         FromMeshId('D015536'),
-        InHashList(lookup_hashes[:-3]),
-        InHashList(lookup_hashes[-1:]),
-        InHashList(lookup_hashes[-4:-1]),
+        HasHash(lookup_hashes[:-3]),
+        HasHash(lookup_hashes[-1:]),
+        HasHash(lookup_hashes[-4:-1]),
         HasOnlySource('pc11'),
         HasOnlySource('medscan'),
         HasReadings(),
         HasDatabases(),
         HasSources(['signor', 'reach']),
         HasSources(['medscan']),
-        HasAnyType(['Phosphorylation', 'Activation']),
-        HasAnyType(['RegulateActivity'], include_subclasses=True),
-        HasAnyType(['Complex'])
+        HasType(['Phosphorylation', 'Activation']),
+        HasType(['RegulateActivity'], include_subclasses=True),
+        HasType(['Complex']),
+        HasNumAgents([2, 3]),
+        HasNumAgents([1]),
+        HasNumEvidence(lookup_src_cnts[:-1]),
+        HasNumEvidence(lookup_src_cnts[-1:])
     ]
 
     failures = []
@@ -323,3 +484,212 @@ def test_query_set_behavior():
     assert not failures, f"{len(failures)}/{len(results)} checks failed."
 
     return results, failures
+
+
+def test_get_interactions():
+    ro = get_db('primary')
+    query = HasAgent('TP53')
+    res = query.get_interactions(ro, limit=10)
+    assert isinstance(res, QueryResult)
+    assert len(res.results) == 10
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(res.results)
+
+
+def test_get_relations():
+    ro = get_db('primary')
+    query = HasAgent('TP53')
+    res = query.get_relations(ro, limit=10)
+    assert isinstance(res, QueryResult)
+    assert len(res.results) <= 10, len(res.results)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(res.results)
+
+
+def test_get_agents():
+    ro = get_db('primary')
+    query = HasAgent('TP53')
+    res = query.get_agents(ro, limit=10)
+    assert isinstance(res, QueryResult)
+    assert len(res.results) <= 10, len(res.results)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(res.results)
+
+
+def test_evidence_filtering_has_only_source():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = ~HasOnlySource('medscan')
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert not any(ev.text_refs.get('READER') == 'medscan' for s in stmts
+                   for ev in s.evidence)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_has_source():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = HasSources(['reach', 'sparser'])
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(ev.text_refs.get('READER') in ['REACH', 'SPARSER']
+               for s in stmts for ev in s.evidence)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_has_database():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = HasDatabases()
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(ev.source_api not in SOURCE_GROUPS['reading']
+               for s in stmts for ev in s.evidence)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_has_readings():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = HasReadings()
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=10,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(ev.source_api in SOURCE_GROUPS['reading']
+               for s in stmts for ev in s.evidence)
+    assert all(len(s.evidence) == 10 for s in stmts)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_mesh():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q2 = FromMeshId('D001943')
+    query = q1 & q2
+    res = query.get_statements(ro, limit=2, ev_limit=None,
+                               evidence_filter=q2.ev_filter())
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(len(s.evidence) < res.evidence_totals[s.get_hash()]
+               for s in stmts)
+    js = res.json()
+    assert 'results' in js
+    assert len(js['results']) == len(stmts)
+
+
+def test_evidence_filtering_pairs():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q_list = [~HasOnlySource('medscan'), HasOnlySource('reach'),
+              ~HasSources(['reach', 'sparser']), HasSources(['pc11', 'signor']),
+              HasDatabases(), ~HasReadings(), FromMeshId('D001943')]
+    for q2, q3 in combinations(q_list, 2):
+        query = q1 | q2 | q3
+        ev_filter = q2.ev_filter() & q3.ev_filter()
+        query.get_statements(ro, limit=2, ev_limit=5, evidence_filter=ev_filter)
+
+        ev_filter = q2.ev_filter() | q3.ev_filter()
+        query.get_statements(ro, limit=2, ev_limit=5, evidence_filter=ev_filter)
+
+
+def test_evidence_filtering_trios():
+    ro = get_db('primary')
+    q1 = HasAgent('TP53')
+    q_list = [~HasOnlySource('medscan'), HasSources(['reach', 'sparser']),
+              HasDatabases(), HasReadings(), FromMeshId('D001943')]
+    for q2, q3, q4 in combinations(q_list, 3):
+        query = q1 | q2 | q3 | q4
+        ev_filter = q2.ev_filter() & q3.ev_filter() & q4.ev_filter()
+        query.get_statements(ro, limit=2, ev_limit=5, evidence_filter=ev_filter)
+
+        ev_filter = q2.ev_filter() | q3.ev_filter() | q4.ev_filter()
+        query.get_statements(ro, limit=2, ev_limit=5, evidence_filter=ev_filter)
+
+    for q2, q3, q4 in permutations(q_list, 3):
+        query = q1 | q2 | q3 | q4
+        ev_filter = q2.ev_filter() & q3.ev_filter() | q4.ev_filter()
+        query.get_statements(ro, limit=2, ev_limit=5, evidence_filter=ev_filter)
+
+
+def test_evidence_count_is_none():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_statements(ro, limit=2)
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    ev_list = stmts[0].evidence
+    assert len(ev_list) > 10
+    assert all(len(s.evidence) == res.evidence_totals[s.get_hash()]
+               for s in stmts)
+    assert res.returned_evidence == sum(res.evidence_totals.values())
+
+
+def test_evidence_count_is_10():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_statements(ro, limit=2, ev_limit=10)
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(len(s.evidence) <= 10 for s in stmts)
+    assert res.returned_evidence == 20
+    assert sum(res.evidence_totals.values()) > 20
+
+
+def test_evidence_count_is_0():
+    ro = get_db('primary')
+    query = HasAgent('TP53') - HasOnlySource('medscan')
+    res = query.get_statements(ro, limit=2, ev_limit=0)
+    assert isinstance(res, StatementQueryResult)
+    stmts = res.statements()
+    assert len(stmts) == 2
+    assert all(len(s.evidence) == 0 for s in stmts)
+    assert res.returned_evidence == 0, res.returned_evidence
+    assert sum(res.evidence_totals.values()) > 20, \
+        sum(res.evidence_totals.values())
+
+
+def test_real_world_examples():
+    ro = get_db('primary')
+    query = (HasAgent('MEK', namespace='FPLX', role='SUBJECT')
+             & HasAgent('ERK', namespace='FPLX', role='OBJECT')
+             & HasType(['Phosphorylation'])
+             - HasOnlySource('medscan'))
+    ev_filter = HasOnlySource('medscan').invert().ev_filter()
+    res = query.get_statements(ro, limit=100, ev_limit=10,
+                               evidence_filter=ev_filter)
+    assert len(res.results)
+
+    query = HasAgent('RAS') & HasAgent('RAF') & HasNumAgents((3,))
+    res = query.get_statements(ro, limit=100, ev_limit=10)
+    stmts = res.statements()
+    assert len(stmts)

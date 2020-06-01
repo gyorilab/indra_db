@@ -1,21 +1,24 @@
 from itertools import combinations
 
 __all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
-           'MergeQueryCore', 'HasAgent', 'FromMeshId', 'InHashList',
+           'MergeQueryCore', 'HasAgent', 'FromMeshId', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
-           'SourceCore', 'SourceIntersection', 'HasAnyType']
+           'SourceCore', 'SourceIntersection', 'HasType', 'IntrusiveQueryCore',
+           'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter']
 
 import json
 import logging
 from collections import OrderedDict, Iterable, defaultdict
 
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-    except_
+    except_, func, null, String, and_
+from sqlalchemy.dialects.postgresql import JSONB
 
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
-from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map
-from indra_db.util import regularize_agent_id
+from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
+    SOURCE_GROUPS
+from indra_db.util import regularize_agent_id, get_ro
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +28,20 @@ class QueryResult(object):
 
     This class standardizes the results of queries to the readonly database.
 
+    Parameters
+    ----------
+    results : dict
+        The results of the query keyed by unique IDs (mk_hash for PA Statements,
+        IDs for Raw Statements, etc.)
+    limit : int
+        The limit that was applied to this query.
+    offset_comp : int
+        The next offset that would be appropriate if this is a paging query.
+    evidence_totals : dict
+        The total numbers of evidence for each element.
+    query_json : dict
+        A description of the query that was used.
+
     Attributes
     ----------
     results : dict
@@ -32,10 +49,14 @@ class QueryResult(object):
         IDs for Raw Statements, etc.)
     limit : int
         The limit that was applied to this query.
+    next_offset : int
+        The next offset that would be appropriate if this is a paging query.
+    evidence_totals : dict
+        The total numbers of evidence for each element.
     query_json : dict
         A description of the query that was used.
     """
-    def __init__(self, results, limit: int, offset: int,
+    def __init__(self, results, limit: int, offset: int, offset_comp: int,
                  evidence_totals: dict, query_json: dict):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
@@ -45,17 +66,22 @@ class QueryResult(object):
         self.total_evidence = sum(self.evidence_totals.values())
         self.limit = limit
         self.offset = offset
+        if limit is None or offset_comp < limit:
+            self.next_offset = None
+        else:
+            self.next_offset = (0 if offset is None else offset) + offset_comp
         self.query_json = query_json
 
-    def json(self):
-        """Return the JSON representaion of the results."""
+    def json(self) -> dict:
+        """Return the JSON representation of the results."""
         if not isinstance(self.results, dict) \
                 and not isinstance(self.results, list):
             json_results = list(self.results)
         else:
             json_results = self.results
         return {'results': json_results, 'limit': self.limit,
-                'offset': self.offset, 'query': self.query_json,
+                'offset': self.offset, 'next_offset': self.next_offset,
+                'query': self.query_json,
                 'evidence_totals': self.evidence_totals,
                 'total_evidence': self.total_evidence}
 
@@ -79,21 +105,28 @@ class StatementQueryResult(QueryResult):
     def __init__(self, results: dict, limit: int, offset: int,
                  evidence_totals: dict, returned_evidence: int,
                  source_counts: dict, query_json: dict):
-        super(StatementQueryResult, self).__init__(results, limit, offset,
+        super(StatementQueryResult, self).__init__(results, limit,
+                                                   offset, len(results),
                                                    evidence_totals, query_json)
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
 
-    def json(self):
+    def json(self) -> dict:
         """Get the JSON dump of the results."""
         json_dict = super(StatementQueryResult, self).json()
         json_dict.update({'returned_evidence': self.returned_evidence,
                           'source_counts': self.source_counts})
         return json_dict
 
-    def statements(self):
+    def statements(self) -> list:
         """Get a list of Statements from the results."""
         return stmts_from_json(list(self.results.values()))
+
+
+def _make_agent_dict(ag_dict):
+    return {n: ag_dict[str(n)]
+            for n in range(int(max(ag_dict.keys())) + 1)
+            if str(n) in ag_dict}
 
 
 class QueryCore(object):
@@ -106,7 +139,7 @@ class QueryCore(object):
         self.full = full
         self._inverted = False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         args = list(self._get_constraint_json().values())[0]
         arg_strs = [f'{k}={v}' for k, v in args.items()
                     if v is not None and not k.startswith('_')]
@@ -159,8 +192,9 @@ class QueryCore(object):
         """
         return self.__invert__()
 
-    def get_statements(self, ro, limit=None, offset=None, best_first=True,
-                       ev_limit=None):
+    def get_statements(self, ro=None, limit=None, offset=None, best_first=True,
+                       ev_limit=None, evidence_filter=None) \
+            -> StatementQueryResult:
         """Get the statements that satisfy this query.
 
         Parameters
@@ -178,6 +212,9 @@ class QueryCore(object):
             Return the best (most evidence) statements first.
         ev_limit : int
             Limit the number of evidence returned for each statement.
+        evidence_filter : None or EvidenceFilter
+            If None, no filtering will be applied. Otherwise, an EvidenceFilter
+            class must be provided.
 
         Returns
         -------
@@ -185,6 +222,9 @@ class QueryCore(object):
             An object holding the JSON result from the database, as well as the
             metadata for the query.
         """
+        if ro is None:
+            ro = get_ro('primary')
+
         # If the result is by definition empty, save ourselves time and work.
         if self.empty:
             return StatementQueryResult({}, limit, offset, {}, 0, {},
@@ -196,15 +236,140 @@ class QueryCore(object):
         mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
                                          best_first)
 
-        # Do the difficult work of turning a query for hashes and ev_counts into
-        # a query for statement JSONs. Return the results.
-        stmt_dict, ev_totals, returned_evidence, source_counts = \
-            self._get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit)
-        return StatementQueryResult(stmt_dict, limit, offset, ev_totals,
+        # Do the difficult work of turning a query for hashes and ev_counts
+        # into a query for statement JSONs. Return the results.
+        mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
+        cont_q = self._get_content_query(ro, mk_hashes_al, ev_limit)
+        if evidence_filter is not None:
+            cont_q = evidence_filter.join_table(ro, cont_q,
+                                                {'fast_raw_pa_link'})
+            cont_q = evidence_filter.apply_filter(ro, cont_q)
+
+        # If there is no evidence, whittle down the results so we only get one
+        # pa_json for each hash.
+        if ev_limit == 0:
+            cont_q = cont_q.distinct()
+
+        # If we have a limit on the evidence, we need to do a lateral join.
+        # If we are just getting all the evidence, or none of it, just put an
+        # alias on the subquery.
+        if ev_limit is not None and ev_limit != 0:
+            cont_q = cont_q.limit(ev_limit)
+            json_content_al = cont_q.subquery().lateral('json_content')
+            stmts_q = (mk_hashes_al
+                       .outerjoin(json_content_al, true())
+                       .outerjoin(ro.SourceMeta,
+                                  ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
+            cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
+                    mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
+                    json_content_al.c.pa_json]
+        else:
+            json_content_al = cont_q.subquery().alias('json_content')
+            stmts_q = (json_content_al
+                       .outerjoin(ro.SourceMeta,
+                                  ro.SourceMeta.mk_hash == json_content_al.c.mk_hash))
+            cols = [json_content_al.c.mk_hash, ro.SourceMeta.src_json,
+                    json_content_al.c.ev_count, json_content_al.c.raw_json,
+                    json_content_al.c.pa_json]
+
+            # Join up with other tables to pull metadata.
+        stmts_q = (stmts_q
+                   .outerjoin(ro.ReadingRefLink,
+                              ro.ReadingRefLink.rid == json_content_al.c.rid))
+
+        ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
+                         if not k.startswith('_')]
+
+        cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
+
+        # Execute the query.
+        selection = select(cols).select_from(stmts_q)
+
+        logger.debug("Executing sql to get statements:\n%s" % str(selection))
+
+        proxy = ro.session.connection().execute(selection)
+        res = proxy.fetchall()
+        if res:
+            logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
+        else:
+            logger.debug("res is empty.")
+
+        # Unpack the statements.
+        stmts_dict = OrderedDict()
+        ev_totals = OrderedDict()
+        source_counts = OrderedDict()
+        returned_evidence = 0
+        src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
+        for row in res:
+            # Unpack the row
+            row_gen = iter(row)
+
+            mk_hash = next(row_gen)
+            src_dict = dict.fromkeys(src_list, 0)
+            src_dict.update(next(row_gen))
+            ev_count = next(row_gen)
+            raw_json_bts = next(row_gen)
+            pa_json_bts = next(row_gen)
+            ref_dict = dict(zip(ref_link_keys, row_gen))
+
+            if pa_json_bts is None:
+                logger.warning("Row returned without pa_json. This likely "
+                               "indicates that an over-zealous evidence filter "
+                               "was used, which filtered out all evidence. "
+                               "This case is not currently handled, and the "
+                               "statement will have to be dropped.")
+                continue
+
+            if raw_json_bts is not None:
+                returned_evidence += 1
+
+            # Add a new statement if the hash is new.
+            if mk_hash not in stmts_dict.keys():
+                source_counts[mk_hash] = src_dict
+                ev_totals[mk_hash] = ev_count
+                stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
+                stmts_dict[mk_hash]['evidence'] = []
+
+            # Add annotations if not present.
+            if ev_limit != 0:
+                raw_json = json.loads(raw_json_bts.decode('utf-8'))
+                ev_json = raw_json['evidence'][0]
+                if 'annotations' not in ev_json.keys():
+                    ev_json['annotations'] = {}
+
+                # Add agents' raw text to annotations.
+                ev_json['annotations']['agents'] = \
+                    {'raw_text': _get_raw_texts(raw_json)}
+
+                # Add prior UUIDs to the annotations
+                if 'prior_uuids' not in ev_json['annotations'].keys():
+                    ev_json['annotations']['prior_uuids'] = []
+                ev_json['annotations']['prior_uuids'].append(raw_json['id'])
+
+                # Add and/or update text refs.
+                if 'text_refs' not in ev_json.keys():
+                    ev_json['text_refs'] = {}
+                if ref_dict['pmid']:
+                    ev_json['pmid'] = ref_dict['pmid']
+                elif 'PMID' in ev_json['text_refs']:
+                    del ev_json['text_refs']['PMID']
+                ev_json['text_refs'].update({k.upper(): v
+                                             for k, v in ref_dict.items()
+                                             if v is not None})
+
+                # Add the source dictionary.
+                if ref_dict['source']:
+                    ev_json['annotations']['content_source'] = ref_dict['source']
+
+                # Add the evidence JSON to the list.
+                stmts_dict[mk_hash]['evidence'].append(ev_json)
+
+        return StatementQueryResult(stmts_dict, limit, offset, ev_totals,
                                     returned_evidence, source_counts,
                                     self.to_json())
 
-    def get_hashes(self, ro, limit=None, offset=None, best_first=True):
+    def get_hashes(self, ro=None, limit=None, offset=None, best_first=True) \
+            -> QueryResult:
         """Get the hashes of statements that satisfy this query.
 
         Parameters
@@ -227,6 +392,9 @@ class QueryCore(object):
             An object holding the results of the query, as well as the metadata
             for the query definition.
         """
+        if ro is None:
+            ro = get_ro('primary')
+
         # If the result is by definition empty, save time and effort.
         if self.empty:
             return QueryResult(set(), limit, offset, {}, self.to_json())
@@ -240,8 +408,237 @@ class QueryCore(object):
         # Make the query, and package the results.
         result = mk_hashes_q.all()
         evidence_totals = {h: cnt for h, cnt in result}
-        return QueryResult(set(evidence_totals.keys()), limit, offset,
-                           evidence_totals, self.to_json())
+
+        return QueryResult(list(evidence_totals.keys()), limit, offset,
+                           len(result), evidence_totals, self.to_json())
+
+    def _get_name_query(self, ro, limit=None, offset=None, best_first=True):
+        mk_hashes_q = self.get_hash_query(ro)
+        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
+                                         best_first)
+
+        mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
+        q = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
+                              ro.NameMeta.ag_num, ro.NameMeta.type_num,
+                              ro.NameMeta.agent_count, ro.NameMeta.activity,
+                              ro.NameMeta.is_active, ro.SourceMeta.src_json)
+             .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
+                     ro.SourceMeta.mk_hash == mk_hashes_sq.c.mk_hash))
+        sq = q.subquery('names')
+        q = ro.session.query(
+            sq.c.mk_hash,
+            func.jsonb_object(
+                func.array_agg(sq.c.ag_num.cast(String)),
+                func.array_agg(sq.c.db_id)
+            ).label('agent_json'),
+            sq.c.type_num,
+            sq.c.agent_count,
+            sq.c.activity,
+            sq.c.is_active,
+            sq.c.src_json.cast(JSONB).label('src_json')
+        ).group_by(
+            sq.c.mk_hash,
+            sq.c.type_num,
+            sq.c.agent_count,
+            sq.c.activity,
+            sq.c.is_active,
+            sq.c.src_json.cast(JSONB)
+        )
+        return q
+
+    def get_interactions(self, ro=None, limit=None, offset=None, best_first=True) \
+            -> QueryResult:
+        """Get the simple interaction information from the Statements metadata.
+
+       Each entry in the result corresponds to a single preassembled Statement,
+       distinguished by its hash.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+        """
+        if ro is None:
+            ro = get_ro('primary')
+
+        if self.empty:
+            return QueryResult({}, limit, offset, {}, self.to_json())
+
+        q = self._get_name_query(ro, limit, offset, best_first)
+        names = q.all()
+        results = {}
+        ev_totals = {}
+        for h, ag_json, type_num, n_ag, activity, is_active, src_json in names:
+            results[h] = {
+                'hash': h,
+                'id': str(h),
+                'agents': _make_agent_dict(ag_json),
+                'type': ro_type_map.get_str(type_num),
+                'activity': activity,
+                'is_active': is_active,
+                'source_counts': src_json,
+            }
+            ev_totals[h] = sum(src_json.values())
+
+        return QueryResult(results, limit, offset, len(results), ev_totals,
+                           self.to_json())
+
+    def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
+                      with_hashes=False) \
+            -> QueryResult:
+        """Get the agent and type information from the Statements metadata.
+
+         Each entry in the result corresponds to a relation, meaning an
+         interaction type, and the names of the agents involved.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+        with_hashes : bool
+            Default is False. If True, retrieve all the hashes that fit within
+            each relational grouping.
+        """
+        if ro is None:
+            ro = get_ro('primary')
+
+        if self.empty:
+            return QueryResult({}, limit, offset, {}, self.to_json())
+
+        names_q = self._get_name_query(ro, limit, offset, best_first)
+
+        sq = names_q.subquery('names')
+        q = ro.session.query(
+            sq.c.agent_json,
+            sq.c.type_num,
+            sq.c.agent_count,
+            sq.c.activity,
+            sq.c.is_active,
+            func.array_agg(sq.c.src_json),
+            func.array_agg(sq.c.mk_hash) if with_hashes else null()
+        ).group_by(
+            sq.c.agent_json,
+            sq.c.type_num,
+            sq.c.agent_count,
+            sq.c.activity,
+            sq.c.is_active
+        )
+
+        names = q.all()
+        results = {}
+        ev_totals = {}
+        num_hashes = 0
+        for ag_json, type_num, n_ag, activity, is_active, srcs, hashes in names:
+            ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
+            agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
+
+            stmt_type = ro_type_map.get_str(type_num)
+
+            key = stmt_type + agent_key
+
+            if key in results:
+                logger.warning("Something went weird processing relations.")
+
+            source_counts = defaultdict(lambda: 0)
+            for src_json in srcs:
+                for src, cnt in src_json.items():
+                    source_counts[src] += cnt
+            results[key] = {'id': key, 'source_counts': dict(source_counts),
+                            'agents': _make_agent_dict(ag_json),
+                            'type': stmt_type, 'activity': activity,
+                            'is_active': is_active, 'hashes': hashes}
+            ev_totals[key] = sum(source_counts.values())
+            num_hashes += len(hashes)
+
+        return QueryResult(results, limit, offset, num_hashes, ev_totals,
+                           self.to_json())
+
+    def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
+                   with_hashes=False) \
+            -> QueryResult:
+        """Get the agent pairs from the Statements metadata.
+
+         Each entry is simply a pair (or more) of Agents involved in an
+         interaction.
+
+        Parameters
+        ----------
+        ro : DatabaseManager
+            A database manager handle that has valid Readonly tables built.
+        limit : int
+            Control the maximum number of results returned. As a rule, unless
+            you are quite sure the query will result in a small number of
+            matches, you should limit the query.
+        offset : int
+            Get results starting from the value of offset. This along with limit
+            allows you to page through results.
+        best_first : bool
+            Return the best (most evidence) statements first.
+        with_hashes : bool
+            Default is False. If True, retrieve all the hashes that fit within
+            each agent pair grouping.
+        """
+        if ro is None:
+            ro = get_ro('primary')
+
+        if self.empty:
+            return QueryResult({}, limit, offset, {}, self.to_json())
+
+        names_q = self._get_name_query(ro, limit, offset, best_first)
+
+        sq = names_q.subquery('names')
+        q = ro.session.query(
+            sq.c.agent_json,
+            sq.c.agent_count,
+            func.array_agg(sq.c.src_json),
+            func.array_agg(sq.c.mk_hash) if with_hashes else null()
+        ).group_by(
+            sq.c.agent_json,
+            sq.c.agent_count
+        )
+        names = q.all()
+
+        results = {}
+        ev_totals = {}
+        num_hashes = 0
+        for ag_json, n_ag, src_jsons, hashes in names:
+            ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
+            key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
+
+            if key in results:
+                logger.warning("Something went weird processing results for "
+                               "agents.")
+
+            source_counts = defaultdict(lambda: 0)
+            for src_json in src_jsons:
+                for src, cnt in src_json.items():
+                    source_counts[src] += cnt
+            results[key] = {'id': key, 'source_counts': dict(source_counts),
+                            'agents': _make_agent_dict(ag_json),
+                            'hashes': hashes}
+            ev_totals[key] = sum(source_counts.values())
+            num_hashes += len(hashes)
+
+        return QueryResult(results, limit, offset, num_hashes, ev_totals,
+                           self.to_json())
 
     def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
                       best_first=True):
@@ -268,6 +665,10 @@ class QueryCore(object):
         """Get the custom constraint JSONs from the subclass"""
         raise NotImplementedError()
 
+    def get_component_queries(self) -> list:
+        """Get a list of the query elements included, in no particular order."""
+        return [self.__class__.__name__]
+
     def _get_table(self, ro):
         raise NotImplementedError()
 
@@ -290,132 +691,34 @@ class QueryCore(object):
         # Otherwise proceed with the usual query.
         return self._get_hash_query(ro, type_queries)
 
-    def _get_hash_query(self, ro, type_queries=None):
+    def _get_hash_query(self, ro, inject_queries=None):
         raise NotImplementedError()
 
     @staticmethod
-    def _get_stmt_jsons_from_hashes_query(ro, mk_hashes_q, ev_limit):
-        """Turn a query for hashes into a query for statements.
-
-        In particular, this function retrieves refs, and the limited number of
-        evidence for each statement.
-        """
-        # Create the link
-        mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
-        raw_json_c = ro.FastRawPaLink.raw_json.label('raw_json')
+    def _get_content_query(ro, mk_hashes_al, ev_limit):
+        # Incorporate a link to the JSONs in the table.
         pa_json_c = ro.FastRawPaLink.pa_json.label('pa_json')
         reading_id_c = ro.FastRawPaLink.reading_id.label('rid')
-        cont_q = ro.session.query(raw_json_c, pa_json_c, reading_id_c)
-        cont_q = cont_q.filter(ro.FastRawPaLink.mk_hash == mk_hashes_al.c.mk_hash)
+        frp_link = ro.FastRawPaLink.mk_hash == mk_hashes_al.c.mk_hash
 
-        if ev_limit is not None:
-            cont_q = cont_q.limit(ev_limit)
-
-        # Apply the lateral join to get evidence.
-        # TODO: Only make a lateral-joined query when evidence is limited.
-        json_content_al = cont_q.subquery().lateral('json_content')
-
-        # Join up with other tables to pull metadata.
-        stmts_q = (mk_hashes_al
-                   .outerjoin(json_content_al, true())
-                   .outerjoin(ro.ReadingRefLink,
-                              ro.ReadingRefLink.rid == json_content_al.c.rid)
-                   .outerjoin(ro.SourceMeta,
-                              ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
-
-        ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
-                         if not k.startswith('_')]
-
-        cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
-                mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
-                json_content_al.c.pa_json]
-        cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
-
-        # Execute the query.
-        selection = select(cols).select_from(stmts_q)
-
-        logger.debug("Executing sql to get statements:\n%s" % str(selection))
-
-        proxy = ro.session.connection().execute(selection)
-        res = proxy.fetchall()
-        if res:
-            logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
+        # If there is no evidence, don't get raw JSON, otherwise we need a col
+        # for the raw JSON.
+        if ev_limit == 0:
+            raw_json_c = null().label('raw_json')
         else:
-            logger.debug("res is empty.")
+            raw_json_c = ro.FastRawPaLink.raw_json.label('raw_json')
 
-        # Unpack the statements.
-        stmts_dict = OrderedDict()
-        ev_totals = OrderedDict()
-        source_counts = OrderedDict()
-        returned_evidence = 0
-        src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
-        for row in res:
-            returned_evidence += 1
+        # Create the query.
+        if ev_limit is None or ev_limit == 0:
+            mk_hash_c = ro.FastRawPaLink.mk_hash.label('mk_hash')
+            ev_count_c = mk_hashes_al.c.ev_count.label('ev_count')
+            cont_q = ro.session.query(mk_hash_c, ev_count_c, raw_json_c,
+                                      pa_json_c, reading_id_c)
+        else:
+            cont_q = ro.session.query(raw_json_c, pa_json_c, reading_id_c)
+        cont_q = cont_q.filter(frp_link)
 
-            # Unpack the row
-            row_gen = iter(row)
-
-            mk_hash = next(row_gen)
-            src_dict = dict.fromkeys(src_list, 0)
-            src_dict.update(next(row_gen))
-            ev_count = next(row_gen)
-            raw_json_bts = next(row_gen)
-            pa_json_bts = next(row_gen)
-            ref_dict = dict(zip(ref_link_keys, row_gen))
-
-            # Break out the evidence JSON
-            raw_json = json.loads(raw_json_bts.decode('utf-8'))
-            ev_json = raw_json['evidence'][0]
-
-            # Add a new statement if the hash is new.
-            if mk_hash not in stmts_dict.keys():
-                source_counts[mk_hash] = src_dict
-                ev_totals[mk_hash] = ev_count
-                stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
-                stmts_dict[mk_hash]['evidence'] = []
-
-            # Add annotations if not present.
-            if 'annotations' not in ev_json.keys():
-                ev_json['annotations'] = {}
-
-            # Add agents' raw text to annotations.
-            raw_text = []
-            agent_names = get_statement_by_name(raw_json['type'])._agent_order
-            for ag_name in agent_names:
-                ag_value = raw_json.get(ag_name, None)
-                if isinstance(ag_value, dict):
-                    raw_text.append(ag_value['db_refs'].get('TEXT'))
-                elif ag_value is None:
-                    raw_text.append(None)
-                else:
-                    for ag in ag_value:
-                        raw_text.append(ag['db_refs'].get('TEXT'))
-            ev_json['annotations']['agents'] = {'raw_text': raw_text}
-
-            # Add prior UUIDs to the annotations
-            if 'prior_uuids' not in ev_json['annotations'].keys():
-                ev_json['annotations']['prior_uuids'] = []
-            ev_json['annotations']['prior_uuids'].append(raw_json['id'])
-
-            # Add and/or update text refs.
-            if 'text_refs' not in ev_json.keys():
-                ev_json['text_refs'] = {}
-            if ref_dict['pmid']:
-                ev_json['pmid'] = ref_dict['pmid']
-            elif 'PMID' in ev_json['text_refs']:
-                del ev_json['text_refs']['PMID']
-            ev_json['text_refs'].update({k.upper(): v
-                                         for k, v in ref_dict.items()
-                                         if v is not None})
-
-            # Add the source dictionary.
-            if ref_dict['source']:
-                ev_json['annotations']['content_source'] = ref_dict['source']
-
-            # Add the evidence JSON to the list.
-            stmts_dict[mk_hash]['evidence'].append(ev_json)
-
-        return stmts_dict, ev_totals, returned_evidence, source_counts
+        return cont_q
 
     def __merge_queries(self, other, MergeClass):
         """This is the most general method for handling query merges.
@@ -473,6 +776,34 @@ class QueryCore(object):
 
         return self._do_or(other)
 
+    def _merge_lists(self, is_and, other, fallback):
+        if isinstance(other, self.__class__) \
+                and self._inverted == other._inverted:
+            # Two type queries of the same polarity can be merged, with some
+            # care for whether they are both inverted or not.
+            my_set = set(self._get_list())
+            yo_set = set(other._get_list())
+            if not self._inverted:
+                merged_values = my_set & yo_set if is_and else my_set | yo_set
+                empty = len(merged_values) == 0
+                full = False
+            else:
+                # RDML
+                merged_values = my_set | yo_set if is_and else my_set & yo_set
+                full = len(merged_values) == 0
+                empty = False
+            res = self.__class__(merged_values)
+            res._inverted = self._inverted
+            res.full = full
+            res.empty = empty
+            return res
+        elif self.is_inverse_of(other):
+            # If the two queries are inverses, we can simply return a empty
+            # result trivially. (A and not A is nothing)
+            return self._get_empty() if is_and else ~self._get_empty()
+
+        return fallback(other)
+
     def __sub__(self, other):
         # Subtraction is the same as "and not"
         return self._do_and(~other)
@@ -497,7 +828,7 @@ class SourceCore(QueryCore):
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
 
-    def _do_and(self, other):
+    def _do_and(self, other) -> QueryCore:
         # Make sure that intersections of SourceCore children end up in
         # SourceIntersection.
         if isinstance(other, SourceCore):
@@ -506,7 +837,7 @@ class SourceCore(QueryCore):
             return SourceIntersection(other.source_queries + (self.copy(),))
         return super(SourceCore, self)._do_and(other)
 
-    def _copy(self):
+    def _copy(self) -> QueryCore:
         raise NotImplementedError()
 
     def _get_table(self, ro):
@@ -515,11 +846,11 @@ class SourceCore(QueryCore):
     def _apply_filter(self, ro, query, invert=False):
         raise NotImplementedError()
 
-    def _get_hash_query(self, ro, type_queries=None):
+    def _get_hash_query(self, ro, inject_queries=None):
         q = self._base_query(ro)
         q = self._apply_filter(ro, q)
-        if type_queries is not None:
-            for type_q in type_queries:
+        if inject_queries is not None:
+            for type_q in inject_queries:
                 q = type_q._apply_filter(self._get_table(ro), q)
         return q
 
@@ -543,7 +874,7 @@ class SourceIntersection(QueryCore):
         rem_hashes = set()
         class_groups = defaultdict(list)
         for sq in source_queries:
-            if isinstance(sq, InHashList):
+            if isinstance(sq, HasHash):
                 # Collect all hashes to include and those to exclude.
                 if not sq._inverted:
                     # This is a part of an intersection, so intersection is
@@ -570,19 +901,19 @@ class SourceIntersection(QueryCore):
             # successfully work out the logic without special communication
             # being necessary.
             empty = True
-            filtered_queries |= {InHashList(add_hashes),
-                                 ~InHashList(rem_hashes)}
+            filtered_queries |= {HasHash(add_hashes),
+                                 ~HasHash(rem_hashes)}
         else:
             # Check for added hashes and add a positive and an inverted hash
             # query for the net positive and net negative hashes.
             if add_hashes is not None:
                 if not add_hashes:
                     empty = True
-                filtered_queries.add(InHashList(add_hashes - rem_hashes))
+                filtered_queries.add(HasHash(add_hashes - rem_hashes))
                 rem_hashes -= add_hashes
 
             if rem_hashes:
-                filtered_queries.add(~InHashList(rem_hashes))
+                filtered_queries.add(~HasHash(rem_hashes))
 
         # Now add in all the other queries, removing those that cancel out.
         for q_list in class_groups.values():
@@ -635,10 +966,14 @@ class SourceIntersection(QueryCore):
         query_list = [q.to_json() for q in self.source_queries]
         return {'multi_source_query': {'source_queries': query_list}}
 
+    def get_component_queries(self) -> list:
+        return [q.__class__.__name__ for q in self.source_queries] \
+               + [self.__class__.__name__]
+
     def _get_table(self, ro):
         return ro.SourceMeta
 
-    def _get_hash_query(self, ro, type_queries=None):
+    def _get_hash_query(self, ro, inject_queries=None):
         query = self._base_query(ro)
 
         # Apply each of the source queries' filters.
@@ -646,8 +981,8 @@ class SourceIntersection(QueryCore):
             query = sq._apply_filter(ro, query, self._inverted)
 
         # Apply any type queries.
-        if type_queries:
-            for tq in type_queries:
+        if inject_queries:
+            for tq in inject_queries:
                 query = tq._apply_filter(self._get_table(ro), query)
         return query
 
@@ -674,7 +1009,16 @@ class HasOnlySource(SourceCore):
         return self.__class__(self.only_source)
 
     def _get_constraint_json(self) -> dict:
-        return {'only_source_query': {'only_source': self.only_source}}
+        return {'has_only_source': {'only_source': self.only_source}}
+
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src == self.only_source
+        else:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src != self.only_source
+        return EvidenceFilter.from_filter('raw_stmt_src', get_clause)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -682,8 +1026,7 @@ class HasOnlySource(SourceCore):
         if not inverted:
             clause = meta.only_src.like(self.only_source)
         else:
-            clause = or_(meta.only_src.notlike(self.only_source),
-                         meta.only_src.is_(None))
+            clause = meta.only_src.is_distinct_from(self.only_source)
         return query.filter(clause)
 
 
@@ -716,7 +1059,16 @@ class HasSources(SourceCore):
             return f"is not from one of {self.sources}"
 
     def _get_constraint_json(self) -> dict:
-        return {'has_source_query': {'sources': self.sources}}
+        return {'has_sources': {'sources': self.sources}}
+
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.in_(self.sources)
+        else:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.notin_(self.sources)
+        return EvidenceFilter.from_filter('raw_stmt_src', get_clause)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -741,6 +1093,9 @@ class SourceTypeCore(SourceCore):
     name = NotImplemented
     col = NotImplemented
 
+    def __init__(self):
+        super(SourceTypeCore, self).__init__()
+
     def __str__(self):
         if not self._inverted:
             return f"has {self.name}"
@@ -752,6 +1107,23 @@ class SourceTypeCore(SourceCore):
 
     def _get_constraint_json(self) -> dict:
         return {f'has_{self.name}_query': {f'_has_{self.name}': True}}
+
+    def ev_filter(self):
+        if self.col == 'has_rd':
+            my_src_group = SOURCE_GROUPS['reading']
+        elif self.col == 'has_db':
+            my_src_group = SOURCE_GROUPS['databases']
+        else:
+            raise RuntimeError("`col` class attribute not recognized.")
+
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.in_(my_src_group)
+        else:
+            def get_clause(ro):
+                return ro.RawStmtSrc.src.notin_(my_src_group)
+
+        return EvidenceFilter.from_filter('raw_stmt_src', get_clause)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -779,7 +1151,7 @@ class HasDatabases(SourceTypeCore):
     col = 'has_db'
 
 
-class InHashList(SourceCore):
+class HasHash(SourceCore):
     """Find Statements from a list of hashes.
 
     Parameters
@@ -788,67 +1160,33 @@ class InHashList(SourceCore):
         A collection of integers, where each integer is a shallow matches key
         hash of a Statement (frequently simply called "mk_hash" or "hash")
     """
+    list_name = 'stmt_hashes'
+
     def __init__(self, stmt_hashes):
         empty = len(stmt_hashes) == 0
         self.stmt_hashes = tuple(stmt_hashes)
-        super(InHashList, self).__init__(empty)
+        super(HasHash, self).__init__(empty)
 
     def _copy(self):
         return self.__class__(self.stmt_hashes)
-
-    def _do_or(self, other):
-        if isinstance(other, InHashList) and self._inverted == other._inverted:
-            # Two hash queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
-                empty = len(hashes) == 0
-                full = False
-            else:
-                # Recall De Morgan's Law.
-                hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
-                full = len(hashes) == 0
-                empty = False
-            res = InHashList(hashes)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a full
-            # result trivially. (A or not A is anything)
-            return ~self.__class__([])
-        return super(InHashList, self)._do_or(other)
-
-    def _do_and(self, other):
-        if isinstance(other, InHashList) and self._inverted == other._inverted:
-            # Two hash queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                hashes = set(self.stmt_hashes) & set(other.stmt_hashes)
-                empty = len(hashes) == 0
-                full = False
-            else:
-                # RDML
-                hashes = set(self.stmt_hashes) | set(other.stmt_hashes)
-                full = len(hashes) == 0
-                empty = False
-            res = InHashList(hashes)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return an empty
-            # result trivially. (A and not A is nothing)
-            return self.__class__([])
-        return super(InHashList, self)._do_and(other)
 
     def __str__(self):
         return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
 
     def _get_constraint_json(self) -> dict:
         return {"hash_query": {'hashes': list(self.stmt_hashes)}}
+
+    def _get_empty(self):
+        return self.__class__([])
+
+    def _get_list(self):
+        return getattr(self, self.list_name)
+
+    def _do_and(self, other) -> QueryCore:
+        return self._merge_lists(True, other, super(HasHash, self)._do_and)
+
+    def _do_or(self, other) -> QueryCore:
+        return self._merge_lists(False, other, super(HasHash, self)._do_or)
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
@@ -930,7 +1268,7 @@ class HasAgent(QueryCore):
             meta = ro.OtherMeta
         return meta
 
-    def _get_hash_query(self, ro, type_queries=None):
+    def _get_hash_query(self, ro, inject_queries=None):
         # Get the base query and filter by regularized ID.
         meta = self._get_table(ro)
         qry = self._base_query(ro).filter(meta.db_id.like(self.regularized_id))
@@ -946,21 +1284,21 @@ class HasAgent(QueryCore):
             role_num = ro_role_map.get_int(self.role)
             qry = qry.filter(meta.role_num == role_num)
         elif self.agent_num is not None:
-            qry = qry.filter(meta.agent_num == self.agent_num)
+            qry = qry.filter(meta.ag_num == self.agent_num)
 
         # Apply the type searches, and invert if needed..
         if not self._inverted:
-            if type_queries:
-                for tq in type_queries:
+            if inject_queries:
+                for tq in inject_queries:
                     qry = tq._apply_filter(self._get_table(ro), qry)
         else:
             # Inversion in this case requires using an "except" clause, because
             # each hash is represented by multiple agents.
-            if type_queries:
+            if inject_queries:
                 # which does mean the Application of De Morgan's law is tricky
                 # here, but apply it we must.
                 type_clauses = [tq.invert()._get_clause(self._get_table(ro))
-                                for tq in type_queries]
+                                for tq in inject_queries]
                 qry = self._base_query(ro).filter(or_(qry.whereclause,
                                                       *type_clauses))
             al = except_(self._base_query(ro), qry).alias('agent_exclude')
@@ -970,7 +1308,243 @@ class HasAgent(QueryCore):
         return qry
 
 
-class HasAnyType(QueryCore):
+class FromPapers(QueryCore):
+    """Find Statements that have evidence from particular papers.
+
+    Parameters
+    ----------
+    paper_list : list[(<id_type>, <paper_id>)]
+        A list of tuples, where each tuple indicates and id-type (e.g. 'pmid')
+        and an id value for a particular paper.
+
+    Returns
+    -------
+    A dictionary data structure containing, among other metadata, a dict of
+    statement jsons under the key 'statements', themselves keyed by their
+    shallow matches-key hashes.
+    """
+    list_name = 'paper_list'
+
+    def __init__(self, paper_list):
+        self.paper_list = tuple(set(paper_list))
+        super(FromPapers, self).__init__(len(self.paper_list) == 0)
+
+    def __str__(self) -> str:
+        ret = 'not ' if self._inverted else ''
+        return ret + f"from papers {self.paper_list}"
+
+    def _copy(self) -> QueryCore:
+        return self.__class__(self.paper_list)
+
+    def _get_empty(self):
+        return self.__class__([])
+
+    def _get_list(self):
+        return getattr(self, self.list_name)
+
+    def _do_and(self, other) -> QueryCore:
+        return self._merge_lists(True, other, super(FromPapers, self)._do_and)
+
+    def _do_or(self, other) -> QueryCore:
+        return self._merge_lists(False, other, super(FromPapers, self)._do_or)
+
+    def _get_constraint_json(self) -> dict:
+        return {'from_papers': {'paper_list': self.paper_list}}
+
+    def _get_table(self, ro):
+        return ro.EvidenceCounts
+
+    def _get_conditions(self, ro):
+        conditions = []
+        for id_type, paper_id in self.paper_list:
+            if paper_id is None:
+                logger.warning("Got paper with id None.")
+                continue
+
+            # TODO: upgrade this to use new id formatting. This will require
+            # updating the ReadingRefLink table in the readonly build.
+            tbl_attr = getattr(ro.ReadingRefLink, id_type)
+            if not self._inverted:
+                if id_type in ['trid', 'tcid']:
+                    conditions.append(tbl_attr == int(paper_id))
+                else:
+                    conditions.append(tbl_attr.like(paper_id))
+            else:
+                if id_type in ['trid', 'tcid']:
+                    conditions.append(tbl_attr != int(paper_id))
+                else:
+                    conditions.append(tbl_attr.notlike(paper_id))
+        return conditions
+
+    def _get_hash_query(self, ro, inject_queries=None):
+        # Create a sub-query on the reading metadata
+        q = ro.session.query(ro.ReadingRefLink.rid.label('rid'))
+        conditions = self._get_conditions(ro)
+        if not self._inverted:
+            q = q.filter(or_(*conditions))
+        else:
+            # RDML (implicit "and")
+            q = q.filter(*conditions)
+
+        sub_al = q.subquery('reading_ids')
+
+        # Map the reading metadata query to mk_hashes with statement counts.
+        qry = (self._base_query(ro)
+               .filter(ro.EvidenceCounts.mk_hash == ro.FastRawPaLink.mk_hash,
+                       ro.FastRawPaLink.reading_id == sub_al.c.rid))
+        return qry
+
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return or_(*self._get_conditions(ro))
+        else:
+            def get_clause(ro):
+                return and_(*self._get_conditions(ro))
+        return EvidenceFilter.from_filter('reading_ref_link', get_clause)
+
+
+class IntrusiveQueryCore(QueryCore):
+    """This is the parent of all queries that draw on info in all meta tables.
+
+    Thus, when using these queries in an Intersection, they are applied to each
+    sub query separately.
+    """
+    name = NotImplemented
+    list_name = NotImplemented
+    item_type = NotImplemented
+    col_name = NotImplemented
+
+    def __init__(self, value_list):
+        value_tuple = tuple([self.item_type(n) for n in value_list])
+        setattr(self, self.list_name, value_tuple)
+        super(IntrusiveQueryCore, self).__init__(len(value_tuple) == 0)
+
+    def _get_empty(self) -> QueryCore:
+        return self.__class__([])
+
+    def _copy(self) -> QueryCore:
+        return self.__class__(self._get_list())
+
+    def _get_list(self):
+        return getattr(self, self.list_name)
+
+    def _do_and(self, other) -> QueryCore:
+        return self._merge_lists(True, other,
+                                 super(IntrusiveQueryCore, self)._do_and)
+
+    def _do_or(self, other) -> QueryCore:
+        return self._merge_lists(False, other,
+                                 super(IntrusiveQueryCore, self)._do_or)
+
+    def _get_constraint_json(self) -> dict:
+        return {self.name: {self.list_name: list(self._get_list())}}
+
+    def _get_table(self, ro):
+        return ro.SourceMeta
+
+    def _get_query_values(self):
+        # This method can be subclassed in case values need to be processed
+        # before the query, a la HasType
+        return self._get_list()
+
+    def _get_clause(self, meta):
+        q_values = self._get_query_values()
+        col = getattr(meta, self.col_name)
+        if len(q_values) == 1:
+            if not self._inverted:
+                clause = col == q_values[0]
+            else:
+                clause = col != q_values[0]
+        else:
+            if not self._inverted:
+                clause = col.in_(q_values)
+            else:
+                clause = col.notin_(q_values)
+        return clause
+
+    def _apply_filter(self, meta, query):
+        """Apply the filter to the query.
+
+        Defined generically for application by other classes when included
+        in an Intersection.
+        """
+        return query.filter(self._get_clause(meta))
+
+    def _get_hash_query(self, ro, inject_queries=None):
+        if inject_queries is not None \
+                and any(q.name == self.name for q in inject_queries):
+            raise ValueError(f"Cannot apply {self.name} queries to another "
+                             f"{self.name} query.")
+        q = self._apply_filter(self._get_table(ro), self._base_query(ro))
+        if inject_queries is not None:
+            for other_in_q in inject_queries:
+                q = other_in_q._apply_filter(self._get_table(ro), q)
+        return q
+
+
+class HasNumAgents(IntrusiveQueryCore):
+    """Find Statements with any one of a listed number of agents.
+
+     For example, `HasNumAgents([1,3,4])` will return agents with either 2,
+     3, or 4 agents (the latter two mostly being complexes).
+
+    NOTE: when used in an Interaction with other queries, the agent numbers are
+    handled specially, with each sub-query having an agent_count constraint
+    applied to it.
+
+    Parameters
+    ----------
+    agent_nums : tuple
+        A list of integers, each indicating a number of agents.
+    """
+    name = 'has_num_agents'
+    list_name = 'agent_nums'
+    item_type = int
+    col_name = 'agent_count'
+
+    def __init__(self, agent_nums):
+        super(HasNumAgents, self).__init__(agent_nums)
+        if 0 in self.agent_nums:
+            raise ValueError(f"Each element of {self.list_name} must be "
+                             f"greater than 0.")
+
+    def __str__(self):
+        invert_word = 'not ' if self._inverted else ''
+        return f"number of agents {invert_word}in {self.agent_nums}"
+
+
+class HasNumEvidence(IntrusiveQueryCore):
+    """Find Statements with one of a given number of evidence.
+
+    For example, HasNumEvidence([2,3,4]) will return Statements that have
+    either 2, 3, or 4 evidence.
+
+    NOTE: when used in an Interaction with other queries, the evidence count is
+    handled specially, with each sub-query having an ev_count constraint
+    added to it.
+
+    Parameters
+    ----------
+    evidence_nums : tuple
+        A list of numbers greater than 0, each indicating a number of evidence.
+    """
+    name = 'has_num_evidence'
+    list_name = 'evidence_nums'
+    item_type = int
+    col_name = 'ev_count'
+
+    def __init__(self, evidence_nums):
+        super(HasNumEvidence, self).__init__(evidence_nums)
+        if 0 in self.evidence_nums:
+            raise ValueError("Each Statement must have at least one Evidence.")
+
+    def __str__(self):
+        invert_word = 'not ' if self._inverted else ''
+        return f"number of evidence {invert_word}in {self.evidence_nums}"
+
+
+class HasType(IntrusiveQueryCore):
     """Find Statements that are one of a collection of types.
 
     For example, you can find Statements that are Phosphorylations or
@@ -988,112 +1562,27 @@ class HasAnyType(QueryCore):
         (optional) default is False. If True, each Statement type given in the
         list will be expanded to include all of its sub classes.
     """
+    name = 'has_type'
+    list_name = 'stmt_types'
+    item_type = str
+    col_name = 'type_num'
+
     def __init__(self, stmt_types, include_subclasses=False):
-        empty = False
-        if len(stmt_types) == 0:
-            empty = True
-
-        st_set = set(stmt_types)
-
         # Do the expansion of sub classes, if requested.
+        st_set = set(stmt_types)
         if include_subclasses:
             for stmt_type in stmt_types:
                 stmt_class = get_statement_by_name(stmt_type)
                 sub_classes = get_all_descendants(stmt_class)
                 st_set |= {c.__name__ for c in sub_classes}
-        self.stmt_types = tuple(st_set)
-        super(HasAnyType, self).__init__(empty)
-
-    def _copy(self):
-        return self.__class__(self.stmt_types)
-
-    def _do_or(self, other):
-        if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            # Two type queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                type_list = set(self.stmt_types) | set(other.stmt_types)
-                empty = len(type_list) == 0
-                full = False
-            else:
-                # RDML (Remember De Morgan's Law)
-                type_list = set(self.stmt_types) & set(other.stmt_types)
-                full = len(type_list) == 0
-                empty = False
-            res = HasAnyType(type_list)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a full
-            # result trivially. (A or not A is anything)
-            return ~self.__class__([])
-        return super(HasAnyType, self)._do_or(other)
-
-    def _do_and(self, other):
-        if isinstance(other, HasAnyType) and self._inverted == other._inverted:
-            # Two type queries of the same polarity can be merged, with some
-            # care for whether they are both inverted or not.
-            if not self._inverted:
-                type_list = set(self.stmt_types) & set(other.stmt_types)
-                empty = len(type_list) == 0
-                full = False
-            else:
-                # RDML
-                type_list = set(self.stmt_types) | set(other.stmt_types)
-                full = len(type_list) == 0
-                empty = False
-            res = HasAnyType(type_list)
-            res._inverted = self._inverted
-            res.full = full
-            res.empty = empty
-            return res
-        elif self.is_inverse_of(other):
-            # If the two queries are inverses, we can simply return a empty
-            # result trivially. (A and not A is nothing)
-            return self.__class__([])
-        return super(HasAnyType, self)._do_and(other)
+        super(HasType, self).__init__(st_set)
 
     def __str__(self):
         invert_word = 'not ' if self._inverted else ''
         return f"type {invert_word}in {self.stmt_types}"
 
-    def _get_constraint_json(self) -> dict:
-        return {'type_query': {'types': self.stmt_types}}
-
-    def _get_table(self, ro):
-        return ro.SourceMeta
-
-    def _get_type_nums(self):
+    def _get_query_values(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
-
-    def _get_clause(self, meta):
-        type_nums = self._get_type_nums()
-        if len(type_nums) == 1:
-            if not self._inverted:
-                clause = meta.type_num == type_nums[0]
-            else:
-                clause = meta.type_num != type_nums[0]
-        else:
-            if not self._inverted:
-                clause = meta.type_num.in_(type_nums)
-            else:
-                clause = meta.type_num.notin_(type_nums)
-        return clause
-
-    def _apply_filter(self, meta, query):
-        """Apply the filter to the query.
-
-        Defined generically for application by other classes when included
-        in an Intersection.
-        """
-        return query.filter(self._get_clause(meta))
-
-    def _get_hash_query(self, ro, type_queries=None):
-        if type_queries is not None:
-            raise ValueError("Cannot apply type queries to type query.")
-        return self._apply_filter(self._get_table(ro), self._base_query(ro))
 
 
 class FromMeshId(QueryCore):
@@ -1105,7 +1594,7 @@ class FromMeshId(QueryCore):
         A canonical MeSH ID, of the "D" variety, e.g. "D000135".
     """
     def __init__(self, mesh_id):
-        if not mesh_id.startswith('D') and not mesh_id[1:].is_digit():
+        if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
             raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
                              "the rest must be a number." % mesh_id)
         self.mesh_id = mesh_id
@@ -1126,13 +1615,13 @@ class FromMeshId(QueryCore):
     def _get_table(self, ro):
         return ro.MeshMeta
 
-    def _get_hash_query(self, ro, type_queries=None):
+    def _get_hash_query(self, ro, inject_queries=None):
         meta = self._get_table(ro)
         qry = self._base_query(ro).filter(meta.mesh_num == self.mesh_num)
 
         if not self._inverted:
-            if type_queries:
-                for tq in type_queries:
+            if inject_queries:
+                for tq in inject_queries:
                     qry = tq._apply_filter(self._get_table(ro), qry)
         else:
             # For much the same reason as with agent queries, an `except_` is
@@ -1142,14 +1631,24 @@ class FromMeshId(QueryCore):
                 ro.SourceMeta.mk_hash.label('mk_hash'),
                 ro.SourceMeta.ev_count.label('ev_count')
             )
-            if type_queries:
-                for tq in type_queries:
+            if inject_queries:
+                for tq in inject_queries:
                     new_base = tq._apply_filter(ro.SourceMeta, new_base)
 
             al = except_(new_base, qry).alias('mesh_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
         return qry
+
+    def ev_filter(self):
+        if not self._inverted:
+            def get_clause(ro):
+                return ro.RawStmtMesh.mesh_num == self.mesh_num
+        else:
+            def get_clause(ro):
+                return ro.RawStmtMesh.mesh_num.is_distinct_from(self.mesh_num)
+
+        return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
 
 
 class MergeQueryCore(QueryCore):
@@ -1171,7 +1670,7 @@ class MergeQueryCore(QueryCore):
 
         # This variable is used internally during the construction of the
         # joint query.
-        self._type_queries = None
+        self._injected_queries = None
 
         # Because of the derivative nature of the "tables" involved, some more
         # dynamism is required to get, for instance, the hash and count pair.
@@ -1208,17 +1707,23 @@ class MergeQueryCore(QueryCore):
     def _get_constraint_json(self) -> dict:
         return {f'{self.name}_query': [q.to_json() for q in self.queries]}
 
+    def get_component_queries(self) -> list:
+        type_list = []
+        for q in self.queries:
+            type_list += q.get_component_queries()
+        return type_list + [self.__class__.__name__]
+
     def _hash_count_pair(self, ro) -> tuple:
         mk_hashes_al = self._get_table(ro)
         return mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count
 
-    def _get_hash_query(self, ro, type_queries=None):
-        self._type_queries = type_queries
+    def _get_hash_query(self, ro, inject_queries=None):
+        self._injected_queries = inject_queries
         self._mk_hashes_al = None  # recalculate the join
         try:
             qry = self._base_query(ro)
         finally:
-            self._type_queries = None
+            self._injected_queries = None
         return qry
 
 
@@ -1236,12 +1741,11 @@ class Intersection(MergeQueryCore):
         # Look for groups of queries that can be merged otherwise, and gather
         # up the type queries for special handling. Also, check to see if any
         # queries are empty, in which case the net query is necessarily empty.
-        mergeable_query_types = [SourceIntersection, SourceCore]
+        mergeable_query_types = [SourceIntersection, SourceCore, FromPapers]
         mergeable_groups = {C: [] for C in mergeable_query_types}
         query_groups = defaultdict(list)
         filtered_queries = set()
-        self.type_query = None
-        self.not_type_query = None
+        self._in_queries = {'pos': {}, 'neg': {}}
         empty = False
         all_full = True
         for query in query_list:
@@ -1256,19 +1760,21 @@ class Intersection(MergeQueryCore):
                     mergeable_groups[C].append(query)
                     break
             else:
-                if isinstance(query, HasAnyType):
-                    # Extract the type queries and merge them together as much
-                    # as possible.
+                if isinstance(query, IntrusiveQueryCore):
+                    # Extract the intrusive (type, agent number, evidence
+                    # number) queries, and merge them together as much as
+                    # possible.
+                    name = query.name
                     if not query._inverted:
-                        if self.type_query is None:
-                            self.type_query = query
+                        if name not in self._in_queries['pos']:
+                            self._in_queries['pos'][name] = query
                         else:
-                            self.type_query &= query
+                            self._in_queries['pos'][name] &= query
                     else:
-                        if self.not_type_query is None:
-                            self.not_type_query = query
+                        if name not in self._in_queries['neg']:
+                            self._in_queries['neg'][name] = query
                         else:
-                            self.not_type_query &= query
+                            self._in_queries['neg'][name] &= query
                 else:
                     query_groups[query.__class__].append(query)
                 filtered_queries.add(query)
@@ -1310,34 +1816,40 @@ class Intersection(MergeQueryCore):
                         if q1.is_inverse_of(q2):
                             empty = True
 
-                # Special care is needed to make sure my type queries don't
-                # identically wipe out everything in my Unions. Specifically, if
-                # the union has only type queries, and the intersection of every
-                # one of those type queries with every one of my type queries,
-                # then the result is an empty query, making this query empty.
-                # Furthermore, trying to apply that Union would result in an
-                # empty query and errors and headaches. And late nights
-                # debugging code.
-                if cls == Union and (self.type_query or self.not_type_query):
+                # Special care is needed to make sure my intrusive queries
+                # don't identically wipe out everything in my Unions.
+                # Specifically, if the union has only intrusive queries, and
+                # the intersection of every one each of the classes of
+                # intrusive query cancels with counterparts in my set of
+                # intrusive queries, then the result is an empty query, making
+                # this query empty. Furthermore, trying to apply that Union
+                # would result in an empty query and errors and headaches. And
+                # late nights debugging code.
+                if cls == Union and any(d for d in self._in_queries.values()):
                     for q in q_list:
                         all_empty = True
-                        for sq in q.queries:
-                            if not isinstance(sq, HasAnyType):
+                        for sub_q in q.queries:
+                            if not isinstance(sub_q, IntrusiveQueryCore):
                                 all_empty = False
                                 break
-                            for tq in [self.type_query, self.not_type_query]:
-                                if tq is None:
-                                    continue
-                                if not (sq & tq).empty:
+                            compare_ins = [q for d in self._in_queries.values()
+                                           for q in d.values()
+                                           if q.name == sub_q.name]
+                            if not compare_ins:
+                                all_empty = False
+                                break
+                            for in_q in compare_ins:
+                                if not (sub_q & in_q).empty:
                                     all_empty = False
+                                    break
                             if not all_empty:
                                 break
                         empty = all_empty
 
         # Check to see if the types overlap
-        if self.type_query and self.not_type_query:
-            if self.type_query.is_inverse_of(self.not_type_query):
-                empty = True
+        empty |= any(pq.is_inverse_of(self._in_queries['neg'][pn])
+                     for pn, pq in self._in_queries['pos'].items()
+                     if pn in self._in_queries['neg'])
 
         super(Intersection, self).__init__(filtered_queries, empty, all_full)
 
@@ -1353,21 +1865,19 @@ class Intersection(MergeQueryCore):
         if self._mk_hashes_al is not None:
             return self._mk_hashes_al
 
-        if self._type_queries is not None:
+        if self._injected_queries is not None:
             raise ValueError("Type queries should not be applied to "
                              "Intersection, but handled as an intersected "
                              "query.")
 
-        type_queries = [tq for tq in [self.type_query, self.not_type_query]
-                        if tq is not None]
-        if not type_queries:
-            type_queries = None
-        queries = [q.get_hash_query(ro, type_queries) for q in self.queries
-                   if not q.full and not isinstance(q, HasAnyType)]
+        in_queries = [q for d in self._in_queries.values() for q in d.values()]
+        if not in_queries:
+            in_queries = None
+        queries = [q.get_hash_query(ro, in_queries) for q in self.queries
+                   if not q.full and not isinstance(q, IntrusiveQueryCore)]
         if not queries:
-            if self.type_query and self.not_type_query:
-                queries = [self.type_query.get_hash_query(ro),
-                           self.not_type_query.get_hash_query(ro)]
+            if in_queries:
+                queries = [q.get_hash_query(ro) for q in in_queries]
                 self._mk_hashes_al = self._merge(*queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,
@@ -1397,36 +1907,33 @@ class Union(MergeQueryCore):
         # hash queries.
         other_queries = set()
         query_groups = defaultdict(list)
-        pos_hash_queries = []
-        neg_hash_queries = []
+        mergeable_types = (HasHash, FromPapers, IntrusiveQueryCore)
+        merge_grps = defaultdict(lambda: {True: [], False: []})
         full = False
         all_empty = True
         for query in query_list:
             if not query.empty:
                 all_empty = False
 
-            if isinstance(query, InHashList):
-                if not query._inverted:
-                    pos_hash_queries.append(query)
-                else:
-                    neg_hash_queries.append(query)
+            if any(isinstance(query, t) for t in mergeable_types):
+                merge_grps[query.__class__][query._inverted].append(query)
             else:
                 other_queries.add(query)
                 query_groups[query.__class__].append(query)
 
         # Merge up the hash queries.
-        for hash_query_group in [pos_hash_queries, neg_hash_queries]:
-            if len(hash_query_group) == 1:
-                other_queries.add(hash_query_group[0])
-            elif len(hash_query_group) > 1:
-                query = hash_query_group[0]
-                for other_query in hash_query_group[1:]:
+        for grp in (g for d in merge_grps.values() for g in d.values()):
+            if len(grp) == 1:
+                other_queries.add(grp[0])
+            elif len(grp) > 1:
+                query = grp[0]
+                for other_query in grp[1:]:
                     query |= other_query
                 if query.full:
                     full = True
                 other_queries.add(query)
 
-        # Check if any of the resuling queries so far is a logical query of
+        # Check if any of the resulting queries so far is a logical query of
         # everything.
         full |= any(q.full for q in other_queries)
 
@@ -1462,17 +1969,32 @@ class Union(MergeQueryCore):
                 if q.empty:
                     continue
 
-                # If it is a type query, merge it with the given type queries,
-                # or else pass the type queries along.
-                if isinstance(q, HasAnyType) and self._type_queries:
-                    for tq in self._type_queries:
-                        q &= tq
+                # If it is an intrusive query, merge it with the given
+                # intrusive queries of the same type, or else pass the type
+                # queries along.
+                if isinstance(q, IntrusiveQueryCore) \
+                        and self._injected_queries:
+                    like_queries = []
+                    in_queries = []
+                    for in_q in self._injected_queries:
+                        if in_q.name == q.name:
+                            like_queries.append(in_q)
+                        else:
+                            in_queries.append(in_q)
+                else:
+                    like_queries = []
+                    in_queries = self._injected_queries
+
+                if like_queries:
+                    for in_q in like_queries:
+                        q &= in_q
                     if q.empty:
                         continue
-                    mkhq = q.get_hash_query(ro)
-                else:
-                    mkhq = q.get_hash_query(ro, self._type_queries)
+                if not in_queries:
+                    in_queries = None
+                mkhq = q.get_hash_query(ro, in_queries)
                 mk_hashes_q_list.append(mkhq)
+
             if len(mk_hashes_q_list) == 1:
                 self._mk_hashes_al = (mk_hashes_q_list[0].subquery()
                                                          .alias(self.name))
@@ -1480,3 +2002,143 @@ class Union(MergeQueryCore):
                 self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
                                           .alias(self.name))
         return self._mk_hashes_al
+
+
+class _QueryEvidenceFilter:
+    def __init__(self, table_name, get_clause):
+        self.table_name = table_name
+        self.get_clause = get_clause
+
+    def join_table(self, ro, query, tables_joined=None):
+        if self.table_name == 'raw_stmt_src':
+            ret = query.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
+        elif self.table_name == 'raw_stmt_mesh':
+            ret = query.outerjoin(ro.RawStmtMesh,
+                                  ro.RawStmtMesh.sid == ro.FastRawPaLink.id)
+        elif self.table_name == 'reading_ref_link':
+            ret = query.outerjoin(
+                ro.ReadingRefLink,
+                ro.ReadingRefLink.rid == ro.FastRawPaLink.reading_id
+            )
+        else:
+            raise ValueError(f"No join defined for readonly table "
+                             f"'{self.table_name}'")
+
+        if tables_joined is not None:
+            tables_joined.add(self.table_name)
+        return ret
+
+
+class EvidenceFilter:
+    """Object for handling filtering of evidence.
+
+    We need to be able to perform logical operations between evidence to handle
+    important cases:
+
+    HasSource(['reach']) & FromMeshId(['D0001'])
+    -> we might reasonably want to filter evidence for the second subquery but
+       not the first.
+
+    HasOnlySource(['reach']) & FromMeshId(['D00001'])
+    -> Here we would likely want to filter the evidence for both sub queries.
+
+    HasOnlySource(['reach']) | FromMeshId(['D000001'])
+    -> Not sure what this even means (its purpose)....not sure what we'd do for
+       evidence filtering when the original statements are or'ed
+
+    HasDatabases() & FromMeshId(['D000001'])
+    -> Here you COULDN'T perform an & on the evidence, because the two sources
+       are mutually exclusive (only readings connect to mesh annotations).
+       However it could make sense you would want to do an "or" between the
+       evidence, so the evidence is either from a database or from a mesh
+       annotated document.
+
+    "filter all the evidence" and "filter none of the evidence" should
+    definitely be options. Although "Filter for all" might run into usues with
+    the "HasDatabase and FromMeshId" scenario. I think no evidence filter should
+    be the default, and if you attempt a bogus "filter all evidence" (as with
+    that scenario) you get an error.
+    """
+
+    def __init__(self, filters=None, joiner='and'):
+        if filters is None:
+            filters = []
+        self.filters = filters
+        self.joiner = joiner
+
+    @classmethod
+    def from_filter(cls, table_name, get_clause):
+        return cls([_QueryEvidenceFilter(table_name, get_clause)])
+
+    def _merge(self, method, other):
+        if not isinstance(other, EvidenceFilter):
+            raise ValueError(f"Type {type(other)} cannot use __{method}__ with "
+                             f"{self.__class__.__name__}.")
+        if self.joiner == method:
+            if other.joiner == method or len(other.filters) == 1:
+                ret = EvidenceFilter(self.filters + other.filters)
+            else:
+                ret = EvidenceFilter(self.filters + [other])
+        else:
+            if other.joiner == method:
+                if len(self.filters) == 1:
+                    ret = EvidenceFilter(other.filters + self.filters)
+                else:
+                    ret = EvidenceFilter(other.filters + [self])
+            else:
+                if len(self.filters) == 1:
+                    if len(other.filters) == 1:
+                        ret = EvidenceFilter(self.filters + other.filters)
+                    else:
+                        ret = EvidenceFilter(self.filters + [other])
+                else:
+                    if len(other.filters) == 1:
+                        ret = EvidenceFilter(other.filters + [self])
+                    else:
+                        ret = EvidenceFilter([self, other])
+        return ret
+
+    def __and__(self, other):
+        return self._merge('and', other)
+
+    def __or__(self, other):
+        return self._merge('or', other)
+
+    def _get_clause_list(self, ro):
+        return [f.get_clause(ro) for f in self.filters]
+
+    def get_clause(self, ro):
+        if self.joiner == 'and':
+            return and_(*self._get_clause_list(ro))
+        else:
+            return or_(*self._get_clause_list(ro))
+
+    def apply_filter(self, ro, query):
+        if self.joiner == 'and':
+            return query.filter(*self._get_clause_list(ro))
+        else:
+            return query.filter(self.get_clause(ro))
+
+    def join_table(self, ro, query, tables_joined=None):
+        if tables_joined is None:
+            tables_joined = set()
+
+        for ev_filter in self.filters:
+            query = ev_filter.join_table(ro, query, tables_joined)
+
+        return query
+
+
+def _get_raw_texts(stmt_json):
+    raw_text = []
+    agent_names = get_statement_by_name(stmt_json['type'])._agent_order
+    for ag_name in agent_names:
+        ag_value = stmt_json.get(ag_name, None)
+        if isinstance(ag_value, dict):
+            raw_text.append(ag_value['db_refs'].get('TEXT'))
+        elif ag_value is None:
+            raw_text.append(None)
+        else:
+            for ag in ag_value:
+                raw_text.append(ag['db_refs'].get('TEXT'))
+    return raw_text

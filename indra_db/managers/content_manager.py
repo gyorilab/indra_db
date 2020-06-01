@@ -452,8 +452,7 @@ class ContentManager(object):
         logger.info("Applying %d updates." % len(update_dict))
         for tr, id_updates, record in update_dict.values():
             if record not in multi_match_records:
-                for id_type, id_val in id_updates.items():
-                    setattr(tr, id_type, id_val)
+                tr.update(**id_updates)
             else:
                 logger.warning("Skipping update of text ref %d with %s due "
                                "to multiple matches to record %s."
@@ -898,7 +897,7 @@ class PmcManager(_NihManager):
     def get_missing_pmids(self, db, tr_data):
         "Try to get missing pmids using the pmc client."
 
-        logger.debug("Getting missing pmids.")
+        logger.info("Getting missing pmids.")
 
         missing_pmid_entries = []
         for tr_entry in tr_data:
@@ -943,30 +942,27 @@ class PmcManager(_NihManager):
         if not len(tc_data):
             return []
 
-        logger.debug("Getting text refs for pmcid->trid dict..")
-        tref_list = db.select_all(
-            db.TextRef,
-            db.TextRef.pmcid.in_(arc_pmcid_list)
-            )
-        pmcid_trid_dict = {
-            pmcid: trid for (pmcid, trid) in
-            db.get_values(tref_list, ['pmcid', 'id'])
-            }
+        logger.info("Getting text refs for pmcid->trid dict..")
+        tc_q = (db.session.query(db.TextContent.text_ref_id,
+                                 db.TextContent.text_type)
+                .filter(db.TextContent.source == self.my_source,
+                        db.TextContent.format == formats.XML))
+        tc_al = tc_q.subquery().alias('tc')
+        q = (db.session.query(db.TextRef.pmcid, db.TextRef.id,
+                              tc_al.c.text_type)
+             .outerjoin(tc_al)
+             .filter(db.TextRef.pmcid_in(arc_pmcid_list)))
+        existing_tc_meta = q.all()
+
+        pmcid_trid_dict = {pmcid: trid for pmcid, trid, _ in existing_tc_meta}
 
         # This should be a very small list, in general.
-        logger.debug('Finding existing text content from db.')
-        existing_tcs = db.select_all(
-            db.TextContent,
-            db.TextContent.text_ref_id.in_(pmcid_trid_dict.values()),
-            db.TextContent.source == self.my_source,
-            db.TextContent.format == formats.XML
-            )
         existing_tc_records = [
-            (tc.text_ref_id, tc.source, tc.format, tc.text_type)
-            for tc in existing_tcs
+            (trid, self.my_source, formats.XML, text_type)
+            for _, trid, text_type in existing_tc_meta if text_type is not None
             ]
-        logger.debug("Found %d existing records on the db."
-                     % len(existing_tc_records))
+        logger.info("Found %d existing records on the db."
+                    % len(existing_tc_records))
         tc_records = []
         for tc in tc_data:
             if tc['pmcid'] not in pmcid_trid_dict.keys():
@@ -1322,6 +1318,10 @@ class PmcOA(PmcManager):
                                  '%Y-%m-%d %H:%M:%S')
             > min_datetime
             }
+        done_sfs = db.select_all(db.SourceFile,
+                                 db.SourceFile.source == self.my_source,
+                                 db.SourceFile.load_date > min_datetime)
+        fpath_set -= {sf.name for sf in done_sfs}
 
         # Upload these archives.
         logger.info("Updating the database with %d articles." % len(fpath_set))

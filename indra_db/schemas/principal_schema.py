@@ -80,6 +80,20 @@ def get_schema(Base):
                        doi=doi, doi_ns=doi_ns, doi_id=doi_id, pii=pii, url=url,
                        manuscript_id=manuscript_id)
 
+        def update(self, **updates):
+            for id_type, id_val in updates.items():
+                if id_type == 'pmid':
+                    self.pmid, self.pmid_num = self.process_pmid(id_val)
+                elif id_type == 'pmcid':
+                    self.pmcid, self.pmcid_num, self.pmcid_version = \
+                        self.process_pmcid(id_val)
+                elif id_type == 'doi':
+                    self.doi, self.doi_ns, self.doi_id = \
+                        self.process_doi(id_val)
+                else:
+                    setattr(self, id_type, id_val)
+            return
+
         @staticmethod
         def process_pmid(pmid):
             if not pmid:

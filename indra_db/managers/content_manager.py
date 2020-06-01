@@ -452,8 +452,7 @@ class ContentManager(object):
         logger.info("Applying %d updates." % len(update_dict))
         for tr, id_updates, record in update_dict.values():
             if record not in multi_match_records:
-                for id_type, id_val in id_updates.items():
-                    setattr(tr, id_type, id_val)
+                tr.update(**id_updates)
             else:
                 logger.warning("Skipping update of text ref %d with %s due "
                                "to multiple matches to record %s."
@@ -949,7 +948,7 @@ class PmcManager(_NihManager):
                             .outerjoin(db.TextContent)
                             .filter(db.TextRef.pmcid_in(arc_pmcid_list),
                                     db.TextContent.source == self.my_source,
-                                    db.TextContent.format == formats.XML))
+                                    db.TextContent.format == formats.XML)).all()
 
         pmcid_trid_dict = {pmcid: trid for pmcid, trid, _ in existing_tc_meta}
 

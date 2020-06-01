@@ -15,6 +15,21 @@ class S3Path(object):
                 key = key[1:]
         self.key = key
 
+    def __lt__(self, other):
+        if not isinstance(other, S3Path):
+            raise ValueError(f"Cannot compare with type \"{type(other)}\".")
+        return self.to_string() < other.to_string()
+
+    def __eq__(self, other):
+        if not isinstance(other, S3Path):
+            raise ValueError(f"Cannot compare with type \"{type(other)}\".")
+        return self.to_string() == other.to_string()
+
+    def __le__(self, other):
+        if not isinstance(other, S3Path):
+            raise ValueError(f"Cannot compare with type \"{type(other)}\".")
+        return self.to_string() <= other.to_string()
+
     def kw(self, prefix=False):
         ret = {'Bucket': self.bucket}
         if self.key:

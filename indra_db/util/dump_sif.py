@@ -10,6 +10,8 @@ from itertools import permutations
 from collections import OrderedDict
 
 from indra.util.aws import get_s3_client
+from indra_db.schemas.readonly_schema import ro_type_map
+from indra.statements.agent import default_ns_order
 
 try:
     import pandas as pd
@@ -24,22 +26,8 @@ logger = logging.getLogger(__name__)
 S3_SIF_BUCKET = 'bigmech'
 S3_SUBDIR = 'indra_db_sif_dump'
 
-NS_PRIORITY_LIST = (
-    'FPLX',
-    'MIRBASE',
-    'HGNC',
-    'GO',
-    'MESH',
-    'HMDB',
-    'CHEBI',
-    'PUBCHEM',
-)
-
-
-# All namespaces here (except NAME) should also be included in the
-# NS_PRIORITY_LIST above
-NS_LIST = ('NAME', 'MIRBASE', 'HGNC', 'FPLX', 'GO', 'MESH', 'HMDB', 'CHEBI',
-           'PUBCHEM')
+NS_PRIORITY_LIST = tuple(default_ns_order)
+NS_LIST = ('NAME', ) + NS_PRIORITY_LIST
 
 
 def _pseudo_key(fname, ymd_date):
@@ -85,10 +73,11 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
             logger.info("Querying for {ns}".format(ns=ns))
             res = ro.select_all([ro.PaMeta.mk_hash, ro.PaMeta.db_name,
                                  ro.PaMeta.db_id, ro.PaMeta.ag_num,
-                                 ro.PaMeta.ev_count, ro.PaMeta.type],
+                                 ro.PaMeta.ev_count, ro.PaMeta.type_num],
                                 ro.PaMeta.db_name.like(ns))
             results.extend(res)
-        results = set(results)
+        results = {(h, dbn, dbi, ag_num, ev_cnt, ro_type_map.get_str(tn))
+                   for h, dbn, dbi, ag_num, ev_cnt, tn in results}
         if pkl_filename:
             if isinstance(pkl_filename, S3Path):
                 upload_pickle_to_s3(results, pkl_filename)
@@ -117,13 +106,8 @@ def get_source_counts(pkl_filename=None, ro=None):
         pkl_filename = S3Path.from_string(pkl_filename)
     if not ro:
         ro = get_ro('primary-ro')
-    res = ro.select_all(ro.PaStmtSrc)
-    ev = {}
-    for r in res:
-        rd = r.__dict__
-        ev[rd['mk_hash']] = {k: v for k, v in rd.items() if
-                             k not in ['_sa_instance_state', 'mk_hash'] and
-                             rd[k] is not None}
+    ev = {h: j for h, j in ro.select_all([ro.SourceMeta.mk_hash,
+                                          ro.SourceMeta.src_json])}
 
     if pkl_filename:
         if isinstance(pkl_filename, S3Path):
@@ -299,7 +283,7 @@ def get_parser():
 
 
 def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
-             reload=False, reconvert=False, ro=None):
+             reload=False, reconvert=True, ro=None):
     if ro is None:
         ro = get_db('primary')
 

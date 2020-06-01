@@ -943,12 +943,16 @@ class PmcManager(_NihManager):
             return []
 
         logger.info("Getting text refs for pmcid->trid dict..")
-        existing_tc_meta = (db.session.query(db.TextRef.pmcid, db.TextRef.id,
-                                             db.TextContent.text_type)
-                            .outerjoin(db.TextContent)
-                            .filter(db.TextRef.pmcid_in(arc_pmcid_list),
-                                    db.TextContent.source == self.my_source,
-                                    db.TextContent.format == formats.XML)).all()
+        tc_q = (db.session.query(db.TextContent.text_ref_id,
+                                 db.TextContent.text_type)
+                .filter(db.TextContent.source == self.my_source,
+                        db.TextContent.format == formats.XML))
+        tc_al = tc_q.subquery().alias('tc')
+        q = (db.session.query(db.TextRef.pmcid, db.TextRef.id,
+                              tc_al.c.text_type)
+             .outerjoin(tc_al)
+             .filter(db.TextRef.pmcid_in(arc_pmcid_list)))
+        existing_tc_meta = q.all()
 
         pmcid_trid_dict = {pmcid: trid for pmcid, trid, _ in existing_tc_meta}
 

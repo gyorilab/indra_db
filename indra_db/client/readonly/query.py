@@ -822,6 +822,20 @@ class QueryCore(object):
         return self._inverted != other._inverted
 
 
+class EmptyQuery:
+    def __and__(self, other):
+        if not isinstance(other, QueryCore):
+            raise TypeError(f"Cannot perform __and__ operation with "
+                            f"{type(other)} and EmptyDBQuery.")
+        return other
+
+    def __or__(self, other):
+        if not isinstance(other, QueryCore):
+            raise TypeError(f"Cannot perform __or__ operation with "
+                            f"{type(other)} and EmptyDBQuery.")
+        return other
+
+
 class SourceCore(QueryCore):
     """The core of all queries that use SourceMeta."""
 

@@ -486,7 +486,8 @@ class DatabaseReader(object):
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in dups.values()
                                               for tpl in dlist],
-                      DatabaseStatementData.get_cols())
+                      DatabaseStatementData.get_cols(),
+                      commit=False)
 
         # Add the agents for the accepted statements.
         logger.info("Uploading agents to the database.")

@@ -18,7 +18,8 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, HasHash, QueryCore, FromPapers, FromMeshId, EvidenceFilter
+    HasOnlySource, HasHash, QueryCore, FromPapers, FromMeshId, EvidenceFilter, \
+    EmptyQuery
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -332,22 +333,8 @@ def get_statements_query_format():
                               endpoint=request.url_root)
 
 
-class EmptyDBQuery:
-    def __and__(self, other):
-        if not isinstance(other, QueryCore):
-            raise TypeError(f"Cannot perform __and__ operation with "
-                            f"{type(other)} and EmptyDBQuery.")
-        return other
-
-    def __or__(self, other):
-        if not isinstance(other, QueryCore):
-            raise TypeError(f"Cannot perform __or__ operation with "
-                            f"{type(other)} and EmptyDBQuery.")
-        return other
-
-
 def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
-    db_query = EmptyDBQuery()
+    db_query = EmptyQuery()
     num_agents = 0
 
     filter_ev = query_dict.pop('filter_ev', 'false').lower() == 'true'

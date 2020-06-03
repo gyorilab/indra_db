@@ -65,7 +65,8 @@ class PreassemblyManager(object):
     def __init__(self, n_proc=1, batch_size=10000, print_logs=False):
         self.n_proc = n_proc
         self.batch_size = batch_size
-        self.pa = Preassembler(bio_ontology)
+        self.pa = Preassembler(bio_ontology,
+                               refinement_ns={'HGNC', 'FPLX'})
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
         self.pickle_stashes = None

@@ -45,7 +45,6 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
     ref_tuples = []
     mod_tuples = []
     mut_tuples = []
-    cur = db._conn.cursor()
     if stmts is None:
         s_col = 'json'
         stmt_dict = None
@@ -53,6 +52,7 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
         s_col = 'uuid'
         stmt_dict = {s.uuid: s for s in stmts}
 
+    cur = db.get_copy_cursor()
     cur.execute(f'SELECT id, {s_col} FROM raw_statements WHERE batch_id=%s',
                 (batch_id,))
     if verbose:

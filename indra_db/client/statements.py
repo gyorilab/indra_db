@@ -23,7 +23,7 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
                                      role=None, stmt_type=None, count=1000,
                                      db=None, do_stmt_count=False,
                                      preassembled=True, fix_refs=True,
-                                     with_evidence=True, with_support=True,
+                                     with_evidence=True, with_support=False,
                                      essentials_only=False):
     """Get statements from the DB by stmt type, agent, and/or agent role.
 
@@ -47,35 +47,35 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
         `SelfModification`, and `ActiveForm` Statements).
     stmt_type : str
         Name of the Statement class.
-    count : int
+    count : int (DEPRECATED)
         Number of statements to retrieve in each batch (passed to
         :py:func:`get_statements`).
     db : :py:class:`DatabaseManager`
         Optionally specify a database manager that attaches to something
         besides the primary database, for example a local databse instance.
-    do_stmt_count : bool
+    do_stmt_count : bool (DEPRECATED)
         Whether or not to perform an initial statement counting step to give
         more meaningful progress messages.
-    preassembled : bool
+    preassembled : bool (DEPRECATED)
         If true, statements will be selected from the table of pre-assembled
         statements. Otherwise, they will be selected from the raw statements.
         Default is True.
-    with_support : bool
+    with_support : bool (DEPRECATED)
         Choose whether to populate the supports and supported_by list
         attributes of the Statement objects. Generally results in slower
-        queries.
+        queries. DEFAULT IS CURRENTLY False.
     with_evidence : bool
         Choose whether or not to populate the evidence list attribute of the
         Statements. As with `with_support`, setting this to True will take
         longer.
-    fix_refs : bool
+    fix_refs : bool (DEPRECATED)
         The paper refs within the evidence objects are not populated in the
         database, and thus must be filled using the relations in the database.
         If True (default), the `pmid` field of each Statement Evidence object
         is set to the correct PMIDs, or None if no PMID is available. If False,
         the `pmid` field defaults to the value populated by the reading
         system.
-    essentials_only : bool
+    essentials_only : bool (DEPRECATED)
         Default is False. If True, retrieve only some metadata regarding the
         statements. Implicitly `with_support`, `with_evidence`, `fix_refs`, and
         `do_stmt_count` are all False, as none of the relevant features apply.

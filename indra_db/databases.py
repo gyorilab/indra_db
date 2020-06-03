@@ -515,6 +515,14 @@ class DatabaseManager(object):
                     len(entry_list))
         return
 
+    def get_copy_cursor(self):
+        """Execute SQL queries in the context of a copy operation."""
+        # Prep the connection.
+        if self._conn is None:
+            self._conn = self.engine.raw_connection()
+            self._conn.rollback()
+        return self._conn.cursor()
+
     def make_copy_batch_id(self):
         """Generate a random batch id for copying into the database.
 

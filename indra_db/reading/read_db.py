@@ -300,7 +300,7 @@ class DatabaseReader(object):
         tc_query = self._db.filter_query(
             self._db.TextContent,
             self._db.TextContent.id.in_(self.tcids),
-            self._db.TextContent.source != 'xdd'
+            self._db.TextContent.format != 'xdd'
             )
 
         if self.reading_mode != 'all':

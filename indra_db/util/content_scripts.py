@@ -419,6 +419,10 @@ def _get_text_content_from_text_refs_cached(frozen_text_refs):
 
 
 def _get_text_ref_id_from_text_refs(text_refs, db):
+    # In some cases the TRID is already there so we can just
+    # return it
+    if 'TRID' in text_refs:
+        return text_refs['TRID']
     text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:

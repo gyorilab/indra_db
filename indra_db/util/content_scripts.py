@@ -440,9 +440,14 @@ def _get_text_content_from_trid(text_ref_id, db):
     contents = defaultdict(list)
     for content, text_type in texts:
         contents[text_type].append(content)
+    # Look at text types in order of priority
     for text_type in ('fulltext', 'abstract', 'title'):
-        if text_type in contents:
-            return unpack(contents[text_type][0])
+        # There are cases when we get a list of results for the same
+        # content type with some that are None and some actual content,
+        # so we iterate to find a non-empty content to return
+        for content in contents.get(text_type, []):
+            if content:
+                return unpack(content)
     return None
 
 

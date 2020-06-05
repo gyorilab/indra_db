@@ -437,14 +437,12 @@ def _get_text_content_from_trid(text_ref_id, db):
     texts = db.select_all([db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id == text_ref_id)
-    fulltext = [unpack(content) for content, text_type in texts
-                if text_type == 'fulltext']
-    if fulltext:
-        return fulltext[0]
-    abstract = [unpack(content) for content, text_type in texts
-                if text_type == 'abstract']
-    if abstract:
-        return abstract[0]
+    contents = defaultdict(list)
+    for content, text_type in texts:
+        contents[text_type].append(content)
+    for text_type in ('fulltext', 'abstract', 'title'):
+        if text_type in contents:
+            return unpack(contents[text_type][0])
     return None
 
 

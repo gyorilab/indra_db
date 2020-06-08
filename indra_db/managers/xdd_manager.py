@@ -83,7 +83,7 @@ class XddManager:
         tcids = db.select_all(
             [db.TextContent.text_ref_id, db.TextContent.id],
             db.TextContent.text_ref_id.in_(self.statements.keys()),
-            db.TextContent.source == 'xdd'
+            db.TextContent.format == 'xdd'
         )
         tcid_lookup = {trid: tcid for trid, tcid in tcids}
 

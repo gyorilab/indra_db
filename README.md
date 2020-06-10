@@ -74,7 +74,7 @@ API, please contact the authors.
 
 ## Installation
 
-The INDRA database only works for Python 3 (tested in 3.5 and 3.6).
+The INDRA database only works for Python 3.6+, though some parts are still compatible with 3.5.
 
 First, [install INDRA](http://indra.readthedocs.io/en/latest/installation.html),
 then simply clone this repo, and make sure that it is visible in your

@@ -938,6 +938,37 @@ class DatabaseManager(object):
         cursor.execute('VACUUM' + (' ANALYZE;' if analyze else ''))
         return
 
+    def pg_restore(self, dump_file, **options):
+        """Load content into the database from a dump file on s3."""
+        if isinstance(dump_file, str):
+            dump_file = S3Path.from_string(dump_file)
+        elif dump_file is not None and not isinstance(dump_file, S3Path):
+            raise ValueError("Argument `dump_file` must be appropriately "
+                             "formatted string or S3Path object, not %s."
+                             % type(dump_file))
+
+        from subprocess import run
+        from os import environ
+
+        self.session.close()
+        self.grab_session()
+
+        # Add the password to the env
+        my_env = environ.copy()
+        my_env['PGPASSWORD'] = self.url.password
+
+        # Pipe the database dump from s3 through this machine into the database
+        logger.info("Dumping into the database.")
+        option_list = [f'--{opt}' if isinstance(val, bool) and val
+                       else f'--{opt}={val}' for opt, val in options.items()]
+        run(' '.join(['aws', 's3', 'cp', dump_file.to_string(), '-', '|',
+                      'pg_restore', *self._form_pg_args(), *option_list,
+                      '--no-owner']),
+            env=my_env, shell=True, check=True)
+        self.session.close()
+        self.grab_session()
+        return dump_file
+
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
@@ -1019,7 +1050,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
             dump_loc = get_s3_dump()
             dump_file = dump_loc.get_element_path('readonly-%s.dump' % now_str)
-        return self._pg_dump(dump_file, schema='readonly')
+        return self.pg_dump(dump_file, schema='readonly')
 
     @staticmethod
     def get_latest_dump_file():
@@ -1100,22 +1131,6 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
-        if isinstance(dump_file, str):
-            dump_file = S3Path.from_string(dump_file)
-        elif dump_file is not None and not isinstance(dump_file, S3Path):
-            raise ValueError("Argument `dump_file` must be appropriately "
-                             "formatted string or S3Path object, not %s."
-                             % type(dump_file))
-
-        from subprocess import run
-        from os import environ
-
-        self.session.close()
-        self.grab_session()
-
-        # Add the password to the env
-        my_env = environ.copy()
-        my_env['PGPASSWORD'] = self.url.password
 
         # Make sure the database is clear.
         if 'readonly' in self.get_schemas():
@@ -1126,13 +1141,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
                 raise IndraDbException("Tables already exist and force_clear "
                                        "is False.")
 
-        # Pipe the database dump from s3 through this machine into the database
-        logger.info("Dumping into the database.")
-        run(' '.join(['aws', 's3', 'cp', dump_file.to_string(), '-', '|',
-                      'pg_restore', *self._form_pg_args(), '--no-owner']),
-            env=my_env, shell=True, check=True)
-        self.session.close()
-        self.grab_session()
+        # Do the restore
+        self.pg_restore(dump_file)
 
         # Run Vacuuming
         logger.info("Running vacuuming.")

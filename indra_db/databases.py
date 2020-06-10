@@ -964,8 +964,25 @@ class PrincipalDatabaseManager(DatabaseManager):
             ro_tbl.build_indices(self)
         return
 
-    def dump_readonly(self, dump_file=None):
-        """Dump the readonly schema to s3."""
+    def pg_dump(self, dump_file, **options):
+        """Use the pg_dump command to dump part of the database onto s3.
+
+        The `pg_dump` tool must be installed, and must be a compatible version
+        with the database(s) being used.
+
+        All keyword arguments are converted into flags/arguments of pg_dump. For
+        documentation run `pg_dump --help`. This will also confirm you have
+        `pg_dump` installed.
+
+        By default, the "General" and "Connection" options are already set. The
+        most likely specification you will want to use is `--table` or
+        `--schema`, specifying either a particular table or schema to dump.
+
+        Parameters
+        ----------
+        dump_file : S3Path or str
+            The location on s3 where the content should be dumped.
+        """
         if isinstance(dump_file, str):
             dump_file = S3Path.from_string(dump_file)
         elif dump_file is not None and not isinstance(dump_file, S3Path):
@@ -974,7 +991,6 @@ class PrincipalDatabaseManager(DatabaseManager):
                              % type(dump_file))
 
         from subprocess import check_call
-        from indra_db.config import get_s3_dump
         from os import environ
 
         # Make sure the session is fresh and any previous session are done.
@@ -985,20 +1001,25 @@ class PrincipalDatabaseManager(DatabaseManager):
         my_env = environ.copy()
         my_env['PGPASSWORD'] = self.url.password
 
+        # Dump the database onto s3, piping through this machine (errors if
+        # anything went wrong).
+        option_list = [f'--{opt}' if isinstance(val, bool) and val
+                       else f'--{opt}={val}' for opt, val in options.items()]
+        cmd = ' '.join(["pg_dump", *self._form_pg_args(), *option_list, '-Fc',
+                        '|', 'aws', 's3', 'cp', '-', dump_file.to_string()])
+        check_call(cmd, shell=True, env=my_env)
+        return dump_file
+
+    def dump_readonly(self, dump_file=None):
+        """Dump the readonly schema to s3."""
+
         # Form the name of the s3 file, if not given.
         if dump_file is None:
+            from indra_db.config import get_s3_dump
             now_str = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
             dump_loc = get_s3_dump()
             dump_file = dump_loc.get_element_path('readonly-%s.dump' % now_str)
-
-        # Dump the database onto s3, piping through this machine (errors if
-        # anything went wrong).
-        cmd = ' '.join(["pg_dump", *self._form_pg_args(),
-                        '-n', 'readonly', '-Fc',
-                        '|', 'aws', 's3', 'cp', '-', dump_file.to_string()])
-        check_call(cmd, shell=True, env=my_env)
-
-        return dump_file
+        return self._pg_dump(dump_file, schema='readonly')
 
     @staticmethod
     def get_latest_dump_file():

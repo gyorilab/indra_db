@@ -39,7 +39,7 @@ class XddManager:
         for group in self.groups:
             logger.info(f"Processing {group.key}")
             file_pair_dict = _get_file_pairs_from_group(s3, group)
-            for run_id, (bibs, stmts) in file_pair_dict.items():
+            for (run_id, id_src), (bibs, stmts) in file_pair_dict.items():
                 logger.info(f"Loading {run_id}")
                 doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
                               for bib in bibs if 'identifier' in bib}
@@ -64,8 +64,12 @@ class XddManager:
 
                     self.statements[trid][ev['text_refs']['READER']].append(sj)
                     if trid not in self.text_content:
+                        if id_src:
+                            src = f'xdd-{id_src}'
+                        else:
+                            src = 'xdd'
                         self.text_content[trid] = \
-                            (trid, 'xdd', 'xdd', 'fulltext',
+                            (trid, src, 'xdd', 'fulltext',
                              pub_lookup[xddid] == 'bioRxiv')
         return
 
@@ -79,7 +83,7 @@ class XddManager:
         tcids = db.select_all(
             [db.TextContent.text_ref_id, db.TextContent.id],
             db.TextContent.text_ref_id.in_(self.statements.keys()),
-            db.TextContent.source == 'xdd'
+            db.TextContent.format == 'xdd'
         )
         tcid_lookup = {trid: tcid for trid, tcid in tcids}
 
@@ -131,29 +135,46 @@ class XddManager:
         self.dump_statements(db)
 
 
+class XDDFileError(Exception):
+    pass
+
+
 def _get_file_pairs_from_group(s3, group: S3Path):
     files = group.list_objects(s3)
     file_pairs = defaultdict(dict)
     for file_path in files:
-        run_id, file_suffix = file_path.key.split('_')
+        # Get information from the filename, including the cases with and
+        # without the id_src label.
+        parts = file_path.key.split('_')
+        if len(parts) == 2:
+            run_id, file_suffix = parts
+            id_src = None
+        elif len(parts) == 3:
+            run_id, id_src, file_suffix = parts
+        else:
+            raise XDDFileError(f"XDD file does not match known standards: "
+                               f"{file_path.key}")
         file_type = file_suffix.split('.')[0]
+
+        # Try getting the file
         try:
             file_obj = s3.get_object(**file_path.kw())
             file_json = json.loads(file_obj['Body'].read())
-            file_pairs[run_id][file_type] = file_json
+            file_pairs[(run_id, id_src)][file_type] = file_json
         except Exception as e:
             logger.error(f"Failed to load {file_path}")
             logger.exception(e)
             if run_id in file_pairs:
                 del file_pairs[run_id]
 
+    # Create a dict of tuples from the pairs of files.
     ret = {}
-    for run_id, files in file_pairs.items():
+    for batch_id, files in file_pairs.items():
         if len(files) != 2 or 'bib' not in files or 'stmts' not in files:
-            logger.warning(f"Run {run_id} does not have both 'bib' and "
+            logger.warning(f"Run {batch_id} does not have both 'bib' and "
                            f"'stmts' in files: {files.keys()}. Skipping.")
             continue
-        ret[run_id] = (files['bib'], files['stmts'])
+        ret[batch_id] = (files['bib'], files['stmts'])
     return ret
 
 

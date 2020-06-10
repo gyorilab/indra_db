@@ -885,6 +885,52 @@ class DatabaseManager(object):
                 '-w',  # Don't prompt for a password, forces use of env.
                 '-d', self.url.database]
 
+    def pg_dump(self, dump_file, **options):
+        """Use the pg_dump command to dump part of the database onto s3.
+
+        The `pg_dump` tool must be installed, and must be a compatible version
+        with the database(s) being used.
+
+        All keyword arguments are converted into flags/arguments of pg_dump. For
+        documentation run `pg_dump --help`. This will also confirm you have
+        `pg_dump` installed.
+
+        By default, the "General" and "Connection" options are already set. The
+        most likely specification you will want to use is `--table` or
+        `--schema`, specifying either a particular table or schema to dump.
+
+        Parameters
+        ----------
+        dump_file : S3Path or str
+            The location on s3 where the content should be dumped.
+        """
+        if isinstance(dump_file, str):
+            dump_file = S3Path.from_string(dump_file)
+        elif dump_file is not None and not isinstance(dump_file, S3Path):
+            raise ValueError("Argument `dump_file` must be appropriately "
+                             "formatted string or S3Path object, not %s."
+                             % type(dump_file))
+
+        from subprocess import check_call
+        from os import environ
+
+        # Make sure the session is fresh and any previous session are done.
+        self.session.close()
+        self.grab_session()
+
+        # Add the password to the env
+        my_env = environ.copy()
+        my_env['PGPASSWORD'] = self.url.password
+
+        # Dump the database onto s3, piping through this machine (errors if
+        # anything went wrong).
+        option_list = [f'--{opt}' if isinstance(val, bool) and val
+                       else f'--{opt}={val}' for opt, val in options.items()]
+        cmd = ' '.join(["pg_dump", *self._form_pg_args(), *option_list, '-Fc',
+                        '|', 'aws', 's3', 'cp', '-', dump_file.to_string()])
+        check_call(cmd, shell=True, env=my_env)
+        return dump_file
+
     def vacuum(self, analyze=True):
         conn = self.engine.raw_connection()
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -963,52 +1009,6 @@ class PrincipalDatabaseManager(DatabaseManager):
             ro_tbl.create(self)
             ro_tbl.build_indices(self)
         return
-
-    def pg_dump(self, dump_file, **options):
-        """Use the pg_dump command to dump part of the database onto s3.
-
-        The `pg_dump` tool must be installed, and must be a compatible version
-        with the database(s) being used.
-
-        All keyword arguments are converted into flags/arguments of pg_dump. For
-        documentation run `pg_dump --help`. This will also confirm you have
-        `pg_dump` installed.
-
-        By default, the "General" and "Connection" options are already set. The
-        most likely specification you will want to use is `--table` or
-        `--schema`, specifying either a particular table or schema to dump.
-
-        Parameters
-        ----------
-        dump_file : S3Path or str
-            The location on s3 where the content should be dumped.
-        """
-        if isinstance(dump_file, str):
-            dump_file = S3Path.from_string(dump_file)
-        elif dump_file is not None and not isinstance(dump_file, S3Path):
-            raise ValueError("Argument `dump_file` must be appropriately "
-                             "formatted string or S3Path object, not %s."
-                             % type(dump_file))
-
-        from subprocess import check_call
-        from os import environ
-
-        # Make sure the session is fresh and any previous session are done.
-        self.session.close()
-        self.grab_session()
-
-        # Add the password to the env
-        my_env = environ.copy()
-        my_env['PGPASSWORD'] = self.url.password
-
-        # Dump the database onto s3, piping through this machine (errors if
-        # anything went wrong).
-        option_list = [f'--{opt}' if isinstance(val, bool) and val
-                       else f'--{opt}={val}' for opt, val in options.items()]
-        cmd = ' '.join(["pg_dump", *self._form_pg_args(), *option_list, '-Fc',
-                        '|', 'aws', 's3', 'cp', '-', dump_file.to_string()])
-        check_call(cmd, shell=True, env=my_env)
-        return dump_file
 
     def dump_readonly(self, dump_file=None):
         """Dump the readonly schema to s3."""

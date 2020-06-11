@@ -51,8 +51,16 @@ def benchmark(loc):
         logger.error(f"Failed to load {loc}, skipping...")
         logger.exception(err)
         return
-    print('\n'.join(f for f, _ in getmembers(test_module, isfunction)
-                    if 'test' in f))
+
+    # Run tests
+    tests = (f for f, _ in getmembers(test_module, isfunction) if 'test' in f)
+    for test_name in tests:
+        test = getattr(test_module, test_name)
+        try:
+            test()
+        except Exception as e:
+            print("FAILED:")
+            print(e)
     return
 
 

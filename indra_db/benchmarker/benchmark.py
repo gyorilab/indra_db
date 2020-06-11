@@ -16,15 +16,18 @@ def benchmark(loc):
         raise ValueError(f"Invalid loc: {loc}")
 
     # Check if the location exists, and whether it is a directory or file.
+    # Handle the file case by recursively calling this function for each file.
     if not os.path.exists(loc):
         raise ValueError(f"No such file or directory: {loc}")
     elif os.path.isdir(loc):
-        # find all files
-        pass
-    elif os.path.isfile(loc):
-        # handle this file
-        pass
-    pass
+        if func_name is not None:
+            raise ValueError("To specify function, location must be a file.")
+        for file in os.listdir(loc):
+            benchmark(os.path.join(loc, file))
+        return
+
+    # Handle the case a file is specified.
+    return
 
 
 parser = ArgumentParser(description=('Run tests and benchmark time to run and '

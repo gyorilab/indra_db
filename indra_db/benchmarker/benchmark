@@ -1,5 +1,12 @@
+#!/usr/bin/env python
+
 import os
+import logging
 from argparse import ArgumentParser
+from inspect import getmembers, isfunction
+from importlib.util import spec_from_file_location, module_from_spec
+
+logger = logging.getLogger('benchmarker')
 
 
 def benchmark(loc):
@@ -23,10 +30,29 @@ def benchmark(loc):
         if func_name is not None:
             raise ValueError("To specify function, location must be a file.")
         for file in os.listdir(loc):
-            benchmark(os.path.join(loc, file))
+            new_path = os.path.join(loc, file)
+            if ('test' in file and os.path.isfile(new_path)
+                    and new_path.endswith('.py')):
+                benchmark(new_path)
         return
 
     # Handle the case a file is specified.
+    if not loc.endswith('.py'):
+        raise ValueError(f"Location {loc} is not a python file.")
+    print("="*len(loc))
+    print(loc)
+    print('-'*len(loc))
+    mod_name = loc.replace('.py', '').replace('/', '.')
+    spec = spec_from_file_location(mod_name, loc)
+    test_module = module_from_spec(spec)
+    try:
+        spec.loader.exec_module(test_module)
+    except Exception as err:
+        logger.error(f"Failed to load {loc}, skipping...")
+        logger.exception(err)
+        return
+    print('\n'.join(f for f, _ in getmembers(test_module, isfunction)
+                    if 'test' in f))
     return
 
 

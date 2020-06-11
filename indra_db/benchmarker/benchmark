@@ -55,12 +55,19 @@ def benchmark(loc):
     # Run tests
     tests = (f for f, _ in getmembers(test_module, isfunction) if 'test' in f)
     for test_name in tests:
+        print(test_name)
+        print('-'*len(test_name))
         test = getattr(test_module, test_name)
         try:
             test()
+            print('-'*len(test_name))
+            print("PASSED!")
         except Exception as e:
-            print("FAILED:")
+            print('-'*len(test_name))
+            print("FAILED!")
             print(e)
+        print('-'*len(test_name))
+
     return
 
 

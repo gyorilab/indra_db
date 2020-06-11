@@ -827,22 +827,21 @@ class Pubmed(_NihManager):
         for pmid, annotation_list in self.annotations.items():
             for annotation in annotation_list:
                 # Format the row.
-                copy_row = (pmid, annotation['mesh'], annotation['text'],
+                copy_row = (int(pmid), int(annotation['mesh'][1:]),
                             annotation['major_topic'])
 
                 # Handle the qualifier
                 qual = annotation['qualifier']
                 if qual is None:
-                    copy_row += (None, None)
+                    copy_row += (None,)
                 else:
-                    copy_row += (qual['mesh'], qual['text'])
+                    copy_row += (int(qual['mesh'][1:]),)
 
                 copy_rows.append(copy_row)
 
         # Copy the results into the database
         self.copy_into_db(db, 'mesh_ref_annotations', copy_rows,
-                          ('pmid', 'mesh_id', 'mesh_text', 'major_topic',
-                           'qual_id', 'qual_text'))
+                          ('pmid_num', 'mesh_num', 'major_topic', 'qual_num'))
         return True
 
     def load_files_and_annotations(self, db, *args, **kwargs):

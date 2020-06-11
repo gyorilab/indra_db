@@ -209,21 +209,19 @@ def get_schema(Base):
 
     class MeshRefAnnotations(Base, IndraDBTable):
         __tablename__ = 'mesh_ref_annotations'
-        _always_disp = ['mesh_text', 'qual_text', 'text_ref_id']
-        _indices = [StringIndex('mesh_ref_annotations_pmid_idx', 'pmid'),
-                    StringIndex('mesh_ref_annotations_mesh_id_idx', 'mesh_id'),
-                    StringIndex('mesh_ref_annotations_mtext_idx', 'mesh_text'),
-                    StringIndex('mesh_ref_annotations_qual_id_idx', 'qual_id'),
-                    StringIndex('mesh_ref_annotations_qtext_idx', 'qual_text')]
-
+        _always_disp = ['pmid_num', 'mesh_num', 'qual_num']
+        _indices = [BtreeIndex('mesh_ref_annotations_pmid_idx', 'pmid_num'),
+                    BtreeIndex('mesh_ref_annotations_mesh_id_idx', 'mesh_num'),
+                    BtreeIndex('mesh_ref_annotations_qual_id_idx', 'qual_num')]
         id = Column(Integer, primary_key=True)
-        mesh_id = Column(String, nullable=False)
-        mesh_text = Column(String, nullable=False)
-        pmid = Column(String, nullable=False)
+        pmid_num = Column(Integer, nullable=False)
+        mesh_num = Column(Integer, nullable=False)
+        qual_num = Column(Integer)
         major_topic = Column(Boolean, default=False)
-        qual_id = Column(String)
-        qual_text = Column(String)
-
+        __table_args__ = (
+            UniqueConstraint('pmid_num', 'mesh_num', 'qual_num',
+                             name='mesh-uniqueness'),
+        )
     table_dict[MeshRefAnnotations.__tablename__] = MeshRefAnnotations
 
     class SourceFile(Base, IndraDBTable):

@@ -342,10 +342,10 @@ def get_schema(Base):
         __tablename__ = 'raw_stmt_mesh'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT DISTINCT raw_statements.id as sid,\n'
-                          '       SUBSTRING(mesh_id, 2)::int as mesh_num\n'
+                          '       mesh_num\n'
                           'FROM text_ref\n'
-                          '  JOIN mesh_ref_annotations\n'
-                          '    ON text_ref.pmid = mesh_ref_annotations.pmid\n'
+                          '  JOIN mesh_ref_annotations AS mra\n'
+                          '    ON text_ref.pmid_num = mra.pmid_num\n'
                           '  JOIN text_content ON text_ref.id = text_ref_id\n'
                           '  JOIN reading\n'
                           '    ON text_content.id = text_content_id\n'

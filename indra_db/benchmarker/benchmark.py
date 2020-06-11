@@ -3,10 +3,23 @@ from argparse import ArgumentParser
 
 
 def benchmark(loc):
+    # By default, just run in this directory
+    if loc is None:
+        loc = '.'
+
+    # Extract a function name, if it was included.
+    if loc.count(':') == 0:
+        func_name = None
+    elif loc.count(':') == 1:
+        loc, func_name = loc.split(':')
+    else:
+        raise ValueError(f"Invalid loc: {loc}")
+
+    # Check if the location exists, and whether it is a directory or file.
     if not os.path.exists(loc):
-        raise ValueError(f"No such file or direcory: {loc}")
+        raise ValueError(f"No such file or directory: {loc}")
     elif os.path.isdir(loc):
-        # find all dirs
+        # find all files
         pass
     elif os.path.isfile(loc):
         # handle this file

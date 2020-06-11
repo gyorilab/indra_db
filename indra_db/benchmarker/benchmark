@@ -65,8 +65,9 @@ def benchmark(loc):
         except Exception as e:
             print('-'*len(test_name))
             print("FAILED!")
-            print(e)
-        print('-'*len(test_name))
+            print('-'*len(test_name))
+            print(type(e), e)
+        print()
 
     return
 

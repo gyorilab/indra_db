@@ -2,6 +2,7 @@
 
 import os
 import logging
+from datetime import datetime
 from argparse import ArgumentParser
 from inspect import getmembers, isfunction
 from importlib.util import spec_from_file_location, module_from_spec
@@ -24,6 +25,7 @@ def benchmark(loc):
 
     # Check if the location exists, and whether it is a directory or file.
     # Handle the file case by recursively calling this function for each file.
+    results = {}
     if not os.path.exists(loc):
         raise ValueError(f"No such file or directory: {loc}")
     elif os.path.isdir(loc):
@@ -33,8 +35,8 @@ def benchmark(loc):
             new_path = os.path.join(loc, file)
             if ('test' in file and os.path.isfile(new_path)
                     and new_path.endswith('.py')):
-                benchmark(new_path)
-        return
+                results.update(benchmark(new_path))
+        return results
 
     # Handle the case a file is specified.
     if not loc.endswith('.py'):
@@ -50,32 +52,48 @@ def benchmark(loc):
     except Exception as err:
         logger.error(f"Failed to load {loc}, skipping...")
         logger.exception(err)
-        return
+        return results
 
     # Run tests
     tests = (f for f, _ in getmembers(test_module, isfunction) if 'test' in f)
     for test_name in tests:
+        test_results = dict.fromkeys(['passed', 'error_type', 'error_str',
+                                      'duration'])
         print(test_name)
         print('-'*len(test_name))
+        print("LOGS:")
         test = getattr(test_module, test_name)
+        start = datetime.now()
         try:
             test()
             print('-'*len(test_name))
             print("PASSED!")
+            test_results['passed'] = True
         except Exception as e:
             print('-'*len(test_name))
-            print("FAILED!")
-            print('-'*len(test_name))
-            print(type(e), e)
-        print()
+            print("FAILED!", type(e), e)
+            test_results['passed'] = False
+            test_results['error_type'] = str(type(e))
+            test_results['error_str'] = str(e)
+        finally:
+            end = datetime.now()
+            test_results['duration'] = (end - start).total_seconds()
+            print()
+            results[f'{mod_name}.{test_name}'] = test_results
 
-    return
+    return results
 
 
-parser = ArgumentParser(description=('Run tests and benchmark time to run and '
-                                     'errors.'))
-parser.add_argument(dest='location')
+def main():
+    parser = ArgumentParser(
+        description=('Run tests and benchmark time to run and '
+                     'errors.'))
+    parser.add_argument(dest='location')
+    args = parser.parse_args()
+    results = benchmark(args.location)
+    for test, stats in results.items():
+        print(test, stats)
+
 
 if __name__ == '__main__':
-    args = parser.parse_args()
-    benchmark(args.location)
+    main()

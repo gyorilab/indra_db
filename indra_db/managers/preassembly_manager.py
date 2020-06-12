@@ -15,7 +15,7 @@ from indra.preassembler.grounding_mapper.mapper import logger \
                                                     as grounding_logger
 from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
-from indra.preassembler.hierarchy_manager import hierarchies
+from indra.ontology.bio import bio_ontology
 
 from indra_db.util.data_gatherer import DataGatherer, DGContext
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
@@ -65,7 +65,7 @@ class PreassemblyManager(object):
     def __init__(self, n_proc=1, batch_size=10000, print_logs=False):
         self.n_proc = n_proc
         self.batch_size = batch_size
-        self.pa = Preassembler(hierarchies)
+        self.pa = Preassembler(bio_ontology)
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
         self.pickle_stashes = None

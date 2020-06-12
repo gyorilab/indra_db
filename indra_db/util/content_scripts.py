@@ -419,6 +419,10 @@ def _get_text_content_from_text_refs_cached(frozen_text_refs):
 
 
 def _get_text_ref_id_from_text_refs(text_refs, db):
+    # In some cases the TRID is already there so we can just
+    # return it
+    if 'TRID' in text_refs:
+        return text_refs['TRID']
     text_ref_id = None
     for id_type in ['pmid', 'pmcid', 'doi',
                     'pii', 'url', 'manuscript_id']:
@@ -437,14 +441,17 @@ def _get_text_content_from_trid(text_ref_id, db):
     texts = db.select_all([db.TextContent.content,
                            db.TextContent.text_type],
                           db.TextContent.text_ref_id == text_ref_id)
-    fulltext = [unpack(content) for content, text_type in texts
-                if text_type == 'fulltext']
-    if fulltext:
-        return fulltext[0]
-    abstract = [unpack(content) for content, text_type in texts
-                if text_type == 'abstract']
-    if abstract:
-        return abstract[0]
+    contents = defaultdict(list)
+    for content, text_type in texts:
+        contents[text_type].append(content)
+    # Look at text types in order of priority
+    for text_type in ('fulltext', 'abstract', 'title'):
+        # There are cases when we get a list of results for the same
+        # content type with some that are None and some actual content,
+        # so we iterate to find a non-empty content to return
+        for content in contents.get(text_type, []):
+            if content:
+                return unpack(content)
     return None
 
 

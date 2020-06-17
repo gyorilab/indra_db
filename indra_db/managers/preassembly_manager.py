@@ -66,6 +66,8 @@ class PreassemblyManager(object):
         self.n_proc = n_proc
         self.batch_size = batch_size
         self.pa = Preassembler(bio_ontology)
+        bio_ontology.initialize()
+        bio_ontology._build_transitive_closure()
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
         self.pickle_stashes = None

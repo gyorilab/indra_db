@@ -19,11 +19,11 @@ def serve_page():
         return f.read().replace('{{ stacks }}', json.dumps(['spruce', 'pine']))
 
 
-@app.route('/fetch/<stack_name>', methods=['GET'])
-def get_stack_data(stack_name):
+@app.route('/fetch/<corpus_name>/<stack_name>', methods=['GET'])
+def get_stack_data(corpus_name, stack_name):
     try:
         s3 = boto3.client('s3')
-        res = s3.list_objects_v2(Bucket=BUCKET, Prefix=f'{BASE}/{stack_name}/')
+        res = s3.list_objects_v2(Bucket=BUCKET, Prefix=f'{BASE}/{corpus_name}/{stack_name}/')
         keys = [e['Key'] for e in res['Contents']]
         result = {}
         for key in keys:

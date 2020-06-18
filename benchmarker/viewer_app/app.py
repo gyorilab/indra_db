@@ -1,7 +1,10 @@
 import json
 import boto3
+import logging
 from os import path
 from flask import Flask, jsonify
+
+logger = logging.getLogger('benchmark_viewer')
 
 HERE = path.dirname(__file__)
 
@@ -18,7 +21,16 @@ def serve_page():
 
 @app.route('/fetch/<stack_name>', methods=['GET'])
 def get_stack_data(stack_name):
-    s3 = boto3.client('s3')
-    res = s3.list_objects_v2(Bucket=BUCKET, Prefix=f'{BASE}/{stack_name}/')
-    print(res)
-    return jsonify({})
+    try:
+        s3 = boto3.client('s3')
+        res = s3.list_objects_v2(Bucket=BUCKET, Prefix=f'{BASE}/{stack_name}/')
+        keys = [e['Key'] for e in res['Contents']]
+        result = {}
+        for key in keys:
+            date_str = path.basename(key).split('.')[0]
+            file = s3.get_object(Bucket=BUCKET, Key=key)
+            result[date_str] = json.loads(file['Body'].read())
+    except Exception as e:
+        logger.exception(e)
+        return jsonify({'message': f'Error: {e}'}), 500
+    return jsonify({'message': 'success', 'tests': result}), 200

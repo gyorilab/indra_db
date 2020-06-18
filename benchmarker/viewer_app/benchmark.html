@@ -53,7 +53,7 @@
         const resp = await fetch(`/fetch/${this.selected_stack}`);
         const data = await resp.json();
         console.log(data);
-        this.tests = data;
+        this.tests = data.tests;
       }
     }
   });

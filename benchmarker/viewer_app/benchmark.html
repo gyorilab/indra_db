@@ -41,6 +41,16 @@
                      ></multiselect>
       </div>
     </div>
+    <div v-show="Object.keys(tests).length">
+      <div class="col-auto">
+        Tests:
+      </div>
+      <div class="col"
+           v-for="test_name in minTestNames"
+           style="writing-mode: vertical-lr; text-orientation: mixed;">
+        {{ test_name }}
+      </div>
+    </div>
     <div v-for="(stack_tests, stack_name) in tests" :key="stack_name">
       <h1>{{ stack_name }}</h1>
       <div v-for="(test_run, date_str) in stack_tests" class="row" :key="date_str">

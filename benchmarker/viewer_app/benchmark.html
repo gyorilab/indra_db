@@ -29,9 +29,30 @@
     </div>
     <div class="row">
       <div class="col">
-        <multiselect v-model="selected_stack"
+        <multiselect v-model="selected_stacks"
                      :options="stacks"
-                     @input="getData"></multiselect>
+                     :multiple="true"
+                     :loading="isLoading"
+                     :hide-selected="true"
+                     :clear-on-select="false"
+                     :close-on-select="false"
+                     @select="getData"
+                     @remove="dropData"
+                     ></multiselect>
+      </div>
+    </div>
+    <div v-for="(stack_tests, stack_name) in tests" :key="stack_name">
+      <h1>{{ stack_name }}</h1>
+      <div v-for="(test_run, date_str) in stack_tests" class="row" :key="date_str">
+        <div class="col-auto">
+          {{ date_str }}
+        </div>
+        <div class="col"
+             v-for="(test_res, test_name) in test_run"
+             :key="test_name"
+             :style="`background-color: ${getColor(test_res)}; color: white;`">
+          {{ Math.round( (test_res.duration + Number.EPSILON) * 10 ) / 10 }}
+        </div>
       </div>
     </div>
   </div>
@@ -44,16 +65,36 @@
     components: {Multiselect: window.VueMultiselect.default},
     data: {
       stacks: {{ stacks }},
-      selected_stack: null,
-      tests: null
+      selected_stacks: [],
+      tests: {},
+      isLoading: false,
     },
     methods: {
-      getData: async function() {
-        console.log(this.selected_stack);
-        const resp = await fetch(`/fetch/${this.selected_stack}`);
+      getData: async function(added) {
+        console.log(added)
+        console.log(this.selected_stacks);
+        this.isLoading = true;
+        const resp = await fetch(`/fetch/${added}`);
         const data = await resp.json();
         console.log(data);
-        this.tests = data.tests;
+        this.tests[added] = data.tests;
+        this.isLoading = false;
+      },
+
+      dropData: function(removed) {
+        console.log('input', removed);
+        console.log('selected', this.selected_stacks);
+        Vue.delete(this.tests, removed);
+      },
+
+      getColor: function(test_res) {
+        if (test_res.passed)
+          return 'green';
+        else
+          if (test_res.error_type === '<class \'unittest.case.SkipTest\'>')
+            return 'yellow';
+          else
+            return 'red';
       }
     }
   });

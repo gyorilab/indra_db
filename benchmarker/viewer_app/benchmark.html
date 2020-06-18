@@ -107,6 +107,25 @@
         }
         return `background-color: ${color}; color: ${text_color};`
       }
+    },
+    computed: {
+      minTestNames: function() {
+        // Check if names is empty
+        if (!this.test_names.length)
+          return [];
+
+        // Get the index of the largest common prefix.
+        let names = this.test_names.concat().sort();
+        let L = names[0].length;
+        let i = 0;
+        while (i < L && names.every(n => n.charAt(i) === names[0].charAt(i))) i++;
+
+        // Get the shortened names.
+        let shortest_names = [];
+        for (let test_name of names)
+          shortest_names.push(test_name.substring(i));
+        return shortest_names;
+      }
     }
   });
 </script>

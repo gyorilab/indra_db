@@ -85,7 +85,7 @@
         console.log(added)
         console.log(this.selected_stacks);
         this.isLoading = true;
-        const resp = await fetch(`/fetch/${added}`);
+        const resp = await fetch(`/fetch/indra/${added}`);
         const data = await resp.json();
         console.log(data);
         this.tests[added] = data.tests;

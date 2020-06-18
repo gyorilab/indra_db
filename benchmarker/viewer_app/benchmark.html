@@ -48,10 +48,10 @@
           {{ date_str }}
         </div>
         <div class="col"
-             v-for="(test_res, test_name) in test_run"
+             v-for="test_name in test_names"
              :key="test_name"
-             :style="getColor(test_res)">
-          {{ Math.round( (test_res.duration + Number.EPSILON) * 10 ) / 10 }}
+             :style="getColor(test_run[test_name])">
+          {{ Math.round( (test_run[test_name].duration + Number.EPSILON) * 10 ) / 10 }}
         </div>
       </div>
     </div>
@@ -68,6 +68,7 @@
       selected_stacks: [],
       tests: {},
       isLoading: false,
+      test_names: [],
     },
     methods: {
       getData: async function(added) {
@@ -78,6 +79,12 @@
         const data = await resp.json();
         console.log(data);
         this.tests[added] = data.tests;
+        for (let test_date in this.tests[added])
+          for (let test_name in this.tests[added][test_date]) {
+            if (this.test_names.includes(test_name))
+              continue
+            this.test_names.push(test_name);
+          }
         this.isLoading = false;
       },
 

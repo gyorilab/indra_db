@@ -182,6 +182,7 @@ class BulkAwsReadingManager(BulkReadingManager):
         'isi': 2400,
         'trips': 300,
         'eidos': 1200,
+        'mti': 3600,
     }
 
     ids_per_job = {
@@ -190,6 +191,7 @@ class BulkAwsReadingManager(BulkReadingManager):
         'isi': 5000,
         'trips': 500,
         'eidos': 5000,
+        'mti': 1000,
     }
 
     def __init__(self, *args, **kwargs):
@@ -387,7 +389,7 @@ def main():
     else:
         db = get_db(args.database)
 
-    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS']
+    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
     if args.method == 'local':
         bulk_manager = BulkLocalReadingManager(readers,
                                                buffer_days=args.buffer,

@@ -550,4 +550,4 @@ SOURCE_GROUPS = {'databases': ['phosphosite', 'cbn', 'pc11', 'biopax',
                                'bel_lc', 'signor', 'biogrid', 'tas',
                                'lincs_drug', 'hprd', 'trrust'],
                  'reading': ['geneways', 'tees', 'isi', 'trips', 'rlimsp',
-                             'medscan', 'sparser', 'reach', 'eidos']}
+                             'medscan', 'sparser', 'reach', 'eidos', 'mti']}

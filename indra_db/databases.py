@@ -145,6 +145,7 @@ reader_versions = {
     'trips': ['STATIC', '2019Nov14'],
     'isi': ['20180503'],
     'eidos': ['0.2.3-SNAPSHOT'],
+    'mti': ['1.0'],
 }
 
 

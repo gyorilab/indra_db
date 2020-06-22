@@ -29,9 +29,12 @@ def get_stack_data(corpus_name, stack_name):
         s3 = boto3.client('s3')
         res = s3.list_objects_v2(Bucket=BUCKET,
                                  Prefix=f'{PREFIX}{corpus_name}/{stack_name}/')
-        keys = [e['Key'] for e in res['Contents']]
+        keys = {path.basename(e['Key']).split('.')[0]: e['Key']
+                for e in res['Contents']}
+        sorted_keys = list(sorted(keys.items(), key=lambda t: t[0],
+                                  reverse=True))
         result = defaultdict(dict)
-        for key in keys:
+        for date_str, key in sorted_keys[:5]:
             date_str = path.basename(key).split('.')[0]
             file = s3.get_object(Bucket=BUCKET, Key=key)
             data = json.loads(file['Body'].read())

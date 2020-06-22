@@ -96,15 +96,14 @@ def _query_wrapper(get_db_query):
                     % (get_db_query.__name__, start_time))
 
         web_query = request.args.copy()
-        offs = web_query.pop('offset', None)
-        ev_lim = web_query.pop('ev_limit', None)
-        best_first = web_query.pop('best_first', 'true').lower() == 'true'
-        max_stmts = min(int(web_query.pop('max_stmts', MAX_STATEMENTS)),
+        offs = _pop(web_query, 'offset', type_cast=int)
+        ev_lim = _pop(web_query, 'ev_limit', type_cast=int)
+        best_first = _pop(web_query, 'best_first', True, bool)
+        max_stmts = min(_pop(web_query, 'max_stmts', MAX_STATEMENTS, int),
                         MAX_STATEMENTS)
-        fmt = web_query.pop('format', 'json')
-        w_english = web_query.pop('with_english', 'false').lower() == 'true'
-        w_cur_counts = \
-            web_query.pop('with_cur_counts', 'false').lower() == 'true'
+        fmt = _pop(web_query, 'format', 'json')
+        w_english = _pop(web_query, 'with_english', False, bool)
+        w_cur_counts = _pop(web_query, 'with_cur_counts', False, bool)
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -538,6 +537,17 @@ def list_curations(stmt_hash, src_hash):
     return jsonify(curation_json)
 
 
+def _pop(query, k, default=None, type_cast=None):
+    if isinstance(default, bool):
+        val = query.pop(k, str(default).lower()) == 'true'
+    else:
+        val = query.pop(k, default)
+
+    if type_cast is not None and val is not None:
+        return type_cast(val)
+    return val
+
+
 @dep_route('/metadata/<level>/from_agents', methods=['GET'])
 @jwt_nontest_optional
 def get_metadata(level):
@@ -552,21 +562,11 @@ def get_metadata(level):
             has[resource] |= role.permissions.get(resource, False)
     logger.info('Auths: %s' % str(has))
 
-    def pop(k, default=None, type_cast=None):
-        if isinstance(default, bool):
-            val = query.pop(k, str(default).lower()) == 'true'
-        else:
-            val = query.pop(k, default)
+    w_curations = _pop(query, 'with_cur_counts', False)
 
-        if type_cast is not None and val is not None:
-            return type_cast(val)
-        return val
-
-    w_curations = pop('with_cur_counts', False)
-
-    kwargs = dict(limit=pop('limit', type_cast=int),
-                  offset=pop('offset', type_cast=int),
-                  best_first=pop('best_first', True))
+    kwargs = dict(limit=_pop(query, 'limit', type_cast=int),
+                  offset=_pop(query, 'offset', type_cast=int),
+                  best_first=_pop(query, 'best_first', True))
     try:
         db_query = _db_query_from_web_query(query, {'HasAgent'}, True)
     except Exception as e:

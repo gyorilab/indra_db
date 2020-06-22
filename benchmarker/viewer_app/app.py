@@ -6,6 +6,8 @@ import logging
 from os import path
 from flask import Flask, jsonify
 
+from benchmarker.util import list_stacks
+
 logger = logging.getLogger('benchmark_viewer')
 
 HERE = path.dirname(__file__)
@@ -18,7 +20,7 @@ PREFIX = 'indra-db/benchmarks/'
 @app.route('/', methods=['GET'])
 def serve_page():
     with open(path.join(HERE, 'benchmark.html'), 'r') as f:
-        return f.read().replace('{{ stacks }}', json.dumps(['spruce', 'pine']))
+        return f.read().replace('{{ stacks }}', json.dumps(list_stacks()))
 
 
 @app.route('/fetch/<corpus_name>/<stack_name>', methods=['GET'])

@@ -82,6 +82,7 @@ def benchmark(loc, base_name=None):
         except Exception as e:
             print('-'*len(test_name))
             print("FAILED!", type(e), e)
+            logger.exception(e)
             test_results['passed'] = False
             test_results['error_type'] = str(type(e))
             test_results['error_str'] = str(e)

@@ -33,7 +33,8 @@ logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
-if environ.get('TESTING_DB_APP') == 1:
+if environ.get('TESTING_DB_APP') == '1':
+    logger.warning("TESTING: No auth will be enabled.")
     TESTING = True
 else:
     TESTING = False
@@ -45,11 +46,6 @@ if not TESTING:
 
 Compress(app)
 CORS(app)
-
-print("Loading file")
-logger.info("INFO working.")
-logger.warning("WARNING working.")
-logger.error("ERROR working.")
 
 TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
@@ -81,11 +77,18 @@ def render_my_template(template, title, **kwargs):
     return env.get_template(template).render(**kwargs)
 
 
+def jwt_nontest_optional(func):
+    if TESTING:
+        return func
+    else:
+        return jwt_optional(func)
+
+
 def _query_wrapper(get_db_query):
     logger.info("Calling outer wrapper.")
 
     @wraps(get_db_query)
-    @jwt_optional
+    @jwt_nontest_optional
     def decorator(*args, **kwargs):
         tracker = LogTracker()
         start_time = datetime.now()
@@ -334,7 +337,7 @@ def serve_stages(stage):
 
 
 @dep_route('/statements', methods=['GET'])
-@jwt_optional
+@jwt_nontest_optional
 def get_statements_query_format():
     # Create a template object from the template file, load once
     return render_my_template('search_statements.html', 'Search',
@@ -482,7 +485,7 @@ def describe_curation():
 
 
 @dep_route('/curation/submit/<hash_val>', methods=['POST'])
-@jwt_optional
+@jwt_nontest_optional
 def submit_curation_endpoint(hash_val, **kwargs):
     user, roles = resolve_auth(dict(request.args))
     if not roles and not user:
@@ -527,7 +530,7 @@ def list_curations(stmt_hash, src_hash):
 
 
 @dep_route('/metadata/<level>/from_agents', methods=['GET'])
-@jwt_optional
+@jwt_nontest_optional
 def get_metadata(level):
     start = datetime.utcnow()
     query = request.args.copy()

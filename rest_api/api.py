@@ -345,6 +345,17 @@ def get_statements_query_format():
                               endpoint=request.url_root)
 
 
+def iter_free_agents(query_dict):
+    agent_keys = {k for k in query_dict.keys() if k.startswith('agent')}
+    for k in agent_keys:
+        entry = query_dict.pop(k)
+        if isinstance(entry, list):
+            for agent in entry:
+                yield agent
+        else:
+            yield entry
+
+
 def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     db_query = EmptyQuery()
     num_agents = 0
@@ -353,10 +364,7 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     ev_filter = EvidenceFilter()
 
     # Get the agents without specified locations (subject or object).
-    free_agents = (query_dict.pop(k) for k in {k for k in query_dict.keys()
-                                               if k.startswith('agent')})
-    for raw_ag in free_agents:
-        num_agents += 1
+    for raw_ag in iter_free_agents(query_dict):
         ag, ns = process_agent(raw_ag)
         db_query &= HasAgent(ag, namespace=ns)
 

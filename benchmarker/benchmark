@@ -95,9 +95,14 @@ def main():
     parser = ArgumentParser(
         description=('Run tests and benchmark time to run and '
                      'errors.'))
-    parser.add_argument(dest='location')
-    parser.add_argument(dest='stack_name')
-    parser.add_argument(dest='api_name')
+    parser.add_argument(dest='location',
+                        help='The location of the test file or directory.')
+    parser.add_argument(dest='stack_name',
+                        help='The name of the Readonly stack being tested.')
+    parser.add_argument(dest='api_name',
+                        help=('The name of the dependant API being tested. '
+                              'This label is used to group test results on s3. '
+                              'Whenever possible, try to use existing labels.'))
     args = parser.parse_args()
     results = benchmark(args.location)
     for test, stats in results.items():

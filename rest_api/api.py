@@ -115,6 +115,7 @@ def _query_wrapper(get_db_query):
                     has[resource] |= role.permissions.get(resource, False)
             logger.info('Auths: %s' % str(has))
         else:
+            web_query.pop('api_key', None)
             has['elsevier'] = True
             has['medscan'] = True
 

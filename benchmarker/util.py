@@ -1,10 +1,11 @@
+__all__ = ['benchmark', 'list_apis', 'list_stacks', 'save_results']
+
 import os
 import json
 
 import boto3
 import logging
 from datetime import datetime
-from collections import defaultdict
 from inspect import getmembers, isfunction
 from importlib.util import spec_from_file_location, module_from_spec
 

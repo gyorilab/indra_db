@@ -373,6 +373,9 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
         raw_ag = query_dict.pop(role, None)
         if raw_ag is None:
             continue
+        if isinstance(raw_ag, list):
+            assert len(raw_ag) == 1, f'Malformed agent for {role}: {raw_ag}'
+            raw_ag = raw_ag[0]
         num_agents += 1
         ag, ns = process_agent(raw_ag)
         db_query &= HasAgent(ag, namespace=ns, role=role.upper())
@@ -380,6 +383,10 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
     if act_raw is not None:
+        if isinstance(act_raw, list):
+            assert len(act_raw) == 1, \
+                f"Got multiple entries for statement type: {act_raw}."
+            act_raw = act_raw[0]
         act = make_statement_camel(act_raw)
         db_query &= HasType([act])
 

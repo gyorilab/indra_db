@@ -12,7 +12,7 @@ HERE = path.dirname(__file__)
 
 app = Flask('benchmark_viewer')
 BUCKET = 'bigmech'
-BASE = 'indra-db/benchmarks'
+PREFIX = 'indra-db/benchmarks/'
 
 
 @app.route('/', methods=['GET'])
@@ -25,7 +25,8 @@ def serve_page():
 def get_stack_data(corpus_name, stack_name):
     try:
         s3 = boto3.client('s3')
-        res = s3.list_objects_v2(Bucket=BUCKET, Prefix=f'{BASE}/{corpus_name}/{stack_name}/')
+        res = s3.list_objects_v2(Bucket=BUCKET,
+                                 Prefix=f'{PREFIX}{corpus_name}/{stack_name}/')
         keys = [e['Key'] for e in res['Contents']]
         result = defaultdict(dict)
         for key in keys:

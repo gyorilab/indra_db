@@ -33,10 +33,15 @@ logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
-app.register_blueprint(auth)
+if environ.get('TESTING_DB_APP') == 1:
+    TESTING = True
+else:
+    TESTING = False
 
-app.config['DEBUG'] = True
-SC, jwt = config_auth(app)
+if not TESTING:
+    app.register_blueprint(auth)
+    app.config['DEBUG'] = True
+    SC, jwt = config_auth(app)
 
 Compress(app)
 CORS(app)
@@ -100,11 +105,15 @@ def _query_wrapper(get_db_query):
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
-        user, roles = resolve_auth(web_query)
-        for role in roles:
-            for resource in has.keys():
-                has[resource] |= role.permissions.get(resource, False)
-        logger.info('Auths: %s' % str(has))
+        if not TESTING:
+            user, roles = resolve_auth(web_query)
+            for role in roles:
+                for resource in has.keys():
+                    has[resource] |= role.permissions.get(resource, False)
+            logger.info('Auths: %s' % str(has))
+        else:
+            has['elsevier'] = True
+            has['medscan'] = True
 
         # Actually run the function.
         logger.info("Running function %s after %s seconds."

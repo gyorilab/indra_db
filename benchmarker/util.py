@@ -93,6 +93,28 @@ def benchmark(loc, base_name=None):
     return results
 
 
+def list_apis():
+    """List the current API names on s3."""
+    s3 = boto3.client('s3')
+    res = s3.list_objects_v2(Bucket=BUCKET, Prefix=PREFIX, Delimiter='/')
+    return [e['Prefix'][len(PREFIX):-1] for e in res['CommonPrefixes']]
+
+
+def list_stacks():
+    """List the stacks represented on s3."""
+    s3 = boto3.client('s3')
+    stack_names = set()
+    for api_name in list_apis():
+        api_prefix = f'{PREFIX}{api_name}/'
+        print(api_prefix)
+        res = s3.list_objects_v2(Bucket=BUCKET, Prefix=api_prefix,
+                                 Delimiter='/')
+        print(res)
+        stack_names |= {e['Prefix'][len(api_prefix):-1]
+                        for e in res['CommonPrefixes']}
+    return list(stack_names)
+
+
 def save_results(start_time, api_name, stack_name, results):
     """Save the result of a test on s3."""
     s3 = boto3.client('s3')

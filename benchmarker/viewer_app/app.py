@@ -1,4 +1,6 @@
 import json
+from collections import defaultdict
+
 import boto3
 import logging
 from os import path
@@ -25,11 +27,13 @@ def get_stack_data(corpus_name, stack_name):
         s3 = boto3.client('s3')
         res = s3.list_objects_v2(Bucket=BUCKET, Prefix=f'{BASE}/{corpus_name}/{stack_name}/')
         keys = [e['Key'] for e in res['Contents']]
-        result = {}
+        result = defaultdict(dict)
         for key in keys:
             date_str = path.basename(key).split('.')[0]
             file = s3.get_object(Bucket=BUCKET, Key=key)
-            result[date_str] = json.loads(file['Body'].read())
+            data = json.loads(file['Body'].read())
+            for test_name, test_data in data.items():
+                result[test_name][date_str] = test_data
     except Exception as e:
         logger.exception(e)
         return jsonify({'message': f'Error: {e}'}), 500

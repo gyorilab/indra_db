@@ -41,27 +41,17 @@
                      ></multiselect>
       </div>
     </div>
-    <div v-show="Object.keys(tests).length">
-      <div class="col-auto">
-        Tests:
-      </div>
-      <div class="col"
-           v-for="test_name in minTestNames"
-           style="writing-mode: vertical-lr; text-orientation: mixed;">
-        {{ test_name }}
-      </div>
-    </div>
     <div v-for="(stack_tests, stack_name) in tests" :key="stack_name">
       <h1>{{ stack_name }}</h1>
-      <div v-for="(test_run, date_str) in stack_tests" class="row" :key="date_str">
-        <div class="col-auto">
-          {{ date_str }}
+      <div v-for="test_name in test_names" class="row" :key="test_name">
+        <div class="col-3">
+          {{ minTestNameMap[test_name] }}
         </div>
-        <div class="col"
-             v-for="test_name in test_names"
-             :key="test_name"
-             :style="getColor(test_run[test_name])">
-          {{ Math.round( (test_run[test_name].duration + Number.EPSILON) * 10 ) / 10 }}
+        <div class="col-1"
+             v-for="(test_run, date_str) in stack_tests[test_name]"
+             :key="date_str"
+             :style="getColor(test_run)">
+          {{ Math.round( (test_run.duration + Number.EPSILON) * 10 ) / 10 }}
         </div>
       </div>
     </div>
@@ -89,12 +79,11 @@
         const data = await resp.json();
         console.log(data);
         this.tests[added] = data.tests;
-        for (let test_date in this.tests[added])
-          for (let test_name in this.tests[added][test_date]) {
-            if (this.test_names.includes(test_name))
-              continue
-            this.test_names.push(test_name);
-          }
+        for (let test_name in this.tests[added]) {
+          if (this.test_names.includes(test_name))
+            continue
+          this.test_names.push(test_name);
+        }
         this.isLoading = false;
       },
 
@@ -119,10 +108,10 @@
       }
     },
     computed: {
-      minTestNames: function() {
+      minTestNameMap: function() {
         // Check if names is empty
         if (!this.test_names.length)
-          return [];
+          return {};
 
         // Get the index of the largest common prefix.
         let names = this.test_names.concat().sort();
@@ -133,7 +122,7 @@
         // Get the shortened names.
         let shortest_names = [];
         for (let test_name of names)
-          shortest_names.push(test_name.substring(i));
+          shortest_names[test_name] = test_name.substring(i);
         return shortest_names;
       }
     }

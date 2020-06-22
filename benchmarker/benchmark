@@ -97,14 +97,15 @@ def main():
                      'errors.'))
     parser.add_argument(dest='location')
     parser.add_argument(dest='stack_name')
+    parser.add_argument(dest='api_name')
     args = parser.parse_args()
     results = benchmark(args.location)
     for test, stats in results.items():
         print(test, stats)
     s3 = boto3.client('s3')
-    s3.put_object(Bucket='bigmech',
-                  Key=f'indra-db/benchmarks/{args.stack_name}/{start_time}.json',
-                  Body=json.dumps(results))
+    data_key = (f'indra-db/benchmarks/{args.api_name}/{args.stack_name}'
+                f'/{start_time}.json')
+    s3.put_object(Bucket='bigmech', Key=data_key, Body=json.dumps(results))
 
 
 if __name__ == '__main__':

@@ -105,13 +105,16 @@ def list_stacks():
     s3 = boto3.client('s3')
     stack_names = set()
     for api_name in list_apis():
-        api_prefix = f'{PREFIX}{api_name}/'
-        print(api_prefix)
-        res = s3.list_objects_v2(Bucket=BUCKET, Prefix=api_prefix,
-                                 Delimiter='/')
-        print(res)
-        stack_names |= {e['Prefix'][len(api_prefix):-1]
-                        for e in res['CommonPrefixes']}
+        try:
+            api_prefix = f'{PREFIX}{api_name}/'
+            res = s3.list_objects_v2(Bucket=BUCKET, Prefix=api_prefix,
+                                     Delimiter='/')
+            stack_names |= {e['Prefix'][len(api_prefix):-1]
+                            for e in res['CommonPrefixes']}
+        except KeyError:
+            logger.error(f"Failed to inspect {api_prefix}: likely malformed "
+                         f"content was added to s3.")
+            continue
     return list(stack_names)
 
 

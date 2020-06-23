@@ -115,8 +115,8 @@ def _query_wrapper(get_db_query):
             logger.info('Auths: %s' % str(has))
         else:
             web_query.pop('api_key', None)
-            has['elsevier'] = True
-            has['medscan'] = True
+            has['elsevier'] = False
+            has['medscan'] = False
 
         # Actually run the function.
         logger.info("Running function %s after %s seconds."

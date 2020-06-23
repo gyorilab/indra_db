@@ -6,7 +6,7 @@ import logging
 from os import path
 from flask import Flask, jsonify
 
-from benchmarker.util import list_stacks
+from benchmarker.util import list_stacks, list_apis
 
 logger = logging.getLogger('benchmark_viewer')
 
@@ -17,10 +17,17 @@ BUCKET = 'bigmech'
 PREFIX = 'indra-db/benchmarks/'
 
 
+def load(**kwargs):
+    with open(path.join(HERE, 'benchmark.html'), 'r') as f:
+        s = f.read()
+    for key, value in kwargs.items():
+        s = s.replace(f'{{{{ {key} }}}}', json.dumps(value))
+    return s
+
+
 @app.route('/', methods=['GET'])
 def serve_page():
-    with open(path.join(HERE, 'benchmark.html'), 'r') as f:
-        return f.read().replace('{{ stacks }}', json.dumps(list_stacks()))
+    return load(stacks=list_stacks(), apis=list_apis())
 
 
 @app.route('/fetch/<corpus_name>/<stack_name>', methods=['GET'])

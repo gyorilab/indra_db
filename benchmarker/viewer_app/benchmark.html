@@ -28,7 +28,12 @@
       <h1>Benchmarks</h1>
     </div>
     <div class="row">
-      <div class="col">
+      <div class="col-6">
+        <multiselect v-model="selected_api"
+                     :options="apis"
+                     placeholder="Select API..."></multiselect>
+      </div>
+      <div class="col" v-show="selected_api">
         <multiselect v-model="selected_stacks"
                      :options="stacks"
                      :multiple="true"
@@ -36,9 +41,9 @@
                      :hide-selected="true"
                      :clear-on-select="false"
                      :close-on-select="false"
+                     placeholder="Select stack..."
                      @select="getData"
-                     @remove="dropData"
-                     ></multiselect>
+                     @remove="dropData"></multiselect>
       </div>
     </div>
     <div v-for="(stack_tests, stack_name) in tests" :key="stack_name">
@@ -66,6 +71,8 @@
     data: {
       stacks: {{ stacks }},
       selected_stacks: [],
+      apis: {{ apis }},
+      selected_api: null,
       tests: {},
       isLoading: false,
       test_names: [],
@@ -75,7 +82,7 @@
         console.log(added)
         console.log(this.selected_stacks);
         this.isLoading = true;
-        const resp = await fetch(`/fetch/indra/${added}`);
+        const resp = await fetch(`/fetch/${this.selected_api}/${added}`);
         const data = await resp.json();
         console.log(data);
         this.tests[added] = data.tests;

@@ -83,8 +83,9 @@ class ReadingManager(object):
             db.ReadingUpdates.reader == reader_name
             )
         if not len(update_list):
-            logger.warning("The database has not had an initial upload, or "
-                           "else the updates table has not been populated.")
+            logger.warning("The database has not had an initial upload "
+                           "for %s, or else the updates table has not "
+                           "been populated." % reader_name)
             return None
 
         return max([u.latest_datetime for u in update_list])
@@ -144,8 +145,8 @@ class BulkReadingManager(ReadingManager):
         if latest_updatetime is not None:
             self.begin_datetime = latest_updatetime - self.buffer
         else:
-            raise ReadingUpdateError("There are no previous updates. "
-                                     "Please run_all.")
+            raise ReadingUpdateError("There are no previous updates for %s. "
+                                     "Please run_all." % reader_name)
 
         constraints = self._get_constraints(db, reader_name)
 

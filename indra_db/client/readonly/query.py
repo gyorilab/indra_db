@@ -662,6 +662,10 @@ class QueryCore(object):
                 'constraint': self._get_constraint_json(),
                 'inverted': self._inverted}
 
+    def _get_constraint_json(self) -> dict:
+        """Get the custom constraint JSONs from the subclass"""
+        raise NotImplementedError()
+
     @classmethod
     def from_json(cls, json_dict):
         class_name = json_dict['class']
@@ -670,15 +674,15 @@ class QueryCore(object):
                 break
         else:
             raise ValueError(f"Invalid class name: {class_name}")
-        obj = sub_cls(**{k: v for k, v in json_dict['constraint'].items()
-                         if not k.startswith('_')})
+        obj = sub_cls._from_constraint_json(json_dict['constraint'])
         if json_dict['inverted']:
             obj = ~obj
         return obj
 
-    def _get_constraint_json(self) -> dict:
-        """Get the custom constraint JSONs from the subclass"""
-        raise NotImplementedError()
+    @classmethod
+    def _from_constraint_json(cls, constraint_json):
+        return cls(** {k: v for k, v in constraint_json.items()
+                       if not k.startswith('_')})
 
     def get_component_queries(self) -> list:
         """Get a list of the query elements included, in no particular order."""
@@ -1005,6 +1009,12 @@ class SourceIntersection(QueryCore):
     def _get_constraint_json(self) -> dict:
         query_list = [q.to_json() for q in self.source_queries]
         return {'source_queries': query_list}
+
+    @classmethod
+    def _from_constraint_json(cls, constraint_json):
+        query_list = [QueryCore.from_json(qj)
+                      for qj in constraint_json['source_queries']]
+        return cls(query_list)
 
     def get_component_queries(self) -> list:
         return [q.__class__.__name__ for q in self.source_queries] \
@@ -1478,6 +1488,10 @@ class IntrusiveQueryCore(QueryCore):
     def _get_constraint_json(self) -> dict:
         return {self.list_name: list(self._get_list())}
 
+    @classmethod
+    def _from_constraint_json(cls, constraint_json):
+        return cls(constraint_json[cls.list_name])
+
     def _get_table(self, ro):
         return ro.SourceMeta
 
@@ -1743,6 +1757,12 @@ class MergeQueryCore(QueryCore):
 
     def _get_constraint_json(self) -> dict:
         return {'query_list': [q.to_json() for q in self.queries]}
+
+    @classmethod
+    def _from_constraint_json(cls, constraint_json):
+        query_list = [QueryCore.from_json(qj)
+                      for qj in constraint_json['query_list']]
+        return cls(query_list)
 
     def get_component_queries(self) -> list:
         type_list = []

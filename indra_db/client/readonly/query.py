@@ -662,6 +662,18 @@ class QueryCore(object):
                 'constraint': self._get_constraint_json(),
                 'inverted': self._inverted}
 
+    @classmethod
+    def from_json(cls, json_dict):
+        class_name = json_dict['class']
+        for sub_cls in get_all_descendants(cls):
+            if sub_cls.__name__ == class_name:
+                break
+        obj = sub_cls(**{k: v for k, v in json_dict['constraint'].items()
+                         if not k.startswith('_')})
+        if json_dict['inverted']:
+            obj = ~obj
+        return obj
+
     def _get_constraint_json(self) -> dict:
         """Get the custom constraint JSONs from the subclass"""
         raise NotImplementedError()

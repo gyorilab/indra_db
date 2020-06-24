@@ -668,6 +668,8 @@ class QueryCore(object):
         for sub_cls in get_all_descendants(cls):
             if sub_cls.__name__ == class_name:
                 break
+        else:
+            raise ValueError(f"Invalid class name: {class_name}")
         obj = sub_cls(**{k: v for k, v in json_dict['constraint'].items()
                          if not k.startswith('_')})
         if json_dict['inverted']:

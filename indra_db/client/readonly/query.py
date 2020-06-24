@@ -140,7 +140,7 @@ class QueryCore(object):
         self._inverted = False
 
     def __repr__(self) -> str:
-        args = list(self._get_constraint_json().values())[0]
+        args = self._get_constraint_json()
         arg_strs = [f'{k}={v}' for k, v in args.items()
                     if v is not None and not k.startswith('_')]
         return f'{"~" if self._inverted else ""}{self.__class__.__name__}' \

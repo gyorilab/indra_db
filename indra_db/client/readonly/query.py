@@ -1,9 +1,9 @@
 from itertools import combinations
 
-__all__ = ['StatementQueryResult', 'QueryCore', 'Intersection', 'Union',
-           'MergeQueryCore', 'HasAgent', 'FromMeshId', 'HasHash',
+__all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
+           'MergeQuery', 'HasAgent', 'FromMeshId', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
-           'SourceCore', 'SourceIntersection', 'HasType', 'IntrusiveQueryCore',
+           'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
            'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter']
 
 import json
@@ -129,7 +129,7 @@ def _make_agent_dict(ag_dict):
             if str(n) in ag_dict}
 
 
-class QueryCore(object):
+class Query(object):
     """The core class for all queries; not functional on its own."""
 
     def __init__(self, empty=False, full=False):
@@ -745,7 +745,7 @@ class QueryCore(object):
         That is to say, for handling __and__ and __or__ calls.
         """
         # We cannot merge with things that aren't queries.
-        if not isinstance(other, QueryCore):
+        if not isinstance(other, Query):
             raise ValueError(f"{self.__class__.__name__} cannot operate with "
                              f"{type(other)}")
 
@@ -843,19 +843,19 @@ class QueryCore(object):
 
 class EmptyQuery:
     def __and__(self, other):
-        if not isinstance(other, QueryCore):
+        if not isinstance(other, Query):
             raise TypeError(f"Cannot perform __and__ operation with "
                             f"{type(other)} and EmptyQuery.")
         return other
 
     def __or__(self, other):
-        if not isinstance(other, QueryCore):
+        if not isinstance(other, Query):
             raise TypeError(f"Cannot perform __or__ operation with "
                             f"{type(other)} and EmptyQuery.")
         return other
 
     def __sub__(self, other):
-        if not isinstance(other, QueryCore):
+        if not isinstance(other, Query):
             raise TypeError(f"Cannot perform __sub__ operation with "
                             f"{type(other)} and EmptyQuery.")
         return other.invert()
@@ -866,22 +866,22 @@ class EmptyQuery:
         return False
 
 
-class SourceCore(QueryCore):
+class SourceQuery(Query):
     """The core of all queries that use SourceMeta."""
 
     def _get_constraint_json(self) -> dict:
         raise NotImplementedError()
 
-    def _do_and(self, other) -> QueryCore:
-        # Make sure that intersections of SourceCore children end up in
+    def _do_and(self, other) -> Query:
+        # Make sure that intersections of SourceQuery children end up in
         # SourceIntersection.
-        if isinstance(other, SourceCore):
+        if isinstance(other, SourceQuery):
             return SourceIntersection([self.copy(), other.copy()])
         elif isinstance(other, SourceIntersection):
             return SourceIntersection(other.source_queries + (self.copy(),))
-        return super(SourceCore, self)._do_and(other)
+        return super(SourceQuery, self)._do_and(other)
 
-    def _copy(self) -> QueryCore:
+    def _copy(self) -> Query:
         raise NotImplementedError()
 
     def _get_table(self, ro):
@@ -899,10 +899,10 @@ class SourceCore(QueryCore):
         return q
 
 
-class SourceIntersection(QueryCore):
-    """A special type of intersection between children of SourceCore.
+class SourceIntersection(Query):
+    """A special type of intersection between children of SourceQuery.
 
-    All SourceCore queries use the same table, so when doing an intersection it
+    All SourceQuery queries use the same table, so when doing an intersection it
     doesn't make sense to do an actual intersection operation, and instead
     simply apply all the filters of each query to build a normal multi-
     conditioned query.
@@ -986,12 +986,12 @@ class SourceIntersection(QueryCore):
         return Union([~q for q in self.source_queries])
 
     def _do_and(self, other):
-        # This is the complement of _do_and in SourceCore, together ensuring
+        # This is the complement of _do_and in SourceQuery, together ensuring
         # that any intersecting group of Source queries goes into this class.
         if isinstance(other, SourceIntersection):
             return SourceIntersection(self.source_queries
                                       + other.source_queries)
-        elif isinstance(other, SourceCore):
+        elif isinstance(other, SourceQuery):
             return SourceIntersection(self.source_queries + (other.copy(),))
         return super(SourceIntersection, self)._do_and(other)
 
@@ -1012,7 +1012,7 @@ class SourceIntersection(QueryCore):
 
     @classmethod
     def _from_constraint_json(cls, constraint_json):
-        query_list = [QueryCore.from_json(qj)
+        query_list = [Query.from_json(qj)
                       for qj in constraint_json['source_queries']]
         return cls(query_list)
 
@@ -1037,7 +1037,7 @@ class SourceIntersection(QueryCore):
         return query
 
 
-class HasOnlySource(SourceCore):
+class HasOnlySource(SourceQuery):
     """Find Statements that come exclusively from a particular source.
 
     For example, find statements that come only from sparser.
@@ -1080,7 +1080,7 @@ class HasOnlySource(SourceCore):
         return query.filter(clause)
 
 
-class HasSources(SourceCore):
+class HasSources(SourceQuery):
     """Find Statements that include a set of sources.
 
     For example, find Statements that have support from both medscan and reach.
@@ -1138,7 +1138,7 @@ class HasSources(SourceCore):
         return query
 
 
-class SourceTypeCore(SourceCore):
+class SourceTypeCore(SourceQuery):
     """The base class for HasReadings and HasDatabases."""
     name = NotImplemented
     col = NotImplemented
@@ -1201,7 +1201,7 @@ class HasDatabases(SourceTypeCore):
     col = 'has_db'
 
 
-class HasHash(SourceCore):
+class HasHash(SourceQuery):
     """Find Statements from a list of hashes.
 
     Parameters
@@ -1232,10 +1232,10 @@ class HasHash(SourceCore):
     def _get_list(self):
         return getattr(self, self.list_name)
 
-    def _do_and(self, other) -> QueryCore:
+    def _do_and(self, other) -> Query:
         return self._merge_lists(True, other, super(HasHash, self)._do_and)
 
-    def _do_or(self, other) -> QueryCore:
+    def _do_or(self, other) -> Query:
         return self._merge_lists(False, other, super(HasHash, self)._do_or)
 
     def _apply_filter(self, ro, query, invert=False):
@@ -1256,7 +1256,7 @@ class HasHash(SourceCore):
         return query.filter(clause)
 
 
-class HasAgent(QueryCore):
+class HasAgent(Query):
     """Get Statements that have a particular agent in a particular role.
 
     Parameters
@@ -1356,7 +1356,7 @@ class HasAgent(QueryCore):
         return qry
 
 
-class FromPapers(QueryCore):
+class FromPapers(Query):
     """Find Statements that have evidence from particular papers.
 
     Parameters
@@ -1381,7 +1381,7 @@ class FromPapers(QueryCore):
         ret = 'not ' if self._inverted else ''
         return ret + f"from papers {self.paper_list}"
 
-    def _copy(self) -> QueryCore:
+    def _copy(self) -> Query:
         return self.__class__(self.paper_list)
 
     def _get_empty(self):
@@ -1390,10 +1390,10 @@ class FromPapers(QueryCore):
     def _get_list(self):
         return getattr(self, self.list_name)
 
-    def _do_and(self, other) -> QueryCore:
+    def _do_and(self, other) -> Query:
         return self._merge_lists(True, other, super(FromPapers, self)._do_and)
 
-    def _do_or(self, other) -> QueryCore:
+    def _do_or(self, other) -> Query:
         return self._merge_lists(False, other, super(FromPapers, self)._do_or)
 
     def _get_constraint_json(self) -> dict:
@@ -1452,7 +1452,7 @@ class FromPapers(QueryCore):
         return EvidenceFilter.from_filter('reading_ref_link', get_clause)
 
 
-class IntrusiveQueryCore(QueryCore):
+class IntrusiveQuery(Query):
     """This is the parent of all queries that draw on info in all meta tables.
 
     Thus, when using these queries in an Intersection, they are applied to each
@@ -1466,24 +1466,24 @@ class IntrusiveQueryCore(QueryCore):
     def __init__(self, value_list):
         value_tuple = tuple([self.item_type(n) for n in value_list])
         setattr(self, self.list_name, value_tuple)
-        super(IntrusiveQueryCore, self).__init__(len(value_tuple) == 0)
+        super(IntrusiveQuery, self).__init__(len(value_tuple) == 0)
 
-    def _get_empty(self) -> QueryCore:
+    def _get_empty(self) -> Query:
         return self.__class__([])
 
-    def _copy(self) -> QueryCore:
+    def _copy(self) -> Query:
         return self.__class__(self._get_list())
 
     def _get_list(self):
         return getattr(self, self.list_name)
 
-    def _do_and(self, other) -> QueryCore:
+    def _do_and(self, other) -> Query:
         return self._merge_lists(True, other,
-                                 super(IntrusiveQueryCore, self)._do_and)
+                                 super(IntrusiveQuery, self)._do_and)
 
-    def _do_or(self, other) -> QueryCore:
+    def _do_or(self, other) -> Query:
         return self._merge_lists(False, other,
-                                 super(IntrusiveQueryCore, self)._do_or)
+                                 super(IntrusiveQuery, self)._do_or)
 
     def _get_constraint_json(self) -> dict:
         return {self.list_name: list(self._get_list())}
@@ -1535,7 +1535,7 @@ class IntrusiveQueryCore(QueryCore):
         return q
 
 
-class HasNumAgents(IntrusiveQueryCore):
+class HasNumAgents(IntrusiveQuery):
     """Find Statements with any one of a listed number of agents.
 
      For example, `HasNumAgents([1,3,4])` will return agents with either 2,
@@ -1566,7 +1566,7 @@ class HasNumAgents(IntrusiveQueryCore):
         return f"number of agents {invert_word}in {self.agent_nums}"
 
 
-class HasNumEvidence(IntrusiveQueryCore):
+class HasNumEvidence(IntrusiveQuery):
     """Find Statements with one of a given number of evidence.
 
     For example, HasNumEvidence([2,3,4]) will return Statements that have
@@ -1596,7 +1596,7 @@ class HasNumEvidence(IntrusiveQueryCore):
         return f"number of evidence {invert_word}in {self.evidence_nums}"
 
 
-class HasType(IntrusiveQueryCore):
+class HasType(IntrusiveQuery):
     """Find Statements that are one of a collection of types.
 
     For example, you can find Statements that are Phosphorylations or
@@ -1637,7 +1637,7 @@ class HasType(IntrusiveQueryCore):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
 
 
-class FromMeshId(QueryCore):
+class FromMeshId(Query):
     """Find Statements whose text sources were given a particular MeSH ID.
 
     Parameters
@@ -1702,7 +1702,7 @@ class FromMeshId(QueryCore):
         return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
 
 
-class MergeQueryCore(QueryCore):
+class MergeQuery(Query):
     """This is the parent of the two merge classes: Intersection and Union.
 
     This class of queries is extremely special, in that the "table" is actually
@@ -1726,7 +1726,7 @@ class MergeQueryCore(QueryCore):
         # Because of the derivative nature of the "tables" involved, some more
         # dynamism is required to get, for instance, the hash and count pair.
         self._mk_hashes_al = None
-        super(MergeQueryCore, self).__init__(*args, **kwargs)
+        super(MergeQuery, self).__init__(*args, **kwargs)
 
     def __invert__(self):
         raise NotImplementedError()
@@ -1744,7 +1744,7 @@ class MergeQueryCore(QueryCore):
     def __str__(self):
         query_strs = []
         for q in self.queries:
-            if isinstance(q, MergeQueryCore) or q._inverted:
+            if isinstance(q, MergeQuery) or q._inverted:
                 query_strs.append(f"({q})")
             else:
                 query_strs.append(str(q))
@@ -1760,7 +1760,7 @@ class MergeQueryCore(QueryCore):
 
     @classmethod
     def _from_constraint_json(cls, constraint_json):
-        query_list = [QueryCore.from_json(qj)
+        query_list = [Query.from_json(qj)
                       for qj in constraint_json['query_list']]
         return cls(query_list)
 
@@ -1784,7 +1784,7 @@ class MergeQueryCore(QueryCore):
         return qry
 
 
-class Intersection(MergeQueryCore):
+class Intersection(MergeQuery):
     """The Intersection of multiple queries.
 
     Baring special handling, this is what results from q1 & q2.
@@ -1798,7 +1798,7 @@ class Intersection(MergeQueryCore):
         # Look for groups of queries that can be merged otherwise, and gather
         # up the type queries for special handling. Also, check to see if any
         # queries are empty, in which case the net query is necessarily empty.
-        mergeable_query_types = [SourceIntersection, SourceCore, FromPapers]
+        mergeable_query_types = [SourceIntersection, SourceQuery, FromPapers]
         mergeable_groups = {C: [] for C in mergeable_query_types}
         query_groups = defaultdict(list)
         filtered_queries = set()
@@ -1817,7 +1817,7 @@ class Intersection(MergeQueryCore):
                     mergeable_groups[C].append(query)
                     break
             else:
-                if isinstance(query, IntrusiveQueryCore):
+                if isinstance(query, IntrusiveQuery):
                     # Extract the intrusive (type, agent number, evidence
                     # number) queries, and merge them together as much as
                     # possible.
@@ -1886,7 +1886,7 @@ class Intersection(MergeQueryCore):
                     for q in q_list:
                         all_empty = True
                         for sub_q in q.queries:
-                            if not isinstance(sub_q, IntrusiveQueryCore):
+                            if not isinstance(sub_q, IntrusiveQuery):
                                 all_empty = False
                                 break
                             compare_ins = [q for d in self._in_queries.values()
@@ -1931,7 +1931,7 @@ class Intersection(MergeQueryCore):
         if not in_queries:
             in_queries = None
         queries = [q.get_hash_query(ro, in_queries) for q in self.queries
-                   if not q.full and not isinstance(q, IntrusiveQueryCore)]
+                   if not q.full and not isinstance(q, IntrusiveQuery)]
         if not queries:
             if in_queries:
                 queries = [q.get_hash_query(ro) for q in in_queries]
@@ -1948,7 +1948,7 @@ class Intersection(MergeQueryCore):
         return self._mk_hashes_al
 
 
-class Union(MergeQueryCore):
+class Union(MergeQuery):
     """The union of multiple queries.
 
     Baring special handling, this is generally the result of q1 | q2.
@@ -1964,7 +1964,7 @@ class Union(MergeQueryCore):
         # hash queries.
         other_queries = set()
         query_groups = defaultdict(list)
-        mergeable_types = (HasHash, FromPapers, IntrusiveQueryCore)
+        mergeable_types = (HasHash, FromPapers, IntrusiveQuery)
         merge_grps = defaultdict(lambda: {True: [], False: []})
         full = False
         all_empty = True
@@ -2009,9 +2009,9 @@ class Union(MergeQueryCore):
     def __invert__(self):
         inv_queries = [~q for q in self.queries]
 
-        # If all the queries are SourceCore, this should be passed back to the
+        # If all the queries are SourceQuery, this should be passed back to the
         # specialized SourceIntersection.
-        if all(isinstance(q, SourceCore) for q in self.queries):
+        if all(isinstance(q, SourceQuery) for q in self.queries):
             return SourceIntersection(inv_queries)
         return Intersection(inv_queries)
 
@@ -2029,7 +2029,7 @@ class Union(MergeQueryCore):
                 # If it is an intrusive query, merge it with the given
                 # intrusive queries of the same type, or else pass the type
                 # queries along.
-                if isinstance(q, IntrusiveQueryCore) \
+                if isinstance(q, IntrusiveQuery) \
                         and self._injected_queries:
                     like_queries = []
                     in_queries = []

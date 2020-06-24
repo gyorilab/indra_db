@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from indra_db import get_ro
 from indra_db.client import HasAgent
-from indra_db.client.readonly.query import EmptyQuery, HasType, QueryCore, \
+from indra_db.client.readonly.query import EmptyQuery, HasType, Query, \
     HasHash, FromPapers
 
 logger = logging.getLogger(__file__)
@@ -119,7 +119,7 @@ def get_statements_by_gene_role_type(agent_id=None, agent_ns='HGNC-SYMBOL',
     if stmt_type:
         query &= HasType([stmt_type])
 
-    if not isinstance(query, QueryCore):
+    if not isinstance(query, Query):
         raise ValueError("Either agent_id or stmt_type must be given.")
 
     if essentials_only:

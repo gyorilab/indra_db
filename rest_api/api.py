@@ -18,7 +18,7 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
 from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, HasHash, QueryCore, FromPapers, FromMeshId, EvidenceFilter, \
+    HasOnlySource, HasHash, Query, FromPapers, FromMeshId, EvidenceFilter, \
     EmptyQuery
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
@@ -124,8 +124,8 @@ def _query_wrapper(get_db_query):
         db_query = get_db_query(web_query, *args, **kwargs)
         if isinstance(db_query, Response):
             return db_query
-        elif not isinstance(db_query, QueryCore):
-            raise RuntimeError("Result should be a child of QueryCore.")
+        elif not isinstance(db_query, Query):
+            raise RuntimeError("Result should be a child of Query.")
 
         if ev_lim is None:
             if get_db_query is get_statement_by_hash:
@@ -426,7 +426,7 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     if isinstance(db_query, EmptyQuery):
         raise DbAPIError(f"No arguments from web query {query_dict} mapped to "
                          f"db query.")
-    assert isinstance(db_query, QueryCore), "Somehow db_query is not QueryCore."
+    assert isinstance(db_query, Query), "Somehow db_query is not Query."
 
     if require and (db_query is None
                     or set(require) > set(db_query.get_component_queries())):

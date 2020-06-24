@@ -658,7 +658,8 @@ class QueryCore(object):
 
     def to_json(self) -> dict:
         """Get the JSON representation of this query."""
-        return {'constraint': self._get_constraint_json(),
+        return {'class': self.__class__.__name__,
+                'constraint': self._get_constraint_json(),
                 'inverted': self._inverted}
 
     def _get_constraint_json(self) -> dict:
@@ -989,7 +990,7 @@ class SourceIntersection(QueryCore):
 
     def _get_constraint_json(self) -> dict:
         query_list = [q.to_json() for q in self.source_queries]
-        return {'multi_source_query': {'source_queries': query_list}}
+        return {'source_queries': query_list}
 
     def get_component_queries(self) -> list:
         return [q.__class__.__name__ for q in self.source_queries] \
@@ -1034,7 +1035,7 @@ class HasOnlySource(SourceCore):
         return self.__class__(self.only_source)
 
     def _get_constraint_json(self) -> dict:
-        return {'has_only_source': {'only_source': self.only_source}}
+        return {'only_source': self.only_source}
 
     def ev_filter(self):
         if not self._inverted:
@@ -1084,7 +1085,7 @@ class HasSources(SourceCore):
             return f"is not from one of {self.sources}"
 
     def _get_constraint_json(self) -> dict:
-        return {'has_sources': {'sources': self.sources}}
+        return {'sources': self.sources}
 
     def ev_filter(self):
         if not self._inverted:
@@ -1131,7 +1132,7 @@ class SourceTypeCore(SourceCore):
         return self.__class__()
 
     def _get_constraint_json(self) -> dict:
-        return {f'has_{self.name}_query': {f'_has_{self.name}': True}}
+        return {}
 
     def ev_filter(self):
         if self.col == 'has_rd':
@@ -1199,7 +1200,7 @@ class HasHash(SourceCore):
         return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
 
     def _get_constraint_json(self) -> dict:
-        return {"hash_query": {'hashes': list(self.stmt_hashes)}}
+        return {'stmt_hashes': list(self.stmt_hashes)}
 
     def _get_empty(self):
         return self.__class__([])
@@ -1277,11 +1278,9 @@ class HasAgent(QueryCore):
         return s
 
     def _get_constraint_json(self) -> dict:
-        return {'agent_query': {'agent_id': self.agent_id,
-                                'namespace': self.namespace,
-                                '_regularized_id': self.regularized_id,
-                                'role': self.role,
-                                'agent_num': self.agent_num}}
+        return {'agent_id': self.agent_id, 'namespace': self.namespace,
+                '_regularized_id': self.regularized_id, 'role': self.role,
+                'agent_num': self.agent_num}
 
     def _get_table(self, ro):
         # The table used depends on the namespace.
@@ -1374,7 +1373,7 @@ class FromPapers(QueryCore):
         return self._merge_lists(False, other, super(FromPapers, self)._do_or)
 
     def _get_constraint_json(self) -> dict:
-        return {'from_papers': {'paper_list': self.paper_list}}
+        return {'paper_list': self.paper_list}
 
     def _get_table(self, ro):
         return ro.EvidenceCounts
@@ -1463,7 +1462,7 @@ class IntrusiveQueryCore(QueryCore):
                                  super(IntrusiveQueryCore, self)._do_or)
 
     def _get_constraint_json(self) -> dict:
-        return {self.name: {self.list_name: list(self._get_list())}}
+        return {self.list_name: list(self._get_list())}
 
     def _get_table(self, ro):
         return ro.SourceMeta
@@ -1634,8 +1633,7 @@ class FromMeshId(QueryCore):
         return self.__class__(self.mesh_id)
 
     def _get_constraint_json(self) -> dict:
-        return {'mesh_query': {'mesh_id': self.mesh_id,
-                               '_mesh_num': self.mesh_num}}
+        return {'mesh_id': self.mesh_id, '_mesh_num': self.mesh_num}
 
     def _get_table(self, ro):
         return ro.MeshMeta
@@ -1730,7 +1728,7 @@ class MergeQueryCore(QueryCore):
         return f'{self.__class__.__name__}([{", ".join(query_strs)}])'
 
     def _get_constraint_json(self) -> dict:
-        return {f'{self.name}_query': [q.to_json() for q in self.queries]}
+        return {'query_list': [q.to_json() for q in self.queries]}
 
     def get_component_queries(self) -> list:
         type_list = []

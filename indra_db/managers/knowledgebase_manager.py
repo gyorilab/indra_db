@@ -196,10 +196,6 @@ class CTDManager(KnowledgebaseManager):
     subsets = ['gene_disease', 'chemical_disease',
                'chemical_gene']
 
-    def __init__(self, *args, **kwargs):
-        self.counts = defaultdict(lambda: 0)
-        super().__init__(*args, **kwargs)
-
     def _get_statements(self):
         s3 = boto3.client('s3')
         all_stmts = []
@@ -209,6 +205,32 @@ class CTDManager(KnowledgebaseManager):
             stmts = pickle.loads(resp['Body'].read())
             all_stmts += [s for s in _expanded(stmts)]
         return all_stmts
+
+
+class VirHostNetManager(KnowledgebaseManager):
+    name = 'virhostnet'
+    source = 'virhostnet'
+
+    def _get_statements(self):
+        from indra.sources import virhostnet
+        vp = virhostnet.process_from_web()
+        return [s for s in _expanded(vp.statements)]
+
+
+class PhosphoElmManager(KnowledgebaseManager):
+    name = 'phosphoelm'
+    source = 'phosphoelm'
+
+    def _get_statements(self):
+        from indra.sources import phosphoelm
+        s3 = boto3.resource('s3')
+        tmp_dir = tempfile.mkdtemp('phosphoelm_files')
+        dump_file = os.path.join(tmp_dir, 'phosphoelm.dump')
+        s3.meta.client.download_file('bigmech',
+                                     'indra-db/phosphoELM_all_2015-04.dump',
+                                     dump_file)
+        pp = phosphoelm.process_from_dump(dump_file)
+        return [s for s in _expanded(pp.statements)]
 
 
 class HPRDManager(KnowledgebaseManager):

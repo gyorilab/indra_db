@@ -189,6 +189,27 @@ class PathwayCommonsManager(KnowledgebaseManager):
         return filtered_stmts
 
 
+class CTDManager(KnowledgebaseManager):
+    name = 'ctd'
+    source = 'ctd'
+    subsets = ['gene_disease', 'chemical_disease',
+               'chemical_gene']
+
+    def __init__(self, *args, **kwargs):
+        self.counts = defaultdict(lambda: 0)
+        super().__init__(*args, **kwargs)
+
+    def _get_statements(self):
+        s3 = boto3.client('s3')
+        all_stmts = []
+        for subset in self.subsets:
+            key = 'indra-db/ctd_%s.pkl' % subset
+            resp = s3.get_object(Bucket='bigmech', Key=key)
+            stmts = pickle.loads(resp['Body'].read())
+            all_stmts += [s for s in _expanded(stmts)]
+        return all_stmts
+
+
 class HPRDManager(KnowledgebaseManager):
     name = 'hprd'
     source = 'hprd'

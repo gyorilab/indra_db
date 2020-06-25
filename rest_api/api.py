@@ -210,6 +210,7 @@ def _query_wrapper(get_db_query):
         res_json['end_of_statements'] = (len(stmts_json) < MAX_STATEMENTS)
         res_json['statements_removed'] = 0
         res_json['evidence_returned'] = result.returned_evidence
+        res_json['query_str'] = str(db_query)
 
         if fmt == 'html':
             title = TITLE + ': ' + 'Results'

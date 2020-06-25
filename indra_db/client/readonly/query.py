@@ -1037,6 +1037,14 @@ class SourceIntersection(Query):
         return query
 
 
+def _join_list(str_list, joiner='or'):
+    str_list = [str(e) for e in str_list]
+    joiner = f' {joiner.strip()} '
+    if len(str_list) > 2:
+        joiner = ',' + joiner
+    return ', '.join(str_list[:-2] + [joiner.join(str_list[-2:])])
+
+
 class HasOnlySource(SourceQuery):
     """Find Statements that come exclusively from a particular source.
 
@@ -1052,8 +1060,8 @@ class HasOnlySource(SourceQuery):
         super(HasOnlySource, self).__init__()
 
     def __str__(self):
-        invert_mod = 'not ' if self._inverted else ''
-        return f"is {invert_mod}only from {self.only_source}"
+        inv = 'not ' if self._inverted else ''
+        return f"is {inv}only from {self.only_source}"
 
     def _copy(self):
         return self.__class__(self.only_source)
@@ -1104,9 +1112,9 @@ class HasSources(SourceQuery):
 
     def __str__(self):
         if not self._inverted:
-            return f"is from all of {self.sources}"
+            return f"is from {_join_list(self.sources, 'and')}"
         else:
-            return f"is not from one of {self.sources}"
+            return f"is not from {_join_list(self.sources)}"
 
     def _get_constraint_json(self) -> dict:
         return {'sources': self.sources}
@@ -1221,7 +1229,8 @@ class HasHash(SourceQuery):
         return self.__class__(self.stmt_hashes)
 
     def __str__(self):
-        return f"hash {'not ' if self._inverted else ''}in {self.stmt_hashes}"
+        inv = 'do not ' if self._inverted else ''
+        return f"{inv}have hash {_join_list(self.stmt_hashes)}"
 
     def _get_constraint_json(self) -> dict:
         return {'stmt_hashes': list(self.stmt_hashes)}
@@ -1293,8 +1302,8 @@ class HasAgent(Query):
                               self.agent_num)
 
     def __str__(self):
-        s = 'not ' if self._inverted else ''
-        s += f"has an agent where {self.namespace} = {self.agent_id}"
+        s = 'do not ' if self._inverted else ''
+        s += f"have an agent where {self.namespace}={self.agent_id}"
         if self.role is not None:
             s += f" with role={self.role}"
         elif self.agent_num is not None:
@@ -1378,8 +1387,10 @@ class FromPapers(Query):
         super(FromPapers, self).__init__(len(self.paper_list) == 0)
 
     def __str__(self) -> str:
-        ret = 'not ' if self._inverted else ''
-        return ret + f"from papers {self.paper_list}"
+        inv = 'not ' if self._inverted else ''
+        paper_descs = [f'{id_type}={paper_id}'
+                       for id_type, paper_id in self.paper_list]
+        return f"are {inv}from papers where {_join_list(paper_descs)}"
 
     def _copy(self) -> Query:
         return self.__class__(self.paper_list)
@@ -1562,8 +1573,8 @@ class HasNumAgents(IntrusiveQuery):
                              f"greater than 0.")
 
     def __str__(self):
-        invert_word = 'not ' if self._inverted else ''
-        return f"number of agents {invert_word}in {self.agent_nums}"
+        inv = 'do not ' if self._inverted else ''
+        return f"{inv}have {_join_list(self.agent_nums)} agents"
 
 
 class HasNumEvidence(IntrusiveQuery):
@@ -1592,8 +1603,8 @@ class HasNumEvidence(IntrusiveQuery):
             raise ValueError("Each Statement must have at least one Evidence.")
 
     def __str__(self):
-        invert_word = 'not ' if self._inverted else ''
-        return f"number of evidence {invert_word}in {self.evidence_nums}"
+        inv = 'do not ' if self._inverted else ''
+        return f"{inv}have {_join_list(self.evidence_nums)} evidence"
 
 
 class HasType(IntrusiveQuery):
@@ -1630,8 +1641,8 @@ class HasType(IntrusiveQuery):
         super(HasType, self).__init__(st_set)
 
     def __str__(self):
-        invert_word = 'not ' if self._inverted else ''
-        return f"type {invert_word}in {self.stmt_types}"
+        inv = 'do not ' if self._inverted else ''
+        return f"{inv}have type {_join_list(self.stmt_types)}"
 
     def _get_query_values(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
@@ -1654,8 +1665,8 @@ class FromMeshId(Query):
         super(FromMeshId, self).__init__()
 
     def __str__(self):
-        invert_char = '!' if self._inverted else ''
-        return f"MeSH ID {invert_char}= {self.mesh_id}"
+        inv = 'not ' if self._inverted else ''
+        return f"are from papers where MeSH ID is {inv}{self.mesh_id}"
 
     def _copy(self):
         return self.__class__(self.mesh_id)
@@ -1742,14 +1753,22 @@ class MergeQuery(Query):
         raise NotImplementedError()
 
     def __str__(self):
+        # Group the query strings.
         query_strs = []
+        neg_query_strs = []
         for q in self.queries:
-            if isinstance(q, MergeQuery) or q._inverted:
+            if isinstance(q, MergeQuery):
                 query_strs.append(f"({q})")
+            elif q._inverted:
+                neg_query_strs.append(str(q))
             else:
                 query_strs.append(str(q))
-        ret = f' {self.join_word} '.join(query_strs)
-        return ret
+
+        # Make sure the negatives are at the end.
+        query_strs += neg_query_strs
+
+        # Create the final list
+        return _join_list(query_strs, self.join_word)
 
     def __repr__(self):
         query_strs = [repr(q) for q in self.queries]

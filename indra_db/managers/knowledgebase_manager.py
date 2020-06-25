@@ -1,6 +1,7 @@
 __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
            'BiogridManager', 'BelLcManager', 'PathwayCommonsManager',
-           'RlimspManager', 'TrrustManager', 'PhosphositeManager']
+           'RlimspManager', 'TrrustManager', 'PhosphositeManager',
+           'CTDManager', 'VirHostNetManager', 'PhosphoElmManager']
 
 import os
 import zlib

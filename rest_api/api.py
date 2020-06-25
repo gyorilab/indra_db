@@ -397,7 +397,7 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
         db_query &= HasType([act])
 
     # Get whether the user wants a strict match
-    if query_dict.pop('strict', 'false').lower() == 'true':
+    if _pop(query_dict, 'strict', False, bool):
         db_query &= HasNumAgents((num_agents,))
 
     # Unpack hashes, if present.

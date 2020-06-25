@@ -67,6 +67,7 @@
     Vue.prototype.$stmt_hash_url = "{{ url_for('get_statement_by_hash', hash_val='') }}";
     Vue.prototype.$curation_url = "{{ url_for('submit_curation_endpoint', hash_val='') }}";
     Vue.prototype.$curation_list_url = "{{ url_for('list_curations', stmt_hash='', src_hash='') }}".slice(0, -2);
+    Vue.prototype.$stmt_types = {{ stmt_types_json }};
     Vue.prototype.$sources = {
       {% for category, data in source_colors %}
       {{ category }}: [

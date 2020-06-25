@@ -16,7 +16,8 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
     stmts_from_json, HtmlAssembler, SOURCE_COLORS, _format_evidence_text, \
     _format_stmt_text
 from indra.assemblers.english import EnglishAssembler
-from indra.statements import make_statement_camel
+from indra.statements import make_statement_camel, get_all_descendants, \
+    Statement
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
     HasOnlySource, HasHash, Query, FromPapers, FromMeshId, EvidenceFilter, \
     EmptyQuery
@@ -272,8 +273,11 @@ def ground():
 
 @dep_route('/search', methods=['GET'])
 def search():
+    stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
+    stmt_types -= {'Influence', 'Event', 'Unresolved'}
     return render_my_template('search.html', 'Search',
-                              source_colors=SOURCE_COLORS)
+                              source_colors=SOURCE_COLORS,
+                              stmt_types_json=json.dumps(sorted(list(stmt_types))))
 
 
 @dep_route('/data-vis/<path:file_path>')

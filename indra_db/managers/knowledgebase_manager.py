@@ -163,7 +163,8 @@ class BiogridManager(KnowledgebaseManager):
 class PathwayCommonsManager(KnowledgebaseManager):
     name = 'pc11'
     source = 'biopax'
-    skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus'}
+    skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus',
+             'ctd'}
 
     def __init__(self, *args, **kwargs):
         self.counts = defaultdict(lambda: 0)

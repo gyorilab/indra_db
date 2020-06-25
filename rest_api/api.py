@@ -569,10 +569,11 @@ def get_metadata(level):
 
     # Figure out authorization.
     has = dict.fromkeys(['elsevier', 'medscan'], False)
-    user, roles = resolve_auth(query)
-    for role in roles:
-        for resource in has.keys():
-            has[resource] |= role.permissions.get(resource, False)
+    if not TESTING:
+        user, roles = resolve_auth(query)
+        for role in roles:
+            for resource in has.keys():
+                has[resource] |= role.permissions.get(resource, False)
     logger.info('Auths: %s' % str(has))
 
     w_curations = _pop(query, 'with_cur_counts', False)

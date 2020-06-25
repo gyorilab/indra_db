@@ -40,8 +40,8 @@ if environ.get('TESTING_DB_APP') == '1':
 else:
     TESTING = False
 
+app.register_blueprint(auth)
 if not TESTING:
-    app.register_blueprint(auth)
     app.config['DEBUG'] = True
     SC, jwt = config_auth(app)
 
@@ -74,7 +74,8 @@ REDACT_MESSAGE = '[MISSING/INVALID API KEY: limited to 200 char for Elsevier]'
 
 def render_my_template(template, title, **kwargs):
     kwargs['title'] = TITLE + ': ' + title
-    kwargs['identity'] = get_jwt_identity()
+    if not TESTING:
+        kwargs['identity'] = get_jwt_identity()
     return env.get_template(template).render(**kwargs)
 
 

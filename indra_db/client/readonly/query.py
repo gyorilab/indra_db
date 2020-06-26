@@ -1061,7 +1061,7 @@ class HasOnlySource(SourceQuery):
 
     def __str__(self):
         inv = 'not ' if self._inverted else ''
-        return f"is {inv}only from {self.only_source}"
+        return f"are {inv}only from {self.only_source}"
 
     def _copy(self):
         return self.__class__(self.only_source)
@@ -1112,9 +1112,9 @@ class HasSources(SourceQuery):
 
     def __str__(self):
         if not self._inverted:
-            return f"is from {_join_list(self.sources, 'and')}"
+            return f"are from {_join_list(self.sources, 'and')}"
         else:
-            return f"is not from {_join_list(self.sources)}"
+            return f"are not from {_join_list(self.sources)}"
 
     def _get_constraint_json(self) -> dict:
         return {'sources': self.sources}

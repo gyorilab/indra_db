@@ -183,7 +183,7 @@ class BulkAwsReadingManager(BulkReadingManager):
         'isi': 2400,
         'trips': 300,
         'eidos': 1200,
-        'mti': 3600,
+        'mti': 5400,
     }
 
     ids_per_job = {

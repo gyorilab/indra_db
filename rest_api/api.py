@@ -362,10 +362,12 @@ def iter_free_agents(query_dict):
             yield entry
 
 
-def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
+def _db_query_from_web_query(query_dict, require_any=None, require_all=None,
+                             empty_web_query=False):
     db_query = EmptyQuery()
     num_agents = 0
 
+    logger.info(f"Making DB query from:\n{query_dict}")
     filter_ev = query_dict.pop('filter_ev', 'false').lower() == 'true'
     ev_filter = EvidenceFilter()
 
@@ -407,9 +409,8 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
 
     # Unpack paper ids, if present:
     id_tpls = set()
-    for id_dict in query_dict.pop('paper_ids', []):
-        val = id_dict['id']
-        typ = id_dict['type']
+    for id_str in query_dict.pop('paper_ids', []):
+        val, typ = id_str.split('@')
 
         # Turn tcids and trids into integers.
         id_val = int(val) if typ in ['tcid', 'trid'] else val
@@ -434,9 +435,12 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
                          f"db query.")
     assert isinstance(db_query, Query), "Somehow db_query is not Query."
 
-    if require and (db_query is None
-                    or set(require) > set(db_query.get_component_queries())):
-        raise DbAPIError(f"Required query elements not found: {require}")
+    component_queries = set(db_query.get_component_queries())
+    if require_any and not set(require_any) & component_queries:
+        raise DbAPIError(f'None of the required query elements '
+                         f'found: {require_any}')
+    if require_all and set(require_all) > component_queries:
+        raise DbAPIError(f"Required query elements not found: {require_all}")
 
     if query_dict and empty_web_query:
         raise DbAPIError(f"Invalid query options: {query_dict.keys()}.")
@@ -457,7 +461,11 @@ def get_statements(query_dict):
         inp_dict['paper_ids'] = \
             {i for i in query_dict.pop('paper_ids', '').split(',') if i}
         inp_dict.update(query_dict)
-        db_query = _db_query_from_web_query(inp_dict, {'HasAgent'}, True)
+        db_query = _db_query_from_web_query(
+            inp_dict,
+            require_any={'HasAgent', 'FromPapers'},
+            empty_web_query=True
+        )
     except Exception as e:
         logger.exception(e)
         abort(Response(f'Problem forming query: {e}', 400))
@@ -582,7 +590,18 @@ def get_metadata(level):
                   offset=_pop(query, 'offset', type_cast=int),
                   best_first=_pop(query, 'best_first', True))
     try:
-        db_query = _db_query_from_web_query(query, {'HasAgent'}, True)
+        inp_dict = {f'agent{i}': ag
+                    for i, ag in enumerate(query.poplist('agent'))}
+        inp_dict['mesh_ids'] = \
+            {m for m in query.pop('mesh_ids', '').split(',') if m}
+        inp_dict['paper_ids'] = \
+            {i for i in query.pop('paper_ids', '').split(',') if i}
+        inp_dict.update(query)
+        db_query = _db_query_from_web_query(
+            inp_dict,
+            require_any={'HasAgent', 'FromPapers'},
+            empty_web_query=True
+        )
     except Exception as e:
         abort(Response(f'Problem forming query: {e}', 400))
         return

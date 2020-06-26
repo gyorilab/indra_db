@@ -675,6 +675,7 @@ def get_metadata(level):
                 % (len(res_list), dt))
 
     ret['relations'] = res_list
+    ret['query_str'] = str(db_query)
     resp = Response(json.dumps(ret), mimetype='application/json')
 
     dt = (datetime.utcnow() - start).total_seconds()

@@ -53,9 +53,11 @@ class DbReadingSubmitter(Submitter):
     _s3_input_name = 'id_list'
     _purpose = 'db_reading'
     _job_queue_dict = {'run_db_reading_queue': ['reach', 'sparser', 'isi',
-                                                'eidos', 'mti'],
+                                                'eidos'],
+                       'run_db_lite_queue': ['mti'],
                        'run_db_trips_queue': ['trips']}
-    _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser', 'mti'],
+    _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser'],
+                     'run_db_lite_jobdef': ['mti'],
                      'run_db_reading_isi_jobdef': ['isi'],
                      'run_db_reading_trips_jobdef': ['trips'],
                      'run_db_reading_eidos_jobdef': ['eidos']}

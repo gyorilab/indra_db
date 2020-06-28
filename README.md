@@ -52,6 +52,9 @@ We include the information from these pre-existing databases:
 - [TRRUST](https://omictools.com/trrust-tool)
 - [PhosphoSitePlus](https://www.phosphosite.org/)
 - [Causal Biological Networks Database](http://www.causalbionet.com/)
+- [VirHostNet](http://virhostnet.prabi.fr/)
+- [CTD](http://ctdbase.org/)
+- [Phospho.ELM](http://phospho.elm.eu.org/)
 
 These databases are retrieved primarily using the tools in `indra.sources`. The
 statements extracted from all of these sources are stored and updated in the

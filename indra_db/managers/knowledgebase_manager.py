@@ -1,6 +1,7 @@
 __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
            'BiogridManager', 'BelLcManager', 'PathwayCommonsManager',
-           'RlimspManager', 'TrrustManager', 'PhosphositeManager']
+           'RlimspManager', 'TrrustManager', 'PhosphositeManager',
+           'CTDManager', 'VirHostNetManager', 'PhosphoElmManager']
 
 import os
 import zlib
@@ -163,7 +164,8 @@ class BiogridManager(KnowledgebaseManager):
 class PathwayCommonsManager(KnowledgebaseManager):
     name = 'pc11'
     source = 'biopax'
-    skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus'}
+    skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus',
+             'ctd'}
 
     def __init__(self, *args, **kwargs):
         self.counts = defaultdict(lambda: 0)
@@ -187,6 +189,64 @@ class PathwayCommonsManager(KnowledgebaseManager):
 
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
         return filtered_stmts
+
+
+class CTDManager(KnowledgebaseManager):
+    name = 'ctd'
+    source = 'ctd'
+    subsets = ['gene_disease', 'chemical_disease',
+               'chemical_gene']
+
+    def _get_statements(self):
+        s3 = boto3.client('s3')
+        all_stmts = []
+        for subset in self.subsets:
+            logger.info('Fetching CTD subset %s from S3...' % subset)
+            key = 'indra-db/ctd_%s.pkl' % subset
+            resp = s3.get_object(Bucket='bigmech', Key=key)
+            stmts = pickle.loads(resp['Body'].read())
+            all_stmts += [s for s in _expanded(stmts)]
+        # Return exactly one of multiple statements that are exactly the same
+        # in terms of content and evidence.
+        unique_stmts, _ = extract_duplicates(all_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
+
+
+class VirHostNetManager(KnowledgebaseManager):
+    name = 'virhostnet'
+    source = 'virhostnet'
+
+    def _get_statements(self):
+        from indra.sources import virhostnet
+        vp = virhostnet.process_from_web()
+        return [s for s in _expanded(vp.statements)]
+
+
+class PhosphoElmManager(KnowledgebaseManager):
+    name = 'phosphoelm'
+    source = 'phosphoelm'
+
+    def _get_statements(self):
+        from indra.sources import phosphoelm
+        logger.info('Fetching PhosphoElm dump from S3...')
+        s3 = boto3.resource('s3')
+        tmp_dir = tempfile.mkdtemp('phosphoelm_files')
+        dump_file = os.path.join(tmp_dir, 'phosphoelm.dump')
+        s3.meta.client.download_file('bigmech',
+                                     'indra-db/phosphoELM_all_2015-04.dump',
+                                     dump_file)
+        logger.info('Processing PhosphoElm dump...')
+        pp = phosphoelm.process_from_dump(dump_file)
+        logger.info('Expanding evidences on PhosphoElm statements...')
+        # Expand evidences just in case, though this processor always
+        # produces a single evidence per statement.
+        stmts = [s for s in _expanded(pp.statements)]
+        # Return exactly one of multiple statements that are exactly the same
+        # in terms of content and evidence.
+        # Now make sure we don't include exact duplicates
+        unique_stmts, _ = extract_duplicates(stmts, KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
 
 
 class HPRDManager(KnowledgebaseManager):

@@ -134,7 +134,7 @@ class formats(_map_class):
     EKB = 'ekb'
 
 
-readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3, 'ISI': 4, 'EIDOS': 5}
+readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3, 'ISI': 4, 'EIDOS': 5, 'MTI': 6}
 
 
 # Specify versions of readers, and preference. Later in the list is better.
@@ -145,6 +145,7 @@ reader_versions = {
     'trips': ['STATIC', '2019Nov14'],
     'isi': ['20180503'],
     'eidos': ['0.2.3-SNAPSHOT'],
+    'mti': ['1.0'],
 }
 
 

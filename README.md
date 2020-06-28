@@ -26,6 +26,8 @@ We have read all available content, and every day we run the following readers:
 we read all new content with the following readers:
 - [Eidos](https://github.com/clulab/eidos)
 - [ISI](https://github.com/sgarg87/big_mech_isi_gg)
+- [MTI](https://ii.nlm.nih.gov/MTI/index.shtml) - used specifically to tag
+content with topic terms.
 
 we read a limited subset of new content with the following readers:
 - [TRIPS](http://trips.ihmc.us/parser/cgi/drum)

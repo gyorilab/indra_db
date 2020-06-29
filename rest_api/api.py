@@ -412,7 +412,7 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
 
 
     # Check for health of the resulting query, and some other things.
-    if isinstance(db_query, EmptyDBQuery):
+    if isinstance(db_query, EmptyQuery):
         raise DbAPIError(f"No arguments from web query {query_dict} mapped to "
                          f"db query.")
     assert isinstance(db_query, QueryCore), "Somehow db_query is not QueryCore."

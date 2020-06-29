@@ -388,12 +388,28 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
         if filter_ev:
             ev_filter &= paper_q.ev_filter()
 
-    # Unpack mesh ids.
-    for mesh_id in query_dict.pop('mesh_ids', []):
-        mesh_q = FromMeshId(mesh_id)
-        db_query &= mesh_q
-        if filter_ev:
-            ev_filter &= mesh_q.ev_filter()
+    # Unpack MeSH IDs depending on the overal operation to perform. If 'and'
+    # (default), we assume that all MeSH terms have to be simultaneously
+    # present. If 'or', we require any (at least one) of the MeSH terms to be
+    # present.
+    mesh_op = query_dict.pop('mesh_op', 'and')
+    if mesh_op == 'or':
+        mesh_query = EmptyQuery()
+        mesh_ev_filter = EvidenceFilter()
+        for mesh_id in query_dict.pop('mesh_ids', []):
+            mesh_q = FromMeshId(mesh_id)
+            mesh_query |= mesh_q
+            if filter_ev:
+                mesh_ev_filter |= mesh_q.ev_filter()
+        db_query &= mesh_query
+        ev_filter &= mesh_ev_filter
+    else:
+        for mesh_id in query_dict.pop('mesh_ids', []):
+            mesh_q = FromMeshId(mesh_id)
+            db_query &= mesh_q
+            if filter_ev:
+                ev_filter &= mesh_q.ev_filter()
+
 
     # Check for health of the resulting query, and some other things.
     if isinstance(db_query, EmptyDBQuery):

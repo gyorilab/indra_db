@@ -355,6 +355,16 @@ def test_query_set_behavior():
     c = Counter()
 
     def dq(query):
+        # Test string creation and JSON dump and load
+        assert str(query), "No string formed."
+        q_json = query.to_json()
+        json_str = json.dumps(q_json)
+        assert json_str, "No JSON created (this is a really weird error)."
+        rjq = Query.from_json(q_json)
+        assert rjq == query, "Re-formed query does not == the original."
+        assert rjq is not query, "Somehow re-composed query IS original query."
+
+        # Test actually running the query
         res = query.get_hashes(db)
         return res.results
 
@@ -385,14 +395,6 @@ def test_query_set_behavior():
     unfound = []
 
     def try_query(q, compair=None, md=None):
-        # Test string creation
-        str(q)
-
-        # Test JSON dump and load
-        q_json = q.to_json()
-        rjq = Query.from_json(q_json)
-        assert rjq == q, "Re-formed query does not == the original."
-        assert rjq is not q, "Somehow re-composed query IS original query."
 
         # Test query logical consistency
         result = None

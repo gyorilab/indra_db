@@ -1684,7 +1684,7 @@ class FromMeshIds(Query):
     def _do_and(self, other) -> Query:
         if isinstance(other, self.__class__) and self._inverted \
                 and other._inverted:
-            return FromMeshIds(list(set(self.mesh_ids) | set(other.mesh_ids)))
+            return ~FromMeshIds(list(set(self.mesh_ids) | set(other.mesh_ids)))
         elif self.is_inverse_of(other):
             return FromMeshIds([])
         return super(FromMeshIds, self)._do_and(other)

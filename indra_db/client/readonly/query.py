@@ -830,7 +830,7 @@ class Query(object):
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
             return False
-        return self.to_json() == other.to_json()
+        return str(self) == str(other)
 
     def is_inverse_of(self, other):
         """Check if a query is the exact opposite of another."""
@@ -998,9 +998,9 @@ class SourceIntersection(Query):
     def __str__(self):
         str_list = [str(sq) for sq in self.source_queries]
         if not self._inverted:
-            return ' and '.join(str_list)
+            return _join_list(str_list, 'and')
         else:
-            return 'not (' + ' and not '.join(str_list) + ')'
+            return 'are not (' + _join_list(str_list, "and") + ')'
 
     def __repr__(self):
         query_reprs = [repr(q) for q in self.source_queries]
@@ -1038,7 +1038,7 @@ class SourceIntersection(Query):
 
 
 def _join_list(str_list, joiner='or'):
-    str_list = [str(e) for e in str_list]
+    str_list = sorted([str(e) for e in str_list])
     joiner = f' {joiner.strip()} '
     if len(str_list) > 2:
         joiner = ',' + joiner

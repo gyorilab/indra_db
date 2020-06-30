@@ -475,6 +475,14 @@ def get_statements(query_dict):
     return db_query
 
 
+@dep_route('/query', methods=['GET', 'POST'])
+@_query_wrapper
+def get_statements_by_query_json(query_dict):
+    query_json_str = query_dict.pop('query', '{}')
+    query_json = json.loads(query_json_str)
+    return Query.from_json(query_json)
+
+
 @dep_route('/statements/from_hashes', methods=['POST'])
 @_query_wrapper
 def get_statements_by_hashes(query_dict):

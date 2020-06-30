@@ -1365,7 +1365,46 @@ class HasAgent(Query):
         return qry
 
 
-class FromPapers(Query):
+class _TextRefCore(Query):
+    list_name = NotImplemented
+
+    def _get_constraint_json(self) -> dict:
+        raise NotImplementedError()
+
+    def _get_table(self, ro):
+        raise NotImplementedError()
+
+    def _get_hash_query(self, ro, inject_queries=None):
+        raise NotImplementedError()
+
+    def _copy(self):
+        raise NotImplementedError()
+
+    def _do_or(self, other) -> Query:
+        cls = self.__class__
+        if isinstance(other, cls) and not self._inverted \
+                and not other._inverted:
+            my_list = getattr(self, self.list_name)
+            thr_list = getattr(other, self.list_name)
+            return cls(list(set(my_list) | set(thr_list)))
+        elif self.is_inverse_of(other):
+            return ~cls([])
+
+        return super(_TextRefCore, self)._do_or(other)
+
+    def _do_and(self, other) -> Query:
+        cls = self.__class__
+        if isinstance(other, self.__class__) and self._inverted \
+                and other._inverted:
+            my_list = getattr(self, self.list_name)
+            thr_list = getattr(other, self.list_name)
+            return ~cls(list(set(my_list) | set(thr_list)))
+        elif self.is_inverse_of(other):
+            return cls([])
+        return super(_TextRefCore, self)._do_and(other)
+
+
+class FromPapers(_TextRefCore):
     """Find Statements that have evidence from particular papers.
 
     Parameters
@@ -1373,12 +1412,6 @@ class FromPapers(Query):
     paper_list : list[(<id_type>, <paper_id>)]
         A list of tuples, where each tuple indicates and id-type (e.g. 'pmid')
         and an id value for a particular paper.
-
-    Returns
-    -------
-    A dictionary data structure containing, among other metadata, a dict of
-    statement jsons under the key 'statements', themselves keyed by their
-    shallow matches-key hashes.
     """
     list_name = 'paper_list'
 
@@ -1394,18 +1427,6 @@ class FromPapers(Query):
 
     def _copy(self) -> Query:
         return self.__class__(self.paper_list)
-
-    def _get_empty(self):
-        return self.__class__([])
-
-    def _get_list(self):
-        return getattr(self, self.list_name)
-
-    def _do_and(self, other) -> Query:
-        return self._merge_lists(True, other, super(FromPapers, self)._do_and)
-
-    def _do_or(self, other) -> Query:
-        return self._merge_lists(False, other, super(FromPapers, self)._do_or)
 
     def _get_constraint_json(self) -> dict:
         return {'paper_list': self.paper_list}
@@ -1648,7 +1669,7 @@ class HasType(IntrusiveQuery):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
 
 
-class FromMeshIds(Query):
+class FromMeshIds(_TextRefCore):
     """Find Statements whose text sources were given one of a list of MeSH IDs.
 
     Parameters
@@ -1656,6 +1677,8 @@ class FromMeshIds(Query):
     mesh_ids : list
         A canonical MeSH ID, of the "D" variety, e.g. "D000135".
     """
+    list_name = 'mesh_ids'
+
     def __init__(self, mesh_ids: list):
         for mesh_id in mesh_ids:
             if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
@@ -1671,23 +1694,6 @@ class FromMeshIds(Query):
 
     def _copy(self):
         return self.__class__(self.mesh_ids)
-
-    def _do_or(self, other) -> Query:
-        if isinstance(other, self.__class__) and not self._inverted \
-                and not other._inverted:
-            return FromMeshIds(list(set(self.mesh_ids) | set(other.mesh_ids)))
-        elif self.is_inverse_of(other):
-            return ~FromMeshIds([])
-
-        return super(FromMeshIds, self)._do_or(other)
-
-    def _do_and(self, other) -> Query:
-        if isinstance(other, self.__class__) and self._inverted \
-                and other._inverted:
-            return ~FromMeshIds(list(set(self.mesh_ids) | set(other.mesh_ids)))
-        elif self.is_inverse_of(other):
-            return FromMeshIds([])
-        return super(FromMeshIds, self)._do_and(other)
 
     def _get_constraint_json(self) -> dict:
         return {'mesh_ids': list(self.mesh_ids),

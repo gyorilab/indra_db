@@ -19,7 +19,7 @@ from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel, get_all_descendants, \
     Statement
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
-    HasOnlySource, HasHash, Query, FromPapers, FromMeshId, EvidenceFilter, \
+    HasOnlySource, HasHash, Query, FromPapers, FromMeshIds, EvidenceFilter, \
     EmptyQuery
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
@@ -423,8 +423,9 @@ def _db_query_from_web_query(query_dict, require_any=None, require_all=None,
             ev_filter &= paper_q.ev_filter()
 
     # Unpack mesh ids.
-    for mesh_id in query_dict.pop('mesh_ids', []):
-        mesh_q = FromMeshId(mesh_id)
+    mesh_ids = query_dict.pop('mesh_ids', [])
+    if mesh_ids:
+        mesh_q = FromMeshIds(mesh_ids)
         db_query &= mesh_q
         if filter_ev:
             ev_filter &= mesh_q.ev_filter()

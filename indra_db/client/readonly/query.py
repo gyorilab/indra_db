@@ -1,7 +1,7 @@
 from itertools import combinations
 
 __all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
-           'MergeQuery', 'HasAgent', 'FromMeshId', 'HasHash',
+           'MergeQuery', 'HasAgent', 'FromMeshIds', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
            'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter']
@@ -1648,38 +1648,61 @@ class HasType(IntrusiveQuery):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
 
 
-class FromMeshId(Query):
-    """Find Statements whose text sources were given a particular MeSH ID.
+class FromMeshIds(Query):
+    """Find Statements whose text sources were given one of a list of MeSH IDs.
 
     Parameters
     ----------
-    mesh_id : str
+    mesh_ids : list
         A canonical MeSH ID, of the "D" variety, e.g. "D000135".
     """
-    def __init__(self, mesh_id):
-        if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
-            raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
-                             "the rest must be a number." % mesh_id)
-        self.mesh_id = mesh_id
-        self.mesh_num = int(mesh_id[1:])
-        super(FromMeshId, self).__init__()
+    def __init__(self, mesh_ids: list):
+        for mesh_id in mesh_ids:
+            if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
+                raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
+                                 "the rest must be a number." % mesh_id)
+        self.mesh_ids = tuple(set(mesh_ids))
+        self.mesh_nums = tuple([int(mesh_id[1:]) for mesh_id in self.mesh_ids])
+        super(FromMeshIds, self).__init__(len(mesh_ids) == 0)
 
     def __str__(self):
         inv = 'not ' if self._inverted else ''
-        return f"are from papers where MeSH ID is {inv}{self.mesh_id}"
+        return f"are {inv}from papers with MeSH ID {_join_list(self.mesh_ids)}"
 
     def _copy(self):
-        return self.__class__(self.mesh_id)
+        return self.__class__(self.mesh_ids)
+
+    def _do_or(self, other) -> Query:
+        if isinstance(other, self.__class__) and not self._inverted \
+                and not other._inverted:
+            return FromMeshIds(list(set(self.mesh_ids) | set(other.mesh_ids)))
+        elif self.is_inverse_of(other):
+            return ~FromMeshIds([])
+
+        return super(FromMeshIds, self)._do_or(other)
+
+    def _do_and(self, other) -> Query:
+        if isinstance(other, self.__class__) and self._inverted \
+                and other._inverted:
+            return FromMeshIds(list(set(self.mesh_ids) | set(other.mesh_ids)))
+        elif self.is_inverse_of(other):
+            return FromMeshIds([])
+        return super(FromMeshIds, self)._do_and(other)
 
     def _get_constraint_json(self) -> dict:
-        return {'mesh_id': self.mesh_id, '_mesh_num': self.mesh_num}
+        return {'mesh_ids': list(self.mesh_ids),
+                '_mesh_nums': list(self.mesh_nums)}
 
     def _get_table(self, ro):
         return ro.MeshMeta
 
     def _get_hash_query(self, ro, inject_queries=None):
         meta = self._get_table(ro)
-        qry = self._base_query(ro).filter(meta.mesh_num == self.mesh_num)
+        qry = self._base_query(ro)
+        if len(self.mesh_nums) == 1:
+            qry = qry.filter(meta.mesh_num == self.mesh_nums[0])
+        else:
+            qry = qry.filter(meta.mesh_num.in_(self.mesh_nums))
 
         if not self._inverted:
             if inject_queries:
@@ -1697,6 +1720,7 @@ class FromMeshId(Query):
                 for tq in inject_queries:
                     new_base = tq._apply_filter(ro.SourceMeta, new_base)
 
+            # Invert the query.
             al = except_(new_base, qry).alias('mesh_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
                                    al.c.ev_count.label('ev_count'))
@@ -1704,11 +1728,20 @@ class FromMeshId(Query):
 
     def ev_filter(self):
         if not self._inverted:
-            def get_clause(ro):
-                return ro.RawStmtMesh.mesh_num == self.mesh_num
+            if len(self.mesh_nums) == 1:
+                def get_clause(ro):
+                    return ro.RawStmtMesh.mesh_num == self.mesh_nums[0]
+            else:
+                def get_clause(ro):
+                    return ro.RawStmtMesh.mesh_num.in_(self.mesh_nums)
         else:
-            def get_clause(ro):
-                return ro.RawStmtMesh.mesh_num.is_distinct_from(self.mesh_num)
+            if len(self.mesh_nums) == 1:
+                def get_clause(ro):
+                    return (ro.RawStmtMesh.mesh_num
+                            .is_distinct_from(self.mesh_nums[0]))
+            else:
+                def get_clause(ro):
+                    return ro.RawStmtMesh.mesh_num.notin_(self.mesh_nums)
 
         return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
 
@@ -2111,18 +2144,18 @@ class EvidenceFilter:
     We need to be able to perform logical operations between evidence to handle
     important cases:
 
-    HasSource(['reach']) & FromMeshId(['D0001'])
+    HasSource(['reach']) & FromMeshIds(['D0001'])
     -> we might reasonably want to filter evidence for the second subquery but
        not the first.
 
-    HasOnlySource(['reach']) & FromMeshId(['D00001'])
+    HasOnlySource(['reach']) & FromMeshIds(['D00001'])
     -> Here we would likely want to filter the evidence for both sub queries.
 
-    HasOnlySource(['reach']) | FromMeshId(['D000001'])
+    HasOnlySource(['reach']) | FromMeshIds(['D000001'])
     -> Not sure what this even means (its purpose)....not sure what we'd do for
        evidence filtering when the original statements are or'ed
 
-    HasDatabases() & FromMeshId(['D000001'])
+    HasDatabases() & FromMeshIds(['D000001'])
     -> Here you COULDN'T perform an & on the evidence, because the two sources
        are mutually exclusive (only readings connect to mesh annotations).
        However it could make sense you would want to do an "or" between the
@@ -2131,7 +2164,7 @@ class EvidenceFilter:
 
     "filter all the evidence" and "filter none of the evidence" should
     definitely be options. Although "Filter for all" might run into usues with
-    the "HasDatabase and FromMeshId" scenario. I think no evidence filter should
+    the "HasDatabase and FromMeshIds" scenario. I think no evidence filter should
     be the default, and if you attempt a bogus "filter all evidence" (as with
     that scenario) you get an error.
     """

@@ -92,7 +92,6 @@ def _build_test_set():
     mesh_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
                       'activity', 'is_active', 'agent_count')
     for stype, refs, activity, is_active in stmts:
-
         # Extract agents, and make a Statement.
         StmtClass = get_statement_by_name(stype)
         if stype == 'ActiveForm':
@@ -386,6 +385,16 @@ def test_query_set_behavior():
     unfound = []
 
     def try_query(q, compair=None, md=None):
+        # Test string creation
+        str(q)
+
+        # Test JSON dump and load
+        q_json = q.to_json()
+        rjq = Query.from_json(q_json)
+        assert rjq == q, "Re-formed query does not == the original."
+        assert rjq is not q, "Somehow re-composed query IS original query."
+
+        # Test query logical consistency
         result = None
         try:
             result = dq(q)
@@ -402,6 +411,7 @@ def test_query_set_behavior():
             c.up(False)
             return
 
+        # Test negative query logical consistency
         negative_result = None
         nq = None
         try:

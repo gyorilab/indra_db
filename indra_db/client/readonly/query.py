@@ -397,7 +397,7 @@ class Query(object):
 
         # If the result is by definition empty, save time and effort.
         if self.empty:
-            return QueryResult(set(), limit, offset, {}, self.to_json())
+            return QueryResult(set(), limit, offset, {}, {}, self.to_json())
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
@@ -409,7 +409,7 @@ class Query(object):
         result = mk_hashes_q.all()
         evidence_totals = {h: cnt for h, cnt in result}
 
-        return QueryResult(list(evidence_totals.keys()), limit, offset,
+        return QueryResult(set(evidence_totals.keys()), limit, offset,
                            len(result), evidence_totals, self.to_json())
 
     def _get_name_query(self, ro, limit=None, offset=None, best_first=True):
@@ -471,7 +471,7 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, self.to_json())
+            return QueryResult({}, limit, offset, {}, {}, self.to_json())
 
         q = self._get_name_query(ro, limit, offset, best_first)
         names = q.all()
@@ -521,7 +521,7 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, self.to_json())
+            return QueryResult({}, limit, offset, {}, {}, self.to_json())
 
         names_q = self._get_name_query(ro, limit, offset, best_first)
 
@@ -600,7 +600,7 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, self.to_json())
+            return QueryResult({}, limit, offset, {}, {}, self.to_json())
 
         names_q = self._get_name_query(ro, limit, offset, best_first)
 

@@ -1484,6 +1484,89 @@ class FromPapers(_TextRefCore):
         return EvidenceFilter.from_filter('reading_ref_link', get_clause)
 
 
+class FromMeshIds(_TextRefCore):
+    """Find Statements whose text sources were given one of a list of MeSH IDs.
+
+    Parameters
+    ----------
+    mesh_ids : list
+        A canonical MeSH ID, of the "D" variety, e.g. "D000135".
+    """
+    list_name = 'mesh_ids'
+
+    def __init__(self, mesh_ids: list):
+        for mesh_id in mesh_ids:
+            if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
+                raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
+                                 "the rest must be a number." % mesh_id)
+        self.mesh_ids = tuple(set(mesh_ids))
+        self.mesh_nums = tuple([int(mesh_id[1:]) for mesh_id in self.mesh_ids])
+        super(FromMeshIds, self).__init__(len(mesh_ids) == 0)
+
+    def __str__(self):
+        inv = 'not ' if self._inverted else ''
+        return f"are {inv}from papers with MeSH ID {_join_list(self.mesh_ids)}"
+
+    def _copy(self):
+        return self.__class__(self.mesh_ids)
+
+    def _get_constraint_json(self) -> dict:
+        return {'mesh_ids': list(self.mesh_ids),
+                '_mesh_nums': list(self.mesh_nums)}
+
+    def _get_table(self, ro):
+        return ro.MeshMeta
+
+    def _get_hash_query(self, ro, inject_queries=None):
+        meta = self._get_table(ro)
+        qry = self._base_query(ro)
+        if len(self.mesh_nums) == 1:
+            qry = qry.filter(meta.mesh_num == self.mesh_nums[0])
+        else:
+            qry = qry.filter(meta.mesh_num.in_(self.mesh_nums))
+
+        if not self._inverted:
+            if inject_queries:
+                for tq in inject_queries:
+                    qry = tq._apply_filter(self._get_table(ro), qry)
+        else:
+            # For much the same reason as with agent queries, an `except_` is
+            # required to perform inversion. Also likewise, great care is
+            # required to handle the type queries.
+            new_base = ro.session.query(
+                ro.SourceMeta.mk_hash.label('mk_hash'),
+                ro.SourceMeta.ev_count.label('ev_count')
+            )
+            if inject_queries:
+                for tq in inject_queries:
+                    new_base = tq._apply_filter(ro.SourceMeta, new_base)
+
+            # Invert the query.
+            al = except_(new_base, qry).alias('mesh_exclude')
+            qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
+                                   al.c.ev_count.label('ev_count'))
+        return qry
+
+    def ev_filter(self):
+        if not self._inverted:
+            if len(self.mesh_nums) == 1:
+                def get_clause(ro):
+                    return ro.RawStmtMesh.mesh_num == self.mesh_nums[0]
+            else:
+                def get_clause(ro):
+                    return ro.RawStmtMesh.mesh_num.in_(self.mesh_nums)
+        else:
+            if len(self.mesh_nums) == 1:
+                def get_clause(ro):
+                    return (ro.RawStmtMesh.mesh_num
+                            .is_distinct_from(self.mesh_nums[0]))
+            else:
+                def get_clause(ro):
+                    return ro.RawStmtMesh.mesh_num.notin_(self.mesh_nums)
+
+        return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
+
+
 class IntrusiveQuery(Query):
     """This is the parent of all queries that draw on info in all meta tables.
 
@@ -1667,89 +1750,6 @@ class HasType(IntrusiveQuery):
 
     def _get_query_values(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
-
-
-class FromMeshIds(_TextRefCore):
-    """Find Statements whose text sources were given one of a list of MeSH IDs.
-
-    Parameters
-    ----------
-    mesh_ids : list
-        A canonical MeSH ID, of the "D" variety, e.g. "D000135".
-    """
-    list_name = 'mesh_ids'
-
-    def __init__(self, mesh_ids: list):
-        for mesh_id in mesh_ids:
-            if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
-                raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
-                                 "the rest must be a number." % mesh_id)
-        self.mesh_ids = tuple(set(mesh_ids))
-        self.mesh_nums = tuple([int(mesh_id[1:]) for mesh_id in self.mesh_ids])
-        super(FromMeshIds, self).__init__(len(mesh_ids) == 0)
-
-    def __str__(self):
-        inv = 'not ' if self._inverted else ''
-        return f"are {inv}from papers with MeSH ID {_join_list(self.mesh_ids)}"
-
-    def _copy(self):
-        return self.__class__(self.mesh_ids)
-
-    def _get_constraint_json(self) -> dict:
-        return {'mesh_ids': list(self.mesh_ids),
-                '_mesh_nums': list(self.mesh_nums)}
-
-    def _get_table(self, ro):
-        return ro.MeshMeta
-
-    def _get_hash_query(self, ro, inject_queries=None):
-        meta = self._get_table(ro)
-        qry = self._base_query(ro)
-        if len(self.mesh_nums) == 1:
-            qry = qry.filter(meta.mesh_num == self.mesh_nums[0])
-        else:
-            qry = qry.filter(meta.mesh_num.in_(self.mesh_nums))
-
-        if not self._inverted:
-            if inject_queries:
-                for tq in inject_queries:
-                    qry = tq._apply_filter(self._get_table(ro), qry)
-        else:
-            # For much the same reason as with agent queries, an `except_` is
-            # required to perform inversion. Also likewise, great care is
-            # required to handle the type queries.
-            new_base = ro.session.query(
-                ro.SourceMeta.mk_hash.label('mk_hash'),
-                ro.SourceMeta.ev_count.label('ev_count')
-            )
-            if inject_queries:
-                for tq in inject_queries:
-                    new_base = tq._apply_filter(ro.SourceMeta, new_base)
-
-            # Invert the query.
-            al = except_(new_base, qry).alias('mesh_exclude')
-            qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
-                                   al.c.ev_count.label('ev_count'))
-        return qry
-
-    def ev_filter(self):
-        if not self._inverted:
-            if len(self.mesh_nums) == 1:
-                def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num == self.mesh_nums[0]
-            else:
-                def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.in_(self.mesh_nums)
-        else:
-            if len(self.mesh_nums) == 1:
-                def get_clause(ro):
-                    return (ro.RawStmtMesh.mesh_num
-                            .is_distinct_from(self.mesh_nums[0]))
-            else:
-                def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.notin_(self.mesh_nums)
-
-        return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
 
 
 class MergeQuery(Query):

@@ -1448,12 +1448,12 @@ class FromPapers(_TextRefCore):
                 if id_type in ['trid', 'tcid']:
                     conditions.append(tbl_attr == int(paper_id))
                 else:
-                    conditions.append(tbl_attr.like(paper_id))
+                    conditions.append(tbl_attr.like(str(paper_id)))
             else:
                 if id_type in ['trid', 'tcid']:
                     conditions.append(tbl_attr != int(paper_id))
                 else:
-                    conditions.append(tbl_attr.notlike(paper_id))
+                    conditions.append(tbl_attr.notlike(str(paper_id)))
         return conditions
 
     def _get_hash_query(self, ro, inject_queries=None):

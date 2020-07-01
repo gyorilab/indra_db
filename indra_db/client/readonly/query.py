@@ -1416,7 +1416,7 @@ class FromPapers(_TextRefCore):
     list_name = 'paper_list'
 
     def __init__(self, paper_list):
-        self.paper_list = tuple(set(paper_list))
+        self.paper_list = tuple({tuple(pair) for pair in paper_list})
         super(FromPapers, self).__init__(len(self.paper_list) == 0)
 
     def __str__(self) -> str:

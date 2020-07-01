@@ -177,10 +177,9 @@ class ApiCall:
         content = json.dumps(res_json)
 
         resp = Response(content, mimetype='application/json')
-        logger.info("Exiting with %d statements with %d/%d evidence of size "
-                    "%f MB after %s seconds."
-                    % (res_json['statements_returned'],
-                       res_json['evidence_returned'],
+        logger.info("Exiting with %d results that have %d total evidence, "
+                    "with size %f MB after %s seconds."
+                    % (len(res_json['results']),
                        res_json['total_evidence'],
                        sys.getsizeof(resp.data) / 1e6,
                        sec_since(self.start_time)))

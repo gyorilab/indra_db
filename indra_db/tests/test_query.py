@@ -364,6 +364,11 @@ def test_query_set_behavior():
         assert rjq == query, "Re-formed query does not == the original."
         assert rjq is not query, "Somehow re-composed query IS original query."
 
+        rjq = Query.from_json(json.loads(json_str))
+        assert rjq == query, "Re-formed query from re-formed JSON != original."
+        assert rjq is not query, \
+            "Somehow thoroughly reconstituted query IS original query."
+
         # Test actually running the query
         res = query.get_hashes(db)
         return res.results

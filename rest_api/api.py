@@ -33,18 +33,19 @@ logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
-app.register_blueprint(auth)
+if environ.get('TESTING_DB_APP') == '1':
+    logger.warning("TESTING: No auth will be enabled.")
+    TESTING = True
+else:
+    TESTING = False
 
-app.config['DEBUG'] = True
-SC, jwt = config_auth(app)
+if not TESTING:
+    app.register_blueprint(auth)
+    app.config['DEBUG'] = True
+    SC, jwt = config_auth(app)
 
 Compress(app)
 CORS(app)
-
-print("Loading file")
-logger.info("INFO working.")
-logger.warning("WARNING working.")
-logger.error("ERROR working.")
 
 TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
@@ -76,11 +77,18 @@ def render_my_template(template, title, **kwargs):
     return env.get_template(template).render(**kwargs)
 
 
+def jwt_nontest_optional(func):
+    if TESTING:
+        return func
+    else:
+        return jwt_optional(func)
+
+
 def _query_wrapper(get_db_query):
     logger.info("Calling outer wrapper.")
 
     @wraps(get_db_query)
-    @jwt_optional
+    @jwt_nontest_optional
     def decorator(*args, **kwargs):
         tracker = LogTracker()
         start_time = datetime.now()
@@ -88,23 +96,27 @@ def _query_wrapper(get_db_query):
                     % (get_db_query.__name__, start_time))
 
         web_query = request.args.copy()
-        offs = web_query.pop('offset', None)
-        ev_lim = web_query.pop('ev_limit', None)
-        best_first = web_query.pop('best_first', 'true').lower() == 'true'
-        max_stmts = min(int(web_query.pop('max_stmts', MAX_STATEMENTS)),
+        offs = _pop(web_query, 'offset', type_cast=int)
+        ev_lim = _pop(web_query, 'ev_limit', type_cast=int)
+        best_first = _pop(web_query, 'best_first', True, bool)
+        max_stmts = min(_pop(web_query, 'max_stmts', MAX_STATEMENTS, int),
                         MAX_STATEMENTS)
-        fmt = web_query.pop('format', 'json')
-        w_english = web_query.pop('with_english', 'false').lower() == 'true'
-        w_cur_counts = \
-            web_query.pop('with_cur_counts', 'false').lower() == 'true'
+        fmt = _pop(web_query, 'format', 'json')
+        w_english = _pop(web_query, 'with_english', False, bool)
+        w_cur_counts = _pop(web_query, 'with_cur_counts', False, bool)
 
         # Figure out authorization.
         has = dict.fromkeys(['elsevier', 'medscan'], False)
-        user, roles = resolve_auth(web_query)
-        for role in roles:
-            for resource in has.keys():
-                has[resource] |= role.permissions.get(resource, False)
-        logger.info('Auths: %s' % str(has))
+        if not TESTING:
+            user, roles = resolve_auth(web_query)
+            for role in roles:
+                for resource in has.keys():
+                    has[resource] |= role.permissions.get(resource, False)
+            logger.info('Auths: %s' % str(has))
+        else:
+            web_query.pop('api_key', None)
+            has['elsevier'] = False
+            has['medscan'] = False
 
         # Actually run the function.
         logger.info("Running function %s after %s seconds."
@@ -325,12 +337,23 @@ def serve_stages(stage):
 
 
 @dep_route('/statements', methods=['GET'])
-@jwt_optional
+@jwt_nontest_optional
 def get_statements_query_format():
     # Create a template object from the template file, load once
     return render_my_template('search_statements.html', 'Search',
                               message="Welcome! Try asking a question.",
                               endpoint=request.url_root)
+
+
+def iter_free_agents(query_dict):
+    agent_keys = {k for k in query_dict.keys() if k.startswith('agent')}
+    for k in agent_keys:
+        entry = query_dict.pop(k)
+        if isinstance(entry, list):
+            for agent in entry:
+                yield agent
+        else:
+            yield entry
 
 
 def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
@@ -341,10 +364,7 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     ev_filter = EvidenceFilter()
 
     # Get the agents without specified locations (subject or object).
-    free_agents = (query_dict.pop(k) for k in {k for k in query_dict.keys()
-                                               if k.startswith('agent')})
-    for raw_ag in free_agents:
-        num_agents += 1
+    for raw_ag in iter_free_agents(query_dict):
         ag, ns = process_agent(raw_ag)
         db_query &= HasAgent(ag, namespace=ns)
 
@@ -353,6 +373,9 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
         raw_ag = query_dict.pop(role, None)
         if raw_ag is None:
             continue
+        if isinstance(raw_ag, list):
+            assert len(raw_ag) == 1, f'Malformed agent for {role}: {raw_ag}'
+            raw_ag = raw_ag[0]
         num_agents += 1
         ag, ns = process_agent(raw_ag)
         db_query &= HasAgent(ag, namespace=ns, role=role.upper())
@@ -360,6 +383,10 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
     # Get the raw name of the statement type (we allow for variation in case).
     act_raw = query_dict.pop('type', None)
     if act_raw is not None:
+        if isinstance(act_raw, list):
+            assert len(act_raw) == 1, \
+                f"Got multiple entries for statement type: {act_raw}."
+            act_raw = act_raw[0]
         act = make_statement_camel(act_raw)
         db_query &= HasType([act])
 
@@ -396,7 +423,7 @@ def _db_query_from_web_query(query_dict, require=None, empty_web_query=False):
             ev_filter &= mesh_q.ev_filter()
 
     # Check for health of the resulting query, and some other things.
-    if isinstance(db_query, EmptyDBQuery):
+    if isinstance(db_query, EmptyQuery):
         raise DbAPIError(f"No arguments from web query {query_dict} mapped to "
                          f"db query.")
     assert isinstance(db_query, QueryCore), "Somehow db_query is not QueryCore."
@@ -473,7 +500,7 @@ def describe_curation():
 
 
 @dep_route('/curation/submit/<hash_val>', methods=['POST'])
-@jwt_optional
+@jwt_nontest_optional
 def submit_curation_endpoint(hash_val, **kwargs):
     user, roles = resolve_auth(dict(request.args))
     if not roles and not user:
@@ -517,8 +544,19 @@ def list_curations(stmt_hash, src_hash):
     return jsonify(curation_json)
 
 
+def _pop(query, k, default=None, type_cast=None):
+    if isinstance(default, bool):
+        val = query.pop(k, str(default).lower()) == 'true'
+    else:
+        val = query.pop(k, default)
+
+    if type_cast is not None and val is not None:
+        return type_cast(val)
+    return val
+
+
 @dep_route('/metadata/<level>/from_agents', methods=['GET'])
-@jwt_optional
+@jwt_nontest_optional
 def get_metadata(level):
     start = datetime.utcnow()
     query = request.args.copy()
@@ -531,21 +569,11 @@ def get_metadata(level):
             has[resource] |= role.permissions.get(resource, False)
     logger.info('Auths: %s' % str(has))
 
-    def pop(k, default=None, type_cast=None):
-        if isinstance(default, bool):
-            val = query.pop(k, str(default).lower()) == 'true'
-        else:
-            val = query.pop(k, default)
+    w_curations = _pop(query, 'with_cur_counts', False)
 
-        if type_cast is not None and val is not None:
-            return type_cast(val)
-        return val
-
-    w_curations = pop('with_cur_counts', False)
-
-    kwargs = dict(limit=pop('limit', type_cast=int),
-                  offset=pop('offset', type_cast=int),
-                  best_first=pop('best_first', True))
+    kwargs = dict(limit=_pop(query, 'limit', type_cast=int),
+                  offset=_pop(query, 'offset', type_cast=int),
+                  best_first=_pop(query, 'best_first', True))
     try:
         db_query = _db_query_from_web_query(query, {'HasAgent'}, True)
     except Exception as e:

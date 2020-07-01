@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+
+from datetime import datetime
+from argparse import ArgumentParser
+
+from benchmarker.util import *
+
+
+def main():
+    start_time = datetime.utcnow()
+    parser = ArgumentParser(
+        description=('Run tests and benchmark time to run and '
+                     'errors.'))
+    subparsers = parser.add_subparsers(
+        dest='task',
+        help="Select the action you wish to perform."
+    )
+
+    # Set up the run parser
+    run_parser = subparsers.add_parser('run', help='Run benchmark tests.')
+    run_parser.add_argument(dest='location',
+                            help='The location of the test file or directory.')
+    run_parser.add_argument(dest='stack_name',
+                            help='The name of the Readonly stack being tested.')
+    run_parser.add_argument(dest='api_name',
+                            help=('The name of the dependant API being tested. '
+                                  'This label is used to group test results on '
+                                  's3. Whenever possible, try to use existing '
+                                  'labels.'))
+
+    # Setup the list parser
+    list_parser = subparsers.add_parser('list', help='List certain properties.')
+    list_parser.add_argument(choices=['apis', 'stacks'], dest='list_scope')
+
+    # Parse the arguments, run the code.
+    args = parser.parse_args()
+    if args.task == 'list':
+        if args.list_scope == 'apis':
+            for api in list_apis():
+                print(api)
+        elif args.list_scope == 'stacks':
+            for stack_name in list_stacks():
+                print(stack_name)
+    elif args.task == 'run':
+        results = benchmark(args.location)
+        for test, stats in results.items():
+            print(test, stats)
+        save_results(start_time, args.api_name, args.stack_name, results)
+
+
+if __name__ == '__main__':
+    main()

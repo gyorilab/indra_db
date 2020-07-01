@@ -10,10 +10,12 @@ import json
 import logging
 from collections import OrderedDict, Iterable, defaultdict
 
+import requests
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
     except_, func, null, String, and_
 from sqlalchemy.dialects.postgresql import JSONB
 
+from indra import get_config
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
 from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
@@ -204,6 +206,20 @@ class Query(object):
         which is harder to read.
         """
         return self.__invert__()
+
+    def rest_get(self, result_type, limit=None, offset=None, best_first=True,
+                 ev_limit=None):
+        """Retrieve results from the remote API."""
+        url = get_config('INDRA_DB_REST_URL', failure_ok=False)
+        resp = requests.get(f'{url}/query/{result_type}',
+                            params={'json': json.dumps(self.to_json()),
+                                    'limit': limit, 'offset': offset,
+                                    'best_first': best_first,
+                                    'ev_limit': ev_limit})
+        if result_type == 'statements':
+            return StatementQueryResult.from_json(resp.json())
+        else:
+            return QueryResult.from_json(resp.json())
 
     def get_statements(self, ro=None, limit=None, offset=None, best_first=True,
                        ev_limit=None, evidence_filter=None) \

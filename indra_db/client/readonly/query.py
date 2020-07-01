@@ -72,6 +72,19 @@ class QueryResult(object):
             self.next_offset = (0 if offset is None else offset) + offset_comp
         self.query_json = query_json
 
+    @classmethod
+    def from_json(cls, json_dict):
+        next_offset = json_dict.pop('next_offset', None)
+        total_evidence = json_dict.pop('total_evidence', None)
+        nc = cls(**json_dict)
+        if nc.next_offset is None:
+            nc.next_offset = next_offset
+        else:
+            assert nc.next_offset == next_offset, "Offsets don't match."
+        assert nc.total_evidence == total_evidence,\
+            "Evidence counts don't match."
+        return nc
+
     def json(self) -> dict:
         """Return the JSON representation of the results."""
         if not isinstance(self.results, dict) \
@@ -81,7 +94,7 @@ class QueryResult(object):
             json_results = self.results
         return {'results': json_results, 'limit': self.limit,
                 'offset': self.offset, 'next_offset': self.next_offset,
-                'query': self.query_json,
+                'query_json': self.query_json,
                 'evidence_totals': self.evidence_totals,
                 'total_evidence': self.total_evidence}
 

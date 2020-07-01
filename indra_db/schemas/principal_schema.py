@@ -98,6 +98,10 @@ def get_schema(Base):
         def process_pmid(pmid):
             if not pmid:
                 return None, None
+
+            if not pmid.isdigit():
+                return pmid, None
+
             return pmid, int(pmid)
 
         @staticmethod
@@ -110,9 +114,15 @@ def get_schema(Base):
 
             if '.' in pmcid:
                 pmcid, version_number_str = pmcid.split('.')
-                version_number = int(version_number_str)
+                if version_number_str.isdigit():
+                    version_number = int(version_number_str)
+                else:
+                    version_number = None
             else:
                 version_number = None
+
+            if not pmcid[3:].isdigit():
+                return pmcid, None, version_number
 
             return pmcid, int(pmcid[3:]), version_number
 

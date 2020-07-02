@@ -493,6 +493,37 @@ class QueryApiCall(ApiCall):
         return Query.from_json(query_json)
 
 
+class MetadataApiCall(FromAgentsApiCall):
+    def produce_response(self, result):
+        # Look up curations, if result with_curations was set.
+        if self.w_cur_counts:
+            rel_hash_lookup = {}
+            if result.result_type == 'hashes':
+                for rel in result.results.values():
+                    rel['cur_count'] = 0
+                    rel_hash_lookup[rel['hash']] = rel
+            else:
+                for rel in result.results.values():
+                    for h in rel['hashes']:
+                        rel['cur_count'] = 0
+                        rel_hash_lookup[h] = rel
+            curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
+            for cur in curations:
+                rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
+
+        logger.info("Returning with %s results after %.2f seconds."
+                    % (len(result.results), sec_since(self.start_time)))
+
+        res_json = result.json()
+        res_json['relations'] = list(res_json['results'].values())
+        res_json['query_str'] = str(self.db_query)
+        resp = Response(json.dumps(res_json), mimetype='application/json')
+
+        logger.info("Result prepared after %.2f seconds."
+                    % sec_since(self.start_time))
+        return resp
+
+
 # ==========================
 # Here begins the API proper
 # ==========================
@@ -678,37 +709,6 @@ def _pop(query, k, default=None, type_cast=None):
     if type_cast is not None and val is not None:
         return type_cast(val)
     return val
-
-
-class MetadataApiCall(FromAgentsApiCall):
-    def produce_response(self, result):
-        # Look up curations, if result with_curations was set.
-        if self.w_cur_counts:
-            rel_hash_lookup = {}
-            if result.result_type == 'hashes':
-                for rel in result.results.values():
-                    rel['cur_count'] = 0
-                    rel_hash_lookup[rel['hash']] = rel
-            else:
-                for rel in result.results.values():
-                    for h in rel['hashes']:
-                        rel['cur_count'] = 0
-                        rel_hash_lookup[h] = rel
-            curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
-            for cur in curations:
-                rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
-
-        logger.info("Returning with %s results after %.2f seconds."
-                    % (len(result.results), sec_since(self.start_time)))
-
-        res_json = result.json()
-        res_json['relations'] = list(res_json['results'].values())
-        res_json['query_str'] = str(self.db_query)
-        resp = Response(json.dumps(res_json), mimetype='application/json')
-
-        logger.info("Result prepared after %.2f seconds."
-                    % sec_since(self.start_time))
-        return resp
 
 
 @dep_route('/metadata/<result_type>/from_agents', methods=['GET'])

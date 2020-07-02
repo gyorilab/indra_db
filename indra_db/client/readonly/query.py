@@ -78,7 +78,9 @@ class QueryResult(object):
     @classmethod
     def from_json(cls, json_dict):
         # Build a StatementQueryResult if appropriate
-        if json_dict['result_type'] == 'statements':
+        if cls != StatementQueryResult \
+                and json_dict['result_type'] == 'statements':
+            json_dict.pop('result_type')
             return StatementQueryResult.from_json(json_dict)
 
         # Filter out some calculated values.

@@ -69,7 +69,7 @@ env.globals.update(url_for=url_for)
 
 
 MAX_STATEMENTS = int(1e3)
-REDACT_MESSAGE = '[MISSING/INVALID API KEY: limited to 200 char for Elsevier]'
+REDACT_MESSAGE = '[MISSING/INVALID CREDENTIALS: limited to 200 char for Elsevier]'
 
 
 def render_my_template(template, title, **kwargs):

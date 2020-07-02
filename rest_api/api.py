@@ -225,7 +225,6 @@ class ApiCall:
 
     def process_entries(self, result):
         elsevier_redactions = 0
-        source_counts = result.source_counts
         if not all(self.has.values()) or self.fmt == 'json-js' \
                 or self.w_english:
             for key, entry in result.results.copy().items():
@@ -256,7 +255,7 @@ class ApiCall:
                 # Filter out medscan if user does not have medscan privileges.
                 if not self.has['medscan']:
                     if result.result_type == 'statements':
-                        source_counts[key].pop('medscan', 0)
+                        result.source_counts[key].pop('medscan', 0)
                     else:
                         result.evidence_totals[key] -= \
                             entry['source_counts'].pop('medscan', 0)
@@ -326,7 +325,7 @@ class StatementApiCall(ApiCall):
 
         # Add derived values to the res_json.
         if self.w_cur_counts:
-            res_json['curation_counts'] = self.get_curation_counts(result)
+            res_json['num_curations'] = self.get_curation_counts(result)
         res_json['statement_limit'] = MAX_STATEMENTS
         res_json['statements_returned'] = len(result.results)
         res_json['end_of_statements'] = (len(result.results) < MAX_STATEMENTS)
@@ -455,7 +454,7 @@ class StatementApiCall(ApiCall):
             raise DbAPIError(f"Required query elements not found: {require_all}")
 
         if self.web_query and empty_web_query:
-            raise DbAPIError(f"Invalid query options: {self.web_query.keys()}.")
+            raise DbAPIError(f"Invalid query options: {list(self.web_query.keys())}.")
 
         return db_query
 

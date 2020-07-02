@@ -254,6 +254,12 @@ class ApiCall:
                     % (self.__class__.__name__, sec_since(self.start_time)))
         return
 
+
+class StatementApiCall(ApiCall):
+
+    def get_db_query(self):
+        raise NotImplementedError()
+
     @staticmethod
     def get_curation_counts(result):
         # Get counts of the curations for the resulting statements.
@@ -274,13 +280,7 @@ class ApiCall:
                     break
         return cur_counts
 
-
-class StatementApiCall(ApiCall):
-
-    def get_db_query(self):
-        raise NotImplementedError()
-
-    def process_result(self, result):
+    def produce_response(self, result):
         res_json = result.json()
 
         # Add derived values to the res_json.

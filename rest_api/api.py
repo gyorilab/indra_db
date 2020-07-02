@@ -115,21 +115,22 @@ class ApiCall:
             self.web_query.pop('api_key', None)
             self.has['elsevier'] = False
             self.has['medscan'] = False
+
+        self.db_query = self.get_db_query()
         return
 
     def run(self, result_type):
         # Get the db query object.
         logger.info("Running function %s after %s seconds."
                     % (self.__class__.__name__, sec_since(self.start_time)))
-        db_query = self.get_db_query()
-        if isinstance(db_query, Response):
-            return db_query
-        elif not isinstance(db_query, Query):
+        if isinstance(self.db_query, Response):
+            return self.db_query
+        elif not isinstance(self.db_query, Query):
             raise RuntimeError("Result should be a child of Query.")
 
         if not self.has['medscan']:
             minus_q = ~HasOnlySource('medscan')
-            db_query &= minus_q
+            self.db_query &= minus_q
         else:
             minus_q = None
 
@@ -142,22 +143,22 @@ class ApiCall:
             else:
                 ev_filter = None
             ev_lim = self._pop('ev_limit', self.default_ev_lim, int)
-            res = db_query.get_statements(ev_lim=ev_lim,
+            res = self.db_query.get_statements(ev_lim=ev_lim,
                                           evidence_filter=ev_filter, **params)
-            self.filter_evidence(res)
         elif result_type == 'interactions':
-            res = db_query.get_statements(**params)
+            res = self.db_query.get_statements(**params)
         elif result_type == 'relations':
             with_hashes = self._pop('with_hashes', type_cast=bool)
-            res = db_query.get_relations(with_hashes=with_hashes, **params)
+            res = self.db_query.get_relations(with_hashes=with_hashes, **params)
         elif result_type == 'agents':
             with_hashes = self._pop('with_hashes', type_cast=bool)
-            res = db_query.get_agents(with_hashes=with_hashes, **params)
+            res = self.db_query.get_agents(with_hashes=with_hashes, **params)
         elif result_type == 'hashes':
-            res = db_query.get_hashes(**params)
+            res = self.db_query.get_hashes(**params)
         else:
             raise ValueError(f"Invalid result type: {result_type}")
-        return self.process_result(res)
+        self.process_entries(res)
+        return self.produce_response(res)
 
     def _pop(self, key, default=None, type_cast=None):
         if isinstance(default, bool):
@@ -172,7 +173,7 @@ class ApiCall:
     def get_db_query(self):
         raise NotImplementedError()
 
-    def process_result(self, result):
+    def produce_response(self, result):
         res_json = result.json()
         content = json.dumps(res_json)
 
@@ -185,25 +186,56 @@ class ApiCall:
                        sec_since(self.start_time)))
         return resp
 
-    def filter_evidence(self, result):
+    def process_entries(self, result):
         elsevier_redactions = 0
         source_counts = result.source_counts
         if not all(self.has.values()) or self.fmt == 'json-js' \
                 or self.w_english:
-            for h, stmt_json in result.results.copy().items():
-                if self.w_english:
-                    stmt = stmts_from_json([stmt_json])[0]
-                    stmt_json['english'] = _format_stmt_text(stmt)
-                    stmt_json['evidence'] = _format_evidence_text(stmt)
+            for key, entry in result.results.copy().items():
+                # Build english reps of each result (unless their just hashes)
+                if self.w_english and result.result_type != 'hashes':
+                    if result.result_type == 'statements':
+                        stmt = stmts_from_json([entry])[0]
+                        eng = _format_stmt_text(stmt)
+                        entry['evidence'] = _format_evidence_text(stmt)
+                    elif result.result_type == 'agents':
+                        ag_dict = entry['agents']
+                        if len(ag_dict) == 0:
+                            eng = ''
+                        else:
+                            ag_list = list(ag_dict.values())
+                            eng = ag_list[0]
+                            if len(ag_dict) > 1:
+                                eng += ' interacts with ' + ag_list[1]
+                                if len(ag_dict) > 3:
+                                    eng += ', ' + ', '.join(ag_list[2:-1])
+                                if len(ag_dict) > 2:
+                                    eng += ', and ' + ag_list[-1]
+                    else:
+                        eng = EnglishAssembler(
+                            [stmt_from_interaction(entry)]).make_model()
+                    entry['english'] = eng
 
+                # Filter out medscan if user does not have medscan privileges.
+                if not self.has['medscan']:
+                    if result.result_type == 'statements':
+                        source_counts[key].pop('medscan', 0)
+                    else:
+                        result.evidence_totals[key] -= \
+                            entry['source_counts'].pop('medscan', 0)
+                        entry['total_count'] = result.evidence_totals[key]
+                        if not entry['source_counts']:
+                            logger.warning("Censored content present.")
+                            continue
+
+                # In most cases we can stop here
                 if self.has['elsevier'] and self.fmt != 'json-js' \
-                        and not self.w_english:
+                        and not self.w_english \
+                        or result.result_type != 'statements':
                     continue
 
-                if not self.has['medscan']:
-                    source_counts[h].pop('medscan', 0)
-
-                for ev_json in stmt_json['evidence'][:]:
+                # If there is evidence, loop through it if necessary.
+                for ev_json in entry['evidence'][:]:
                     if self.fmt == 'json-js':
                         ev_json['source_hash'] = str(ev_json['source_hash'])
 
@@ -214,10 +246,11 @@ class ApiCall:
                         if len(text) > 200:
                             ev_json['text'] = text[:200] + REDACT_MESSAGE
                             elsevier_redactions += 1
-        logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
-                    f"evidence.")
+        if result.result_type == 'statements':
+            logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
+                        f"evidence.")
 
-        logger.info("Finished redacting evidence for %s after %s seconds."
+        logger.info("Finished  for %s after %s seconds."
                     % (self.__class__.__name__, sec_since(self.start_time)))
         return
 
@@ -644,118 +677,40 @@ def _pop(query, k, default=None, type_cast=None):
     return val
 
 
-@dep_route('/metadata/<level>/from_agents', methods=['GET'])
-@jwt_nontest_optional
-def get_metadata(level):
-    start = datetime.utcnow()
-    query = request.args.copy()
-
-    # Figure out authorization.
-    has = dict.fromkeys(['elsevier', 'medscan'], False)
-    if not TESTING:
-        user, roles = resolve_auth(query)
-        for role in roles:
-            for resource in has.keys():
-                has[resource] |= role.permissions.get(resource, False)
-    logger.info('Auths: %s' % str(has))
-
-    w_curations = _pop(query, 'with_cur_counts', False)
-
-    kwargs = dict(limit=_pop(query, 'limit', type_cast=int),
-                  offset=_pop(query, 'offset', type_cast=int),
-                  best_first=_pop(query, 'best_first', True))
-    try:
-        inp_dict = {f'agent{i}': ag
-                    for i, ag in enumerate(query.poplist('agent'))}
-        inp_dict['mesh_ids'] = \
-            {m for m in query.pop('mesh_ids', '').split(',') if m}
-        inp_dict['paper_ids'] = \
-            {i for i in query.pop('paper_ids', '').split(',') if i}
-        inp_dict.update(query)
-        db_query = _db_query_from_web_query(
-            inp_dict,
-            require_any={'HasAgent', 'FromPapers'},
-            empty_web_query=True
-        )
-    except Exception as e:
-        abort(Response(f'Problem forming query: {e}', 400))
-        return
-
-    if not has['medscan']:
-        db_query -= HasOnlySource('medscan')
-
-    if level == 'hashes':
-        res = db_query.get_interactions(**kwargs)
-    elif level == 'relations':
-        res = db_query.get_relations(with_hashes=w_curations, **kwargs)
-    elif level == 'agents':
-        res = db_query.get_agents(with_hashes=w_curations, **kwargs)
-    else:
-        abort(Response(f'Invalid level: {level}'))
-        return
-
-    dt = (datetime.utcnow() - start).total_seconds()
-    logger.info("Got %s results after %.2f." % (len(res.results), dt))
-
-    ret = res.json()
-    res_list = []
-    for key, entry in ret.pop('results').items():
-        # Filter medscan from source counts.
-        if not has['medscan']:
-            res.evidence_totals[key] -= entry['source_counts'].pop('medscan', 0)
-            entry['total_count'] = res.evidence_totals[key]
-            if not entry['source_counts']:
-                logger.warning("Censored content present.")
-                continue
-
-        # Create english
-        if level == 'agents':
-            ag_dict = entry['agents']
-            if len(ag_dict) == 0:
-                eng = ''
-            else:
-                ag_list = list(ag_dict.values())
-                eng = ag_list[0]
-                if len(ag_dict) > 1:
-                    eng += ' interacts with ' + ag_list[1]
-                    if len(ag_dict) > 3:
-                        eng += ', ' + ', '.join(ag_list[2:-1])
-                    if len(ag_dict) > 2:
-                        eng += ', and ' + ag_list[-1]
-        else:
-            eng = EnglishAssembler([stmt_from_interaction(entry)]).make_model()
-        entry['english'] = eng
-
-        res_list.append(entry)
-
-    # Look up curations, if result with_curations was set.
-    if w_curations:
-        rel_hash_lookup = {}
-        if level == 'hashes':
-            for rel in res_list:
-                rel['cur_count'] = 0
-                rel_hash_lookup[rel['hash']] = rel
-        else:
-            for rel in res_list:
-                for h in rel['hashes']:
+class MetadataApiCall(FromAgentsApiCall):
+    def produce_response(self, result):
+        # Look up curations, if result with_curations was set.
+        if self.w_cur_counts:
+            rel_hash_lookup = {}
+            if result.result_type == 'hashes':
+                for rel in result.results.values():
                     rel['cur_count'] = 0
-                    rel_hash_lookup[h] = rel
-        curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
-        for cur in curations:
-            rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
+                    rel_hash_lookup[rel['hash']] = rel
+            else:
+                for rel in result.results.values():
+                    for h in rel['hashes']:
+                        rel['cur_count'] = 0
+                        rel_hash_lookup[h] = rel
+            curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
+            for cur in curations:
+                rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
 
-    # Finish up the query.
-    dt = (datetime.utcnow() - start).total_seconds()
-    logger.info("Returning with %s results after %.2f seconds."
-                % (len(res_list), dt))
+        logger.info("Returning with %s results after %.2f seconds."
+                    % (len(result.results), sec_since(self.start_time)))
 
-    ret['relations'] = res_list
-    ret['query_str'] = str(db_query)
-    resp = Response(json.dumps(ret), mimetype='application/json')
+        res_json = result.json()
+        res_json['relations'] = list(res_json['results'].values())
+        res_json['query_str'] = str(self.db_query)
+        resp = Response(json.dumps(res_json), mimetype='application/json')
 
-    dt = (datetime.utcnow() - start).total_seconds()
-    logger.info("Result prepared after %.2f seconds." % dt)
-    return resp
+        logger.info("Result prepared after %.2f seconds."
+                    % sec_since(self.start_time))
+        return resp
+
+
+@dep_route('/metadata/<result_type>/from_agents', methods=['GET'])
+def get_metadata(result_type):
+    return MetadataApiCall().run(result_type)
 
 
 if __name__ == '__main__':

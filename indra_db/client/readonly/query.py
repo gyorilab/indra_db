@@ -59,7 +59,7 @@ class QueryResult(object):
         A description of the query that was used.
     """
     def __init__(self, results, limit: int, offset: int, offset_comp: int,
-                 evidence_totals: dict, query_json: dict):
+                 evidence_totals: dict, query_json: dict, result_type: str):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
                              "and not a string.")
@@ -68,6 +68,7 @@ class QueryResult(object):
         self.total_evidence = sum(self.evidence_totals.values())
         self.limit = limit
         self.offset = offset
+        self.result_type = result_type
         if limit is None or offset_comp < limit:
             self.next_offset = None
         else:
@@ -76,9 +77,18 @@ class QueryResult(object):
 
     @classmethod
     def from_json(cls, json_dict):
+        # Build a StatementQueryResult if appropriate
+        if json_dict['result_type'] == 'statements':
+            return StatementQueryResult.from_json(json_dict)
+
+        # Filter out some calculated values.
         next_offset = json_dict.pop('next_offset', None)
         total_evidence = json_dict.pop('total_evidence', None)
+
+        # Build the class
         nc = cls(**json_dict)
+
+        # Check calculated values.
         if nc.next_offset is None:
             nc.next_offset = next_offset
         else:
@@ -98,7 +108,8 @@ class QueryResult(object):
                 'offset': self.offset, 'next_offset': self.next_offset,
                 'query_json': self.query_json,
                 'evidence_totals': self.evidence_totals,
-                'total_evidence': self.total_evidence}
+                'total_evidence': self.total_evidence,
+                'result_type': self.result_type}
 
 
 class StatementQueryResult(QueryResult):
@@ -122,7 +133,8 @@ class StatementQueryResult(QueryResult):
                  source_counts: dict, query_json: dict):
         super(StatementQueryResult, self).__init__(results, limit,
                                                    offset, len(results),
-                                                   evidence_totals, query_json)
+                                                   evidence_totals, query_json,
+                                                   'statements')
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
 
@@ -439,7 +451,8 @@ class Query(object):
         evidence_totals = {h: cnt for h, cnt in result}
 
         return QueryResult(set(evidence_totals.keys()), limit, offset,
-                           len(result), evidence_totals, self.to_json())
+                           len(result), evidence_totals, self.to_json(),
+                           'hashes')
 
     def _get_name_query(self, ro, limit=None, offset=None, best_first=True):
         mk_hashes_q = self.get_hash_query(ro)
@@ -519,7 +532,7 @@ class Query(object):
             ev_totals[h] = sum(src_json.values())
 
         return QueryResult(results, limit, offset, len(results), ev_totals,
-                           self.to_json())
+                           self.to_json(), 'interactions')
 
     def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
                       with_hashes=False) \
@@ -598,7 +611,7 @@ class Query(object):
             num_hashes += len(hashes)
 
         return QueryResult(results, limit, offset, num_hashes, ev_totals,
-                           self.to_json())
+                           self.to_json(), 'relations')
 
     def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
                    with_hashes=False) \
@@ -667,7 +680,7 @@ class Query(object):
             num_hashes += len(hashes)
 
         return QueryResult(results, limit, offset, num_hashes, ev_totals,
-                           self.to_json())
+                           self.to_json(), 'agents')
 
     def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
                       best_first=True):

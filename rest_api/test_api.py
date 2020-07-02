@@ -429,11 +429,7 @@ class DbApiTestCase(unittest.TestCase):
             raise SkipTest("No redactable (>200 char) Elsevier content "
                            "occurred.")
 
-        key = get_config('INDRA_DB_REST_API_KEY')
-        if key is None:
-            return  # Can't test the behavior with an API key.
-
-        key_param = 'api_key=%s' % key
+        key_param = 'api_key=TESTKEY'
         if base_qstr:
             new_qstr = '&'.join(base_qstr.replace('?', '').split('&')
                                 + [key_param])

@@ -173,6 +173,10 @@ def _make_agent_dict(ag_dict):
             if str(n) in ag_dict}
 
 
+class ApiError(Exception):
+    pass
+
+
 class Query(object):
     """The core class for all queries; not functional on its own."""
 
@@ -245,6 +249,10 @@ class Query(object):
                                     'limit': limit, 'offset': offset,
                                     'best_first': best_first,
                                     'ev_limit': ev_limit})
+        if resp.status_code != 200:
+            raise ApiError(f"REST API failed with ({resp.status_code}): "
+                           f"{resp.json()}")
+
         if result_type == 'statements':
             return StatementQueryResult.from_json(resp.json())
         else:

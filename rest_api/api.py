@@ -546,7 +546,7 @@ class MetadataApiCall(FromAgentsApiCall):
 
 class QueryApiCall(ApiCall):
     def get_db_query(self):
-        query_json = self._pop('json', '{}')
+        query_json = json.loads(self._pop('json', '{}'))
         return Query.from_json(query_json)
 
 

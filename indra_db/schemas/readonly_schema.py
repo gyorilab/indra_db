@@ -529,7 +529,8 @@ def get_schema(Base):
                           "        = raw_unique_links.pa_stmt_mk_hash\n"
                           "GROUP BY meta.mk_hash, mesh_num, type_num, \n"
                           "  meta.ev_count, is_active, activity, agent_count")
-        _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num'),
+        _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num',
+                               cluster=True),
                     BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('mesh_meta_type_num_idx', 'type_num'),
                     StringIndex('mesh_meta_activity_idx', 'activity')]

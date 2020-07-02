@@ -625,7 +625,7 @@ class Query(object):
                             'type': stmt_type, 'activity': activity,
                             'is_active': is_active, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
-            num_hashes += len(hashes)
+            num_hashes += 0 if hashes is None else len(hashes)
 
         return QueryResult(results, limit, offset, num_hashes, ev_totals,
                            self.to_json(), 'relations')

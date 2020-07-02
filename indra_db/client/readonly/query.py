@@ -90,6 +90,13 @@ class QueryResult(object):
         # Build the class
         nc = cls(**json_dict)
 
+        # Convert result keys into integers, if appropriate
+        if isinstance(nc.results, dict):
+            if nc.result_type in ['statements', 'interactions']:
+                nc.evidence_totals = {int(k): v
+                                      for k, v in nc.evidence_totals.items()}
+                nc.results = {int(k): v for k, v in nc.results.items()}
+
         # Check calculated values.
         if nc.next_offset is None:
             nc.next_offset = next_offset
@@ -104,6 +111,8 @@ class QueryResult(object):
         if not isinstance(self.results, dict) \
                 and not isinstance(self.results, list):
             json_results = list(self.results)
+        elif isinstance(self.results, dict):
+            json_results = {str(k): v for k, v in self.results.items()}
         else:
             json_results = self.results
         return {'results': json_results, 'limit': self.limit,
@@ -146,6 +155,12 @@ class StatementQueryResult(QueryResult):
         json_dict.update({'returned_evidence': self.returned_evidence,
                           'source_counts': self.source_counts})
         return json_dict
+
+    @classmethod
+    def from_json(cls, json_dict):
+        nc = super(StatementQueryResult, cls).from_json(json_dict)
+        nc.source_counts = {int(k): v for k, v in nc.source_counts.items()}
+        return nc
 
     def statements(self) -> list:
         """Get a list of Statements from the results."""

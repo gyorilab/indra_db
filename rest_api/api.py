@@ -490,7 +490,7 @@ class FromHashApiCall(StatementApiCall):
     default_ev_lim = 1000
 
     def get_db_query(self):
-        self.web_query['hashses'] = [self._pop('hash')]
+        self.web_query['hashes'] = [self._pop('hash')]
         return self._db_query_from_web_query()
 
 
@@ -502,7 +502,7 @@ class FromPapersApiCall(StatementApiCall):
             logger.error("No ids provided!")
             abort(Response("No ids in request!", 400))
         mesh_ids = request.json.get('mesh_ids', [])
-        self.web_query['papser_ids'] = ids
+        self.web_query['paper_ids'] = ids
         self.web_query['mesh_ids'] = mesh_ids
         return self._db_query_from_web_query()
 

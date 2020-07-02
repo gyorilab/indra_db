@@ -116,10 +116,12 @@ class ApiCall:
             self.has['elsevier'] = False
             self.has['medscan'] = False
 
-        self.db_query = self.get_db_query()
+        self.db_query = None
         return
 
     def run(self, result_type):
+        self.db_query = self.get_db_query()
+
         # Get the db query object.
         logger.info("Running function %s after %s seconds."
                     % (self.__class__.__name__, sec_since(self.start_time)))
@@ -601,9 +603,9 @@ def get_statements(method):
         call = FromAgentsApiCall()
     elif method == 'from_hashes' and request.method == 'POST':
         call = FromHashesApiCall()
-    elif method.startswith('from_hash') and request.method == 'GET':
+    elif method.startswith('from_hash/') and request.method == 'GET':
         call = FromHashApiCall()
-        call.web_query['hash'] = method[len('from_hash'):]
+        call.web_query['hash'] = method[len('from_hash/'):]
     elif method == 'from_papers' and request.method == 'POST':
         call = FromPapersApiCall()
     else:

@@ -86,6 +86,28 @@ def jwt_nontest_optional(func):
         return jwt_optional(func)
 
 
+def iter_free_agents(query_dict):
+    agent_keys = {k for k in query_dict.keys() if k.startswith('agent')}
+    for k in agent_keys:
+        entry = query_dict.pop(k)
+        if isinstance(entry, list):
+            for agent in entry:
+                yield agent
+        else:
+            yield entry
+
+
+def dep_route(url, **kwargs):
+    if DEPLOYMENT is not None:
+        url = f'/{DEPLOYMENT}{url}'
+    flask_dec = app.route(url, **kwargs)
+    return flask_dec
+
+
+# ==========================
+# API call class definitions
+# ==========================
+
 class ApiCall:
     default_ev_lim = 10
 
@@ -420,17 +442,6 @@ class StatementApiCall(ApiCall):
         return db_query
 
 
-def iter_free_agents(query_dict):
-    agent_keys = {k for k in query_dict.keys() if k.startswith('agent')}
-    for k in agent_keys:
-        entry = query_dict.pop(k)
-        if isinstance(entry, list):
-            for agent in entry:
-                yield agent
-        else:
-            yield entry
-
-
 class FromAgentsApiCall(StatementApiCall):
     def get_db_query(self):
         logger.info("Getting query details.")
@@ -532,13 +543,6 @@ class QueryApiCall(ApiCall):
 # ==========================
 # Here begins the API proper
 # ==========================
-
-
-def dep_route(url, **kwargs):
-    if DEPLOYMENT is not None:
-        url = f'/{DEPLOYMENT}{url}'
-    flask_dec = app.route(url, **kwargs)
-    return flask_dec
 
 
 @dep_route('/', methods=['GET'])

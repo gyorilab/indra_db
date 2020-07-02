@@ -143,8 +143,9 @@ class ApiCall:
             else:
                 ev_filter = None
             ev_lim = self._pop('ev_limit', self.default_ev_lim, int)
-            res = self.db_query.get_statements(ev_lim=ev_lim,
-                                          evidence_filter=ev_filter, **params)
+            res = self.db_query.get_statements(ev_limit=ev_lim,
+                                               evidence_filter=ev_filter,
+                                               **params)
         elif result_type == 'interactions':
             res = self.db_query.get_statements(**params)
         elif result_type == 'relations':

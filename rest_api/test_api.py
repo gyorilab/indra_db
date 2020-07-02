@@ -12,6 +12,8 @@ from warnings import warn
 from indra import get_config
 from indra.statements import stmts_from_json
 from indra.databases import hgnc_client
+from indra_db.client import HasAgent, HasType
+from indra_db.client.readonly.query import QueryResult, StatementQueryResult
 
 from .api import app, MAX_STATEMENTS, get_source, REDACT_MESSAGE
 
@@ -475,6 +477,45 @@ class DbApiTestCase(unittest.TestCase):
     def test_interaction_query(self):
         self.__time_query('get', 'metadata/relations/from_agents',
                           'agent0=mek%40AUTO&limit=50&with_cur_counts=true')
+
+    def test_simple_json_query(self):
+        query = (HasAgent('MEK', namespace='NAME')
+                 & HasAgent('ERK', namespace='NAME')
+                 & HasType(['Phosphorylation']))
+        limit = 50
+        ev_limit = 5
+        qr1 = query.get_statements(limit=50, ev_limit=5)
+        qj = query.to_json()
+        qjs = json.dumps(qj)
+        resp, dt, size = \
+            self.__time_query('get', 'query/statements',
+                              f'json={qjs}&limit={limit}&ev_limit={ev_limit}')
+        qr2 = QueryResult.from_json(json.loads(resp.data))
+        assert isinstance(qr2, StatementQueryResult)
+
+        # Check that we got the same statements.
+        assert qr1.results.keys() == qr2.results.keys()
+
+        # Make sure elsevier and medscan were filtered out
+        for s1, s2 in zip(qr1.statements(), qr2.statements()):
+            if any(ev.source_api == 'medscan' for ev in s1.evidence):
+                assert len(s1.evidence) > len(s2.evidence),\
+                    'Medscan result not filtered out.'
+                continue  # TODO: Figure out how to test elsevier in this case.
+            else:
+                assert len(s1.evidence) == len(s2.evidence), \
+                    "Evidence counts don't match."
+
+            for ev1, ev2 in zip(s1.evidence, s2.evidence):
+                if ev1.text_refs['SOURCE'] == 'elsevier':
+                    if len(ev1.text) > 200:
+                        assert ev2.text.endswith(REDACT_MESSAGE),\
+                            "Elsevier text not truncated."
+                        assert len(ev2.text) == (200 + len(REDACT_MESSAGE)), \
+                            "Elsevier text not truncated."
+                    else:
+                        assert len(ev1.text) == len(ev2.text),\
+                            "Evidence text lengths don't match."
 
 
 if __name__ == '__main__':

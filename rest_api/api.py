@@ -406,8 +406,14 @@ class StatementApiCall(ApiCall):
 
         # Unpack paper ids, if present:
         id_tpls = set()
-        for id_str in self._pop('paper_ids', []):
-            val, typ = id_str.split('@')
+        for paper_id in self._pop('paper_ids', []):
+            if isinstance(paper_id, dict):
+                val = paper_id['id']
+                typ = paper_id['type']
+            elif isinstance(paper_id, str):
+                val, typ = paper_id.split('@')
+            else:
+                raise ValueError(f"Invalid paper_id type: {type(paper_id)}")
 
             # Turn tcids and trids into integers.
             id_val = int(val) if typ in ['tcid', 'trid'] else val

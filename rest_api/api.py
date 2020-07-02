@@ -2,7 +2,6 @@ import sys
 import json
 import logging
 from os import path, environ
-from functools import wraps
 from datetime import datetime
 
 from flask import Flask, request, abort, Response, redirect, jsonify
@@ -143,47 +142,45 @@ class ApiCall:
                 self.has['medscan'] = True
 
         self.db_query = None
+        self.ev_filter = None
+        self.special = {}
         return
 
     def run(self, result_type):
-        self.db_query = self.get_db_query()
 
         # Get the db query object.
         logger.info("Running function %s after %s seconds."
                     % (self.__class__.__name__, sec_since(self.start_time)))
-        if isinstance(self.db_query, Response):
-            return self.db_query
-        elif not isinstance(self.db_query, Query):
-            raise RuntimeError("Result should be a child of Query.")
-
-        if not self.has['medscan']:
-            minus_q = ~HasOnlySource('medscan')
-            self.db_query &= minus_q
-        else:
-            minus_q = None
 
         # Actually run the function
         params = dict(offset=self.offs, limit=self.max_stmts,
                       best_first=self.best_first)
         if result_type == 'statements':
-            if minus_q:
-                ev_filter = minus_q.ev_filter()
-            else:
-                ev_filter = None
-            ev_lim = self._pop('ev_limit', self.default_ev_lim, int)
-            res = self.db_query.get_statements(ev_limit=ev_lim,
-                                               evidence_filter=ev_filter,
-                                               **params)
+            self.special['ev_limit'] = \
+                self._pop('ev_limit', self.default_ev_lim, int)
+            res = self.get_db_query().get_statements(
+                ev_limit=self.special['ev_limit'],
+                evidence_filter=self.ev_filter,
+                **params
+            )
         elif result_type == 'interactions':
-            res = self.db_query.get_statements(**params)
+            res = self.get_db_query().get_statements(**params)
         elif result_type == 'relations':
-            with_hashes = self._pop('with_hashes', type_cast=bool)
-            res = self.db_query.get_relations(with_hashes=with_hashes, **params)
+            self.special['with_hashes'] = \
+                self._pop('with_hashes', False, bool)
+            res = self.get_db_query().get_relations(
+                with_hashes=self.special['with_hashes'] or self.w_cur_counts,
+                **params
+            )
         elif result_type == 'agents':
-            with_hashes = self._pop('with_hashes', type_cast=bool)
-            res = self.db_query.get_agents(with_hashes=with_hashes, **params)
+            self.special['with_hashes'] = \
+                self._pop('with_hashes', False, bool)
+            res = self.get_db_query().get_agents(
+                with_hashes=self.special['with_hashes'] or self.w_cur_counts,
+                **params
+            )
         elif result_type == 'hashes':
-            res = self.db_query.get_hashes(**params)
+            res = self.get_db_query().get_hashes(**params)
         else:
             raise ValueError(f"Invalid result type: {result_type}")
         self.process_entries(res)
@@ -200,6 +197,17 @@ class ApiCall:
         return val
 
     def get_db_query(self):
+        if self.db_query is None:
+            self.db_query = self._build_db_query()
+
+            if not self.has['medscan']:
+                minus_q = ~HasOnlySource('medscan')
+                self.db_query &= minus_q
+                self.ev_filter = minus_q.ev_filter()
+
+        return self.db_query
+
+    def _build_db_query(self):
         raise NotImplementedError()
 
     def produce_response(self, result):
@@ -290,7 +298,7 @@ class StatementApiCall(ApiCall):
         self.strict = self._pop('strict', False, bool)
         return
 
-    def get_db_query(self):
+    def _build_db_query(self):
         raise NotImplementedError()
 
     @staticmethod
@@ -453,7 +461,7 @@ class StatementApiCall(ApiCall):
 
 
 class FromAgentsApiCall(StatementApiCall):
-    def get_db_query(self):
+    def _build_db_query(self):
         logger.info("Getting query details.")
         try:
             self.web_query.update(
@@ -470,23 +478,23 @@ class FromAgentsApiCall(StatementApiCall):
             )
         except Exception as e:
             logger.exception(e)
-            abort(Response(f'Problem forming query: {e}', 400))
-            return
+            return abort(Response(f'Problem forming query: {e}', 400))
 
         return db_query
 
 
 class FromHashesApiCall(StatementApiCall):
-    def get_db_query(self):
+    def _build_db_query(self):
         hashes = request.json.get('hashes')
         if not hashes:
             logger.error("No hashes provided!")
-            abort(Response("No hashes given!", 400))
+            return abort(Response("No hashes given!", 400))
         if len(hashes) > MAX_STATEMENTS:
             logger.error("Too many hashes given!")
-            abort(
-                Response("Too many hashes given, %d allowed." % MAX_STATEMENTS,
-                         400))
+            return abort(
+                Response(f"Too many hashes given, {MAX_STATEMENTS} allowed.",
+                         400)
+            )
 
         self.web_query['hashes'] = hashes
         return self._db_query_from_web_query()
@@ -495,18 +503,18 @@ class FromHashesApiCall(StatementApiCall):
 class FromHashApiCall(StatementApiCall):
     default_ev_lim = 1000
 
-    def get_db_query(self):
+    def _build_db_query(self):
         self.web_query['hashes'] = [self._pop('hash')]
         return self._db_query_from_web_query()
 
 
 class FromPapersApiCall(StatementApiCall):
-    def get_db_query(self):
+    def _build_db_query(self):
         # Get the paper id.
         ids = request.json.get('ids')
         if not ids:
             logger.error("No ids provided!")
-            abort(Response("No ids in request!", 400))
+            return abort(Response("No ids in request!", 400))
         mesh_ids = request.json.get('mesh_ids', [])
         self.web_query['paper_ids'] = ids
         self.web_query['mesh_ids'] = mesh_ids
@@ -527,6 +535,8 @@ class MetadataApiCall(FromAgentsApiCall):
                     for h in rel['hashes']:
                         rel['cur_count'] = 0
                         rel_hash_lookup[h] = rel
+                    if not self.special['with_hashes']:
+                        rel['hashes'] = None
             curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
             for cur in curations:
                 rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
@@ -545,7 +555,7 @@ class MetadataApiCall(FromAgentsApiCall):
 
 
 class QueryApiCall(ApiCall):
-    def get_db_query(self):
+    def _build_db_query(self):
         query_json = json.loads(self._pop('json', '{}'))
         return Query.from_json(query_json)
 

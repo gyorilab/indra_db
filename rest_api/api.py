@@ -134,9 +134,13 @@ class ApiCall:
                     self.has[resource] |= role.permissions.get(resource, False)
             logger.info('Auths: %s' % str(self.has))
         else:
-            self.web_query.pop('api_key', None)
-            self.has['elsevier'] = False
-            self.has['medscan'] = False
+            api_key = self.web_query.pop('api_key', None)
+            if api_key is None:  # any key will do for testing.
+                self.has['elsevier'] = False
+                self.has['medscan'] = False
+            else:
+                self.has['elsevier'] = True
+                self.has['medscan'] = True
 
         self.db_query = None
         return

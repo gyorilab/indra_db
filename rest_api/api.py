@@ -659,6 +659,11 @@ def get_statements_by_query_json(result_type):
     return QueryApiCall().run(result_type)
 
 
+@dep_route('/metadata/<result_type>/from_agents', methods=['GET'])
+def get_metadata(result_type):
+    return MetadataApiCall().run(result_type)
+
+
 @dep_route('/curation', methods=['GET'])
 def describe_curation():
     return redirect('/statements', code=302)
@@ -707,11 +712,6 @@ def list_curations(stmt_hash, src_hash):
     curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
     curation_json = [cur.to_json() for cur in curations]
     return jsonify(curation_json)
-
-
-@dep_route('/metadata/<result_type>/from_agents', methods=['GET'])
-def get_metadata(result_type):
-    return MetadataApiCall().run(result_type)
 
 
 if __name__ == '__main__':

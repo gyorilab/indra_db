@@ -1,7 +1,8 @@
 __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
            'BiogridManager', 'BelLcManager', 'PathwayCommonsManager',
            'RlimspManager', 'TrrustManager', 'PhosphositeManager',
-           'CTDManager', 'VirHostNetManager', 'PhosphoElmManager']
+           'CTDManager', 'VirHostNetManager', 'PhosphoElmManager',
+           'DrugBankManager']
 
 import os
 import zlib
@@ -209,6 +210,24 @@ class CTDManager(KnowledgebaseManager):
         # Return exactly one of multiple statements that are exactly the same
         # in terms of content and evidence.
         unique_stmts, _ = extract_duplicates(all_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
+
+
+class DrugBankManager(KnowledgebaseManager):
+    name = 'drugbank'
+    source = 'drugbank'
+
+    def _get_statements(self):
+        s3 = boto3.client('s3')
+        logger.info('Fetching DrugBank statements %s from S3...')
+        key = 'indra-db/drugbank_5.1.pkl'
+        resp = s3.get_object(Bucket='bigmech', Key=key)
+        stmts = pickle.loads(resp['Body'].read())
+        stmts += [s for s in _expanded(stmts)]
+        # Return exactly one of multiple statements that are exactly the same
+        # in terms of content and evidence.
+        unique_stmts, _ = extract_duplicates(stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
 

@@ -556,7 +556,11 @@ class MetadataApiCall(FromAgentsApiCall):
 class QueryApiCall(ApiCall):
     def _build_db_query(self):
         query_json = json.loads(self._pop('json', '{}'))
-        return Query.from_json(query_json)
+        q = Query.from_json(query_json)
+        if q.full:
+            abort(Response("Query would retrieve all statements. "
+                           "Please constrain further.", 400))
+        return q
 
 
 # ==========================

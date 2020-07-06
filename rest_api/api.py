@@ -250,6 +250,9 @@ class ApiCall:
                     else:
                         eng = EnglishAssembler(
                             [stmt_from_interaction(entry)]).make_model()
+                    if not eng:
+                        logger.warning(f"English not formed for {key}:\n"
+                                       f"{entry}")
                     entry['english'] = eng
 
                 # Filter out medscan if user does not have medscan privileges.

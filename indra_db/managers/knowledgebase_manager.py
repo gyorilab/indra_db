@@ -166,7 +166,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
     name = 'pc11'
     source = 'biopax'
     skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus',
-             'ctd'}
+             'ctd', 'drugbank'}
 
     def __init__(self, *args, **kwargs):
         self.counts = defaultdict(lambda: 0)

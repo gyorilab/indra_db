@@ -253,10 +253,7 @@ class Query(object):
             raise ApiError(f"REST API failed with ({resp.status_code}): "
                            f"{resp.json()}")
 
-        if result_type == 'statements':
-            return StatementQueryResult.from_json(resp.json())
-        else:
-            return QueryResult.from_json(resp.json())
+        return QueryResult.from_json(resp.json())
 
     def get_statements(self, ro=None, limit=None, offset=None, best_first=True,
                        ev_limit=None, evidence_filter=None) \

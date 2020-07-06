@@ -535,7 +535,8 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, {}, self.to_json())
+            return QueryResult({}, limit, offset, {}, {}, self.to_json(),
+                               'interactions')
 
         q = self._get_name_query(ro, limit, offset, best_first)
         names = q.all()
@@ -585,7 +586,8 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, {}, self.to_json())
+            return QueryResult({}, limit, offset, {}, {}, self.to_json(),
+                               'relations')
 
         names_q = self._get_name_query(ro, limit, offset, best_first)
 

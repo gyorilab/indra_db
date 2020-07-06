@@ -554,6 +554,11 @@ class Query(object):
             }
             ev_totals[h] = sum(src_json.values())
 
+        if best_first:
+            results = {k: results[k]
+                       for k, _ in sorted(ev_totals.items(),
+                                          key=lambda t: -t[1])}
+
         return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'interactions')
 
@@ -634,6 +639,12 @@ class Query(object):
             ev_totals[key] = sum(source_counts.values())
             num_hashes += 0 if hashes is None else len(hashes)
 
+        if best_first:
+            results = {k: results[k]
+                       for k, _ in sorted(ev_totals.items(),
+                                          key=lambda t: -t[1])}
+
+
         return QueryResult(results, limit, offset, num_hashes, ev_totals,
                            self.to_json(), 'relations')
 
@@ -702,6 +713,12 @@ class Query(object):
                             'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
             num_hashes += len(hashes)
+
+        if best_first:
+            results = {k: results[k]
+                       for k, _ in sorted(ev_totals.items(),
+                                          key=lambda t: -t[1])}
+
 
         return QueryResult(results, limit, offset, num_hashes, ev_totals,
                            self.to_json(), 'agents')

@@ -382,6 +382,7 @@ class StatementApiCall(ApiCall):
         for raw_ag in iter_free_agents(self.web_query):
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns)
+            num_agents += 1
 
         # Get the agents with specified roles.
         for role in ['subject', 'object']:

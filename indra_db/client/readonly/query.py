@@ -296,7 +296,9 @@ class Query(object):
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
         mk_hashes_q = self.get_hash_query(ro)
-        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
+        mk_hashes_q = mk_hashes_q.distinct()
+        mk_hash_obj, n_ev_obj = self._hash_count_pair(ro)
+        mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
                                          best_first)
 
         # Do the difficult work of turning a query for hashes and ev_counts
@@ -465,7 +467,9 @@ class Query(object):
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
         mk_hashes_q = self.get_hash_query(ro)
-        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
+        mk_hashes_q = mk_hashes_q.distinct()
+        _, n_ev_obj = self._hash_count_pair(ro)
+        mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
                                          best_first)
 
         # Make the query, and package the results.
@@ -476,42 +480,23 @@ class Query(object):
                            len(result), evidence_totals, self.to_json(),
                            'hashes')
 
-    def _get_name_query(self, ro, limit=None, offset=None, best_first=True):
+    def _get_name_query(self, ro):
         mk_hashes_q = self.get_hash_query(ro)
-        mk_hashes_q = self._apply_limits(ro, mk_hashes_q, limit, offset,
-                                         best_first)
 
         mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
-        q = (ro.session.query(ro.NameMeta.mk_hash, ro.NameMeta.db_id,
-                              ro.NameMeta.ag_num, ro.NameMeta.type_num,
-                              ro.NameMeta.agent_count, ro.NameMeta.activity,
-                              ro.NameMeta.is_active, ro.SourceMeta.src_json)
-             .filter(ro.NameMeta.mk_hash == mk_hashes_sq.c.mk_hash,
-                     ro.SourceMeta.mk_hash == mk_hashes_sq.c.mk_hash))
-        sq = q.subquery('names')
-        q = ro.session.query(
-            sq.c.mk_hash,
-            func.jsonb_object(
-                func.array_agg(sq.c.ag_num.cast(String)),
-                func.array_agg(sq.c.db_id)
-            ).label('agent_json'),
-            sq.c.type_num,
-            sq.c.agent_count,
-            sq.c.activity,
-            sq.c.is_active,
-            sq.c.src_json.cast(JSONB).label('src_json')
-        ).group_by(
-            sq.c.mk_hash,
-            sq.c.type_num,
-            sq.c.agent_count,
-            sq.c.activity,
-            sq.c.is_active,
-            sq.c.src_json.cast(JSONB)
-        )
+        q = (ro.session.query(ro.AgentInteractions.mk_hash,
+                              ro.AgentInteractions.agent_json,
+                              ro.AgentInteractions.type_num,
+                              ro.AgentInteractions.agent_count,
+                              ro.AgentInteractions.ev_count,
+                              ro.AgentInteractions.activity,
+                              ro.AgentInteractions.is_active,
+                              ro.AgentInteractions.src_json)
+             .filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash))
         return q
 
-    def get_interactions(self, ro=None, limit=None, offset=None, best_first=True) \
-            -> QueryResult:
+    def get_interactions(self, ro=None, limit=None, offset=None,
+                         best_first=True) -> QueryResult:
         """Get the simple interaction information from the Statements metadata.
 
        Each entry in the result corresponds to a single preassembled Statement,
@@ -535,29 +520,28 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, {}, self.to_json(),
+            return QueryResult({}, limit, offset, None, {}, self.to_json(),
                                'interactions')
 
-        q = self._get_name_query(ro, limit, offset, best_first)
+        q = self._get_name_query(ro)
+        q = self._apply_limits(q, ro.AgentInteractions.ev_count,
+                               limit, offset, best_first)
+
         names = q.all()
         results = {}
         ev_totals = {}
-        for h, ag_json, type_num, n_ag, activity, is_active, src_json in names:
+        for h, ag_json, type_num, n_ag, n_ev, act, is_act, src_json in names:
             results[h] = {
                 'hash': h,
                 'id': str(h),
                 'agents': _make_agent_dict(ag_json),
                 'type': ro_type_map.get_str(type_num),
-                'activity': activity,
-                'is_active': is_active,
+                'activity': act,
+                'is_active': is_act,
                 'source_counts': src_json,
             }
             ev_totals[h] = sum(src_json.values())
-
-        if best_first:
-            results = {k: results[k]
-                       for k, _ in sorted(ev_totals.items(),
-                                          key=lambda t: -t[1])}
+            assert ev_totals[h] == n_ev
 
         return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'interactions')
@@ -594,13 +578,14 @@ class Query(object):
             return QueryResult({}, limit, offset, {}, {}, self.to_json(),
                                'relations')
 
-        names_q = self._get_name_query(ro, limit, offset, best_first)
+        names_q = self._get_name_query(ro)
 
         sq = names_q.subquery('names')
         q = ro.session.query(
             sq.c.agent_json,
             sq.c.type_num,
             sq.c.agent_count,
+            func.sum(sq.c.ev_count).label('ev_count'),
             sq.c.activity,
             sq.c.is_active,
             func.array_agg(sq.c.src_json),
@@ -613,11 +598,13 @@ class Query(object):
             sq.c.is_active
         )
 
+        q = self._apply_limits(q, sq.c.ev_count, limit, offset, best_first)
+
         names = q.all()
         results = {}
         ev_totals = {}
         num_hashes = 0
-        for ag_json, type_num, n_ag, activity, is_active, srcs, hashes in names:
+        for ag_json, type_num, n_ag, n_ev, act, is_act, srcs, hashes in names:
             ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
@@ -634,16 +621,11 @@ class Query(object):
                     source_counts[src] += cnt
             results[key] = {'id': key, 'source_counts': dict(source_counts),
                             'agents': _make_agent_dict(ag_json),
-                            'type': stmt_type, 'activity': activity,
-                            'is_active': is_active, 'hashes': hashes}
+                            'type': stmt_type, 'activity': act,
+                            'is_active': is_act, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
+            assert ev_totals[key] == n_ev
             num_hashes += 0 if hashes is None else len(hashes)
-
-        if best_first:
-            results = {k: results[k]
-                       for k, _ in sorted(ev_totals.items(),
-                                          key=lambda t: -t[1])}
-
 
         return QueryResult(results, limit, offset, num_hashes, ev_totals,
                            self.to_json(), 'relations')
@@ -681,22 +663,30 @@ class Query(object):
 
         names_q = self._get_name_query(ro, limit, offset, best_first)
 
-        sq = names_q.subquery('names')
-        q = ro.session.query(
-            sq.c.agent_json,
-            sq.c.agent_count,
-            func.array_agg(sq.c.src_json),
-            func.array_agg(sq.c.mk_hash) if with_hashes else null()
+        names_sq = names_q.subquery('names')
+        agent_q = ro.session.query(
+            names_sq.c.agent_json,
+            names_sq.c.agent_count,
+            func.sum(names_sq.c.ev_count).label('ev_count'),
+            func.array_agg(names_sq.c.src_json).label('src_jsons'),
+            (func.array_agg(names_sq.c.mk_hash) if with_hashes
+             else null()).label('hashes')
         ).group_by(
-            sq.c.agent_json,
-            sq.c.agent_count
+            names_sq.c.agent_json,
+            names_sq.c.agent_count
         )
+
+        sq = agent_q.subquery('agents')
+        q = ro.session.query(sq.c.agent_json, sq.c.agent_count, sq.c.ev_count,
+                             sq.c.src_jsons, sq.c.hashes)
+        q = self._apply_limits(q, sq.c.ev_count, limit, offset, best_first)
+
         names = q.all()
 
         results = {}
         ev_totals = {}
         num_hashes = 0
-        for ag_json, n_ag, src_jsons, hashes in names:
+        for ag_json, n_ag, n_ev, src_jsons, hashes in names:
             ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
@@ -712,24 +702,16 @@ class Query(object):
                             'agents': _make_agent_dict(ag_json),
                             'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
-            num_hashes += len(hashes)
-
-        if best_first:
-            results = {k: results[k]
-                       for k, _ in sorted(ev_totals.items(),
-                                          key=lambda t: -t[1])}
-
+            assert n_ev == ev_totals[key]
+            num_hashes += 0 if hashes is None else len(hashes)
 
         return QueryResult(results, limit, offset, num_hashes, ev_totals,
                            self.to_json(), 'agents')
 
-    def _apply_limits(self, ro, mk_hashes_q, limit=None, offset=None,
+    @staticmethod
+    def _apply_limits(mk_hashes_q, ev_count_obj, limit=None, offset=None,
                       best_first=True):
         """Apply the general query limits to the net hash query."""
-        mk_hashes_q = mk_hashes_q.distinct()
-
-        mk_hash_obj, ev_count_obj = self._hash_count_pair(ro)
-
         # Apply the general options.
         if best_first:
             mk_hashes_q = mk_hashes_q.order_by(desc(ev_count_obj))

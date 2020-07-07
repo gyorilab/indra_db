@@ -581,24 +581,29 @@ class Query(object):
 
         names_q = self._get_name_query(ro)
 
-        sq = names_q.subquery('names')
-        q = ro.session.query(
-            sq.c.agent_json,
-            sq.c.type_num,
-            sq.c.agent_count,
-            func.sum(sq.c.ev_count).label('ev_count'),
-            sq.c.activity,
-            sq.c.is_active,
-            func.array_agg(sq.c.src_json),
-            func.array_agg(sq.c.mk_hash) if with_hashes else null()
+        names_sq = names_q.subquery('names')
+        rel_q = ro.session.query(
+            names_sq.c.agent_json,
+            names_sq.c.type_num,
+            names_sq.c.agent_count,
+            func.sum(names_sq.c.ev_count).label('ev_count'),
+            names_sq.c.activity,
+            names_sq.c.is_active,
+            func.array_agg(names_sq.c.src_json).label('src_jsons'),
+            (func.array_agg(names_sq.c.mk_hash) if with_hashes
+             else null()).label('hashes')
         ).group_by(
-            sq.c.agent_json,
-            sq.c.type_num,
-            sq.c.agent_count,
-            sq.c.activity,
-            sq.c.is_active
+            names_sq.c.agent_json,
+            names_sq.c.type_num,
+            names_sq.c.agent_count,
+            names_sq.c.activity,
+            names_sq.c.is_active
         )
 
+        sq = rel_q.subquery('relations')
+        q = ro.session.query(sq.c.agent_json, sq.c.type_num, sq.c.agent_count,
+                             sq.c.ev_count, sq.c.activity, sq.c.is_active,
+                             sq.c.src_jsons, sq.c.hashes)
         q = self._apply_limits(q, sq.c.ev_count, limit, offset, best_first)
 
         names = q.all()

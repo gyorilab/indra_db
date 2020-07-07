@@ -525,7 +525,9 @@ class Query(object):
                                'interactions')
 
         q = self._get_name_query(ro)
-        q = self._apply_limits(q, ro.AgentInteractions.ev_count,
+        q = self._apply_limits(q, [desc(ro.AgentInteractions.ev_count),
+                                   ro.AgentInteractions.type_num,
+                                   ro.AgentInteractions.agent_json],
                                limit, offset, best_first)
 
         names = q.all()
@@ -604,7 +606,8 @@ class Query(object):
         q = ro.session.query(sq.c.agent_json, sq.c.type_num, sq.c.agent_count,
                              sq.c.ev_count, sq.c.activity, sq.c.is_active,
                              sq.c.src_jsons, sq.c.hashes)
-        q = self._apply_limits(q, sq.c.ev_count, limit, offset, best_first)
+        q = self._apply_limits(q, [desc(sq.c.ev_count), sq.c.type_num],
+                               limit, offset, best_first)
 
         names = q.all()
         results = {}
@@ -686,7 +689,8 @@ class Query(object):
         sq = agent_q.subquery('agents')
         q = ro.session.query(sq.c.agent_json, sq.c.agent_count, sq.c.ev_count,
                              sq.c.src_jsons, sq.c.hashes)
-        q = self._apply_limits(q, sq.c.ev_count, limit, offset, best_first)
+        q = self._apply_limits(q, [desc(sq.c.ev_count), sq.c.agent_json],
+                               limit, offset, best_first)
 
         names = q.all()
 
@@ -721,7 +725,10 @@ class Query(object):
         """Apply the general query limits to the net hash query."""
         # Apply the general options.
         if best_first:
-            mk_hashes_q = mk_hashes_q.order_by(desc(ev_count_obj))
+            if isinstance(ev_count_obj, list):
+                mk_hashes_q = mk_hashes_q.order_by(*ev_count_obj)
+            else:
+                mk_hashes_q = mk_hashes_q.order_by(desc(ev_count_obj))
         if limit is not None:
             mk_hashes_q = mk_hashes_q.limit(limit)
         if offset is not None:

@@ -633,7 +633,7 @@ class Query(object):
             assert ev_totals[key] == n_ev
             num_hashes += 0 if hashes is None else len(hashes)
 
-        return QueryResult(results, limit, offset, num_hashes, ev_totals,
+        return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'relations')
 
     def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
@@ -712,7 +712,7 @@ class Query(object):
             assert n_ev == ev_totals[key]
             num_hashes += 0 if hashes is None else len(hashes)
 
-        return QueryResult(results, limit, offset, num_hashes, ev_totals,
+        return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'agents')
 
     @staticmethod

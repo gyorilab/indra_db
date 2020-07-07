@@ -462,7 +462,8 @@ class Query(object):
 
         # If the result is by definition empty, save time and effort.
         if self.empty:
-            return QueryResult(set(), limit, offset, {}, {}, self.to_json())
+            return QueryResult(set(), limit, offset, 0, {}, self.to_json(),
+                               'hashes')
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
@@ -520,7 +521,7 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, None, {}, self.to_json(),
+            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'interactions')
 
         q = self._get_name_query(ro)
@@ -575,7 +576,7 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, {}, self.to_json(),
+            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'relations')
 
         names_q = self._get_name_query(ro)
@@ -659,9 +660,10 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, {}, {}, self.to_json())
+            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
+                               'agents')
 
-        names_q = self._get_name_query(ro, limit, offset, best_first)
+        names_q = self._get_name_query(ro)
 
         names_sq = names_q.subquery('names')
         agent_q = ro.session.query(

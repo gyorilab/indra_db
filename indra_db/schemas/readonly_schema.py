@@ -4,7 +4,7 @@ import logging
 
 from sqlalchemy import Column, Integer, String, BigInteger, Boolean,\
     SmallInteger
-from sqlalchemy.dialects.postgresql import BYTEA, JSON
+from sqlalchemy.dialects.postgresql import BYTEA, JSON, JSONB
 
 from indra.statements import get_all_descendants, Statement
 
@@ -543,6 +543,64 @@ def get_schema(Base):
         is_active = Column(Boolean)
         agent_count = Column(Integer)
     read_views[MeshMeta.__tablename__] = MeshMeta
+
+    class AgentInteractions(Base, ReadonlyTable):
+        __tablename__ = 'agent_interactions'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ("SELECT\n" 
+                          "  low_level_names.mk_hash AS mk_hash, \n"
+                          "  jsonb_object(\n"
+                          "    array_agg(\n"
+                          "      CAST(\n"
+                          "        low_level_names.ag_num AS VARCHAR)),\n"
+                          "    array_agg(low_level_names.db_id)\n"
+                          "  ) AS agent_json, \n"
+                          "  low_level_names.type_num AS type_num, \n"
+                          "  low_level_names.agent_count AS agent_count, \n"
+                          "  low_level_names.ev_count AS ev_count, \n"
+                          "  low_level_names.activity AS activity, \n"
+                          "  low_level_names.is_active AS is_active, \n"
+                          "  CAST(\n"
+                          "    low_level_names.src_json AS JSONB\n"
+                          "  ) AS src_json \n"
+                          "FROM \n"
+                          "  (\n"
+                          "    SELECT \n"
+                          "      readonly.name_meta.mk_hash AS mk_hash, \n"
+                          "      readonly.name_meta.db_id AS db_id, \n"
+                          "      readonly.name_meta.ag_num AS ag_num, \n"
+                          "      readonly.name_meta.type_num AS type_num, \n"
+                          "      readonly.name_meta.agent_count AS agent_count, \n"
+                          "      readonly.name_meta.ev_count AS ev_count, \n"
+                          "      readonly.name_meta.activity AS activity, \n"
+                          "      readonly.name_meta.is_active AS is_active, \n"
+                          "      readonly.source_meta.src_json AS src_json \n"
+                          "    FROM \n"
+                          "      readonly.name_meta, \n"
+                          "      readonly.source_meta\n"
+                          "    WHERE \n"
+                          "      readonly.name_meta.mk_hash \n"
+                          "        = readonly.source_meta.mk_hash\n"
+                          "  ) AS low_level_names \n"
+                          "GROUP BY \n"
+                          "  low_level_names.mk_hash, \n"
+                          "  low_level_names.type_num, \n"
+                          "  low_level_names.agent_count, \n"
+                          "  low_level_names.ev_count, \n"
+                          "  low_level_names.activity, \n"
+                          "  low_level_names.is_active, \n"
+                          "  CAST(low_level_names.src_json AS JSONB)")
+        _indices = [BtreeIndex('agent_interactions_mk_hash_idx', 'mk_hash')]
+
+        mk_hash = Column(BigInteger, primary_key=True)
+        ev_count = Column(Integer)
+        type_num = Column(SmallInteger)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
+        agent_json = Column(JSONB)
+        src_json = Column(JSONB)
+    read_views[AgentInteractions.__tablename__] = AgentInteractions
 
     return read_views
 

@@ -249,6 +249,8 @@ class ApiCall:
                                                        for ag in ag_list[2:-1])
                                 if len(ag_dict) > 2:
                                     eng += ', and ' + f'<b>{ag_list[-1]}</b>'
+                            else:
+                                eng += ' is modified'
                     else:
                         eng = _format_stmt_text(stmt_from_interaction(entry))
                     if not eng:

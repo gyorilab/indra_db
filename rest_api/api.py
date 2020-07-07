@@ -240,16 +240,17 @@ class ApiCall:
                             eng = ''
                         else:
                             ag_list = list(ag_dict.values())
-                            eng = ag_list[0]
+                            eng = f'<b>{ag_list[0]}</b>'
                             if len(ag_dict) > 1:
-                                eng += ' interacts with ' + ag_list[1]
+                                eng += ' affects ' + f'<b>{ag_list[1]}</b>'
                                 if len(ag_dict) > 3:
-                                    eng += ', ' + ', '.join(ag_list[2:-1])
+                                    eng += ', ' \
+                                           + ', '.join(f'<b>{ag}</b>'
+                                                       for ag in ag_list[2:-1])
                                 if len(ag_dict) > 2:
-                                    eng += ', and ' + ag_list[-1]
+                                    eng += ', and ' + f'<b>{ag_list[-1]}</b>'
                     else:
-                        eng = EnglishAssembler(
-                            [stmt_from_interaction(entry)]).make_model()
+                        eng = _format_stmt_text(stmt_from_interaction(entry))
                     if not eng:
                         logger.warning(f"English not formed for {key}:\n"
                                        f"{entry}")

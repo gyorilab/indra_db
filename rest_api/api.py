@@ -399,6 +399,21 @@ class StatementApiCall(ApiCall):
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, role=role.upper())
 
+        # Get agents with specific agent numbers.
+        for key in self.web_query.copy().keys():
+            if not key.startswith('ag_num'):
+                continue
+            ag_num_str = key[len('ag_num_'):]
+            if not ag_num_str.isdigit():
+                return abort(Response(f"Invalid agent number: {ag_num_str}",
+                                      400))
+
+            raw_ag = self._pop(key)
+            ag_num = int(ag_num_str)
+            ag, ns = process_agent(raw_ag)
+            db_query &= HasAgent(ag, namespace=ns, agent_num=ag_num)
+            num_agents += 1
+
         # Get the raw name of the statement type (we fix some variations).
         act_raw = self._pop('type', None)
         if act_raw is not None:

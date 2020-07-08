@@ -203,7 +203,10 @@ class ApiCall:
             if not self.has['medscan']:
                 minus_q = ~HasOnlySource('medscan')
                 self.db_query &= minus_q
-                self.ev_filter = minus_q.ev_filter()
+                if not self.ev_filter:
+                    self.ev_filter = minus_q.ev_filter()
+                else:
+                    self.ev_filter &= minus_q.ev_filter()
 
         return self.db_query
 
@@ -461,6 +464,10 @@ class StatementApiCall(ApiCall):
             db_query &= mesh_q
             if filter_ev:
                 ev_filter &= mesh_q.ev_filter()
+
+        # Assign ev filter to class scope
+        if ev_filter.filters:
+            self.ev_filter = ev_filter
 
         # Check for health of the resulting query, and some other things.
         if isinstance(db_query, EmptyQuery):

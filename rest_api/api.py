@@ -304,6 +304,10 @@ class StatementApiCall(ApiCall):
     def __init__(self):
         super(StatementApiCall, self).__init__()
         self.strict = self._pop('strict', False, bool)
+        self.web_query['mesh_ids'] = \
+            {m for m in self._pop('mesh_ids', '').split(',') if m}
+        self.web_query['paper_ids'] = \
+            {i for i in self._pop('paper_ids', '').split(',') if i}
         return
 
     def _build_db_query(self):
@@ -496,10 +500,6 @@ class FromAgentsApiCall(StatementApiCall):
                 {f'agent{i}': ag
                  for i, ag in enumerate(self.web_query.poplist('agent'))}
             )
-            self.web_query['mesh_ids'] = \
-                {m for m in self._pop('mesh_ids', '').split(',') if m}
-            self.web_query['paper_ids'] = \
-                {i for i in self._pop('paper_ids', '').split(',') if i}
             db_query = self._db_query_from_web_query(
                 require_any={'HasAgent', 'FromPapers'},
                 empty_web_query=True

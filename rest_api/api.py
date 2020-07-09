@@ -26,8 +26,8 @@ from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indra_db.exceptions import BadHashError
 from indra_db.client import submit_curation, stmt_from_interaction,\
     get_curations
-from .util import process_agent, DbAPIError, LogTracker, sec_since, get_source,\
-    get_s3_client, gilda_ground
+from .util import process_agent, DbAPIError, LogTracker, sec_since, get_source, \
+    get_s3_client, gilda_ground, process_mesh_term
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
@@ -464,7 +464,7 @@ class StatementApiCall(ApiCall):
         # Unpack mesh ids.
         mesh_ids = self._pop('mesh_ids', [])
         if mesh_ids:
-            mesh_q = FromMeshIds(mesh_ids)
+            mesh_q = FromMeshIds([process_mesh_term(m) for m in mesh_ids])
             db_query &= mesh_q
             if filter_ev:
                 ev_filter &= mesh_q.ev_filter()

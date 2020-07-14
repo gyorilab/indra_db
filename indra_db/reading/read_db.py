@@ -174,6 +174,7 @@ class DatabaseResultData(object):
 
 
 class StatementResultData(DatabaseResultData):
+    @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
         return 'batch_id', 'reading_id', 'db_info_id', 'uuid', 'mk_hash', \
@@ -190,6 +191,7 @@ class StatementResultData(DatabaseResultData):
 
 
 class MeshRefResultData(DatabaseResultData):
+    @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
         return 'pmid_num', 'mesh_num'
@@ -415,7 +417,7 @@ class DatabaseReader(object):
 
         return
 
-    def dump_statements_to_db(self):
+    def dump_results_to_db(self):
         """Upload the statements to the database."""
         self.starts['dump_statements_db'] = datetime.utcnow()
         logger.info("Uploading %d statements to the database." %
@@ -446,32 +448,39 @@ class DatabaseReader(object):
                     mesh_term_tuples[key] = tpl
                     mesh_terms.append(sd.result)
 
-        updates = {}
+        # Dump the good results into the raw results table.
+        updated = self._db.copy_report_push(
+            'raw_statements',
+            stmt_tuples.values(),
+            StatementResultData.get_cols(),
+            constraint='reading_raw_statement_uniqueness',
+            commit=False,
+            return_cols=('uuid',)
+        )
+        updated = self._db.copy_report_push(
+            'mti_ref_annotations_test',
+            mesh_term_tuples.values(),
+            StatementResultData.get_cols(),
+            constraint='reading_raw_statement_uniqueness',
+            commit=False,
+            return_cols=('uuid',)
+        )
 
-        # Different columns for result data types
-        for result_data in StatementResultData, MeshRefResultData:
-            # Dump the good statements into the raw statements table.
-            updated = self._db.copy_report_push(
-                'raw_statements',
-                stmt_tuples.values(),
-                result_data.get_cols(),
-                constraint='reading_raw_statement_uniqueness',
-                commit=False,
-                return_cols=('uuid',)
-            )
+        gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
+        gatherer.add('upd_stmts', len(updated))
+        gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(updated))
+        gatherer.add('upd_mesh_terms', len(updated))
 
-            updates[result_data] = len(updated)
+        # Dump the duplicates into a separate to all for debugging.
+        self._db.copy('rejected_statements', [tpl for dlist in stmt_dups.values()
+                                            for tpl in dlist],
+                    StatementResultData.get_cols(),
+                    commit=False)
+        self._db.copy('rejected_statements', [tpl for dlist in mesh_term_dups.values()
+                                            for tpl in dlist],
+                    MeshRefResultData.get_cols(),
+                    commit=False)
 
-            # Dump the duplicates into a separate to all for debugging.
-            self._db.copy('rejected_statements', [tpl for dlist in dups.values()
-                                                for tpl in dlist],
-                        result_data.get_cols(),
-                        commit=False)
-
-        gatherer.add('new_stmts', len(stmt_tuples) - updates[StatementResultData])
-        gatherer.add('upd_stmts', updates[StatementResultData])
-        gatherer.add('new_mesh_terms', len(mesh_term_tuples) - updates[MeshRefResultData])
-        gatherer.add('upd_mesh_terms', updates[MeshRefResultData])
 
         # Add the agents for the accepted statements.
         logger.info("Uploading agents to the database.")

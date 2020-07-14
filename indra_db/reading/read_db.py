@@ -426,27 +426,25 @@ class DatabaseReader(object):
 
         # Find and filter out duplicate statements.
         stmt_tuples = {}
-        mesh_term_tuples = {}
         stmts = []
-        mesh_terms = []
         stmt_dups = {}
-        mesh_term_dups = {}
+        mesh_term_tuples = {}
         for sd in self.result_outputs:
             tpl = sd.make_tuple(batch_id)
             key = (tpl[1], tpl[4], tpl[9])
             if key in stmt_tuples.keys():
                 logger.warning('Duplicate key found: %s.' % str(key))
                 if sd.kind_of_results == 'statements':
-                    stmt_dups.setdefault(key, []).append(tpl)
-                else:
-                    mesh_term_dups.setdefault(key, []).append(tpl)
+                    if key in stmt_dups.keys():
+                        stmt_dups[key].append(tpl)
+                    else:
+                        stmt_dups[key] = [tpl]
             else:
                 if sd.kind_of_results == 'statements':
                     stmt_tuples[key] = tpl
                     stmts.append(sd.result)
                 else:
                     mesh_term_tuples[key] = tpl
-                    mesh_terms.append(sd.result)
 
         # Dump the good results into the raw results table.
         updated = self._db.copy_report_push(
@@ -457,13 +455,11 @@ class DatabaseReader(object):
             commit=False,
             return_cols=('uuid',)
         )
-        updated = self._db.copy_report_push(
+        updated = self._db.copy_lazy(
             'mti_ref_annotations_test',
             mesh_term_tuples.values(),
             StatementResultData.get_cols(),
-            constraint='reading_raw_statement_uniqueness',
-            commit=False,
-            return_cols=('uuid',)
+            commit=False
         )
 
         gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
@@ -475,10 +471,6 @@ class DatabaseReader(object):
         self._db.copy('rejected_statements', [tpl for dlist in stmt_dups.values()
                                             for tpl in dlist],
                     StatementResultData.get_cols(),
-                    commit=False)
-        self._db.copy('rejected_statements', [tpl for dlist in mesh_term_dups.values()
-                                            for tpl in dlist],
-                    MeshRefResultData.get_cols(),
                     commit=False)
 
 

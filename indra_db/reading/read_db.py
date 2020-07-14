@@ -173,7 +173,7 @@ class DatabaseResultData(object):
         return make_hash(simple_text.lower(), 16)
 
 
-class StatementResultData(DatabaseResultData):
+class DatabaseStatementData(DatabaseResultData):
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
@@ -190,7 +190,7 @@ class StatementResultData(DatabaseResultData):
                 self._get_text_hash())
 
 
-class MeshRefResultData(DatabaseResultData):
+class DatabaseMeshRefData(DatabaseResultData):
     def __init__(self, result, reading_id=None, db_info_id=None,
                  indra_version=None):
         super().__init__(result, reading_id, db_info_id, indra_version)
@@ -454,7 +454,7 @@ class DatabaseReader(object):
         updated = self._db.copy_report_push(
             'raw_statements',
             stmt_tuples.values(),
-            StatementResultData.get_cols(),
+            DatabaseStatementData.get_cols(),
             constraint='reading_raw_statement_uniqueness',
             commit=False,
             return_cols=('uuid',)
@@ -466,7 +466,7 @@ class DatabaseReader(object):
         updated = self._db.copy_lazy(
             'mti_ref_annotations_test',
             mesh_term_tuples.values(),
-            StatementResultData.get_cols(),
+            DatabaseStatementData.get_cols(),
             commit=False
         )
         gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(updated))
@@ -475,7 +475,7 @@ class DatabaseReader(object):
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in stmt_dups.values()
                                               for tpl in dlist],
-                      StatementResultData.get_cols(),
+                      DatabaseStatementData.get_cols(),
                       commit=False)
 
         # Add the agents for the accepted statements.
@@ -522,13 +522,13 @@ class DatabaseReader(object):
             for rslt in rslts:
                 if reading_data.kind_of_results == 'statements':
                     rslt.evidence[0].pmid = None
-                    rslt_data = StatementResultData(
+                    rslt_data = DatabaseStatementData(
                         rslt, reading_data.reading_id)
                 else:
                     pmid = self._db.select_one(self._db.TextRef.pmid_num, self._db.TextContent.id ==
                                                reading_data.content_id, self._db.TextContent.text_ref_id == self._db.TextRef.id)
                     rslt_tuple = (pmid, rslt)
-                    rslt_data = MeshRefResultData(
+                    rslt_data = DatabaseMeshRefData(
                         rslt_tuple, reading_data.reading_id)
                 rslt_data_list.append(rslt_data)
         else:

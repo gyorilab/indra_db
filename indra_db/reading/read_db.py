@@ -432,21 +432,20 @@ class DatabaseReader(object):
         for sd in self.result_outputs:
             tpl = sd.make_tuple(batch_id)
             key = (tpl[1], tpl[4], tpl[9])
-            if key in stmt_tuples.keys():
-                logger.warning('Duplicate key found: %s.' % str(key))
-                if sd.kind_of_results == 'statements':
+            if sd.reader_class.results_type == 'statements':
+                if key in stmt_tuples.keys():
+                    logger.warning('Duplicate key found: %s.' % str(key))
                     if key in stmt_dups.keys():
                         stmt_dups[key].append(tpl)
                     else:
                         stmt_dups[key] = [tpl]
-            else:
-                if sd.kind_of_results == 'statements':
+                else:
                     stmt_tuples[key] = tpl
                     stmts.append(sd.result)
-                else:
-                    mesh_term_tuples[key] = tpl
+            else:   # For mesh_terms
+                mesh_term_tuples[key] = tpl
 
-        # Dump the good results into the raw results table.
+        # Dump the good stetements into the raw statements table.
         updated = self._db.copy_report_push(
             'raw_statements',
             stmt_tuples.values(),
@@ -455,15 +454,16 @@ class DatabaseReader(object):
             commit=False,
             return_cols=('uuid',)
         )
+        gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
+        gatherer.add('upd_stmts', len(updated))
+
+        # Dump mesh_terms to the table
         updated = self._db.copy_lazy(
             'mti_ref_annotations_test',
             mesh_term_tuples.values(),
             StatementResultData.get_cols(),
             commit=False
         )
-
-        gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
-        gatherer.add('upd_stmts', len(updated))
         gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(updated))
         gatherer.add('upd_mesh_terms', len(updated))
 

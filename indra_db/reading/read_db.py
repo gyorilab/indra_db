@@ -154,7 +154,7 @@ class DatabaseResultData(object):
         currently installed.
     """
     def __init__(self, result, reading_id=None, db_info_id=None,
-                 indra_version=None, kind_of_results='statements'):
+                 indra_version=None):
         self.reading_id = reading_id
         self.db_info_id = db_info_id
         self.result = result
@@ -162,7 +162,6 @@ class DatabaseResultData(object):
             self.indra_version = get_indra_version()
         else:
             self.indra_version = indra_version
-        self.kind_of_results = kind_of_results
         self.__text_patt = re.compile('[\W_]+')
         return
 
@@ -173,17 +172,15 @@ class DatabaseResultData(object):
             simple_text += str(ev.annotations['coords'])
         return make_hash(simple_text.lower(), 16)
 
-    def get_cols(self):
+
+class StatementResultData(DatabaseResultData):
+    def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
-        if self.kind_of_results == 'mesh_terms':
-            return 'pmid_num', 'mesh_num'
         return 'batch_id', 'reading_id', 'db_info_id', 'uuid', 'mk_hash', \
                'source_hash', 'type', 'json', 'indra_version', 'text_hash'
 
     def make_tuple(self, batch_id):
         """Make a tuple for copying into the database."""
-        if self.kind_of_results == 'mesh_terms':
-            return tuple(self.result)
         return (batch_id, self.reading_id, self.db_info_id,
                 self.result.uuid, self.result.get_hash(),
                 self.result.evidence[0].get_source_hash(),
@@ -192,47 +189,14 @@ class DatabaseResultData(object):
                 self._get_text_hash())
 
 
-def get_rslts_safely(reading_data):
-    rslt_data_list = []
-    try:
-        rslts = reading_data.get_results()
-    except Exception as e:
-        logger.error("Got exception creating results for %d."
-                     % reading_data.reading_id)
-        logger.exception(e)
-        return []
-    if rslts is not None:
-        if not len(rslts):
-            logger.debug("Got no results for %s." % reading_data.reading_id)
-        for rslt in rslts:
-            rslt.evidence[0].pmid = None
-            rslt_data = DatabaseResultData(rslt, reading_data.reading_id, kind_of_results=reading_data.kind_of_results)
-            rslt_data_list.append(rslt_data)
-    else:
-        logger.warning("Got None results for %s." % reading_data.reading_id)
-    return rslt_data_list
+class MeshRefResultData(DatabaseResultData):
+    def get_cols():
+        """Get the columns for the tuple returned by `make_tuple`."""
+        return 'pmid_num', 'mesh_num'
 
-
-def make_results(reading_data_list, num_proc=1):
-    """Convert a list of ReadingData instances into ResultData instances."""
-    rslt_data_list = []
-
-    if num_proc is 1:  # Don't use pool if not needed.
-        for reading_data in reading_data_list:
-            rslt_data_list += get_rslts_safely(reading_data)
-    else:
-        pool = Pool(num_proc)
-        try:
-            rslt_data_list_list = pool.map(get_rslts_safely, reading_data_list)
-            for rslt_data_sublist in rslt_data_list_list:
-                rslt_data_list += rslt_data_sublist
-        finally:
-            pool.close()
-            pool.join()
-
-    logger.info("Found %d results from %d readings." %
-                (len(rslt_data_list), len(reading_data_list)))
-    return rslt_data_list
+    def make_tuple(self, batch_id):
+        """Make a tuple for copying into the database."""
+        return tuple(self.result)
 
 
 gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts'])
@@ -460,38 +424,54 @@ class DatabaseReader(object):
 
         # Find and filter out duplicate statements.
         stmt_tuples = {}
+        mesh_term_tuples = {}
         stmts = []
-        dups = {}
+        mesh_terms = []
+        stmt_dups = {}
+        mesh_term_dups = {}
         for sd in self.result_outputs:
             tpl = sd.make_tuple(batch_id)
             key = (tpl[1], tpl[4], tpl[9])
             if key in stmt_tuples.keys():
                 logger.warning('Duplicate key found: %s.' % str(key))
-                if key in dups.keys():
-                    dups[key].append(tpl)
+                if sd.kind_of_results == 'statements':
+                    stmt_dups.setdefault(key, []).append(tpl)
                 else:
-                    dups[key] = [tpl]
+                    mesh_term_dups.setdefault(key, []).append(tpl)
             else:
-                stmt_tuples[key] = tpl
-                stmts.append(sd.statement)
+                if sd.kind_of_results == 'statements':
+                    stmt_tuples[key] = tpl
+                    stmts.append(sd.result)
+                else:
+                    mesh_term_tuples[key] = tpl
+                    mesh_terms.append(sd.result)
 
-        # Dump the good statements into the raw statements table.
-        updated = self._db.copy_report_push(
-            'raw_statements',
-            stmt_tuples.values(),
-            DatabaseResultData.get_cols(),
-            constraint='reading_raw_statement_uniqueness',
-            commit=False,
-            return_cols=('uuid',)
-        )
-        gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
-        gatherer.add('upd_stmts', len(updated))
+        updates = {}
 
-        # Dump the duplicates into a separate to all for debugging.
-        self._db.copy('rejected_statements', [tpl for dlist in dups.values()
-                                              for tpl in dlist],
-                      DatabaseResultData.get_cols(),
-                      commit=False)
+        # Different columns for result data types
+        for result_data in StatementResultData, MeshRefResultData:
+            # Dump the good statements into the raw statements table.
+            updated = self._db.copy_report_push(
+                'raw_statements',
+                stmt_tuples.values(),
+                result_data.get_cols(),
+                constraint='reading_raw_statement_uniqueness',
+                commit=False,
+                return_cols=('uuid',)
+            )
+
+            updates[result_data] = len(updated)
+
+            # Dump the duplicates into a separate to all for debugging.
+            self._db.copy('rejected_statements', [tpl for dlist in dups.values()
+                                                for tpl in dlist],
+                        result_data.get_cols(),
+                        commit=False)
+
+        gatherer.add('new_stmts', len(stmt_tuples) - updates[StatementResultData])
+        gatherer.add('upd_stmts', updates[StatementResultData])
+        gatherer.add('new_mesh_terms', len(mesh_term_tuples) - updates[MeshRefResultData])
+        gatherer.add('upd_mesh_terms', updates[MeshRefResultData])
 
         # Add the agents for the accepted statements.
         logger.info("Uploading agents to the database.")
@@ -514,12 +494,58 @@ class DatabaseReader(object):
         self.starts['make_results'] = datetime.utcnow()
         if self.rslt_mode == 'all':
             all_outputs = self.new_readings + self.extant_readings
-            self.result_outputs = make_results(all_outputs, self.n_proc)
+            self.result_outputs = self.make_results(all_outputs, self.n_proc)
         elif self.rslt_mode == 'unread':
-            self.result_outputs = make_results(self.new_readings,
+            self.result_outputs = self.make_results(self.new_readings,
                                                      self.n_proc)
         self.stops['make_results'] = datetime.utcnow()
         return
+
+    def get_rslts_safely(self, reading_data):
+        rslt_data_list = []
+        try:
+            rslts = reading_data.get_results()
+        except Exception as e:
+            logger.error("Got exception creating results for %d."
+                        % reading_data.reading_id)
+            logger.exception(e)
+            return []
+        if rslts is not None:
+            if not len(rslts):
+                logger.debug("Got no results for %s." % reading_data.reading_id)
+            for rslt in rslts:
+                if reading_data.kind_of_results == 'statements':
+                    rslt.evidence[0].pmid = None
+                    rslt_data = StatementResultData(rslt, reading_data.reading_id)
+                else:
+                    pmid = self._db.select_one(self._db.TextRef.pmid_num, self._db.TextContent.id == reading_data.content_id, self._db.TextContent.text_ref_id == self._db.TextRef.id)
+                    rslt_tuple = (pmid, rslt)
+                    rslt_data = MeshRefResultData(rslt_tuple, reading_data.reading_id)
+                rslt_data_list.append(rslt_data)
+        else:
+            logger.warning("Got None results for %s." % reading_data.reading_id)
+        return rslt_data_list
+
+    def make_results(self, reading_data_list, num_proc=1):
+        """Convert a list of ReadingData instances into ResultData instances."""
+        rslt_data_list = []
+
+        if num_proc is 1:  # Don't use pool if not needed.
+            for reading_data in reading_data_list:
+                rslt_data_list += self.get_rslts_safely(reading_data)
+        else:
+            pool = Pool(num_proc)
+            try:
+                rslt_data_list_list = pool.map(self.get_rslts_safely, reading_data_list)
+                for rslt_data_sublist in rslt_data_list_list:
+                    rslt_data_list += rslt_data_sublist
+            finally:
+                pool.close()
+                pool.join()
+
+        logger.info("Found %d results from %d readings." %
+                    (len(rslt_data_list), len(reading_data_list)))
+        return rslt_data_list
 
 
 # =============================================================================

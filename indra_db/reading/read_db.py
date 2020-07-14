@@ -136,7 +136,7 @@ class DatabaseReadingData(ReadingData):
                 and r_entry.reader_version == self.reader_version[:20])
 
 
-class DatabaseStatementData(object):
+class DatabaseResultData(object):
     """Contains metadata for statements, as well as the statement itself.
 
     This, like ReadingData, is primarily designed for use with the database,
@@ -144,8 +144,8 @@ class DatabaseStatementData(object):
 
     Parameters
     ----------
-    statement : an indra Statement instance
-        The statement whose extra meta data this object encapsulates.
+    result : an indra Result instance
+        The result whose extra meta data this object encapsulates.
     reading_id : int or None
         The id number of the entry in the `readings` table of the database.
         None if no such id is available.
@@ -153,82 +153,86 @@ class DatabaseStatementData(object):
         Override the default indra version, which is the version of indra
         currently installed.
     """
-    def __init__(self, statement, reading_id=None, db_info_id=None,
-                 indra_version=None):
+    def __init__(self, result, reading_id=None, db_info_id=None,
+                 indra_version=None, kind_of_results='statements'):
         self.reading_id = reading_id
         self.db_info_id = db_info_id
-        self.statement = statement
+        self.result = result
         if indra_version is None:
             self.indra_version = get_indra_version()
         else:
             self.indra_version = indra_version
+        self.kind_of_results = kind_of_results
         self.__text_patt = re.compile('[\W_]+')
         return
 
     def _get_text_hash(self):
-        ev = self.statement.evidence[0]
+        ev = self.result.evidence[0]
         simple_text = self.__text_patt.sub('', ev.text)
         if 'coords' in ev.annotations.keys():
             simple_text += str(ev.annotations['coords'])
         return make_hash(simple_text.lower(), 16)
 
-    @staticmethod
-    def get_cols():
+    def get_cols(self):
         """Get the columns for the tuple returned by `make_tuple`."""
+        if self.kind_of_results == 'mesh_terms':
+            return 'pmid_num', 'mesh_num'
         return 'batch_id', 'reading_id', 'db_info_id', 'uuid', 'mk_hash', \
                'source_hash', 'type', 'json', 'indra_version', 'text_hash'
 
     def make_tuple(self, batch_id):
         """Make a tuple for copying into the database."""
+        if self.kind_of_results == 'mesh_terms':
+            return tuple(self.result)
         return (batch_id, self.reading_id, self.db_info_id,
-                self.statement.uuid, self.statement.get_hash(),
-                self.statement.evidence[0].get_source_hash(),
-                self.statement.__class__.__name__,
-                json.dumps(self.statement.to_json()), self.indra_version,
+                self.result.uuid, self.result.get_hash(),
+                self.result.evidence[0].get_source_hash(),
+                self.result.__class__.__name__,
+                json.dumps(self.result.to_json()), self.indra_version,
                 self._get_text_hash())
 
 
-def get_stmts_safely(reading_data):
-    stmt_data_list = []
+def get_rslts_safely(reading_data):
+    rslt_data_list = []
     try:
-        stmts = reading_data.get_statements()
+        rslts = reading_data.get_results()
     except Exception as e:
-        logger.error("Got exception creating statements for %d."
+        logger.error("Got exception creating results for %d."
                      % reading_data.reading_id)
         logger.exception(e)
         return []
-    if stmts is not None:
-        if not len(stmts):
-            logger.debug("Got no statements for %s." % reading_data.reading_id)
-        for stmt in stmts:
-            stmt.evidence[0].pmid = None
-            stmt_data = DatabaseStatementData(stmt, reading_data.reading_id)
-            stmt_data_list.append(stmt_data)
+    if rslts is not None:
+        if not len(rslts):
+            logger.debug("Got no results for %s." % reading_data.reading_id)
+        for rslt in rslts:
+            rslt.evidence[0].pmid = None
+            rslt_data = DatabaseResultData(rslt, reading_data.reading_id, kind_of_results=reading_data.kind_of_results)
+            rslt_data_list.append(rslt_data)
     else:
-        logger.warning("Got None statements for %s." % reading_data.reading_id)
-    return stmt_data_list
+        logger.warning("Got None results for %s." % reading_data.reading_id)
+    return rslt_data_list
 
 
-def make_statements(reading_data_list, num_proc=1):
-    """Convert a list of ReadingData instances into StatementData instances."""
-    stmt_data_list = []
+def make_results(reading_data_list, num_proc=1):
+    """Convert a list of ReadingData instances into ResultData instances."""
+    rslt_data_list = []
 
     if num_proc is 1:  # Don't use pool if not needed.
         for reading_data in reading_data_list:
-            stmt_data_list += get_stmts_safely(reading_data)
+            rslt_data_list += get_rslts_safely(reading_data)
     else:
         pool = Pool(num_proc)
         try:
-            stmt_data_list_list = pool.map(get_stmts_safely, reading_data_list)
-            for stmt_data_sublist in stmt_data_list_list:
-                stmt_data_list += stmt_data_sublist
+            rslt_data_list_list = pool.map(get_rslts_safely, reading_data_list)
+            for rslt_data_sublist in rslt_data_list_list:
+                rslt_data_list += rslt_data_sublist
         finally:
             pool.close()
             pool.join()
 
-    logger.info("Found %d statements from %d readings." %
-                (len(stmt_data_list), len(reading_data_list)))
-    return stmt_data_list
+    logger.info("Found %d results from %d readings." %
+                (len(rslt_data_list), len(reading_data_list)))
+    return rslt_data_list
 
 
 gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts'])
@@ -250,14 +254,14 @@ class DatabaseReader(object):
     reading_mode : str : 'all', 'unread', or 'none'
         Optional, default 'undread' - If 'all', read everything (generally
         slow); if 'unread', only read things that were unread, (the cache of old
-        readings may still be used if `stmt_mode='all'` to get everything); if
+        readings may still be used if `rslt_mode='all'` to get everything); if
         'none', don't read, and only retrieve existing readings.
-    stmt_mode : str : 'all', 'unread', or 'none'
-        Optional, default 'all' - If 'all', produce statements for all content
+    rslt_mode : str : 'all', 'unread', or 'none'
+        Optional, default 'all' - If 'all', produce results for all content
         for all readers. If the readings were already produced, they will be
         retrieved from the database if `read_mode` is 'none' or 'unread'. If
         this option is 'unread', only the newly produced readings will be
-        processed. If 'none', no statements will be produced.
+        processed. If 'none', no rs will be produced.
     batch_size : int
         Optional, default 1000 - The number of text content entries to be
         yielded by the database at a given time.
@@ -267,13 +271,13 @@ class DatabaseReader(object):
         different database.
     """
     def __init__(self, tcids, reader, verbose=True, reading_mode='unread',
-                 stmt_mode='all', batch_size=1000, db=None, n_proc=1):
+                 rslt_mode='all', batch_size=1000, db=None, n_proc=1):
         self.tcids = tcids
         self.reader = reader
         self.reader.reset()
         self.verbose = verbose
         self.reading_mode = reading_mode
-        self.stmt_mode = stmt_mode
+        self.rslt_mode = rslt_mode
         self.batch_size = batch_size
         self.n_proc = n_proc
         if db is None:
@@ -285,12 +289,12 @@ class DatabaseReader(object):
         logger.info("Instantiating reading handler for reader %s with version "
                     "%s using reading mode %s and statement mode %s for %d "
                     "tcids." % (reader.name, reader.get_version(),
-                                reading_mode, stmt_mode, len(tcids)))
+                                reading_mode, rslt_mode, len(tcids)))
 
         # To be filled.
         self.extant_readings = []
         self.new_readings = []
-        self.statement_outputs = []
+        self.result_outputs = []
         self.starts = {}
         self.stops = {}
         return
@@ -438,7 +442,7 @@ class DatabaseReader(object):
                     % (self.reader.name, self.reading_mode))
 
         # Handle the cases where I need to retrieve old readings.
-        if self.reading_mode != 'all' and self.stmt_mode == 'all':
+        if self.reading_mode != 'all' and self.rslt_mode == 'all':
             self._get_prior_readings()
 
         # Now produce any new readings that need to be produced.
@@ -451,14 +455,14 @@ class DatabaseReader(object):
         """Upload the statements to the database."""
         self.starts['dump_statements_db'] = datetime.utcnow()
         logger.info("Uploading %d statements to the database." %
-                    len(self.statement_outputs))
+                    len(self.result_outputs))
         batch_id = self._db.make_copy_batch_id()
 
         # Find and filter out duplicate statements.
         stmt_tuples = {}
         stmts = []
         dups = {}
-        for sd in self.statement_outputs:
+        for sd in self.result_outputs:
             tpl = sd.make_tuple(batch_id)
             key = (tpl[1], tpl[4], tpl[9])
             if key in stmt_tuples.keys():
@@ -475,7 +479,7 @@ class DatabaseReader(object):
         updated = self._db.copy_report_push(
             'raw_statements',
             stmt_tuples.values(),
-            DatabaseStatementData.get_cols(),
+            DatabaseResultData.get_cols(),
             constraint='reading_raw_statement_uniqueness',
             commit=False,
             return_cols=('uuid',)
@@ -486,7 +490,7 @@ class DatabaseReader(object):
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in dups.values()
                                               for tpl in dlist],
-                      DatabaseStatementData.get_cols(),
+                      DatabaseResultData.get_cols(),
                       commit=False)
 
         # Add the agents for the accepted statements.
@@ -500,21 +504,21 @@ class DatabaseReader(object):
         """Dump the statements into a pickle file."""
         self.starts['dump_statements_pkl'] = datetime.utcnow()
         with open(pickle_file, 'wb') as f:
-            pickle.dump([sd.statement for sd in self.statement_outputs], f)
+            pickle.dump([sd.statement for sd in self.result_outputs], f)
         print("Statements pickled in %s." % pickle_file)
         self.stops['dump_readings_pkl'] = datetime.utcnow()
         return
 
-    def get_statements(self):
-        """Convert the reader output into a list of StatementData instances."""
-        self.starts['make_statements'] = datetime.utcnow()
-        if self.stmt_mode == 'all':
+    def get_results(self):
+        """Convert the reader output into a list of ResultData instances."""
+        self.starts['make_results'] = datetime.utcnow()
+        if self.rslt_mode == 'all':
             all_outputs = self.new_readings + self.extant_readings
-            self.statement_outputs = make_statements(all_outputs, self.n_proc)
-        elif self.stmt_mode == 'unread':
-            self.statement_outputs = make_statements(self.new_readings,
+            self.result_outputs = make_results(all_outputs, self.n_proc)
+        elif self.rslt_mode == 'unread':
+            self.result_outputs = make_results(self.new_readings,
                                                      self.n_proc)
-        self.stops['make_statements'] = datetime.utcnow()
+        self.stops['make_results'] = datetime.utcnow()
         return
 
 
@@ -560,7 +564,7 @@ def construct_readers(reader_names, **kwargs):
 
 
 @DGContext.wrap(gatherer)
-def read(db_reader, stmt_mode, reading_pickle, stmts_pickle, upload_readings,
+def read(db_reader, rslt_mode, reading_pickle, stmts_pickle, upload_readings,
          upload_stmts):
     """Read for a single reader"""
     gatherer.set_sub_label(db_reader.reader.name)
@@ -570,7 +574,7 @@ def read(db_reader, stmt_mode, reading_pickle, stmts_pickle, upload_readings,
     if reading_pickle:
         db_reader.dump_readings_to_pickle(reading_pickle)
 
-    if stmt_mode != 'none':
+    if rslt_mode != 'none':
         db_reader.get_statements()
         if upload_stmts:
             db_reader.dump_statements_to_db()
@@ -581,18 +585,18 @@ def read(db_reader, stmt_mode, reading_pickle, stmts_pickle, upload_readings,
 
 
 def run_reading(readers, tcids, verbose=True, reading_mode='unread',
-                stmt_mode='all', batch_size=1000, reading_pickle=None,
+                rslt_mode='all', batch_size=1000, reading_pickle=None,
                 stmts_pickle=None, upload_readings=True, upload_stmts=True,
                 db=None):
     """Run the reading with the given readers on the given text content ids."""
     workers = []
     for reader in readers:
         logger.info("Beginning reading for %s." % reader.name)
-        db_reader = DatabaseReader(tcids, reader, verbose, stmt_mode=stmt_mode,
+        db_reader = DatabaseReader(tcids, reader, verbose, rslt_mode=rslt_mode,
                                    reading_mode=reading_mode, db=db,
                                    batch_size=batch_size)
         workers.append(db_reader)
-        read(db_reader, stmt_mode, reading_pickle, stmts_pickle,
+        read(db_reader, rslt_mode, reading_pickle, stmts_pickle,
              upload_readings, upload_stmts)
     return workers
 
@@ -619,7 +623,7 @@ def make_parser():
               "use pre-existing readings. Default is 'unread'.")
     )
     parser.add_argument(
-        '-S', '--stmt_mode',
+        '-S', '--rslt_mode',
         choices=['all', 'unread', 'none'],
         default='all',
         help=("Choose which readings should produce statements. If 'all', all "
@@ -730,9 +734,9 @@ def main():
     # Some combinations of options don't make sense:
     forbidden_combos = [('all', 'unread'), ('none', 'unread'),
                         ('none', 'none')]
-    assert (args.reading_mode, args.stmt_mode) not in forbidden_combos, \
+    assert (args.reading_mode, args.rslt_mode) not in forbidden_combos, \
         ("The combination of reading mode %s and statement mode %s is not "
-         "allowed." % (args.reading_mode, args.stmt_mode))
+         "allowed." % (args.reading_mode, args.rslt_mode))
 
     for n in range(n_max):
         logger.info("Beginning outer batch %d/%d. ------------" % (n+1, n_max))
@@ -750,7 +754,7 @@ def main():
                  for tcid_str in input_lines[B*n:B*(n+1)]]
 
         # Read everything ====================================================
-        run_reading(readers, tcids, verbose, args.reading_mode, args.stmt_mode,
+        run_reading(readers, tcids, verbose, args.reading_mode, args.rslt_mode,
                     args.b_in, reading_pickle, stmts_pickle,
                     not args.no_reading_upload, not args.no_statement_upload)
 

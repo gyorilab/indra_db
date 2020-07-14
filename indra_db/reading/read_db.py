@@ -191,6 +191,11 @@ class StatementResultData(DatabaseResultData):
 
 
 class MeshRefResultData(DatabaseResultData):
+    def __init__(self, result, reading_id=None, db_info_id=None,
+                 indra_version=None):
+        super().__init__(result, reading_id, db_info_id, indra_version)
+        self.pmid, self.mesh_id = result
+
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""

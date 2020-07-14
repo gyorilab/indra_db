@@ -165,13 +165,6 @@ class DatabaseResultData(object):
         self.__text_patt = re.compile('[\W_]+')
         return
 
-    def _get_text_hash(self):
-        ev = self.result.evidence[0]
-        simple_text = self.__text_patt.sub('', ev.text)
-        if 'coords' in ev.annotations.keys():
-            simple_text += str(ev.annotations['coords'])
-        return make_hash(simple_text.lower(), 16)
-
 
 class DatabaseStatementData(DatabaseResultData):
     @staticmethod
@@ -188,6 +181,13 @@ class DatabaseStatementData(DatabaseResultData):
                 self.result.__class__.__name__,
                 json.dumps(self.result.to_json()), self.indra_version,
                 self._get_text_hash())
+
+    def _get_text_hash(self):
+        ev = self.result.evidence[0]
+        simple_text = self.__text_patt.sub('', ev.text)
+        if 'coords' in ev.annotations.keys():
+            simple_text += str(ev.annotations['coords'])
+        return make_hash(simple_text.lower(), 16)
 
 
 class DatabaseMeshRefData(DatabaseResultData):

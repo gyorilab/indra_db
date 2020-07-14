@@ -271,7 +271,7 @@ class DatabaseReader(object):
             self._db.TextContent,
             self._db.TextContent.id.in_(self.tcids),
             self._db.TextContent.format != 'xdd'
-            )
+        )
 
         if self.reading_mode != 'all':
             logger.debug("Getting content to be read.")
@@ -282,7 +282,7 @@ class DatabaseReader(object):
                 self._tc_rd_link,
                 self._db.Reading.reader == self.reader.name,
                 self._db.Reading.reader_version == rv[:20]
-                )
+            )
 
             # Now let's exclude all of those.
             tc_tbr_query = tc_query.except_(tc_sub_q)
@@ -339,11 +339,11 @@ class DatabaseReader(object):
                 db.Reading.reader_version == self.reader.get_version()[:20],
                 db.Reading.text_content_id.in_(self.tcids),
                 db.Reading.format != 'xdd'
-                )
+            )
             for r in readings_query.yield_per(self.batch_size):
                 self.extant_readings.append(
                     DatabaseReadingData.from_db_reading(r)
-                    )
+                )
         logger.info("Found %d pre-existing readings."
                     % len(self.extant_readings))
         self.stops['old_readings'] = datetime.utcnow()
@@ -469,10 +469,9 @@ class DatabaseReader(object):
 
         # Dump the duplicates into a separate to all for debugging.
         self._db.copy('rejected_statements', [tpl for dlist in stmt_dups.values()
-                                            for tpl in dlist],
-                    StatementResultData.get_cols(),
-                    commit=False)
-
+                                              for tpl in dlist],
+                      StatementResultData.get_cols(),
+                      commit=False)
 
         # Add the agents for the accepted statements.
         logger.info("Uploading agents to the database.")
@@ -498,7 +497,7 @@ class DatabaseReader(object):
             self.result_outputs = self.make_results(all_outputs, self.n_proc)
         elif self.rslt_mode == 'unread':
             self.result_outputs = self.make_results(self.new_readings,
-                                                     self.n_proc)
+                                                    self.n_proc)
         self.stops['make_results'] = datetime.utcnow()
         return
 
@@ -508,23 +507,28 @@ class DatabaseReader(object):
             rslts = reading_data.get_results()
         except Exception as e:
             logger.error("Got exception creating results for %d."
-                        % reading_data.reading_id)
+                         % reading_data.reading_id)
             logger.exception(e)
             return []
         if rslts is not None:
             if not len(rslts):
-                logger.debug("Got no results for %s." % reading_data.reading_id)
+                logger.debug("Got no results for %s." %
+                             reading_data.reading_id)
             for rslt in rslts:
                 if reading_data.kind_of_results == 'statements':
                     rslt.evidence[0].pmid = None
-                    rslt_data = StatementResultData(rslt, reading_data.reading_id)
+                    rslt_data = StatementResultData(
+                        rslt, reading_data.reading_id)
                 else:
-                    pmid = self._db.select_one(self._db.TextRef.pmid_num, self._db.TextContent.id == reading_data.content_id, self._db.TextContent.text_ref_id == self._db.TextRef.id)
+                    pmid = self._db.select_one(self._db.TextRef.pmid_num, self._db.TextContent.id ==
+                                               reading_data.content_id, self._db.TextContent.text_ref_id == self._db.TextRef.id)
                     rslt_tuple = (pmid, rslt)
-                    rslt_data = MeshRefResultData(rslt_tuple, reading_data.reading_id)
+                    rslt_data = MeshRefResultData(
+                        rslt_tuple, reading_data.reading_id)
                 rslt_data_list.append(rslt_data)
         else:
-            logger.warning("Got None results for %s." % reading_data.reading_id)
+            logger.warning("Got None results for %s." %
+                           reading_data.reading_id)
         return rslt_data_list
 
     def make_results(self, reading_data_list, num_proc=1):
@@ -537,7 +541,8 @@ class DatabaseReader(object):
         else:
             pool = Pool(num_proc)
             try:
-                rslt_data_list_list = pool.map(self.get_rslts_safely, reading_data_list)
+                rslt_data_list_list = pool.map(
+                    self.get_rslts_safely, reading_data_list)
                 for rslt_data_sublist in rslt_data_list_list:
                     rslt_data_list += rslt_data_sublist
             finally:

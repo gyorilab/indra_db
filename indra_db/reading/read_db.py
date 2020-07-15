@@ -485,12 +485,12 @@ class DatabaseReader(object):
         self.stops['dump_statements_db'] = datetime.utcnow()
         return
 
-    def dump_statements_to_pickle(self, pickle_file):
-        """Dump the statements into a pickle file."""
-        self.starts['dump_statements_pkl'] = datetime.utcnow()
+    def dump_results_to_pickle(self, pickle_file):
+        """Dump the results into a pickle file."""
+        self.starts['dump_result_pkl'] = datetime.utcnow()
         with open(pickle_file, 'wb') as f:
-            pickle.dump([sd.statement for sd in self.result_outputs], f)
-        print("Statements pickled in %s." % pickle_file)
+            pickle.dump([ro.result for ro in self.result_outputs], f)
+        print("Results pickled in %s." % pickle_file)
         self.stops['dump_readings_pkl'] = datetime.utcnow()
         return
 

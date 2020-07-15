@@ -429,7 +429,7 @@ class DatabaseReader(object):
                     len(self.result_outputs))
         batch_id = self._db.make_copy_batch_id()
 
-        if sd.reader_class.results_type == 'statements':
+        if self.reader.results_type == 'statements':
             # Find and filter out duplicate statements.
             stmt_tuples = {}
             stmts = []
@@ -437,17 +437,17 @@ class DatabaseReader(object):
             for sd in self.result_outputs:
                 tpl = sd.make_tuple(batch_id)
                 key = (tpl[1], tpl[4], tpl[9])
-                    if key in stmt_tuples.keys():
-                        logger.warning('Duplicate key found: %s.' % str(key))
-                        if key in stmt_dups.keys():
-                            stmt_dups[key].append(tpl)
-                        else:
-                            stmt_dups[key] = [tpl]
+                if key in stmt_tuples.keys():
+                    logger.warning('Duplicate key found: %s.' % str(key))
+                    if key in stmt_dups.keys():
+                        stmt_dups[key].append(tpl)
                     else:
-                        stmt_tuples[key] = tpl
-                        stmts.append(sd.result)
+                        stmt_dups[key] = [tpl]
+                else:
+                    stmt_tuples[key] = tpl
+                    stmts.append(sd.result)
 
-            # Dump the good stetements into the raw statements table.
+            # Dump the good statements into the raw statements table.
             updated = self._db.copy_report_push(
                 'raw_statements',
                 stmt_tuples.values(),
@@ -460,10 +460,10 @@ class DatabaseReader(object):
             gatherer.add('upd_stmts', len(updated))
 
             # Dump the duplicates into a separate to all for debugging.
-            self._db.copy('rejected_statements', [tpl for dlist in stmt_dups.values()
-                                                for tpl in dlist],
-                        DatabaseStatementData.get_cols(),
-                        commit=False)
+            self._db.copy('rejected_statements',
+                          [tpl for dl in stmt_dups.values() for tpl in dl],
+                          DatabaseStatementData.get_cols(),
+                          commit=False)
 
             # Add the agents for the accepted statements.
             logger.info("Uploading agents to the database.")
@@ -530,8 +530,11 @@ class DatabaseReader(object):
                     rslt_data = DatabaseStatementData(
                         rslt, reading_data.reading_id)
                 else:
-                    pmid = self._db.select_one(self._db.TextRef.pmid_num, self._db.TextContent.id ==
-                                               reading_data.content_id, self._db.TextContent.text_ref_id == self._db.TextRef.id)
+                    pmid = self._db.select_one(
+                        self._db.TextRef.pmid_num,
+                        self._db.TextContent.id == reading_data.content_id,
+                        self._db.TextContent.text_ref_id == self._db.TextRef.id
+                    )
                     rslt_tuple = (pmid, rslt)
                     rslt_data = DatabaseMeshRefData(
                         rslt_tuple, reading_data.reading_id)
@@ -619,10 +622,10 @@ def read(db_reader, rslt_mode, reading_pickle, stmts_pickle, upload_readings,
     if rslt_mode != 'none':
         db_reader.get_statements()
         if upload_stmts:
-            db_reader.dump_statements_to_db()
+            db_reader.dump_results_to_db()
         if stmts_pickle:
-            db_reader.dump_statements_to_pickle(db_reader.reader.name + '_'
-                                                + stmts_pickle)
+            db_reader.dump_results_to_pickle(db_reader.reader.name + '_'
+                                             + stmts_pickle)
     return
 
 

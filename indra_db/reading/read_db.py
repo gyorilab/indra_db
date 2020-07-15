@@ -203,7 +203,7 @@ class DatabaseMeshRefData(DatabaseResultData):
 
     def make_tuple(self, batch_id):
         """Make a tuple for copying into the database."""
-        return tuple(self.result)
+        return tuple(self.pmid, self.mesh_id)
 
 
 gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts'])

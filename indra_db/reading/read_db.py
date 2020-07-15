@@ -194,16 +194,16 @@ class DatabaseMeshRefData(DatabaseResultData):
     def __init__(self, result, reading_id=None, db_info_id=None,
                  indra_version=None):
         super().__init__(result, reading_id, db_info_id, indra_version)
-        self.pmid, self.mesh_id = result
+        self.pmid, (self.mesh_id, self.is_concept) = result
 
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
-        return 'pmid_num', 'mesh_num'
+        return 'pmid_num', 'mesh_num', 'is_concept'
 
     def make_tuple(self, batch_id):
         """Make a tuple for copying into the database."""
-        return tuple(self.pmid, self.mesh_id)
+        return self.pmid, self.mesh_id, self.is_concept
 
 
 gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts'])

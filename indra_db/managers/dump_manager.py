@@ -236,6 +236,23 @@ class Readonly(Dumper):
         return
 
 
+class StatementHashMeshId(Dumper):
+    name = 'mti_mesh_ids'
+    fmi = 'pkl'
+
+    def dump(self, continuing=False):
+        if self.use_principal:
+            ro = get_db(self.db_label)
+        else:
+            ro = get_ro(self.db_label)
+
+        q = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num])
+
+        s3 = boto3.client('s3')
+        s3.put_object(Body=pickle.dumps(q.all()), **self.get_s3_path().kw())
+
+
+
 def load_readonly_dump(db_label, ro_label, dump_file):
     principal_db = get_db(db_label)
     readonly_db = get_ro(ro_label)

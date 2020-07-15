@@ -423,66 +423,71 @@ class DatabaseReader(object):
         return
 
     def dump_results_to_db(self):
-        """Upload the statements to the database."""
-        self.starts['dump_statements_db'] = datetime.utcnow()
-        logger.info("Uploading %d statements to the database." %
+        """Upload the results to the database."""
+        self.starts['dump_results_db'] = datetime.utcnow()
+        logger.info("Uploading %d results to the database." %
                     len(self.result_outputs))
         batch_id = self._db.make_copy_batch_id()
 
-        # Find and filter out duplicate statements.
-        stmt_tuples = {}
-        stmts = []
-        stmt_dups = {}
-        mesh_term_tuples = {}
-        for sd in self.result_outputs:
-            tpl = sd.make_tuple(batch_id)
-            key = (tpl[1], tpl[4], tpl[9])
-            if sd.reader_class.results_type == 'statements':
-                if key in stmt_tuples.keys():
-                    logger.warning('Duplicate key found: %s.' % str(key))
-                    if key in stmt_dups.keys():
-                        stmt_dups[key].append(tpl)
+        if sd.reader_class.results_type == 'statements':
+            # Find and filter out duplicate statements.
+            stmt_tuples = {}
+            stmts = []
+            stmt_dups = {}
+            for sd in self.result_outputs:
+                tpl = sd.make_tuple(batch_id)
+                key = (tpl[1], tpl[4], tpl[9])
+                    if key in stmt_tuples.keys():
+                        logger.warning('Duplicate key found: %s.' % str(key))
+                        if key in stmt_dups.keys():
+                            stmt_dups[key].append(tpl)
+                        else:
+                            stmt_dups[key] = [tpl]
                     else:
-                        stmt_dups[key] = [tpl]
-                else:
-                    stmt_tuples[key] = tpl
-                    stmts.append(sd.result)
-            else:   # For mesh_terms
+                        stmt_tuples[key] = tpl
+                        stmts.append(sd.result)
+
+            # Dump the good stetements into the raw statements table.
+            updated = self._db.copy_report_push(
+                'raw_statements',
+                stmt_tuples.values(),
+                DatabaseStatementData.get_cols(),
+                constraint='reading_raw_statement_uniqueness',
+                commit=False,
+                return_cols=('uuid',)
+            )
+            gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
+            gatherer.add('upd_stmts', len(updated))
+
+            # Dump the duplicates into a separate to all for debugging.
+            self._db.copy('rejected_statements', [tpl for dlist in stmt_dups.values()
+                                                for tpl in dlist],
+                        DatabaseStatementData.get_cols(),
+                        commit=False)
+
+            # Add the agents for the accepted statements.
+            logger.info("Uploading agents to the database.")
+            if len(stmts):
+                insert_raw_agents(self._db, batch_id, stmts, verbose=False)
+            self.stops['dump_statements_db'] = datetime.utcnow()
+        else:
+            mesh_term_tuples = {}
+            for sd in self.result_outputs:
+                tpl = sd.make_tuple(batch_id)
+                key = (tpl[1], tpl[4], tpl[9])
                 mesh_term_tuples[key] = tpl
 
-        # Dump the good stetements into the raw statements table.
-        updated = self._db.copy_report_push(
-            'raw_statements',
-            stmt_tuples.values(),
-            DatabaseStatementData.get_cols(),
-            constraint='reading_raw_statement_uniqueness',
-            commit=False,
-            return_cols=('uuid',)
-        )
-        gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
-        gatherer.add('upd_stmts', len(updated))
+            # Dump mesh_terms to the table
+            updated = self._db.copy_lazy(
+                'mti_ref_annotations_test',
+                mesh_term_tuples.values(),
+                DatabaseStatementData.get_cols(),
+                commit=False
+            )
 
-        # Dump mesh_terms to the table
-        updated = self._db.copy_lazy(
-            'mti_ref_annotations_test',
-            mesh_term_tuples.values(),
-            DatabaseStatementData.get_cols(),
-            commit=False
-        )
-        gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(updated))
-        gatherer.add('upd_mesh_terms', len(updated))
+            gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(updated))
+            gatherer.add('upd_mesh_terms', len(updated))
 
-        # Dump the duplicates into a separate to all for debugging.
-        self._db.copy('rejected_statements', [tpl for dlist in stmt_dups.values()
-                                              for tpl in dlist],
-                      DatabaseStatementData.get_cols(),
-                      commit=False)
-
-        # Add the agents for the accepted statements.
-        logger.info("Uploading agents to the database.")
-        if len(stmts):
-            insert_raw_agents(self._db, batch_id, stmts, verbose=False)
-        self.stops['dump_statements_db'] = datetime.utcnow()
         return
 
     def dump_results_to_pickle(self, pickle_file):

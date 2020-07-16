@@ -252,7 +252,6 @@ class StatementHashMeshId(Dumper):
         s3.put_object(Body=pickle.dumps(q.all()), **self.get_s3_path().kw())
 
 
-
 def load_readonly_dump(db_label, ro_label, dump_file):
     principal_db = get_db(db_label)
     readonly_db = get_ro(ro_label)
@@ -376,7 +375,6 @@ def main():
         ro_dumper = Readonly.from_list(starter.manifest)
         if not args.allow_continue or not ro_dumper:
             logger.info("Generating readonly schema (est. a long time)")
-            assert False, 'moooo'
             ro_dumper = Readonly(date_stamp=starter.date_stamp)
             ro_dumper.dump(continuing=args.allow_continue)
         else:
@@ -396,6 +394,12 @@ def main():
                 .dump(continuing=args.allow_continue)
         else:
             logger.info("Statement dump exists, skipping.")
+
+        if not args.allow_continue \
+                or not StatementHashMeshId.from_list(starter.manifest):
+            logger.info("Dumping hash-mesh tuples.")
+            StatementHashMeshId(date_stamp=starter.date_stamp)\
+                .dump(continuing=args.continuing)
 
         if not args.allow_continue or not Belief.from_list(starter.manifest):
             logger.info("Dumping belief.")

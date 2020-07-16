@@ -602,6 +602,10 @@ class QueryApiCall(ApiCall):
     def _build_db_query(self):
         query_json = json.loads(self._pop('json', '{}'))
         q = Query.from_json(query_json)
+        required_queries = {'HasAgent', 'FromPapers', 'FromMeshIds'}
+        if not required_queries & set(q.get_component_queries()):
+            abort(Response(f"Query must contain at least one of "
+                           f"{required_queries}."), 400)
         if q.full:
             abort(Response("Query would retrieve all statements. "
                            "Please constrain further.", 400))

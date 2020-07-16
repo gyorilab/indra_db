@@ -123,6 +123,7 @@ class ApiCall:
         self.fmt = self._pop('format', 'json')
         self.w_english = self._pop('with_english', False, bool)
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)
+        self.strict = self._pop('strict', False, bool)
 
         # Figure out authorization.
         self.has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -207,6 +208,11 @@ class ApiCall:
                     self.ev_filter = minus_q.ev_filter()
                 else:
                     self.ev_filter &= minus_q.ev_filter()
+
+            if self.strict:
+                num_agents = (self.db_query.get_component_queries()
+                              .count(HasAgent.__name__))
+                self.db_query &= HasNumAgents((num_agents,))
 
         return self.db_query
 
@@ -303,7 +309,6 @@ class ApiCall:
 class StatementApiCall(ApiCall):
     def __init__(self):
         super(StatementApiCall, self).__init__()
-        self.strict = self._pop('strict', False, bool)
         self.web_query['mesh_ids'] = \
             {m for m in self._pop('mesh_ids', '').split(',') if m}
         self.web_query['paper_ids'] = \
@@ -392,7 +397,6 @@ class StatementApiCall(ApiCall):
         for raw_ag in iter_free_agents(self.web_query):
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns)
-            num_agents += 1
 
         # Get the agents with specified roles.
         for role in ['subject', 'object']:
@@ -402,7 +406,6 @@ class StatementApiCall(ApiCall):
             if isinstance(raw_ag, list):
                 assert len(raw_ag) == 1, f'Malformed agent for {role}: {raw_ag}'
                 raw_ag = raw_ag[0]
-            num_agents += 1
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, role=role.upper())
 
@@ -419,7 +422,6 @@ class StatementApiCall(ApiCall):
             ag_num = int(ag_num_str)
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, agent_num=ag_num)
-            num_agents += 1
 
         # Get the raw name of the statement type (we fix some variations).
         act_raw = self._pop('type', None)

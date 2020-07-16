@@ -163,7 +163,7 @@ class BiogridManager(KnowledgebaseManager):
 
 
 class PathwayCommonsManager(KnowledgebaseManager):
-    name = 'pc11'
+    name = 'pathwaycommons'
     source = 'biopax'
     skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus',
              'ctd', 'drugbank'}
@@ -185,7 +185,8 @@ class PathwayCommonsManager(KnowledgebaseManager):
     def _get_statements(self):
         s3 = boto3.client('s3')
 
-        resp = s3.get_object(Bucket='bigmech', Key='indra-db/biopax_pc11.pkl')
+        resp = s3.get_object(Bucket='bigmech',
+                             Key='indra-db/biopax_pc12_pybiopax.pkl')
         stmts = pickle.loads(resp['Body'].read())
 
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
@@ -344,8 +345,9 @@ class PhosphositeManager(KnowledgebaseManager):
         resp = s3.get_object(Bucket='bigmech',
                              Key='indra-db/Kinase_substrates.owl.gz')
         owl_gz = resp['Body'].read()
-        owl_bytes = zlib.decompress(owl_gz, zlib.MAX_WBITS + 32)
-        bp = biopax.process_owl_str(owl_bytes)
+        owl_str = \
+            zlib.decompress(owl_gz, zlib.MAX_WBITS + 32).decode('utf-8')
+        bp = biopax.process_owl_str(owl_str)
         stmts, dups = extract_duplicates(bp.statements,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))

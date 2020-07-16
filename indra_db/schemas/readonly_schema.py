@@ -562,7 +562,8 @@ def get_schema(Base):
                           "  low_level_names.is_active AS is_active, \n"
                           "  CAST(\n"
                           "    low_level_names.src_json AS JSONB\n"
-                          "  ) AS src_json \n"
+                          "  ) AS src_json, \n"
+                          "  false AS is_complex_dup\n"
                           "FROM \n"
                           "  (\n"
                           "    SELECT \n"
@@ -591,6 +592,7 @@ def get_schema(Base):
                           "  low_level_names.is_active, \n"
                           "  CAST(low_level_names.src_json AS JSONB)")
         _indices = [BtreeIndex('agent_interactions_mk_hash_idx', 'mk_hash')]
+        _always_disp = ['mk_hash', 'agent_json']
 
         mk_hash = Column(BigInteger, primary_key=True)
         ev_count = Column(Integer)
@@ -600,6 +602,7 @@ def get_schema(Base):
         agent_count = Column(Integer)
         agent_json = Column(JSONB)
         src_json = Column(JSONB)
+        is_complex_dup = Column(Boolean)
     read_views[AgentInteractions.__tablename__] = AgentInteractions
 
     return read_views

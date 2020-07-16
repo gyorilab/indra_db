@@ -3,6 +3,7 @@ __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
            'PrincipalDatabaseManager', 'ReadonlyDatabaseManager']
 
 import re
+import json
 import random
 import logging
 from io import BytesIO
@@ -561,8 +562,8 @@ class DatabaseManager(object):
         data_bts = []
         n_cols = len(cols)
         for entry in data:
-            # Make sure that the number of columns matches the number of columns in
-            # the data.
+            # Make sure that the number of columns matches the number of columns
+            # in the data.
             if n_cols != len(entry):
                 raise ValueError("Number of columns does not match number of "
                                  "columns in data.")
@@ -572,6 +573,8 @@ class DatabaseManager(object):
             for element in entry:
                 if isinstance(element, str):
                     new_entry.append(element.encode('utf8'))
+                if isinstance(element, dict):
+                    new_entry.append(json.dumps(element).encode('utf-8'))
                 elif (isinstance(element, bytes)
                       or element is None
                       or isinstance(element, Number)

@@ -228,11 +228,32 @@ def get_schema(Base):
         mesh_num = Column(Integer, nullable=False)
         qual_num = Column(Integer)
         major_topic = Column(Boolean, default=False)
+        is_concept = Column(Boolean, default=False)
         __table_args__ = (
-            UniqueConstraint('pmid_num', 'mesh_num', 'qual_num',
+            UniqueConstraint('pmid_num', 'mesh_num', 'qual_num', 'is_concept',
                              name='mesh-uniqueness'),
         )
     table_dict[MeshRefAnnotations.__tablename__] = MeshRefAnnotations
+
+
+    class MtiRefAnnotationsTest(Base, IndraDBTable):
+        __tablename__ = 'mti_ref_annotations_test'
+        _always_disp = ['pmid_num', 'mesh_num', 'qual_num']
+        _indices = [BtreeIndex('mti_ref_annotations_test_pmid_idx', 'pmid_num'),
+                    BtreeIndex('mti_ref_annotations_test_mesh_id_idx', 'mesh_num'),
+                    BtreeIndex('mti_ref_annotations_test_qual_id_idx', 'qual_num')]
+        id = Column(Integer, primary_key=True)
+        pmid_num = Column(Integer, nullable=False)
+        mesh_num = Column(Integer, nullable=False)
+        qual_num = Column(Integer)
+        major_topic = Column(Boolean, default=False)
+        is_concept = Column(Boolean, default=False)
+        __table_args__ = (
+            UniqueConstraint('pmid_num', 'mesh_num', 'qual_num', 'is_concept',
+                                name='mesh-uniqueness'),
+        )
+    table_dict[MtiRefAnnotationsTest.__tablename__] = MtiRefAnnotationsTest
+
 
     class SourceFile(Base, IndraDBTable):
         __tablename__ = 'source_file'

@@ -78,11 +78,11 @@ class DbReadingSubmitter(Submitter):
 
     def _get_base(self, job_name, start_ix, end_ix):
         read_mode = self.options.pop('read_mode', 'unread')
-        stmt_mode = self.options.pop('stmt_mode', 'all')
+        rslt_mode = self.options.pop('rslt_mode', 'all')
 
         base = ['python3', '-m', 'indra_db.reading.read_db_aws',
                 self.job_base, job_name, self.s3_base]
-        base += ['/sw/tmp', read_mode, stmt_mode, '32', str(start_ix),
+        base += ['/sw/tmp', read_mode, rslt_mode, '32', str(start_ix),
                  str(end_ix)]
         return base
 
@@ -93,23 +93,23 @@ class DbReadingSubmitter(Submitter):
                 extensions.extend(['--' + key, val])
         return extensions
 
-    def set_options(self, stmt_mode='all', read_mode='unread',
+    def set_options(self, rslt_mode='all', read_mode='unread',
                     max_reach_input_len=None, max_reach_space_ratio=None):
         """Set the options for this reading job.
 
         Parameters
         ----------
-        stmt_mode : bool
-            Optional, default 'all' - If 'all', produce statements for all
+        rslt_mode : bool
+            Optional, default 'all' - If 'all', produce results for all
             content for all readers. If the readings were already produced,
             they will be retrieved from the database if `read_mode` is 'none'
             or 'unread'. If this option is 'unread', only the newly produced
-            readings will be processed. If 'none', no statements will be
+            readings will be processed. If 'none', no results will be
             produced.
         read_mode : str : 'all', 'unread', or 'none'
             Optional, default 'unread' - If 'all', read everything (generally
             slow); if 'unread', only read things that were unread, (the cache
-            of old readings may still be used if `stmt_mode='all'` to get
+            of old readings may still be used if `rslt_mode='all'` to get
             everything); if 'none', don't read, and only retrieve existing
             readings.
         max_reach_input_len : int
@@ -122,7 +122,7 @@ class DbReadingSubmitter(Submitter):
             fraction of characters that are spaces is a fast and simple way to
             catch and avoid such problems. Recommend a value of 0.5.
         """
-        self.options['stmt_mode'] = stmt_mode
+        self.options['rslt_mode'] = rslt_mode
         self.options['read_mode'] = read_mode
         self.options['max_reach_input_len'] = max_reach_input_len
         self.options['max_reach_space_ratio'] = max_reach_space_ratio
@@ -200,10 +200,10 @@ if __name__ == '__main__':
                      'as one text content id per line.'),
         )
     parser.add_argument(
-        '-S', '--stmt_mode',
+        '-S', '--rslt_mode',
         choices=['all', 'unread', 'none'],
         default='all',
-        help='Choose the subset of statements on which to run reading.'
+        help='Choose the subset of readings from which to generate results.'
     )
     parser.add_argument(
         '-R', '--read_mode',
@@ -248,7 +248,7 @@ if __name__ == '__main__':
 
     logger.info("Reading for %s" % args.readers)
     sub = DbReadingSubmitter(args.basename, args.readers, args.project)
-    sub.set_options(args.stmt_mode, args.read_mode,
+    sub.set_options(args.rslt_mode, args.read_mode,
                     args.max_reach_input_len, args.max_reach_space_ratio)
 
     submit = partial(sub.submit_reading, args.input_file, args.start_ix,

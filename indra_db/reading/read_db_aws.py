@@ -57,13 +57,13 @@ def get_parser():
               "use pre-existing readings. Default is 'unread'.")
     )
     parser.add_argument(
-        dest='stmt_mode',
+        dest='rslt_mode',
         choices=['all', 'unread', 'none'],
-        help=("Choose which readings should produce statements. If 'all', all "
+        help=("Choose from which readings to extract results. If 'all', all "
               "readings that are produced or retrieved will be used to produce "
-              "statements. If 'unread', only produce statements from "
+              "results. If 'unread', only produce results from "
               "previously unread content. If 'none', do not produce any "
-              "statements (only readings will be produced).")
+              "results (only readings will be produced).")
     )
     parser.add_argument(
         dest='num_cores',
@@ -151,9 +151,9 @@ def main():
 
     # Some combinations of options don't make sense:
     forbidden_combos = [('all', 'unread'), ('none', 'unread'), ('none', 'none')]
-    assert (args.read_mode, args.stmt_mode) not in forbidden_combos, \
+    assert (args.read_mode, args.rslt_mode) not in forbidden_combos, \
         ("The combination of reading mode %s and statement mode %s is not "
-         "allowed." % (args.reading_mode, args.stmt_mode))
+         "allowed." % (args.reading_mode, args.rslt_mode))
 
     # Get a handle for the database
     if args.test:
@@ -163,9 +163,8 @@ def main():
         db = None
 
     # Read everything ========================================
-    workers = run_reading(readers, tcids, verbose=True, db=db,
-                          reading_mode=args.read_mode,
-                          stmt_mode=args.stmt_mode)
+    run_reading(readers, tcids, verbose=True, db=db,
+                reading_mode=args.read_mode, rslt_mode=args.rslt_mode)
 
     # Preserve the sparser logs
     contents = os.listdir('.')

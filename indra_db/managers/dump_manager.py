@@ -238,7 +238,7 @@ class Readonly(Dumper):
 
 class StatementHashMeshId(Dumper):
     name = 'mti_mesh_ids'
-    fmi = 'pkl'
+    fmt = 'pkl'
 
     def __init__(self, db_label='primary', use_principal=False, **kwargs):
         self.use_principal = use_principal

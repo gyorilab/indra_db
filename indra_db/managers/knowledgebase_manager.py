@@ -191,17 +191,23 @@ class PathwayCommonsManager(KnowledgebaseManager):
     def _get_statements(self):
         s3 = boto3.client('s3')
 
+        logger.info('Loading PC content pickle from S3')
         resp = s3.get_object(Bucket='bigmech',
                              Key='indra-db/biopax_pc12_pybiopax.pkl')
+        logger.info('Loading PC statements from pickle')
         stmts = pickle.loads(resp['Body'].read())
 
+        logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
-        return filtered_stmts
+        unique_stmts, _ = extract_duplicates(filtered_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
 
 
 class CTDManager(KnowledgebaseManager):
-    name = 'ctd'
+    name = 'CTD'
     source = 'ctd'
+    short_name = 'ctd'
     subsets = ['gene_disease', 'chemical_disease',
                'chemical_gene']
 
@@ -228,14 +234,14 @@ class DrugBankManager(KnowledgebaseManager):
 
     def _get_statements(self):
         s3 = boto3.client('s3')
-        logger.info('Fetching DrugBank statements %s from S3...')
+        logger.info('Fetching DrugBank statements from S3...')
         key = 'indra-db/drugbank_5.1.pkl'
         resp = s3.get_object(Bucket='bigmech', Key=key)
         stmts = pickle.loads(resp['Body'].read())
-        stmts += [s for s in _expanded(stmts)]
+        expanded_stmts = [s for s in _expanded(stmts)]
         # Return exactly one of multiple statements that are exactly the same
         # in terms of content and evidence.
-        unique_stmts, _ = extract_duplicates(stmts,
+        unique_stmts, _ = extract_duplicates(expanded_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
 

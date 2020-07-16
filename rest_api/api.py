@@ -166,15 +166,13 @@ class ApiCall:
         elif result_type == 'interactions':
             res = self.get_db_query().get_interactions(**params)
         elif result_type == 'relations':
-            self.special['with_hashes'] = \
-                self._pop('with_hashes', False, bool)
+            self.special['with_hashes'] = self._pop('with_hashes', False, bool)
             res = self.get_db_query().get_relations(
                 with_hashes=self.special['with_hashes'] or self.w_cur_counts,
                 **params
             )
         elif result_type == 'agents':
-            self.special['with_hashes'] = \
-                self._pop('with_hashes', False, bool)
+            self.special['with_hashes'] = self._pop('with_hashes', False, bool)
             res = self.get_db_query().get_agents(
                 with_hashes=self.special['with_hashes'] or self.w_cur_counts,
                 **params

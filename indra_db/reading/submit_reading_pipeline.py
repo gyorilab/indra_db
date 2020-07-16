@@ -54,7 +54,7 @@ class DbReadingSubmitter(Submitter):
     _purpose = 'db_reading'
     _job_queue_dict = {'run_db_reading_queue': ['reach', 'sparser', 'isi',
                                                 'eidos'],
-                       'run_db_lite_queue': ['mti'],
+                       'run_db_mti_queue': ['mti'],
                        'run_db_trips_queue': ['trips']}
     _job_def_dict = {'run_db_reading_jobdef': ['reach', 'sparser'],
                      'run_db_lite_jobdef': ['mti'],

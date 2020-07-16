@@ -14,7 +14,6 @@ from jinja2 import Environment, ChoiceLoader
 from indra.assemblers.html.assembler import loader as indra_loader, \
     stmts_from_json, HtmlAssembler, SOURCE_COLORS, _format_evidence_text, \
     _format_stmt_text
-from indra.assemblers.english import EnglishAssembler
 from indra.statements import make_statement_camel, get_all_descendants, \
     Statement
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
@@ -165,7 +164,7 @@ class ApiCall:
                 **params
             )
         elif result_type == 'interactions':
-            res = self.get_db_query().get_statements(**params)
+            res = self.get_db_query().get_interactions(**params)
         elif result_type == 'relations':
             self.special['with_hashes'] = \
                 self._pop('with_hashes', False, bool)

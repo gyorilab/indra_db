@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 class KnowledgebaseManager(object):
     """This is a class to lay out the methods for updating a dataset."""
     name = NotImplemented
+    short_name = NotImplemented
     source = NotImplemented
 
     def upload(self, db):
@@ -48,11 +49,11 @@ class KnowledgebaseManager(object):
 
     def _check_reference(self, db, can_create=True):
         """Ensure that this database has an entry in the database."""
-        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.name)
+        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.short_name)
         if dbinfo is None:
             if can_create:
-                dbid = db.insert(db.DBInfo, db_name=self.name,
-                                 source_api=self.source)
+                dbid = db.insert(db.DBInfo, db_name=self.short_name,
+                                 source_api=self.source, db_full_name=self.name)
             else:
                 return None
         else:
@@ -70,7 +71,8 @@ class KnowledgebaseManager(object):
 
 class TasManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the TAS dataset."""
-    name = 'tas'
+    name = 'TAS'
+    short_name = 'tas'
     source = 'tas'
 
     @staticmethod
@@ -93,7 +95,8 @@ class TasManager(KnowledgebaseManager):
 
 
 class SignorManager(KnowledgebaseManager):
-    name = 'signor'
+    name = 'Signor'
+    short_name = 'signor'
     source = 'signor'
 
     def _get_statements(self):
@@ -104,7 +107,8 @@ class SignorManager(KnowledgebaseManager):
 
 class CBNManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of CBN network files"""
-    name = 'cbn'
+    name = 'Causal Bionet'
+    short_name = 'cbn'
     source = 'bel'
 
     def __init__(self, archive_url=None):
@@ -153,7 +157,8 @@ class CBNManager(KnowledgebaseManager):
 
 
 class BiogridManager(KnowledgebaseManager):
-    name = 'biogrid'
+    name = 'BioGRID'
+    short_name = 'biogrid'
     source = 'biogrid'
 
     def _get_statements(self):
@@ -163,7 +168,8 @@ class BiogridManager(KnowledgebaseManager):
 
 
 class PathwayCommonsManager(KnowledgebaseManager):
-    name = 'pathwaycommons'
+    name = 'Pathway Commons'
+    short_name = 'pc'
     source = 'biopax'
     skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus',
              'ctd', 'drugbank'}
@@ -216,7 +222,8 @@ class CTDManager(KnowledgebaseManager):
 
 
 class DrugBankManager(KnowledgebaseManager):
-    name = 'drugbank'
+    name = 'DrugBank'
+    short_name = 'drugbank'
     source = 'drugbank'
 
     def _get_statements(self):
@@ -234,7 +241,8 @@ class DrugBankManager(KnowledgebaseManager):
 
 
 class VirHostNetManager(KnowledgebaseManager):
-    name = 'virhostnet'
+    name = 'VirHostNet'
+    short_name = 'vhn'
     source = 'virhostnet'
 
     def _get_statements(self):
@@ -244,7 +252,8 @@ class VirHostNetManager(KnowledgebaseManager):
 
 
 class PhosphoElmManager(KnowledgebaseManager):
-    name = 'phosphoelm'
+    name = 'Phospho.ELM'
+    short_name = 'pe'
     source = 'phosphoelm'
 
     def _get_statements(self):
@@ -270,7 +279,8 @@ class PhosphoElmManager(KnowledgebaseManager):
 
 
 class HPRDManager(KnowledgebaseManager):
-    name = 'hprd'
+    name = 'HPRD'
+    short_name = 'hprd'
     source = 'hprd'
 
     def _get_statements(self):
@@ -317,7 +327,8 @@ class HPRDManager(KnowledgebaseManager):
 
 
 class BelLcManager(KnowledgebaseManager):
-    name = 'bel_lc'
+    name = 'BEL Large Corpus'
+    short_name = 'bel_lc'
     source = 'bel'
 
     def _get_statements(self):
@@ -335,7 +346,8 @@ class BelLcManager(KnowledgebaseManager):
 
 
 class PhosphositeManager(KnowledgebaseManager):
-    name = 'phosphosite'
+    name = 'Phosphosite Plus'
+    short_name = 'psp'
     source = 'biopax'
 
     def _get_statements(self):
@@ -356,7 +368,8 @@ class PhosphositeManager(KnowledgebaseManager):
 
 
 class RlimspManager(KnowledgebaseManager):
-    name = 'rlimsp'
+    name = 'RLIMS-P'
+    short_name = 'rlimsp'
     source = 'rlimsp'
     _rlimsp_root = 'https://hershey.dbi.udel.edu/textmining/export/'
     _rlimsp_files = [('rlims.medline.json', 'pmid'),
@@ -385,7 +398,8 @@ class RlimspManager(KnowledgebaseManager):
 
 
 class TrrustManager(KnowledgebaseManager):
-    name = 'trrust'
+    name = 'TRRUST'
+    short_name = 'trrust'
     source = 'trrust'
 
     def _get_statements(self):

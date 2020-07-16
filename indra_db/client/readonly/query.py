@@ -12,8 +12,7 @@ from collections import OrderedDict, Iterable, defaultdict
 
 import requests
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-    except_, func, null, String, and_
-from sqlalchemy.dialects.postgresql import JSONB
+    except_, func, null, and_
 
 from indra import get_config
 from indra.statements import stmts_from_json, get_statement_by_name, \

@@ -381,15 +381,7 @@ class StatementApiCall(ApiCall):
                        sec_since(self.start_time)))
         return resp
 
-    def _db_query_from_web_query(self, require_any=None, require_all=None,
-                                 empty_web_query=False):
-        db_query = EmptyQuery()
-        num_agents = 0
-
-        logger.info(f"Making DB query from:\n{self.web_query}")
-        filter_ev = self._pop('filter_ev', False, bool)
-        ev_filter = EvidenceFilter()
-
+    def _agent_query_from_web_query(self, db_query):
         # Get the agents without specified locations (subject or object).
         for raw_ag in iter_free_agents(self.web_query):
             ag, ns = process_agent(raw_ag)
@@ -420,6 +412,9 @@ class StatementApiCall(ApiCall):
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, agent_num=ag_num)
 
+        return db_query
+
+    def _type_query_from_web_query(self, db_query):
         # Get the raw name of the statement type (we fix some variations).
         act_raw = self._pop('type', None)
         if act_raw is not None:
@@ -429,15 +424,18 @@ class StatementApiCall(ApiCall):
                 act_raw = act_raw[0]
             act = make_statement_camel(act_raw)
             db_query &= HasType([act])
+        return db_query
 
-        # Get whether the user wants a strict match
-        if self.strict:
-            db_query &= HasNumAgents((num_agents,))
-
+    def _hashes_query_from_web_query(self, db_query):
         # Unpack hashes, if present.
         hashes = self._pop('hashes', None)
         if hashes:
             db_query &= HasHash(hashes)
+        return db_query
+
+    def _evidence_query_from_web_query(self, db_query):
+        filter_ev = self._pop('filter_ev', False, bool)
+        ev_filter = EvidenceFilter()
 
         # Unpack paper ids, if present:
         id_tpls = set()
@@ -471,7 +469,10 @@ class StatementApiCall(ApiCall):
         # Assign ev filter to class scope
         if ev_filter.filters:
             self.ev_filter = ev_filter
+        return db_query
 
+    def _check_db_query(self, db_query, require_any, require_all,
+                        empty_web_query):
         # Check for health of the resulting query, and some other things.
         if isinstance(db_query, EmptyQuery):
             raise DbAPIError(f"No arguments from web query {self.web_query} "
@@ -483,10 +484,26 @@ class StatementApiCall(ApiCall):
             raise DbAPIError(f'None of the required query elements '
                              f'found: {require_any}')
         if require_all and set(require_all) > component_queries:
-            raise DbAPIError(f"Required query elements not found: {require_all}")
+            raise DbAPIError(f"Required query elements not found: "
+                             f"{require_all}")
 
         if self.web_query and empty_web_query:
-            raise DbAPIError(f"Invalid query options: {list(self.web_query.keys())}.")
+            raise DbAPIError(f"Invalid query options: "
+                             f"{list(self.web_query.keys())}.")
+        return
+
+    def _db_query_from_web_query(self, require_any=None, require_all=None,
+                                 empty_web_query=False):
+        db_query = EmptyQuery()
+
+        logger.info(f"Making DB query from:\n{self.web_query}")
+
+        db_query = self._agent_query_from_web_query(db_query)
+        db_query = self._type_query_from_web_query(db_query)
+        db_query = self._hashes_query_from_web_query(db_query)
+        db_query = self._evidence_query_from_web_query(db_query)
+        self._check_db_query(db_query, require_any, require_all,
+                             empty_web_query)
 
         return db_query
 

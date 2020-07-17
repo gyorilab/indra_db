@@ -209,7 +209,8 @@ class DatabaseMeshRefData(DatabaseResultData):
         return self.pmid, self.mesh_id, self.is_concept
 
 
-gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts'])
+gatherer = DataGatherer('reading', ['readings', 'new_stmts', 'upd_stmts',
+                                    'new_mesh_terms', 'skp_mesh_terms'])
 
 
 class DatabaseReader(object):

@@ -480,13 +480,13 @@ class DatabaseReader(object):
                 mesh_term_tuples.add(tpl)
 
             # Dump mesh_terms to the table
-            updated = self._db.copy_lazy('mti_ref_annotations_test',
-                                         mesh_term_tuples,
-                                         DatabaseMeshRefData.get_cols(),
-                                         commit=False)
+            skipped = self._db.copy_report_lazy('mti_ref_annotations_test',
+                                                mesh_term_tuples,
+                                                DatabaseMeshRefData.get_cols(),
+                                                commit=False)
 
-            gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(updated))
-            gatherer.add('upd_mesh_terms', len(updated))
+            gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(skipped))
+            gatherer.add('skp_mesh_terms', len(skipped))
 
         return
 

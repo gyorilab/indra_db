@@ -68,6 +68,7 @@ class QueryResult(object):
         self.limit = limit
         self.offset = offset
         self.result_type = result_type
+        self.offset_comp = offset_comp
         if limit is None or offset_comp < limit:
             self.next_offset = None
         else:
@@ -119,7 +120,8 @@ class QueryResult(object):
                 'query_json': self.query_json,
                 'evidence_totals': self.evidence_totals,
                 'total_evidence': self.total_evidence,
-                'result_type': self.result_type}
+                'result_type': self.result_type,
+                'offset_comp': self.offset_comp}
 
 
 class StatementQueryResult(QueryResult):

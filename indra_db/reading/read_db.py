@@ -162,11 +162,14 @@ class DatabaseResultData(object):
             self.indra_version = get_indra_version()
         else:
             self.indra_version = indra_version
-        self.__text_patt = re.compile('[\W_]+')
         return
 
 
 class DatabaseStatementData(DatabaseResultData):
+    def __init__(self, *args, **kwargs):
+        super(DatabaseStatementData, self).__init__(*args, **kwargs)
+        self.__text_patt = re.compile('[\W_]+')
+
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""

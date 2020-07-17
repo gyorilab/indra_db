@@ -635,7 +635,10 @@ class Query(object):
         ev_totals = {}
         num_hashes = 0
         for ag_json, type_num, n_ag, n_ev, act, is_act, srcs, hashes in names:
-            ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
+            if type_num == ro_type_map.get_int("Complex"):
+                ordered_agents = set(ag_json.values())
+            else:
+                ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
             agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
             stmt_type = ro_type_map.get_str(type_num)
@@ -643,7 +646,9 @@ class Query(object):
             key = stmt_type + agent_key
 
             if key in results:
-                logger.warning("Something went weird processing relations.")
+                if type_num != ro_type_map.get_int("Complex"):
+                    logger.warning("Something went weird processing relations.")
+                continue
 
             source_counts = defaultdict(lambda: 0)
             for src_json in srcs:

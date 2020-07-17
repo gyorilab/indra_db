@@ -474,19 +474,16 @@ class DatabaseReader(object):
                 insert_raw_agents(self._db, batch_id, stmts, verbose=False)
             self.stops['dump_statements_db'] = datetime.utcnow()
         else:
-            mesh_term_tuples = {}
+            mesh_term_tuples = set()
             for sd in self.result_outputs:
                 tpl = sd.make_tuple(batch_id)
-                key = (tpl[1], tpl[4], tpl[9])
-                mesh_term_tuples[key] = tpl
+                mesh_term_tuples.add(tpl)
 
             # Dump mesh_terms to the table
-            updated = self._db.copy_lazy(
-                'mti_ref_annotations_test',
-                mesh_term_tuples.values(),
-                DatabaseStatementData.get_cols(),
-                commit=False
-            )
+            updated = self._db.copy_lazy('mti_ref_annotations_test',
+                                         mesh_term_tuples,
+                                         DatabaseStatementData.get_cols(),
+                                         commit=False)
 
             gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(updated))
             gatherer.add('upd_mesh_terms', len(updated))

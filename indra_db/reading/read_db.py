@@ -609,8 +609,8 @@ def construct_readers(reader_names, **kwargs):
 
 
 @DGContext.wrap(gatherer)
-def read(db_reader, rslt_mode, reading_pickle, stmts_pickle, upload_readings,
-         upload_stmts):
+def read(db_reader, rslt_mode, reading_pickle, rslts_pickle, upload_readings,
+         upload_rslts):
     """Read for a single reader"""
     gatherer.set_sub_label(db_reader.reader.name)
     db_reader.get_readings()
@@ -620,12 +620,12 @@ def read(db_reader, rslt_mode, reading_pickle, stmts_pickle, upload_readings,
         db_reader.dump_readings_to_pickle(reading_pickle)
 
     if rslt_mode != 'none':
-        db_reader.get_statements()
-        if upload_stmts:
+        db_reader.get_results()
+        if upload_rslts:
             db_reader.dump_results_to_db()
-        if stmts_pickle:
+        if rslts_pickle:
             db_reader.dump_results_to_pickle(db_reader.reader.name + '_'
-                                             + stmts_pickle)
+                                             + rslts_pickle)
     return
 
 

@@ -535,7 +535,7 @@ class DatabaseReader(object):
                         self._db.TextContent.id == reading_data.content_id,
                         self._db.TextContent.text_ref_id == self._db.TextRef.id
                     )
-                    rslt_tuple = (pmid, rslt)
+                    rslt_tuple = (pmid[0], rslt)
                     rslt_data = DatabaseMeshRefData(
                         rslt_tuple, reading_data.reading_id)
                 rslt_data_list.append(rslt_data)

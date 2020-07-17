@@ -220,7 +220,7 @@ def get_schema(Base):
             '       pa_agents.id AS ag_id, role_num, pa_agents.ag_num,\n'
             '       type_num, pa_statements.mk_hash,\n'
             '       readonly.evidence_counts.ev_count, activity, is_active,\n'
-            '       agent_count\n'
+            '       agent_count, false AS is_complex_dup\n'
             'FROM pa_agents, pa_statements, readonly.pa_agent_counts, type_map,'
             '  role_map, readonly.evidence_counts'
             '  LEFT JOIN pa_activity'
@@ -235,6 +235,21 @@ def get_schema(Base):
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),
                     BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
+
+        @classmethod
+        def create(cls, db, commit=True):
+            sql = ReadonlyTable.create(cls, db, False) + '\n'
+            sql += (f'INSERT INTO readonly.pa_meta \n'
+                    f'SELECT db_name, db_id, ag_id,\n '
+                    f'  generate_series(-1, 1, 2) AS role_num,\n'
+                    f'  generate_series(0, 1) AS ag_num,\n'
+                    f'  type_num, mk_hash, ev_count, activity, is_active,\n'
+                    f'  agent_count, true AS is_complex_dup\n'
+                    f'FROM readonly.pa_meta\n'
+                    f'WHERE type_num = {ro_type_map.get_int("Complex")}\n')
+            if commit:
+                cls.execute(db, sql)
+            return sql
 
         @classmethod
         def get_definition(cls):
@@ -254,6 +269,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
+        is_complex_dup = Column(Boolean)
     read_views[PaMeta.__tablename__] = PaMeta
 
     class RawStmtSrc(Base, ReadonlyTable):
@@ -371,6 +387,7 @@ def get_schema(Base):
             '    SELECT distinct mk_hash, type_num, activity, is_active,\n'
             '                    ev_count, agent_count'
             '    FROM readonly.pa_meta'
+            '    WHERE NOT is_complex_dup'
             ')\n'
             'SELECT readonly.pa_stmt_src.*, \n'
             '       meta.ev_count, \n'
@@ -488,7 +505,7 @@ def get_schema(Base):
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ("SELECT db_name, db_id, ag_id, role_num, ag_num,\n"
                           "       type_num, mk_hash, ev_count, activity,\n"
-                          "       is_active, agent_count\n"
+                          "       is_active, agent_count, is_complex_dup\n"
                           "FROM readonly.pa_meta\n"
                           "WHERE db_name NOT IN ('NAME', 'TEXT')")
         _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
@@ -506,6 +523,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
+        is_complex_dup = Column(Boolean)
     read_views[OtherMeta.__tablename__] = OtherMeta
 
     class MeshMeta(Base, ReadonlyTable):
@@ -516,6 +534,7 @@ def get_schema(Base):
                           "                  ev_count, activity, \n"
                           "                  is_active, agent_count \n"
                           "  FROM readonly.pa_meta\n"
+                          "  WHERE NOT is_complex_dup\n"
                           ")\n"
                           "SELECT COUNT(DISTINCT sid) as mesh_ev_count,\n"
                           "       meta.ev_count,\n"
@@ -582,6 +601,7 @@ def get_schema(Base):
                           "    WHERE \n"
                           "      readonly.name_meta.mk_hash \n"
                           "        = readonly.source_meta.mk_hash\n"
+                          "      AND NOT readonly.name_meta.is_complex_dup"
                           "  ) AS low_level_names \n"
                           "GROUP BY \n"
                           "  low_level_names.mk_hash, \n"
@@ -593,6 +613,33 @@ def get_schema(Base):
                           "  CAST(low_level_names.src_json AS JSONB)")
         _indices = [BtreeIndex('agent_interactions_mk_hash_idx', 'mk_hash')]
         _always_disp = ['mk_hash', 'agent_json']
+
+        @classmethod
+        def create(cls, db, commit=True):
+            ReadonlyTable.create(cls, db, commit)
+            from itertools import permutations
+            interactions = db.select_all(
+                db.AgentInteractions,
+                db.AgentInteractions.type_num == ro_type_map.get_int('Complex')
+            )
+            new_interactions = []
+            for interaction in interactions:
+                if interaction.agent_count < 2:
+                    continue
+                for pair in permutations(interaction.agent_json, 2):
+                    if interaction.agent_count == 2 and pair == ('0', '1'):
+                        continue
+                    new_agent_json = {str(i): interaction.agent_json[j]
+                                      for i, j in enumerate(pair)}
+                    new_interactions.append(
+                        (interaction.mk_hash, interaction.ev_count,
+                         interaction.type_num, 2, new_agent_json,
+                         interaction.src_json, True)
+                    )
+            db.copy('readonly.agent_interactions', new_interactions,
+                    ('mk_hash', 'ev_count', 'type_num', 'agent_count',
+                     'agent_json', 'src_json', 'is_complex_dup'))
+            return
 
         mk_hash = Column(BigInteger, primary_key=True)
         ev_count = Column(Integer)

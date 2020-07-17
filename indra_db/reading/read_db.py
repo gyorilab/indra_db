@@ -693,7 +693,7 @@ def make_parser():
         '-b', '--inner_batch',
         dest='b_in',
         help=('Choose the size of the inner batches, which is the number of '
-              'text content entires loaded at a given time, and the number of '
+              'text content entries loaded at a given time, and the number of '
               'entries that are read at a time by a reader. The default is '
               '1,000.'),
         default=1000,
@@ -716,8 +716,9 @@ def make_parser():
         action='store_true'
     )
     parser.add_argument(
-        '--no_statement_upload',
-        help='Choose not to upload the statements to the database.',
+        '--no_result_upload',
+        help=('Choose not to upload the resutls extracted from teh readings '
+              'to the database.'),
         action='store_true'
     )
     parser.add_argument(
@@ -789,10 +790,10 @@ def main():
         # Get the pickle file names.
         if args.name is not None:
             reading_pickle = args.name + '_readings_%d.pkl' % n
-            stmts_pickle = args.name + '_stmts_%d.pkl' % n
+            rslts_pickle = args.name + '_results_%d.pkl' % n
         else:
             reading_pickle = None
-            stmts_pickle = None
+            rslts_pickle = None
 
         # Get the dict of ids.
         tcids = [int(tcid_str.strip())
@@ -800,8 +801,8 @@ def main():
 
         # Read everything ====================================================
         run_reading(readers, tcids, verbose, args.reading_mode, args.rslt_mode,
-                    args.b_in, reading_pickle, stmts_pickle,
-                    not args.no_reading_upload, not args.no_statement_upload)
+                    args.b_in, reading_pickle, rslts_pickle,
+                    not args.no_reading_upload, not args.no_result_upload)
 
 
 if __name__ == "__main__":

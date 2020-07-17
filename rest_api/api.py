@@ -689,24 +689,6 @@ def serve_data_vis(file_path):
                         content_type=ct)
 
 
-@dep_route('/ilv/<path:file>')
-def serve_indralab_vue(file):
-    full_path = path.join('/home/patrick/Workspace/indralab-vue/dist', file)
-    if not path.exists(full_path):
-        abort(404)
-        return
-    ext = full_path.split('.')[-1]
-    if ext == 'js':
-        ct = 'application/javascript'
-    elif ext == 'css':
-        ct = 'text/css'
-    else:
-        ct = None
-    with open(full_path, 'rb') as f:
-        return Response(f.read(),
-                        content_type=ct)
-
-
 @dep_route('/monitor')
 def get_data_explorer():
     return render_my_template('daily_data.html', 'Monitor')

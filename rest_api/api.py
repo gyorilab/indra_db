@@ -14,8 +14,9 @@ from jinja2 import Environment, ChoiceLoader
 from indra.assemblers.html.assembler import loader as indra_loader, \
     stmts_from_json, HtmlAssembler, SOURCE_COLORS, _format_evidence_text, \
     _format_stmt_text
+from indra.ontology.bio import bio_ontology
 from indra.statements import make_statement_camel, get_all_descendants, \
-    Statement
+    Statement, Complex
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
     HasOnlySource, HasHash, Query, FromPapers, FromMeshIds, EvidenceFilter, \
     EmptyQuery
@@ -123,6 +124,7 @@ class ApiCall:
         self.w_english = self._pop('with_english', False, bool)
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)
         self.strict = self._pop('strict', False, bool)
+        self.agent_dict = None
 
         # Figure out authorization.
         self.has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -240,6 +242,20 @@ class ApiCall:
             for key, entry in result.results.copy().items():
                 # Build english reps of each result (unless their just hashes)
                 if self.w_english and result.result_type != 'hashes':
+                    # Fix the agent order
+                    if self.strict:
+                        if result.result_type == 'statements':
+                            if type(entry) == Complex:
+                                id_lookup = {v: int(k)
+                                             for k, v in self.agent_dict}
+                                entry.members.sort(
+                                    key=lambda ag: id_lookup.get(ag.name, 10)
+                                )
+                        elif result.result_type == 'relations':
+                            if entry['type'] == 'Complex':
+                                entry['agents'] = self.agent_dict
+
+                    # Construct the english.
                     if result.result_type == 'statements':
                         stmt = stmts_from_json([entry])[0]
                         eng = _format_stmt_text(stmt)
@@ -314,6 +330,7 @@ class StatementApiCall(ApiCall):
             {m for m in self._pop('mesh_ids', '').split(',') if m}
         self.web_query['paper_ids'] = \
             {i for i in self._pop('paper_ids', '').split(',') if i}
+        self.agent_dict = {}
         return
 
     def _build_db_query(self):
@@ -385,6 +402,16 @@ class StatementApiCall(ApiCall):
                        sec_since(self.start_time)))
         return resp
 
+    def _add_agent_to_dict(self, num, ag, ns):
+        if not self.strict:
+            return
+
+        if ns in ['NAME', 'FPLX',]:
+            self.agent_dict[num] = ag
+        elif ns != 'TEXT':
+            self.agent_dict[num] = bio_ontology.get_name(ns, ag)
+        return
+
     def _agent_query_from_web_query(self, db_query):
         # Get the agents without specified locations (subject or object).
         for raw_ag in iter_free_agents(self.web_query):
@@ -392,7 +419,7 @@ class StatementApiCall(ApiCall):
             db_query &= HasAgent(ag, namespace=ns)
 
         # Get the agents with specified roles.
-        for role in ['subject', 'object']:
+        for ag_num, role in enumerate(['subject', 'object']):
             raw_ag = self._pop(role, None)
             if raw_ag is None:
                 continue
@@ -401,6 +428,7 @@ class StatementApiCall(ApiCall):
                 raw_ag = raw_ag[0]
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, role=role.upper())
+            self._add_agent_to_dict(ag_num, ag, ns)
 
         # Get agents with specific agent numbers.
         for key in self.web_query.copy().keys():
@@ -415,6 +443,7 @@ class StatementApiCall(ApiCall):
             ag_num = int(ag_num_str)
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, agent_num=ag_num)
+            self._add_agent_to_dict(ag_num, ag, ns)
 
         return db_query
 
@@ -648,6 +677,24 @@ def serve_data_vis(file_path):
     logger.info('data-vis: ' + full_path)
     if not path.exists(full_path):
         return abort(404)
+    ext = full_path.split('.')[-1]
+    if ext == 'js':
+        ct = 'application/javascript'
+    elif ext == 'css':
+        ct = 'text/css'
+    else:
+        ct = None
+    with open(full_path, 'rb') as f:
+        return Response(f.read(),
+                        content_type=ct)
+
+
+@dep_route('/ilv/<path:file>')
+def serve_indralab_vue(file):
+    full_path = path.join('/home/patrick/Workspace/indralab-vue/dist', file)
+    if not path.exists(full_path):
+        abort(404)
+        return
     ext = full_path.split('.')[-1]
     if ext == 'js':
         ct = 'application/javascript'

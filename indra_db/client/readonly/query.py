@@ -239,15 +239,16 @@ class Query(object):
         """
         return self.__invert__()
 
-    def rest_get(self, result_type, limit=None, offset=None, best_first=True,
-                 ev_limit=None):
+    def _rest_get(self, result_type, limit=None, offset=None, best_first=True,
+                  **other_params):
         """Retrieve results from the remote API."""
+        logger.info("Using remote API to resolve query.")
         url = get_config('INDRA_DB_REST_URL', failure_ok=False)
+        params = {'json': json.dumps(self.to_json()), 'limit': limit,
+                  'offset': offset, 'best_first': best_first}
+        params.update(other_params)
         resp = requests.get(f'{url}/query/{result_type}',
-                            params={'json': json.dumps(self.to_json()),
-                                    'limit': limit, 'offset': offset,
-                                    'best_first': best_first,
-                                    'ev_limit': ev_limit})
+                            params=params)
         if resp.status_code != 200:
             raise ApiError(f"REST API failed with ({resp.status_code}): "
                            f"{resp.json()}")
@@ -291,6 +292,14 @@ class Query(object):
         if self.empty:
             return StatementQueryResult({}, limit, offset, {}, 0, {},
                                         self.to_json())
+
+        # If the database isn't available, route through the web service.
+        if not ro.available:
+            if evidence_filter:
+                logger.warning("Passing of evidence filter through API not "
+                               "yet implemented.")
+            return self._rest_get('statements', limit, offset, best_first,
+                                  ev_limit=ev_limit)
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
@@ -464,6 +473,10 @@ class Query(object):
             return QueryResult(set(), limit, offset, 0, {}, self.to_json(),
                                'hashes')
 
+        # If the database isn't directly available, route through the web API.
+        if not ro.available:
+            return self._rest_get('hashes', limit, offset, best_first)
+
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
         mk_hashes_q = self.get_hash_query(ro)
@@ -523,6 +536,9 @@ class Query(object):
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'interactions')
 
+        if not ro.available:
+            return self._rest_get('interactions', limit, offset, best_first)
+
         q = self._get_name_query(ro)
         q = self._apply_limits(q, [desc(ro.AgentInteractions.ev_count),
                                    ro.AgentInteractions.type_num,
@@ -579,6 +595,10 @@ class Query(object):
         if self.empty:
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'relations')
+
+        if not ro.available:
+            return self._rest_get('relations', limit, offset, best_first,
+                                  with_hashes=with_hashes)
 
         names_q = self._get_name_query(ro)
 
@@ -669,6 +689,10 @@ class Query(object):
         if self.empty:
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'agents')
+
+        if not ro.available:
+            return self._rest_get('agents', limit, offset, best_first,
+                                  with_hashes=with_hashes)
 
         names_q = self._get_name_query(ro)
 

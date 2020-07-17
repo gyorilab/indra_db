@@ -205,7 +205,7 @@ class DatabaseManager(object):
         try:
             ping_engine.execute('SELECT 1 AS ping;')
         except Exception as err:
-            logger.warning(f"Database {self.url} is not available: {err}")
+            logger.warning(f"Database {repr(self.url)} is not available: {err}")
             self.available = False
             return
         self.engine = create_engine(self.url)
@@ -321,6 +321,8 @@ class DatabaseManager(object):
 
     def grab_session(self):
         "Get an active session with the database."
+        if not self.available:
+            return
         if self.session is None or not self.session.is_active:
             logger.debug('Attempting to get session...')
             DBSession = sessionmaker(bind=self.engine)

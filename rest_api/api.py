@@ -230,6 +230,10 @@ class ApiCall:
         return resp
 
     def process_entries(self, result):
+        if result.result_type == 'hashes':
+            # There is really nothing to do for hashes.
+            return
+
         elsevier_redactions = 0
         if not all(self.has.values()) or self.fmt == 'json-js' \
                 or self.w_english:

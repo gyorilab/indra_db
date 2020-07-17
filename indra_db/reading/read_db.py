@@ -525,7 +525,7 @@ class DatabaseReader(object):
                 logger.debug("Got no results for %s." %
                              reading_data.reading_id)
             for rslt in rslts:
-                if reading_data.kind_of_results == 'statements':
+                if reading_data.reader_class.results_type == 'statements':
                     rslt.evidence[0].pmid = None
                     rslt_data = DatabaseStatementData(
                         rslt, reading_data.reading_id)

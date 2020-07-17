@@ -181,7 +181,7 @@ class DatabaseManager(object):
 
     Example
     -------
-    If you wish to acces the primary database and find the the metadata for a
+    If you wish to access the primary database and find the the metadata for a
     particular pmid, 1234567:
 
     >> from indra.db import get_db
@@ -199,6 +199,15 @@ class DatabaseManager(object):
         self.session = None
         self.Base = declarative_base()
         self.label = label
+        ping_engine = create_engine(self.url,
+                                    connect_args={'connect_timeout': 1})
+        self.available = True
+        try:
+            ping_engine.execute('SELECT 1 AS ping;')
+        except Exception as err:
+            logger.warning(f"Database {self.url} is not available: {err}")
+            self.available = False
+            return
         self.engine = create_engine(self.url)
         self._conn = None
         return
@@ -978,6 +987,8 @@ class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
+        if not self.available:
+            return
 
         self.tables = principal_schema.get_schema(self.Base)
         self.readonly = readonly_schema.get_schema(self.Base)
@@ -1114,6 +1125,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
+        if not self.available:
+            return
 
         self.tables = readonly_schema.get_schema(self.Base)
         for tbl in self.tables.values():

@@ -223,6 +223,8 @@ class DatabaseManager(object):
             self.__foreign_key_graph = None
 
     def __del__(self, *args, **kwargs):
+        if not self.available:
+            return
         try:
             self.grab_session()
             self.session.rollback()

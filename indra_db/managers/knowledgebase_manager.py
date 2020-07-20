@@ -1,7 +1,8 @@
 __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
            'BiogridManager', 'BelLcManager', 'PathwayCommonsManager',
            'RlimspManager', 'TrrustManager', 'PhosphositeManager',
-           'CTDManager', 'VirHostNetManager', 'PhosphoElmManager']
+           'CTDManager', 'VirHostNetManager', 'PhosphoElmManager',
+           'DrugBankManager']
 
 import os
 import zlib
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 class KnowledgebaseManager(object):
     """This is a class to lay out the methods for updating a dataset."""
     name = NotImplemented
+    short_name = NotImplemented
     source = NotImplemented
 
     def upload(self, db):
@@ -47,11 +49,11 @@ class KnowledgebaseManager(object):
 
     def _check_reference(self, db, can_create=True):
         """Ensure that this database has an entry in the database."""
-        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.name)
+        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.short_name)
         if dbinfo is None:
             if can_create:
-                dbid = db.insert(db.DBInfo, db_name=self.name,
-                                 source_api=self.source)
+                dbid = db.insert(db.DBInfo, db_name=self.short_name,
+                                 source_api=self.source, db_full_name=self.name)
             else:
                 return None
         else:
@@ -69,7 +71,8 @@ class KnowledgebaseManager(object):
 
 class TasManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the TAS dataset."""
-    name = 'tas'
+    name = 'TAS'
+    short_name = 'tas'
     source = 'tas'
 
     @staticmethod
@@ -92,7 +95,8 @@ class TasManager(KnowledgebaseManager):
 
 
 class SignorManager(KnowledgebaseManager):
-    name = 'signor'
+    name = 'Signor'
+    short_name = 'signor'
     source = 'signor'
 
     def _get_statements(self):
@@ -103,7 +107,8 @@ class SignorManager(KnowledgebaseManager):
 
 class CBNManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of CBN network files"""
-    name = 'cbn'
+    name = 'Causal Bionet'
+    short_name = 'cbn'
     source = 'bel'
 
     def __init__(self, archive_url=None):
@@ -152,7 +157,8 @@ class CBNManager(KnowledgebaseManager):
 
 
 class BiogridManager(KnowledgebaseManager):
-    name = 'biogrid'
+    name = 'BioGRID'
+    short_name = 'biogrid'
     source = 'biogrid'
 
     def _get_statements(self):
@@ -162,10 +168,11 @@ class BiogridManager(KnowledgebaseManager):
 
 
 class PathwayCommonsManager(KnowledgebaseManager):
-    name = 'pc11'
+    name = 'Pathway Commons'
+    short_name = 'pc'
     source = 'biopax'
     skips = {'psp', 'hprd', 'biogrid', 'phosphosite', 'phosphositeplus',
-             'ctd'}
+             'ctd', 'drugbank'}
 
     def __init__(self, *args, **kwargs):
         self.counts = defaultdict(lambda: 0)
@@ -184,16 +191,23 @@ class PathwayCommonsManager(KnowledgebaseManager):
     def _get_statements(self):
         s3 = boto3.client('s3')
 
-        resp = s3.get_object(Bucket='bigmech', Key='indra-db/biopax_pc11.pkl')
+        logger.info('Loading PC content pickle from S3')
+        resp = s3.get_object(Bucket='bigmech',
+                             Key='indra-db/biopax_pc12_pybiopax.pkl')
+        logger.info('Loading PC statements from pickle')
         stmts = pickle.loads(resp['Body'].read())
 
+        logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
-        return filtered_stmts
+        unique_stmts, _ = extract_duplicates(filtered_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
 
 
 class CTDManager(KnowledgebaseManager):
-    name = 'ctd'
+    name = 'CTD'
     source = 'ctd'
+    short_name = 'ctd'
     subsets = ['gene_disease', 'chemical_disease',
                'chemical_gene']
 
@@ -213,8 +227,28 @@ class CTDManager(KnowledgebaseManager):
         return unique_stmts
 
 
+class DrugBankManager(KnowledgebaseManager):
+    name = 'DrugBank'
+    short_name = 'drugbank'
+    source = 'drugbank'
+
+    def _get_statements(self):
+        s3 = boto3.client('s3')
+        logger.info('Fetching DrugBank statements from S3...')
+        key = 'indra-db/drugbank_5.1.pkl'
+        resp = s3.get_object(Bucket='bigmech', Key=key)
+        stmts = pickle.loads(resp['Body'].read())
+        expanded_stmts = [s for s in _expanded(stmts)]
+        # Return exactly one of multiple statements that are exactly the same
+        # in terms of content and evidence.
+        unique_stmts, _ = extract_duplicates(expanded_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
+
+
 class VirHostNetManager(KnowledgebaseManager):
-    name = 'virhostnet'
+    name = 'VirHostNet'
+    short_name = 'vhn'
     source = 'virhostnet'
 
     def _get_statements(self):
@@ -224,7 +258,8 @@ class VirHostNetManager(KnowledgebaseManager):
 
 
 class PhosphoElmManager(KnowledgebaseManager):
-    name = 'phosphoelm'
+    name = 'Phospho.ELM'
+    short_name = 'pe'
     source = 'phosphoelm'
 
     def _get_statements(self):
@@ -250,7 +285,8 @@ class PhosphoElmManager(KnowledgebaseManager):
 
 
 class HPRDManager(KnowledgebaseManager):
-    name = 'hprd'
+    name = 'HPRD'
+    short_name = 'hprd'
     source = 'hprd'
 
     def _get_statements(self):
@@ -297,7 +333,8 @@ class HPRDManager(KnowledgebaseManager):
 
 
 class BelLcManager(KnowledgebaseManager):
-    name = 'bel_lc'
+    name = 'BEL Large Corpus'
+    short_name = 'bel_lc'
     source = 'bel'
 
     def _get_statements(self):
@@ -315,7 +352,8 @@ class BelLcManager(KnowledgebaseManager):
 
 
 class PhosphositeManager(KnowledgebaseManager):
-    name = 'phosphosite'
+    name = 'Phosphosite Plus'
+    short_name = 'psp'
     source = 'biopax'
 
     def _get_statements(self):
@@ -325,8 +363,9 @@ class PhosphositeManager(KnowledgebaseManager):
         resp = s3.get_object(Bucket='bigmech',
                              Key='indra-db/Kinase_substrates.owl.gz')
         owl_gz = resp['Body'].read()
-        owl_bytes = zlib.decompress(owl_gz, zlib.MAX_WBITS + 32)
-        bp = biopax.process_owl_str(owl_bytes)
+        owl_str = \
+            zlib.decompress(owl_gz, zlib.MAX_WBITS + 32).decode('utf-8')
+        bp = biopax.process_owl_str(owl_str)
         stmts, dups = extract_duplicates(bp.statements,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))
@@ -335,7 +374,8 @@ class PhosphositeManager(KnowledgebaseManager):
 
 
 class RlimspManager(KnowledgebaseManager):
-    name = 'rlimsp'
+    name = 'RLIMS-P'
+    short_name = 'rlimsp'
     source = 'rlimsp'
     _rlimsp_root = 'https://hershey.dbi.udel.edu/textmining/export/'
     _rlimsp_files = [('rlims.medline.json', 'pmid'),
@@ -364,7 +404,8 @@ class RlimspManager(KnowledgebaseManager):
 
 
 class TrrustManager(KnowledgebaseManager):
-    name = 'trrust'
+    name = 'TRRUST'
+    short_name = 'trrust'
     source = 'trrust'
 
     def _get_statements(self):

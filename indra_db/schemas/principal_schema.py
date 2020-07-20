@@ -347,7 +347,8 @@ def get_schema(Base):
         __tablename__ = 'db_info'
         _always_disp = ['id', 'db_name', 'source_api']
         id = Column(Integer, primary_key=True)
-        db_name = Column(String(20), nullable=False)
+        db_name = Column(String, nullable=False)
+        db_full_name = Column(String, nullable=False)
         source_api = Column(String, nullable=False)
         create_date = Column(DateTime, default=func.now())
         last_updated = Column(DateTime, onupdate=func.now())

@@ -55,6 +55,7 @@ We include the information from these pre-existing databases:
 - [VirHostNet](http://virhostnet.prabi.fr/)
 - [CTD](http://ctdbase.org/)
 - [Phospho.ELM](http://phospho.elm.eu.org/)
+- [DrugBank](https://www.drugbank.ca/)
 
 These databases are retrieved primarily using the tools in `indra.sources`. The
 statements extracted from all of these sources are stored and updated in the

@@ -67,7 +67,7 @@ def url_for(*args, **kwargs):
 env.globals.update(url_for=url_for)
 
 
-MAX_STATEMENTS = int(1e3)
+MAX_STATEMENTS = int(0.5e3)
 REDACT_MESSAGE = '[MISSING/INVALID CREDENTIALS: limited to 200 char for Elsevier]'
 
 

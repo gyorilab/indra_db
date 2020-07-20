@@ -243,13 +243,15 @@ class ApiCall:
             for key, entry in result.results.copy().items():
                 # Build english reps of each result (unless their just hashes)
                 if self.w_english and result.result_type != 'hashes':
+                    stmt = None
                     # Fix the agent order
                     if self.strict:
                         if result.result_type == 'statements':
-                            if type(entry) == Complex:
+                            stmt = stmts_from_json([entry])[0]
+                            if type(stmt) == Complex:
                                 id_lookup = {v: int(k)
-                                             for k, v in self.agent_dict}
-                                entry.members.sort(
+                                             for k, v in self.agent_dict.items()}
+                                stmt.members.sort(
                                     key=lambda ag: id_lookup.get(ag.name, 10)
                                 )
                             agent_set = {ag.name
@@ -266,7 +268,8 @@ class ApiCall:
 
                     # Construct the english.
                     if result.result_type == 'statements':
-                        stmt = stmts_from_json([entry])[0]
+                        if stmt is None:
+                            stmt = stmts_from_json([entry])[0]
                         eng = _format_stmt_text(stmt)
                         entry['evidence'] = _format_evidence_text(stmt)
                     elif result.result_type == 'agents':

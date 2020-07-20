@@ -377,7 +377,10 @@ class StatementApiCall(ApiCall):
                                            result.source_counts, title=title,
                                            db_rest_url=request.url_root[:-1])
             idbr_template = env.get_template('idbr_statements_view.html')
-            identity = self.user.identity() if self.user else None
+            if not TESTING:
+                identity = self.user.identity() if self.user else None
+            else:
+                identity = None
             content = html_assembler.make_model(idbr_template,
                                                 identity=identity)
             if self.tracker.get_messages():

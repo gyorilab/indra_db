@@ -125,6 +125,7 @@ class ApiCall:
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)
         self.strict = self._pop('strict', False, bool)
         self.agent_dict = None
+        self.agent_set = None
 
         # Figure out authorization.
         self.has = dict.fromkeys(['elsevier', 'medscan'], False)
@@ -251,9 +252,17 @@ class ApiCall:
                                 entry.members.sort(
                                     key=lambda ag: id_lookup.get(ag.name, 10)
                                 )
-                        elif result.result_type == 'relations':
-                            if entry['type'] == 'Complex':
+                            agent_set = {ag.name
+                                         for ag in stmt.agent_list()
+                                         if ag is not None}
+                        else:
+                            agent_set = set(entry['agents'].values())
+                            if result.result_type == 'relations' \
+                                    and entry['type'] == 'Complex':
                                 entry['agents'] = self.agent_dict
+                        if agent_set < self.agent_set:
+                            result.results.pop(key, None)
+                            continue
 
                     # Construct the english.
                     if result.result_type == 'statements':
@@ -331,6 +340,7 @@ class StatementApiCall(ApiCall):
         self.web_query['paper_ids'] = \
             {i for i in self._pop('paper_ids', '').split(',') if i}
         self.agent_dict = {}
+        self.agent_set = set()
         return
 
     def _build_db_query(self):
@@ -406,14 +416,21 @@ class StatementApiCall(ApiCall):
                        sec_since(self.start_time)))
         return resp
 
-    def _add_agent_to_dict(self, num, ag, ns):
+    def _require_agent(self, ag, ns, num=None):
         if not self.strict:
             return
 
-        if ns in ['NAME', 'FPLX',]:
-            self.agent_dict[num] = ag
+        if ns in ['NAME', 'FPLX', ]:
+            name = ag
         elif ns != 'TEXT':
-            self.agent_dict[num] = bio_ontology.get_name(ns, ag)
+            name = bio_ontology.get_name(ns, ag)
+        else:
+            # If the namespace is TEXT, what do we do?
+            return
+
+        self.agent_set.add(name)
+        if num is not None:
+            self.agent_dict[num] = name
         return
 
     def _agent_query_from_web_query(self, db_query):
@@ -421,6 +438,7 @@ class StatementApiCall(ApiCall):
         for raw_ag in iter_free_agents(self.web_query):
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns)
+            self._require_agent(ag, ns)
 
         # Get the agents with specified roles.
         for ag_num, role in enumerate(['subject', 'object']):
@@ -432,7 +450,7 @@ class StatementApiCall(ApiCall):
                 raw_ag = raw_ag[0]
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, role=role.upper())
-            self._add_agent_to_dict(ag_num, ag, ns)
+            self._require_agent(ag, ns, ag_num)
 
         # Get agents with specific agent numbers.
         for key in self.web_query.copy().keys():
@@ -447,7 +465,7 @@ class StatementApiCall(ApiCall):
             ag_num = int(ag_num_str)
             ag, ns = process_agent(raw_ag)
             db_query &= HasAgent(ag, namespace=ns, agent_num=ag_num)
-            self._add_agent_to_dict(ag_num, ag, ns)
+            self._require_agent(ag, ns, ag_num)
 
         return db_query
 

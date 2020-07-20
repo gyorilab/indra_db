@@ -373,8 +373,9 @@ class StatementApiCall(ApiCall):
             title = TITLE + ': ' + 'Results'
             ev_totals = res_json.pop('evidence_totals')
             stmts = stmts_from_json(stmts_json.values())
-            html_assembler = HtmlAssembler(stmts, res_json, ev_totals,
-                                           result.source_counts, title=title,
+            html_assembler = HtmlAssembler(stmts, summary_metadata=res_json,
+                                           ev_counts=ev_totals, title=title,
+                                           source_counts=result.source_counts,
                                            db_rest_url=request.url_root[:-1])
             idbr_template = env.get_template('idbr_statements_view.html')
             if not TESTING:

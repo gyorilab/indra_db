@@ -68,7 +68,7 @@ class S3Path(object):
 
     @classmethod
     def from_string(cls, s3_key_str):
-        patt = re.compile('s3://([a-z0-9]+)/(.*)')
+        patt = re.compile('s3://([a-z0-9\-.]+)/(.*)')
         m = patt.match(s3_key_str)
         if m is None:
             raise ValueError("Invalid format for s3 path: %s" % s3_key_str)

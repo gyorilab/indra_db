@@ -160,6 +160,7 @@ class ApiCall:
         # Actually run the function
         params = dict(offset=self.offs, limit=self.limit,
                       best_first=self.best_first)
+        logger.info(f"Sending query with params: {params}")
         if result_type == 'statements':
             self.special['ev_limit'] = \
                 self._pop('ev_limit', self.default_ev_lim, int)
@@ -187,6 +188,7 @@ class ApiCall:
         else:
             raise ValueError(f"Invalid result type: {result_type}")
         self.process_entries(res)
+        logger.info(f"Returning for query with params: {params}")
         return self.produce_response(res)
 
     def _pop(self, key, default=None, type_cast=None):
@@ -216,6 +218,8 @@ class ApiCall:
                               .count(HasAgent.__name__))
                 self.db_query &= HasNumAgents((num_agents,))
 
+        logger.info(f"Constructed query \"{self.db_query}\":\n"
+                    f"{json.dumps(self.db_query.to_json(), indent=2)}")
         return self.db_query
 
     def _build_db_query(self):

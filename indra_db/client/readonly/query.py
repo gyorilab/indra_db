@@ -638,7 +638,8 @@ class Query(object):
             if type_num == ro_type_map.get_int("Complex"):
                 ordered_agents = set(ag_json.values())
             else:
-                ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
+                ordered_agents = [ag_json.get(str(n))
+                                  for n in range(max(n_ag, int(max(ag_json))+1))]
             agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
             stmt_type = ro_type_map.get_str(type_num)
@@ -728,7 +729,8 @@ class Query(object):
         ev_totals = {}
         num_hashes = 0
         for ag_json, n_ag, n_ev, src_jsons, hashes in names:
-            ordered_agents = [ag_json.get(str(n)) for n in range(n_ag)]
+            ordered_agents = [ag_json.get(str(n))
+                              for n in range(max(n_ag, int(max(ag_json))+1))]
             key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
 
             if key in results:

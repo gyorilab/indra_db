@@ -15,7 +15,7 @@ from indra.databases import hgnc_client
 from indra_db.client import HasAgent, HasType
 from indra_db.client.readonly.query import QueryResult, StatementQueryResult
 
-from .api import app, MAX_STATEMENTS, get_source, REDACT_MESSAGE
+from .api import app, MAX_STMTS, get_source, REDACT_MESSAGE
 
 
 HERE = path.dirname(path.abspath(__file__))
@@ -240,7 +240,7 @@ class DbApiTestCase(unittest.TestCase):
                                                   check_stmts=False,
                                                   time_goal=20)
         resp2 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
-                                                  offset=MAX_STATEMENTS,
+                                                  offset=MAX_STMTS,
                                                   check_stmts=False,
                                                   time_goal=20)
         return
@@ -346,7 +346,7 @@ class DbApiTestCase(unittest.TestCase):
     def test_statements_by_hashes_large_query(self):
         with open(path.join(HERE, 'sample_hashes.pkl'), 'rb') as f:
             hashes = pickle.load(f)
-        hash_sample = hashes[:MAX_STATEMENTS]
+        hash_sample = hashes[:MAX_STMTS]
 
         # Run the test.
         resp, dt, size = self.__time_query('post', 'statements/from_hashes',

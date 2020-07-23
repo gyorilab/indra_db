@@ -67,7 +67,7 @@ def url_for(*args, **kwargs):
 env.globals.update(url_for=url_for)
 
 
-MAX_STATEMENTS = int(0.5e3)
+MAX_STMTS = int(0.5e3)
 REDACT_MESSAGE = '[MISSING/INVALID CREDENTIALS: limited to 200 char for Elsevier]'
 
 
@@ -118,8 +118,10 @@ class ApiCall:
         self.web_query = request.args.copy()
         self.offs = self._pop('offset', type_cast=int)
         self.best_first = self._pop('best_first', True, bool)
-        self.max_stmts = min(self._pop('max_stmts', MAX_STATEMENTS, int),
-                             MAX_STATEMENTS)
+        if 'limit' in self.web_query:
+            self.limit = min(self._pop('limit', MAX_STMTS, int), MAX_STMTS)
+        else:
+            self.limit = min(self._pop('max_stmts', MAX_STMTS, int), MAX_STMTS)
         self.fmt = self._pop('format', 'json')
         self.w_english = self._pop('with_english', False, bool)
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)
@@ -156,7 +158,7 @@ class ApiCall:
                     % (self.__class__.__name__, sec_since(self.start_time)))
 
         # Actually run the function
-        params = dict(offset=self.offs, limit=self.max_stmts,
+        params = dict(offset=self.offs, limit=self.limit,
                       best_first=self.best_first)
         if result_type == 'statements':
             self.special['ev_limit'] = \
@@ -591,10 +593,10 @@ class FromHashesApiCall(StatementApiCall):
         if not hashes:
             logger.error("No hashes provided!")
             return abort(Response("No hashes given!", 400))
-        if len(hashes) > MAX_STATEMENTS:
+        if len(hashes) > MAX_STMTS:
             logger.error("Too many hashes given!")
             return abort(
-                Response(f"Too many hashes given, {MAX_STATEMENTS} allowed.",
+                Response(f"Too many hashes given, {MAX_STMTS} allowed.",
                          400)
             )
 

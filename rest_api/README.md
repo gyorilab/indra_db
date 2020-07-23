@@ -413,7 +413,7 @@ the
 Use curl to query for any kind of interaction between SMURF2 and SMAD2, 
 returning at most 10 statements with 3 evidence each:
 ```bash
-curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&max_stmts=10&ev_limit=3"
+curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&limit=10&ev_limit=3"
 ```
 As above, in python this could be handled using the `requests` module, or with
 the client:
@@ -425,7 +425,7 @@ from indra.sources import indra_db_rest as idbr
 # With requests
 resp = requests.get('http://api.host/statements/from_agents',
                     params={'agent0': 'SMURF2', 'agent1': 'SMAD',
-                            'api_key': 12345, 'max_stmts': 10,
+                            'api_key': 12345, 'limit': 10,
                             'ev_limit': 3})
 resp_json = resp.json()
 stmts = stmts_from_json(resp_json['statements'].values())

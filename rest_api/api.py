@@ -376,53 +376,87 @@ class StatementApiCall(ApiCall):
         return cur_counts
 
     def produce_response(self, result):
-        res_json = result.json()
+        if result.result_type == 'statements':
+            res_json = result.json()
 
-        # Add derived values to the res_json.
-        if self.w_cur_counts:
-            res_json['num_curations'] = self.get_curation_counts(result)
-        res_json['statement_limit'] = MAX_STATEMENTS
-        res_json['statements_returned'] = len(result.results)
-        res_json['end_of_statements'] = (len(result.results) < MAX_STATEMENTS)
-        res_json['statements_removed'] = 0
-        res_json['evidence_returned'] = result.returned_evidence
+            # Add derived values to the res_json.
+            if self.w_cur_counts:
+                res_json['num_curations'] = self.get_curation_counts(result)
+            res_json['statement_limit'] = MAX_STMTS
+            res_json['statements_returned'] = len(result.results)
+            res_json['end_of_statements'] = \
+                (len(result.results) < MAX_STMTS)
+            res_json['statements_removed'] = 0
+            res_json['evidence_returned'] = result.returned_evidence
 
-        stmts_json = result.results
-        if self.fmt == 'html':
-            title = TITLE + ': ' + 'Results'
-            ev_totals = res_json.pop('evidence_totals')
-            stmts = stmts_from_json(stmts_json.values())
-            html_assembler = HtmlAssembler(stmts, summary_metadata=res_json,
-                                           ev_counts=ev_totals, title=title,
-                                           source_counts=result.source_counts,
-                                           db_rest_url=request.url_root[:-1])
-            idbr_template = env.get_template('idbr_statements_view.html')
-            if not TESTING:
-                identity = self.user.identity() if self.user else None
-            else:
-                identity = None
-            content = html_assembler.make_model(idbr_template,
-                                                identity=identity)
-            if self.tracker.get_messages():
-                level_stats = ['%d %ss' % (n, lvl.lower())
-                               for lvl, n in self.tracker.get_level_stats().items()]
-                msg = ' '.join(level_stats)
-                content = html_assembler.append_warning(msg)
-            mimetype = 'text/html'
-        else:  # Return JSON for all other values of the format argument
-            res_json.update(self.tracker.get_level_stats())
-            res_json['statements'] = stmts_json
-            content = json.dumps(res_json)
-            mimetype = 'application/json'
+            stmts_json = result.results
+            if self.fmt == 'html':
+                title = TITLE + ': ' + 'Results'
+                ev_totals = res_json.pop('evidence_totals')
+                stmts = stmts_from_json(stmts_json.values())
+                html_assembler = \
+                    HtmlAssembler(stmts, summary_metadata=res_json,
+                                  ev_counts=ev_totals, title=title,
+                                  source_counts=result.source_counts,
+                                  db_rest_url=request.url_root[:-1])
+                idbr_template = env.get_template('idbr_statements_view.html')
+                if not TESTING:
+                    identity = self.user.identity() if self.user else None
+                else:
+                    identity = None
+                content = html_assembler.make_model(idbr_template,
+                                                    identity=identity)
+                if self.tracker.get_messages():
+                    level_stats = ['%d %ss' % (n, lvl.lower())
+                                   for lvl, n
+                                   in self.tracker.get_level_stats().items()]
+                    msg = ' '.join(level_stats)
+                    content = html_assembler.append_warning(msg)
+                mimetype = 'text/html'
+            else:  # Return JSON for all other values of the format argument
+                res_json.update(self.tracker.get_level_stats())
+                res_json['statements'] = stmts_json
+                content = json.dumps(res_json)
+                mimetype = 'application/json'
 
-        resp = Response(content, mimetype=mimetype)
-        logger.info("Exiting with %d statements with %d/%d evidence of size "
-                    "%f MB after %s seconds."
-                    % (res_json['statements_returned'],
-                       res_json['evidence_returned'],
-                       res_json['total_evidence'],
-                       sys.getsizeof(resp.data) / 1e6,
-                       sec_since(self.start_time)))
+            resp = Response(content, mimetype=mimetype)
+            logger.info("Exiting with %d statements with %d/%d evidence of "
+                        "size %f MB after %s seconds."
+                        % (res_json['statements_returned'],
+                           res_json['evidence_returned'],
+                           res_json['total_evidence'],
+                           sys.getsizeof(resp.data) / 1e6,
+                           sec_since(self.start_time)))
+        else:
+            # Look up curations, if result with_curations was set.
+            if self.w_cur_counts:
+                rel_hash_lookup = {}
+                if result.result_type == 'hashes':
+                    for rel in result.results.values():
+                        rel['cur_count'] = 0
+                        rel_hash_lookup[rel['hash']] = rel
+                else:
+                    for rel in result.results.values():
+                        for h in rel['hashes']:
+                            rel['cur_count'] = 0
+                            rel_hash_lookup[h] = rel
+                        if not self.special['with_hashes']:
+                            rel['hashes'] = None
+                curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
+                for cur in curations:
+                    rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
+
+            logger.info("Returning with %s results after %.2f seconds."
+                        % (len(result.results), sec_since(self.start_time)))
+
+            res_json = result.json()
+            res_json['relations'] = list(res_json['results'].values())
+            res_json.pop('results')
+            res_json['query_str'] = str(self.db_query)
+            resp = Response(json.dumps(res_json), mimetype='application/json')
+
+            logger.info("Result prepared after %.2f seconds."
+                        % sec_since(self.start_time))
         return resp
 
     def _require_agent(self, ag, ns, num=None):
@@ -629,39 +663,6 @@ class FromPapersApiCall(StatementApiCall):
         return self._db_query_from_web_query()
 
 
-class MetadataApiCall(FromAgentsApiCall):
-    def produce_response(self, result):
-        # Look up curations, if result with_curations was set.
-        if self.w_cur_counts:
-            rel_hash_lookup = {}
-            if result.result_type == 'hashes':
-                for rel in result.results.values():
-                    rel['cur_count'] = 0
-                    rel_hash_lookup[rel['hash']] = rel
-            else:
-                for rel in result.results.values():
-                    for h in rel['hashes']:
-                        rel['cur_count'] = 0
-                        rel_hash_lookup[h] = rel
-                    if not self.special['with_hashes']:
-                        rel['hashes'] = None
-            curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
-            for cur in curations:
-                rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
-
-        logger.info("Returning with %s results after %.2f seconds."
-                    % (len(result.results), sec_since(self.start_time)))
-
-        res_json = result.json()
-        res_json['relations'] = list(res_json['results'].values())
-        res_json['query_str'] = str(self.db_query)
-        resp = Response(json.dumps(res_json), mimetype='application/json')
-
-        logger.info("Result prepared after %.2f seconds."
-                    % sec_since(self.start_time))
-        return resp
-
-
 class QueryApiCall(ApiCall):
     def _build_db_query(self):
         query_json = json.loads(self._pop('json', '{}'))
@@ -771,8 +772,9 @@ def get_statements_query_format():
                               endpoint=request.url_root)
 
 
-@dep_route('/statements/<path:method>', methods=['GET', 'POST'])
-def get_statements(method):
+@dep_route('/<result_type>/<path:method>', methods=['GET', 'POST'])
+@dep_route('/metadata/<result_type>/<path:method>', methods=['GET', 'POST'])
+def get_statements(result_type, method):
     """Get some statements constrained by query."""
 
     if method == 'from_agents' and request.method == 'GET':
@@ -787,17 +789,12 @@ def get_statements(method):
     else:
         return abort(Response('Page not found.', 404))
 
-    return call.run(result_type='statements')
+    return call.run(result_type=result_type)
 
 
 @dep_route('/query/<result_type>', methods=['GET', 'POST'])
 def get_statements_by_query_json(result_type):
     return QueryApiCall().run(result_type)
-
-
-@dep_route('/metadata/<result_type>/from_agents', methods=['GET'])
-def get_metadata(result_type):
-    return MetadataApiCall().run(result_type)
 
 
 @dep_route('/curation', methods=['GET'])

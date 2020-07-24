@@ -483,8 +483,7 @@ class DatabaseReader(object):
             # Dump mesh_terms to the table
             skipped = self._db.copy_report_lazy('mti_ref_annotations_test',
                                                 mesh_term_tuples,
-                                                DatabaseMeshRefData.get_cols(),
-                                                commit=False)
+                                                DatabaseMeshRefData.get_cols())
 
             gatherer.add('new_mesh_terms', len(mesh_term_tuples) - len(skipped))
             gatherer.add('skp_mesh_terms', len(skipped))

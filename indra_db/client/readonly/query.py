@@ -296,10 +296,11 @@ class Query(object):
                                         self.to_json())
 
         # If the database isn't available, route through the web service.
-        if not ro.available:
+        if ro is None:
             if evidence_filter:
-                logger.warning("Passing of evidence filter through API not "
-                               "yet implemented.")
+                logger.warning("No direct R.O. access available, but passing "
+                               "of evidence filter through API not yet "
+                               "implemented.")
             return self._rest_get('statements', limit, offset, best_first,
                                   ev_limit=ev_limit)
 
@@ -476,7 +477,7 @@ class Query(object):
                                'hashes')
 
         # If the database isn't directly available, route through the web API.
-        if not ro.available:
+        if ro is None:
             return self._rest_get('hashes', limit, offset, best_first)
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
@@ -539,7 +540,7 @@ class Query(object):
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'interactions')
 
-        if not ro.available:
+        if ro is None:
             return self._rest_get('interactions', limit, offset, best_first)
 
         q = self._get_name_query(ro)
@@ -600,7 +601,7 @@ class Query(object):
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'relations')
 
-        if not ro.available:
+        if ro is None:
             return self._rest_get('relations', limit, offset, best_first,
                                   with_hashes=with_hashes)
 
@@ -701,7 +702,7 @@ class Query(object):
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'agents')
 
-        if not ro.available:
+        if ro is None:
             return self._rest_get('agents', limit, offset, best_first,
                                   with_hashes=with_hashes)
 

@@ -68,21 +68,41 @@ def get_primary_db(force_new=False):
 
 
 def get_db(db_label):
-    """Get a db instance base on it's name in the config or env."""
+    """Get a db instance base on it's name in the config or env.
+
+    If the label does not exist or the database labeled can't be reached, None
+    is returned.
+    """
     defaults = get_databases()
+    if db_label not in defaults:
+        logger.error(f"No such database available: {db_label}. Check config "
+                     f"file or environment variables.")
+        return
     db_url = defaults[db_label]
     db = PrincipalDatabaseManager(db_url, label=db_label)
+    if not db.available:
+        return
     db.grab_session()
     return db
 
 
 def get_ro(ro_label):
-    """Get a readonly database instance, based on its name/"""
+    """Get a readonly database instance, based on its name.
+
+    If the label does not exist or the database labeled can't be reached, None
+    is returned.
+    """
     defaults = get_readonly_databases()
     if ro_label == 'primary' and 'override' in defaults:
         logger.info("Found an override database: using in place of primary.")
         ro_label = 'override'
+    if ro_label not in defaults:
+        logger.error(f"No such readonly database available: {ro_label}. Check "
+                     f"config file or environment variables.")
+        return
     db_url = defaults[ro_label]
     ro = ReadonlyDatabaseManager(db_url, label=ro_label)
+    if not ro.available:
+        return
     ro.grab_session()
     return ro

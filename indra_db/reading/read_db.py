@@ -94,6 +94,12 @@ class DatabaseReadingData(ReadingData):
                    db_reading.reader_version, db_reading.format,
                    reading, db_reading.id)
 
+    @classmethod
+    def from_json(cls, jd):
+        # Remove redundant ID that doesn't show up in the JSON.
+        jd['tcid'] = jd.pop('content_id')
+        return super(DatabaseReadingData, cls).from_json(jd)
+
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""

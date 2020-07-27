@@ -94,6 +94,12 @@ class DatabaseReadingData(ReadingData):
                    db_reading.reader_version, db_reading.format,
                    reading, db_reading.id)
 
+    @classmethod
+    def from_json(cls, jd):
+        # Remove redundant ID that doesn't show up in the JSON.
+        jd['tcid'] = jd.pop('content_id')
+        return super(DatabaseReadingData, cls).from_json(jd)
+
     @staticmethod
     def get_cols():
         """Get the columns for the tuple returned by `make_tuple`."""
@@ -512,6 +518,19 @@ class DatabaseReader(object):
         return
 
     def get_rslts_safely(self, reading_data):
+        res_type = reading_data.reader_class.results_type
+        if res_type == 'mesh_terms':
+            pmid_tpl = self._db.select_one(
+                self._db.TextRef.pmid_num,
+                self._db.TextContent.id == reading_data.content_id,
+                self._db.TextContent.text_ref_id == self._db.TextRef.id
+            )
+            pmid = pmid_tpl[0]
+            if pmid is None:
+                logger.warning(f"No PMID found for "
+                               f"tcid={reading_data.content_id}")
+                return []
+
         rslt_data_list = []
         try:
             rslts = reading_data.get_results()
@@ -520,24 +539,22 @@ class DatabaseReader(object):
                          % reading_data.reading_id)
             logger.exception(e)
             return []
+
         if rslts is not None:
             if not len(rslts):
                 logger.debug("Got no results for %s." %
                              reading_data.reading_id)
             for rslt in rslts:
-                if reading_data.reader_class.results_type == 'statements':
+                if res_type == 'statements':
                     rslt.evidence[0].pmid = None
                     rslt_data = DatabaseStatementData(
                         rslt, reading_data.reading_id)
-                else:
-                    pmid = self._db.select_one(
-                        self._db.TextRef.pmid_num,
-                        self._db.TextContent.id == reading_data.content_id,
-                        self._db.TextContent.text_ref_id == self._db.TextRef.id
-                    )
-                    rslt_tuple = (pmid[0], rslt)
+                elif res_type == 'mesh_terms':
+                    rslt_tuple = (pmid, rslt)
                     rslt_data = DatabaseMeshRefData(
                         rslt_tuple, reading_data.reading_id)
+                else:
+                    raise ReadDBError(f"Unhandled results type: {res_type}.")
                 rslt_data_list.append(rslt_data)
         else:
             logger.warning("Got None results for %s." %

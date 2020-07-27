@@ -120,6 +120,10 @@ class BulkReadingManager(ReadingManager):
         # Only read titles for TRIPS.
         if reader_name.lower() == 'trips':
             constrains.append(db.TextContent.text_type == "title")
+        elif reader_name.lower() == 'mti':
+            constrains.append(
+                db.TextContent.text_type.in_(['title', 'abstract'])
+            )
         return constrains
 
     @ReadingManager._run_all_readers

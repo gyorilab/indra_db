@@ -28,7 +28,8 @@ class KnowledgebaseManager(object):
         """Upload the content for this dataset into the database."""
         dbid = self._check_reference(db)
         stmts = self._get_statements()
-        insert_db_stmts(db, stmts, dbid)
+        breakpoint()
+        #insert_db_stmts(db, stmts, dbid)
         return
 
     def update(self, db):
@@ -75,23 +76,24 @@ class TasManager(KnowledgebaseManager):
     short_name = 'tas'
     source = 'tas'
 
-    @staticmethod
-    def get_order_value(stmt):
-        cm = stmt.evidence[0].annotations['class_min']
-        return ['Kd < 100nM', '100nM < Kd < 1uM'].index(cm)
-
-    def choose_better(self, *stmts):
-        best_stmt = min([(self.get_order_value(stmt), stmt)
-                         for stmt in stmts if stmt is not None],
-                        key=lambda t: t[0])
-        return best_stmt[1]
-
     def _get_statements(self):
-        from indra.sources.tas import process_csv
-        proc = process_csv()
-        stmts, dups = extract_duplicates(proc.statements)
-        print(dups)
-        return stmts
+        from indra.sources import tas
+        # The settings we use here are justified as follows:
+        # - only affinities that indicate binding are included
+        # - only agents that have some kind of a name available are
+        #   included, with ones that get just an ID as a name are
+        #   not included.
+        # - we do not require full standardization, thereby allowing
+        #   set of drugs to be extracted for which we have a name from CHEBML.
+        logger.info('Processing TAS from web')
+        tp = tas.process_from_web(affinity_class_limit=2,
+                                  named_only=True,
+                                  standardized_only=False)
+        logger.info('Expanding evidences and deduplicating')
+        filtered_stmts = [s for s in _expanded(tp.statements)]
+        unique_stmts, _ = extract_duplicates(filtered_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
 
 
 class SignorManager(KnowledgebaseManager):

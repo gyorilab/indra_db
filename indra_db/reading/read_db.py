@@ -530,12 +530,17 @@ class DatabaseReader(object):
                     rslt_data = DatabaseStatementData(
                         rslt, reading_data.reading_id)
                 else:
-                    pmid = self._db.select_one(
+                    pmid_tpl = self._db.select_one(
                         self._db.TextRef.pmid_num,
                         self._db.TextContent.id == reading_data.content_id,
                         self._db.TextContent.text_ref_id == self._db.TextRef.id
                     )
-                    rslt_tuple = (pmid[0], rslt)
+                    pmid = pmid_tpl[0]
+                    if pmid is None:
+                        logger.warning(f"No PMID found for "
+                                       f"tcid={reading_data.content_id}")
+                        continue
+                    rslt_tuple = (pmid, rslt)
                     rslt_data = DatabaseMeshRefData(
                         rslt_tuple, reading_data.reading_id)
                 rslt_data_list.append(rslt_data)

@@ -277,8 +277,12 @@ class PreassemblyManager(object):
 
         # Now get the support links between all batches.
         support_links = set()
+        batching_args = tuple()
+        if self.stmt_type is not None:
+            batching_args += (db.PAStatements.type == self.stmt_type,)
         outer_iter = db.select_all_batched(self.batch_size,
                                            db.PAStatements.json,
+                                           *batching_args,
                                            order_by=db.PAStatements.mk_hash)
         for outer_idx, outer_batch_jsons in outer_iter:
             outer_batch = [_stmt_from_json(sj) for sj, in outer_batch_jsons]
@@ -290,6 +294,7 @@ class PreassemblyManager(object):
             # Get links with all other batches
             inner_iter = db.select_all_batched(self.batch_size,
                                                db.PAStatements.json,
+                                               *batching_args,
                                                order_by=db.PAStatements.mk_hash,
                                                skip_idx=outer_idx)
             for inner_idx, inner_batch_jsons in inner_iter:
@@ -450,6 +455,8 @@ class PreassemblyManager(object):
                          db.PAStatements.json,
                          db.PAStatements.create_date >= start_date,
                          db.PAStatements.create_date <= end_date)
+        if self.stmt_type is not None:
+            batching_args += (db.PAStatements.type == self.stmt_type,)
         npa_json_iter = db.select_all_batched(*batching_args,
                                               order_by=db.PAStatements.mk_hash)
         for outer_idx, npa_json_batch in npa_json_iter:

@@ -28,8 +28,7 @@ class KnowledgebaseManager(object):
         """Upload the content for this dataset into the database."""
         dbid = self._check_reference(db)
         stmts = self._get_statements()
-        breakpoint()
-        #insert_db_stmts(db, stmts, dbid)
+        insert_db_stmts(db, stmts, dbid)
         return
 
     def update(self, db):
@@ -84,7 +83,8 @@ class TasManager(KnowledgebaseManager):
         #   included, with ones that get just an ID as a name are
         #   not included.
         # - we do not require full standardization, thereby allowing
-        #   set of drugs to be extracted for which we have a name from CHEBML.
+        #   set of drugs to be extracted for which we have a name from CHEBML,
+        #   HMS-LINCS, or DrugBank
         logger.info('Processing TAS from web')
         tp = tas.process_from_web(affinity_class_limit=2,
                                   named_only=True,

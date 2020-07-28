@@ -141,7 +141,7 @@ readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3, 'ISI': 4, 'EIDOS': 5, 'MTI': 6}
 reader_versions = {
     'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
                 'October2018-linux', 'February2020-linux', 'April2020-linux'],
-    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-'],
+    'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-', '1.6.1'],
     'trips': ['STATIC', '2019Nov14'],
     'isi': ['20180503'],
     'eidos': ['0.2.3-SNAPSHOT'],

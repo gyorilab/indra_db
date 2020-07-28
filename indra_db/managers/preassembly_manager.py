@@ -62,7 +62,8 @@ class PreassemblyManager(object):
         time. In general, a larger batch size will somewhat be faster, but
         require much more memory.
     """
-    def __init__(self, n_proc=None, batch_size=10000, print_logs=False):
+    def __init__(self, n_proc=None, batch_size=10000, print_logs=False,
+                 stmt_type=None):
         self.n_proc = n_proc
         self.batch_size = batch_size
         self.pa = Preassembler(bio_ontology)
@@ -71,6 +72,7 @@ class PreassemblyManager(object):
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
         self.pickle_stashes = None
+        self.stmt_type = stmt_type
         return
 
     def _get_latest_updatetime(self, db):
@@ -229,7 +231,11 @@ class PreassemblyManager(object):
                 stmt_ids = pickle.load(f)
         else:
             # Get the statement ids.
-            stmt_ids = distill_stmts(db)
+            if self.stmt_type is not None:
+                clauses = [db.RawStatements.type == self.stmt_type]
+            else:
+                clauses = []
+            stmt_ids = distill_stmts(db, clauses=clauses)
             with open(sid_cache_fname, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 
@@ -331,6 +337,8 @@ class PreassemblyManager(object):
             db.RawStatements.id == db.RawUniqueLinks.raw_stmt_id
         )
         new_sid_q = db.filter_query(db.RawStatements.id).except_(old_id_q)
+        if self.stmt_type is not None:
+            new_sid_q = new_sid_q.filter(db.RawStatements.type == self.stmt_type)
         all_new_stmt_ids = {sid for sid, in new_sid_q.all()}
         self._log("Found %d new statement ids." % len(all_new_stmt_ids))
         return all_new_stmt_ids
@@ -369,7 +377,11 @@ class PreassemblyManager(object):
             with open(dist_stash, 'rb') as f:
                 stmt_ids = pickle.load(f)
         else:
-            stmt_ids = distill_stmts(db, get_full_stmts=False)
+            if self.stmt_type is not None:
+                clauses = [db.RawStatements.type == self.stmt_type]
+            else:
+                clauses = []
+            stmt_ids = distill_stmts(db, get_full_stmts=False, clauses=clauses)
             with open(dist_stash, 'wb') as f:
                 pickle.dump(stmt_ids, f)
 

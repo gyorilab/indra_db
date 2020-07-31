@@ -416,25 +416,7 @@ class DbPreassembler:
         self.__tag = 'supplement'
 
         # If we are continuing, check for support links that were already found
-        support_link_stash = 'new_support_links.pkl'
-        self.pickle_stashes.append(support_link_stash)
-        if continuing and path.exists(support_link_stash):
-            with open(support_link_stash, 'rb') as f:
-                status_dict = pickle.load(f)
-                new_support_links = status_dict['existing links']
-                npa_done = status_dict['ids done']
-            self._log("Found %d previously found new links."
-                      % len(new_support_links))
-        else:
-            new_support_links = set()
-            npa_done = set()
-
-        self._log("Downloading all pre-existing support links")
-        existing_links = {(a, b) for a, b in
-                          db.select_all([db.PASupportLinks.supported_mk_hash,
-                                         db.PASupportLinks.supporting_mk_hash])}
-        # Just in case...
-        new_support_links -= existing_links
+        new_support_links = set()
 
         # Now find the new support links that need to be added.
         batching_args = (self.batch_size,
@@ -447,63 +429,54 @@ class DbPreassembler:
                                               order_by=db.PAStatements.mk_hash)
         for outer_idx, npa_json_batch in npa_json_iter:
             # Create the statements from the jsons.
-            npa_batch = []
-            for s_json, in npa_json_batch:
-                s = _stmt_from_json(s_json)
-                if s.get_hash(shallow=True) not in npa_done:
-                    npa_batch.append(s)
+            npa_batch = [_stmt_from_json(s_json) for s_json in npa_json_batch]
 
             # Compare internally
             self._log("Getting support for new pa batch %d." % outer_idx)
             some_support_links = self._get_support_links(npa_batch)
 
-            try:
-                # Compare against the other new batch statements.
-                other_npa_json_iter = db.select_all_batched(
-                    *batching_args,
-                    order_by=db.PAStatements.mk_hash,
-                    skip_idx=outer_idx
-                )
-                for inner_idx, other_npa_json_batch in other_npa_json_iter:
-                    other_npa_batch = [_stmt_from_json(s_json)
-                                       for s_json, in other_npa_json_batch]
-                    split_idx = len(npa_batch)
-                    full_list = npa_batch + other_npa_batch
-                    self._log("Comparing outer batch %d to inner batch %d of "
-                              "other new statements." % (outer_idx, inner_idx))
-                    some_support_links |= \
-                        self._get_support_links(full_list, split_idx=split_idx)
+            # Compare against the other new batch statements.
+            other_npa_json_iter = db.select_all_batched(
+                *batching_args,
+                order_by=db.PAStatements.mk_hash,
+                skip_idx=outer_idx
+            )
+            for inner_idx, other_npa_json_batch in other_npa_json_iter:
+                other_npa_batch = [_stmt_from_json(s_json)
+                                   for s_json, in other_npa_json_batch]
+                split_idx = len(npa_batch)
+                full_list = npa_batch + other_npa_batch
+                self._log("Comparing outer batch %d to inner batch %d of "
+                          "other new statements." % (outer_idx, inner_idx))
+                some_support_links |= \
+                    self._get_support_links(full_list, split_idx=split_idx)
 
-                # Compare against the existing statements.
-                opa_json_iter = db.select_all_batched(
-                    self.batch_size,
-                    db.PAStatements.json,
-                    db.PAStatements.create_date < start_date
-                )
-                for opa_idx, opa_json_batch in opa_json_iter:
-                    opa_batch = [_stmt_from_json(s_json)
-                                 for s_json, in opa_json_batch]
-                    split_idx = len(npa_batch)
-                    full_list = npa_batch + opa_batch
-                    self._log("Comparing new batch %d to batch %d of old "
-                              "statements." % (outer_idx, opa_idx))
-                    some_support_links |= \
-                        self._get_support_links(full_list, split_idx=split_idx)
-            finally:
-                # Stash the new support links in case we crash.
-                new_support_links |= (some_support_links - existing_links)
-                with open(support_link_stash, 'wb') as f:
-                    pickle.dump({'existing links': new_support_links,
-                                 'ids done': npa_done}, f)
-            npa_done |= {s.get_hash(shallow=True) for s in npa_batch}
+            # Compare against the existing statements.
+            opa_json_iter = db.select_all_batched(
+                self.batch_size,
+                db.PAStatements.json,
+                db.PAStatements.create_date < start_date
+            )
+            for opa_idx, opa_json_batch in opa_json_iter:
+                opa_batch = [_stmt_from_json(s_json)
+                             for s_json, in opa_json_batch]
+                split_idx = len(npa_batch)
+                full_list = npa_batch + opa_batch
+                self._log("Comparing new batch %d to batch %d of old "
+                          "statements." % (outer_idx, opa_idx))
+                some_support_links |= \
+                    self._get_support_links(full_list, split_idx=split_idx)
 
         # Insert any remaining support links.
         if new_support_links:
             self._log("Copying %d support links into db."
                       % len(new_support_links))
-            db.copy('pa_support_links', new_support_links,
-                    ('supported_mk_hash', 'supporting_mk_hash'))
-            gatherer.add('links', len(new_support_links))
+            skipped = db.copy_report_lazy(
+                'pa_support_links',
+                new_support_links,
+                ('supported_mk_hash', 'supporting_mk_hash')
+            )
+            gatherer.add('links', len(new_support_links - set(skipped)))
         self.__tag = 'Unpurposed'
         return
 

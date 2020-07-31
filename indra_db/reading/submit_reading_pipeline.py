@@ -26,14 +26,15 @@ from functools import partial
 
 from indra_reading.util import get_s3_log_prefix
 from indra_reading.scripts.submit_reading_pipeline import create_submit_parser,\
-    create_read_parser, Submitter
+    create_read_parser
+from indra_reading.batch.submitters.reading_submitter import ReadingSubmitter
 
 from indra_db.reading.read_db_aws import get_s3_reader_version_loc, bucket_name
 
 logger = logging.getLogger('indra_db_submitter')
 
 
-class DbReadingSubmitter(Submitter):
+class DbReadingSubmitter(ReadingSubmitter):
     """A class for the management of a batch of reading jobs on AWS.
 
     Parameters

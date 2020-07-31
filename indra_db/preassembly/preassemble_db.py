@@ -119,6 +119,7 @@ class DbPreassembler:
     def _extract_and_push_unique_statements(self, db, raw_sids, num_stmts,
                                             mk_done=None):
         """Get the unique Statements from the raw statements."""
+        start_date = datetime.utcnow()
         self._log("There are %d distilled raw statement ids to preassemble."
                   % len(raw_sids))
 
@@ -172,7 +173,8 @@ class DbPreassembler:
 
         self._log("Added %d new pa statements into the database."
                   % len(new_mk_set))
-        return new_mk_set
+        end_date = datetime.utcnow()
+        return {'start': start_date, 'end': end_date, 'mk_set': new_mk_set}
 
     @clockit
     def _condense_statements(self, cleaned_stmts, mk_done, new_mk_set,
@@ -247,19 +249,12 @@ class DbPreassembler:
                       % len(skip_ids))
 
         # Get filtered statement ID's.
-        sid_cache_fname = path.join(HERE, 'stmt_id_cache.pkl')
-        if continuing and path.exists(sid_cache_fname):
-            with open(sid_cache_fname, 'rb') as f:
-                stmt_ids = pickle.load(f)
+        if self.stmt_type is not None:
+            clauses = [db.RawStatements.type == self.stmt_type]
         else:
-            # Get the statement ids.
-            if self.stmt_type is not None:
-                clauses = [db.RawStatements.type == self.stmt_type]
-            else:
-                clauses = []
-            stmt_ids = distill_stmts(db, clauses=clauses)
-            with open(sid_cache_fname, 'wb') as f:
-                pickle.dump(stmt_ids, f)
+            clauses = []
+        stmt_ids = self._run_cached(continuing, distill_stmts, db,
+                                    clauses=clauses)
 
         # Handle the possibility we're picking up after an earlier job...
         done_pa_ids = set()
@@ -351,10 +346,6 @@ class DbPreassembler:
                     ('supported_mk_hash', 'supporting_mk_hash'))
             gatherer.add('links', len(support_links))
 
-        # Delete the pickle cache
-        if path.exists(sid_cache_fname):
-            remove(sid_cache_fname)
-
         return True
 
     def _get_new_stmt_ids(self, db):
@@ -377,40 +368,20 @@ class DbPreassembler:
         last_update = self._get_latest_updatetime(db)
         assert last_update is not None, \
             "The preassembly tables have not yet been initialized."
-        start_date = datetime.utcnow()
         self._log("Latest update was: %s" % last_update)
 
         # Get the new statements...
         self._log("Loading info about the existing state of preassembly. "
                   "(This may take a little time)")
-        new_id_stash = 'new_ids.pkl'
-        self.pickle_stashes.append(new_id_stash)
-        if continuing and path.exists(new_id_stash):
-            self._log("Loading new statement ids from cache...")
-            with open(new_id_stash, 'rb') as f:
-                new_ids = pickle.load(f)
-        else:
-            new_ids = self._get_new_stmt_ids(db)
-
-            # Stash the new ids in case we need to pick up where we left off.
-            with open(new_id_stash, 'wb') as f:
-                pickle.dump(new_ids, f)
+        new_ids = self._run_cached(continuing, self._get_new_stmt_ids, db)
 
         # Weed out exact duplicates.
-        dist_stash = 'stmt_ids.pkl'
-        self.pickle_stashes.append(dist_stash)
-        if continuing and path.exists(dist_stash):
-            self._log("Loading distilled statement ids from cache...")
-            with open(dist_stash, 'rb') as f:
-                stmt_ids = pickle.load(f)
+        if self.stmt_type is not None:
+            clauses = [db.RawStatements.type == self.stmt_type]
         else:
-            if self.stmt_type is not None:
-                clauses = [db.RawStatements.type == self.stmt_type]
-            else:
-                clauses = []
-            stmt_ids = distill_stmts(db, get_full_stmts=False, clauses=clauses)
-            with open(dist_stash, 'wb') as f:
-                pickle.dump(stmt_ids, f)
+            clauses = []
+        stmt_ids = self._run_cached(continuing, distill_stmts, db,
+                                    get_full_stmts=False, clauses=clauses)
 
         # Get discarded statements
         skip_ids = {i for i, in db.select_all(db.DiscardedStatements.stmt_id)}
@@ -421,23 +392,16 @@ class DbPreassembler:
         # Get the set of new unique statements and link to any new evidence.
         old_mk_set = {mk for mk, in db.select_all(db.PAStatements.mk_hash)}
         self._log("Found %d old pa statements." % len(old_mk_set))
-        new_mk_stash = 'new_mk_set.pkl'
-        self.pickle_stashes.append(new_mk_stash)
-        if continuing and path.exists(new_mk_stash):
-            self._log("Loading hashes for new pa statements from cache...")
-            with open(new_mk_stash, 'rb') as f:
-                stash_dict = pickle.load(f)
-            start_date = stash_dict['start']
-            end_date = stash_dict['end']
-            new_mk_set = stash_dict['mk_set']
-        else:
-            new_mk_set = self._extract_and_push_unique_statements(db, new_stmt_ids,
-                                                                  len(new_stmt_ids),
-                                                                  old_mk_set)
-            end_date = datetime.utcnow()
-            with open(new_mk_stash, 'wb') as f:
-                pickle.dump({'start': start_date, 'end': end_date,
-                             'mk_set': new_mk_set}, f)
+
+        result_dict = self._run_cached(
+            continuing,
+            self._extract_and_push_unique_statements,
+            db, new_stmt_ids, len(new_stmt_ids), old_mk_set
+        )
+        start_date = result_dict['start']
+        end_date = result_dict['end']
+        new_mk_set = result_dict['mk_set']
+
         if continuing:
             self._log("Original old mk set: %d" % len(old_mk_set))
             old_mk_set = old_mk_set - new_mk_set

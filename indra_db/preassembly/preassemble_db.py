@@ -6,6 +6,7 @@ from functools import wraps
 from datetime import datetime
 from collections import defaultdict
 from argparse import ArgumentParser
+from botocore import errorfactory
 
 from indra.util import batch_iter, clockit
 from indra.statements import Statement
@@ -16,10 +17,11 @@ from indra.preassembler.grounding_mapper.mapper import logger \
 from indra.preassembler import Preassembler
 from indra.preassembler import logger as ipa_logger
 from indra.ontology.bio import bio_ontology
+from indra_db.reading.read_db_aws import bucket_name
 
 from indra_db.util.data_gatherer import DataGatherer, DGContext
 from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
-    extract_agent_data, insert_pa_agents, hash_pa_agents
+    extract_agent_data, insert_pa_agents, hash_pa_agents, S3Path
 
 site_logger.setLevel(logging.INFO)
 grounding_logger.setLevel(logging.WARNING)
@@ -49,7 +51,7 @@ class IndraDBPreassemblyError(Exception):
     pass
 
 
-class PreassemblyManager(object):
+class DbPreassembler:
     """Class used to manage the preassembly pipeline
 
     Parameters
@@ -62,10 +64,12 @@ class PreassemblyManager(object):
         time. In general, a larger batch size will somewhat be faster, but
         require much more memory.
     """
-    def __init__(self, n_proc=1, batch_size=10000, print_logs=False,
-                 stmt_type=None):
+    def __init__(self, n_proc=1, batch_size=10000, s3_cache=None,
+                 print_logs=False, stmt_type=None):
         self.n_proc = n_proc
         self.batch_size = batch_size
+        self.s3_cache = s3_cache
+        # TODO: Do some datestamp things and "start" and "end" the run.
         self.pa = Preassembler(bio_ontology)
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
@@ -193,6 +197,26 @@ class PreassemblyManager(object):
             agent_tuples |= set(ref_data)
 
         return new_unique_stmts, evidence_links, agent_tuples
+
+    def _run_cached(self, continuing, func, *args, **kwargs):
+        # Define the location of this cache.
+        import boto3
+        s3 = boto3.client('s3')
+        result_cache = self.s3_cache.get_element_path(f'{func.__name__}.pkl')
+
+        # If continuing, try to retrieve the file.
+        if continuing:
+            try:
+                s3_result = result_cache.get(s3)
+                return pickle.loads(s3_result['Body'].read())
+            except errorfactory.NoSuchKey:
+                pass
+
+        # If not continuing or the file doesn't exist, run the function.
+        results = func(*args, **kwargs)
+        pickle_data = pickle.dumps(results)
+        result_cache.put(s3, pickle_data)
+        return results
 
     @_handle_update_table
     @DGContext.wrap(gatherer)
@@ -670,6 +694,14 @@ def _make_parser():
               'config file and INDRADBPRIMARY in the environment. The default '
               'is \'primary\'.')
     )
+    parser.add_argument(
+        '-C', '--cache',
+        default=f's3://{bucket_name}/preassembly_results/temp',
+        help=('Choose where on s3 the temp files that allow jobs to continue '
+              'after stopping are stored. Value should be given in the form:'
+              's3://{bucket_name}/{prefix}. NOTE THAT A "/" WILL *NOT* BE '
+              'ADDED TO THE END OF THE PREFIX.')
+    )
     return parser
 
 
@@ -684,14 +716,15 @@ def _main():
     db = get_db(args.database)
     assert db is not None
     db.grab_session()
-    pm = PreassemblyManager(args.num_procs, args.batch)
+    s3_cache = S3Path.from_string(args.cache)
+    pa = DbPreassembler(args.num_procs, args.batch, s3_cache)
 
     desc = 'Continuing' if args.continuing else 'Beginning'
     print("%s to %s preassembled corpus." % (desc, args.task))
     if args.task == 'create':
-        pm.create_corpus(db, args.continuing)
+        pa.create_corpus(db, args.continuing)
     elif args.task == 'update':
-        pm.supplement_corpus(db, args.continuing)
+        pa.supplement_corpus(db, args.continuing)
     else:
         raise IndraDBPreassemblyError('Unrecognized task: %s.' % args.task)
 

@@ -31,7 +31,7 @@ class PreassemblySubmitter(Submitter):
             return None, None
         job_name = f'{self.job_base}_{self.task}_{stmt_type}'
         cmd = ['python3', '-m', 'indra_db.preassembly.preassemble_db',
-               self.task, '-n', '32']
+               self.task, '-n', '32', '-C', f'{self.s3_base}/{job_name}']
         return job_name, cmd
 
     def _iter_job_args(self, type_list=None):

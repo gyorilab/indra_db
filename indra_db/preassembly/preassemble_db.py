@@ -143,6 +143,9 @@ class DbPreassembler:
         return
 
     def _run_cached(self, continuing, func, *args, **kwargs):
+        if self.s3_cache is None:
+            return func(*args, **kwargs)
+
         # Define the location of this cache.
         import boto3
         s3 = boto3.client('s3')
@@ -354,6 +357,7 @@ class DbPreassembler:
                 db.PAStatements.mk_hash.in_(hash_list[out_si:out_ei])
             )
             outer_batch = [_stmt_from_json(sj) for sj, in sj_query.all()]
+
             # Get internal support links
             self._log('Getting internal support links outer batch %d.'
                       % outer_idx)

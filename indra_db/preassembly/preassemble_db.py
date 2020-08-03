@@ -271,6 +271,14 @@ class DbPreassembler:
 
         return new_unique_stmts, evidence_links, agent_tuples
 
+    def _dump_links(self, db, supp_links):
+        self._log(f"Copying batch of {len(supp_links)} support links into db.")
+        skipped = db.copy_report_lazy('pa_support_links', supp_links,
+                                      ('supported_mk_hash',
+                                       'supporting_mk_hash'))
+        gatherer.add('links', len(supp_links - set(skipped)))
+        return
+
     @_handle_update_table
     @DGContext.wrap(gatherer)
     def create_corpus(self, db, continuing=False):
@@ -336,6 +344,7 @@ class DbPreassembler:
         # Now get the support links between all batches.
         support_links = set()
         hash_list = list(new_mk_set)
+        hash_list.sort()
         N = len(new_mk_set)
         B = self.batch_size
         idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
@@ -372,21 +381,13 @@ class DbPreassembler:
             # statements, so it doesn't make sense to copy every time, but for
             # long preassembly, this allows for better failure recovery.
             if len(support_links) >= self.batch_size:
-                self._log("Copying batch of %d support links into db."
-                          % len(support_links))
-                skipped = db.copy_report_lazy('pa_support_links', support_links,
-                                              ('supported_mk_hash',
-                                               'supporting_mk_hash'))
-                gatherer.add('links', len(support_links - set(skipped)))
+                self._dump_links(db, support_links)
                 support_links = set()
 
         # Insert any remaining support links.
         if support_links:
-            self._log("Copying final batch of %d support links into db."
-                      % len(support_links))
-            db.copy('pa_support_links', support_links,
-                    ('supported_mk_hash', 'supporting_mk_hash'))
-            gatherer.add('links', len(support_links))
+            self._log('Final (overflow) batch of links.')
+            self._dump_links(db, support_links)
 
         self._clear_cache()
         return True
@@ -453,9 +454,10 @@ class DbPreassembler:
         """Calculate the support for the given date range of pa statements."""
         if not isinstance(new_hashes, list):
             new_hashes = list(new_hashes)
+        new_hashes.sort()
 
         # If we are continuing, check for support links that were already found
-        new_support_links = set()
+        support_links = set()
         N = len(new_hashes)
         B = self.batch_size
         new_idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
@@ -505,14 +507,19 @@ class DbPreassembler:
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx)
 
+            support_links |= some_support_links
+
+            # There are generally few support links compared to the number of
+            # statements, so it doesn't make sense to copy every time, but for
+            # long preassembly, this allows for better failure recovery.
+            if len(support_links) >= self.batch_size:
+                self._dump_links(db, support_links)
+                support_links = set()
+
         # Insert any remaining support links.
-        if new_support_links:
-            self._log("Copying %d support links into db."
-                      % len(new_support_links))
-            skipped = db.copy_report_lazy('pa_support_links', new_support_links,
-                                          ('supported_mk_hash',
-                                           'supporting_mk_hash'))
-            gatherer.add('links', len(new_support_links - set(skipped)))
+        if support_links:
+            self._log("Final (overflow) batch of new support links.")
+            self._dump_links(db, support_links)
         return
 
     @_handle_update_table

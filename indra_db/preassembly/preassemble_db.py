@@ -173,9 +173,12 @@ class DbPreassembler:
         supp_file.put(s3, pickle.dumps(outer_idx))
         return
 
-    def _get_support_mark(self):
+    def _get_support_mark(self, continuing):
         if self.s3_cache is None:
             return
+
+        if not continuing:
+            return -1
 
         import boto3
         s3 = boto3.client('s3')
@@ -375,7 +378,7 @@ class DbPreassembler:
         N = len(new_mk_set)
         B = self.batch_size
         idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
-        start_idx = self._get_support_mark() + 1
+        start_idx = self._get_support_mark(continuing) + 1
         for outer_idx, (out_si, out_ei) in enumerate(idx_batches[start_idx:]):
             outer_idx += start_idx
             sj_query = db.filter_query(
@@ -492,7 +495,7 @@ class DbPreassembler:
         N = len(new_hashes)
         B = self.batch_size
         idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
-        start_idx = self._get_support_mark() + 1
+        start_idx = self._get_support_mark(continuing) + 1
         for outer_idx, (out_s, out_e) in enumerate(idx_batches[start_idx:]):
             outer_idx += start_idx
             # Create the statements from the jsons.

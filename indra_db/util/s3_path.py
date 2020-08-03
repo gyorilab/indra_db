@@ -62,6 +62,9 @@ class S3Path(object):
     def exists(self, s3):
         return 'Contents' in s3.list_objects_v2(**self.kw(prefix=True))
 
+    def delete(self, s3):
+        return s3.delete_object(**self.kw())
+
     def get_element_path(self, *subkeys):
         args = []
         if self.key is not None:

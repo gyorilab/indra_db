@@ -142,6 +142,23 @@ class DbPreassembler:
             s3_path.delete(s3)
         return
 
+    def _run_cached(self, continuing, func, *args, **kwargs):
+        # Define the location of this cache.
+        import boto3
+        s3 = boto3.client('s3')
+        result_cache = self._get_cache_path(f'{func.__name__}.pkl')
+
+        # If continuing, try to retrieve the file.
+        if continuing and result_cache.exists(s3):
+            s3_result = result_cache.get(s3)
+            return pickle.loads(s3_result['Body'].read())
+
+        # If not continuing or the file doesn't exist, run the function.
+        results = func(*args, **kwargs)
+        pickle_data = pickle.dumps(results)
+        result_cache.put(s3, pickle_data)
+        return results
+
     def _raw_sid_stmt_iter(self, db, id_set, do_enumerate=False):
         """Return a generator over statements with the given database ids."""
         def _fixed_raw_stmt_from_json(s_json, tr):
@@ -255,23 +272,6 @@ class DbPreassembler:
             agent_tuples |= set(ref_data)
 
         return new_unique_stmts, evidence_links, agent_tuples
-
-    def _run_cached(self, continuing, func, *args, **kwargs):
-        # Define the location of this cache.
-        import boto3
-        s3 = boto3.client('s3')
-        result_cache = self._get_cache_path(f'{func.__name__}.pkl')
-
-        # If continuing, try to retrieve the file.
-        if continuing and result_cache.exists(s3):
-            s3_result = result_cache.get(s3)
-            return pickle.loads(s3_result['Body'].read())
-
-        # If not continuing or the file doesn't exist, run the function.
-        results = func(*args, **kwargs)
-        pickle_data = pickle.dumps(results)
-        result_cache.put(s3, pickle_data)
-        return results
 
     @_handle_update_table
     @DGContext.wrap(gatherer)

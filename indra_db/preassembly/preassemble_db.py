@@ -192,7 +192,6 @@ class DbPreassembler:
     def _extract_and_push_unique_statements(self, db, raw_sids, num_stmts,
                                             mk_done=None):
         """Get the unique Statements from the raw statements."""
-        start_date = datetime.utcnow()
         self._log("There are %d distilled raw statement ids to preassemble."
                   % len(raw_sids))
 
@@ -246,8 +245,7 @@ class DbPreassembler:
 
         self._log("Added %d new pa statements into the database."
                   % len(new_mk_set))
-        end_date = datetime.utcnow()
-        return {'start': start_date, 'end': end_date, 'mk_set': new_mk_set}
+        return new_mk_set
 
     @clockit
     def _condense_statements(self, cleaned_stmts, mk_done, new_mk_set,
@@ -331,45 +329,35 @@ class DbPreassembler:
                           % len(done_pa_ids))
 
         # Get the set of unique statements
-        self._extract_and_push_unique_statements(db, stmt_ids, len(stmt_ids),
-                                                 done_pa_ids)
-
-        # If we are continuing, check for support links that were already found
-        if continuing:
-            self._log("Getting pre-existing links...")
-            db_existing_links = db.select_all([
-                db.PASupportLinks.supporting_mk_hash,
-                db.PASupportLinks.supporting_mk_hash
-            ])
-            existing_links = {tuple(res) for res in db_existing_links}
-            self._log("Found %d existing links." % len(existing_links))
-        else:
-            existing_links = set()
+        new_mk_set = self._run_cached(continuing,
+                                      self._extract_and_push_unique_statements,
+                                      db, stmt_ids, len(stmt_ids), done_pa_ids)
 
         # Now get the support links between all batches.
         support_links = set()
-        batching_args = tuple()
-        if self.stmt_type is not None:
-            batching_args += (db.PAStatements.type == self.stmt_type,)
-        outer_iter = db.select_all_batched(self.batch_size,
-                                           db.PAStatements.json,
-                                           *batching_args,
-                                           order_by=db.PAStatements.mk_hash)
-        for outer_idx, outer_batch_jsons in outer_iter:
-            outer_batch = [_stmt_from_json(sj) for sj, in outer_batch_jsons]
+        hash_list = list(new_mk_set)
+        N = len(new_mk_set)
+        B = self.batch_size
+        idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
+        for outer_idx, (out_si, out_ei) in enumerate(idx_batches):
+            sj_query = db.filter_query(
+                db.PAStatements.json,
+                db.PAStatements.mk_hash.in_(hash_list[out_si:out_ei])
+            )
+            outer_batch = [_stmt_from_json(sj) for sj, in sj_query.all()]
             # Get internal support links
             self._log('Getting internal support links outer batch %d.'
                       % outer_idx)
             some_support_links = self._get_support_links(outer_batch)
 
             # Get links with all other batches
-            inner_iter = db.select_all_batched(self.batch_size,
-                                               db.PAStatements.json,
-                                               *batching_args,
-                                               order_by=db.PAStatements.mk_hash,
-                                               skip_idx=outer_idx)
-            for inner_idx, inner_batch_jsons in inner_iter:
-                inner_batch = [_stmt_from_json(sj) for sj, in inner_batch_jsons]
+            in_start = outer_idx + 1
+            for inner_idx, (in_si, in_ei) in enumerate(idx_batches[in_start:]):
+                inner_sj_q = db.filter_query(
+                    db.PAStatements.json,
+                    db.PAStatements.mk_hash.in_(hash_list[in_si:in_ei])
+                )
+                inner_batch = [_stmt_from_json(sj) for sj, in inner_sj_q.all()]
                 split_idx = len(inner_batch)
                 full_list = inner_batch + outer_batch
                 self._log('Getting support between outer batch %d and inner'
@@ -378,7 +366,7 @@ class DbPreassembler:
                     self._get_support_links(full_list, split_idx=split_idx)
 
             # Add all the new support links
-            support_links |= (some_support_links - existing_links)
+            support_links |= some_support_links
 
             # There are generally few support links compared to the number of
             # statements, so it doesn't make sense to copy every time, but for
@@ -386,10 +374,10 @@ class DbPreassembler:
             if len(support_links) >= self.batch_size:
                 self._log("Copying batch of %d support links into db."
                           % len(support_links))
-                db.copy('pa_support_links', support_links,
-                        ('supported_mk_hash', 'supporting_mk_hash'))
-                gatherer.add('links', len(support_links))
-                existing_links |= support_links
+                skipped = db.copy_report_lazy('pa_support_links', support_links,
+                                              ('supported_mk_hash',
+                                               'supporting_mk_hash'))
+                gatherer.add('links', len(support_links - set(skipped)))
                 support_links = set()
 
         # Insert any remaining support links.

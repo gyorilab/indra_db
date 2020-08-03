@@ -162,6 +162,30 @@ class DbPreassembler:
         result_cache.put(s3, pickle_data)
         return results
 
+    def _put_support_mark(self, outer_idx):
+        if self.s3_cache is None:
+            return
+
+        import boto3
+        s3 = boto3.client('s3')
+
+        supp_file = self._get_cache_path('support_idx.pkl')
+        supp_file.put(s3, pickle.dumps(outer_idx))
+        return
+
+    def _get_support_mark(self):
+        if self.s3_cache is None:
+            return
+
+        import boto3
+        s3 = boto3.client('s3')
+
+        supp_file = self._get_cache_path('support_idx.pkl')
+        if not supp_file.exists(s3):
+            return -1
+        s3_resp = supp_file.get(s3)
+        return pickle.loads(s3_resp['Body'].read())
+
     def _raw_sid_stmt_iter(self, db, id_set, do_enumerate=False):
         """Return a generator over statements with the given database ids."""
         def _fixed_raw_stmt_from_json(s_json, tr):
@@ -351,7 +375,9 @@ class DbPreassembler:
         N = len(new_mk_set)
         B = self.batch_size
         idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
-        for outer_idx, (out_si, out_ei) in enumerate(idx_batches):
+        start_idx = self._get_support_mark() + 1
+        for outer_idx, (out_si, out_ei) in enumerate(idx_batches[start_idx:]):
+            outer_idx += start_idx
             sj_query = db.filter_query(
                 db.PAStatements.json,
                 db.PAStatements.mk_hash.in_(hash_list[out_si:out_ei])
@@ -359,8 +385,8 @@ class DbPreassembler:
             outer_batch = [_stmt_from_json(sj) for sj, in sj_query.all()]
 
             # Get internal support links
-            self._log('Getting internal support links outer batch %d.'
-                      % outer_idx)
+            self._log(f'Getting internal support links outer batch '
+                      f'{outer_idx}/{N}.')
             some_support_links = self._get_support_links(outer_batch)
 
             # Get links with all other batches
@@ -386,6 +412,7 @@ class DbPreassembler:
             # long preassembly, this allows for better failure recovery.
             if len(support_links) >= self.batch_size:
                 self._dump_links(db, support_links)
+                self._put_support_mark(outer_idx)
                 support_links = set()
 
         # Insert any remaining support links.
@@ -464,8 +491,10 @@ class DbPreassembler:
         support_links = set()
         N = len(new_hashes)
         B = self.batch_size
-        new_idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
-        for outer_idx, (out_s, out_e) in enumerate(new_idx_batches):
+        idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
+        start_idx = self._get_support_mark() + 1
+        for outer_idx, (out_s, out_e) in enumerate(idx_batches[start_idx:]):
+            outer_idx += start_idx
             # Create the statements from the jsons.
             npa_json_q = db.filter_query(
                 db.PAStatements.json,
@@ -474,12 +503,12 @@ class DbPreassembler:
             npa_batch = [_stmt_from_json(s_json) for s_json in npa_json_q.all()]
 
             # Compare internally
-            self._log("Getting support for new pa batch %d." % outer_idx)
+            self._log(f"Getting support for new pa batch {outer_idx}/{N}.")
             some_support_links = self._get_support_links(npa_batch)
 
             # Compare against the other new batch statements.
             in_start = outer_idx + 1
-            for in_idx, (in_s, in_e) in enumerate(new_idx_batches[in_start:]):
+            for in_idx, (in_s, in_e) in enumerate(idx_batches[in_start:]):
                 other_npa_q = db.filter_query(
                     db.PAStatements.json,
                     db.PAStatements.mk_hash.in_(new_hashes[in_s:in_e])
@@ -518,6 +547,7 @@ class DbPreassembler:
             # long preassembly, this allows for better failure recovery.
             if len(support_links) >= self.batch_size:
                 self._dump_links(db, support_links)
+                self._put_support_mark(outer_idx)
                 support_links = set()
 
         # Insert any remaining support links.

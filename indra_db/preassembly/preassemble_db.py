@@ -111,6 +111,37 @@ class DbPreassembler:
             return None
         return max([u.run_datetime for u in update_list])
 
+    def _get_cache_path(self, file_name):
+        return (self.s3_cache.get_element_path(self.__tag)
+                             .get_element_path(file_name))
+
+    def _init_cache(self, continuing):
+        if self.s3_cache is None:
+            return
+
+        import boto3
+        s3 = boto3.client('s3')
+        start_file = self._get_cache_path('start.pkl')
+        if start_file.exists(s3) and continuing:
+            s3_resp = start_file.get(s3)
+            start_data = pickle.loads(s3_resp['Body'].read())
+            start_time = start_data['start_time']
+        else:
+            start_time = datetime.utcnow()
+            start_data = {'start_time': start_time}
+            start_file.put(s3, pickle.dumps(start_data))
+        return start_time
+
+    def _clear_cache(self):
+        if self.s3_cache is None:
+            return
+        import boto3
+        s3 = boto3.client('s3')
+        objects = self._get_cache_path('').list_objects(s3)
+        for s3_path in objects:
+            s3_path.delete(s3)
+        return
+
     def _raw_sid_stmt_iter(self, db, id_set, do_enumerate=False):
         """Return a generator over statements with the given database ids."""
         def _fixed_raw_stmt_from_json(s_json, tr):
@@ -229,7 +260,7 @@ class DbPreassembler:
         # Define the location of this cache.
         import boto3
         s3 = boto3.client('s3')
-        result_cache = self.s3_cache.get_element_path(f'{func.__name__}.pkl')
+        result_cache = self._get_cache_path(f'{func.__name__}.pkl')
 
         # If continuing, try to retrieve the file.
         if continuing and result_cache.exists(s3):
@@ -257,6 +288,7 @@ class DbPreassembler:
         For more detail on preassembly, see indra/preassembler/__init__.py
         """
         self.__tag = 'create'
+        self._init_cache(continuing)
 
         if not continuing:
             # Make sure the discarded statements table is cleared.
@@ -368,6 +400,7 @@ class DbPreassembler:
                     ('supported_mk_hash', 'supporting_mk_hash'))
             gatherer.add('links', len(support_links))
 
+        self._clear_cache()
         return True
 
     def _get_new_stmt_ids(self, db):
@@ -385,7 +418,6 @@ class DbPreassembler:
 
     def _supplement_statements(self, db, continuing=False):
         """Supplement the preassembled statements with the latest content."""
-        self.__tag = 'supplement'
 
         last_update = self._get_latest_updatetime(db)
         assert last_update is not None, \
@@ -430,12 +462,10 @@ class DbPreassembler:
             self._log("Adjusted old mk set: %d" % len(old_mk_set))
 
         self._log("Found %d new pa statements." % len(new_mk_set))
-        self.__tag = 'Unpurposed'
         return start_date, end_date
 
     def _supplement_support(self, db, start_date, end_date, continuing=False):
         """Calculate the support for the given date range of pa statements."""
-        self.__tag = 'supplement'
 
         # If we are continuing, check for support links that were already found
         new_support_links = set()
@@ -499,7 +529,6 @@ class DbPreassembler:
                 ('supported_mk_hash', 'supporting_mk_hash')
             )
             gatherer.add('links', len(new_support_links - set(skipped)))
-        self.__tag = 'Unpurposed'
         return
 
     @_handle_update_table
@@ -515,18 +544,16 @@ class DbPreassembler:
         would achieve if you had simply re-run preassembly on _all_ the
         raw statements.
         """
+        self.__tag = 'supplement'
+        self._init_cache(continuing)
 
         self.pickle_stashes = []
 
         start_date, end_date = self._supplement_statements(db, continuing)
         self._supplement_support(db, start_date, end_date, continuing)
 
-        # Remove all the caches so they can't be picked up accidentally later.
-        for cache in self.pickle_stashes:
-            if path.exists(cache):
-                remove(cache)
-        self.pickle_stashes = None
-
+        self._clear_cache()
+        self.__tag = 'Unpurposed'
         return True
 
     def _log(self, msg, level='info'):

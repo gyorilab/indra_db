@@ -69,6 +69,8 @@ class DbPreassembler:
         self.n_proc = n_proc
         self.batch_size = batch_size
         self.s3_cache = s3_cache
+
+        self.cache_start_time = None
         # TODO: Do some datestamp things and "start" and "end" the run.
         self.pa = Preassembler(bio_ontology)
         self.__tag = 'Unpurposed'
@@ -207,12 +209,9 @@ class DbPreassembler:
         result_cache = self.s3_cache.get_element_path(f'{func.__name__}.pkl')
 
         # If continuing, try to retrieve the file.
-        if continuing:
-            try:
-                s3_result = result_cache.get(s3)
-                return pickle.loads(s3_result['Body'].read())
-            except errorfactory.NoSuchKey:
-                pass
+        if continuing and result_cache.exists(s3):
+            s3_result = result_cache.get(s3)
+            return pickle.loads(s3_result['Body'].read())
 
         # If not continuing or the file doesn't exist, run the function.
         results = func(*args, **kwargs)

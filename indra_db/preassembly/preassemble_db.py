@@ -68,10 +68,33 @@ class DbPreassembler:
                  print_logs=False, stmt_type=None):
         self.n_proc = n_proc
         self.batch_size = batch_size
-        self.s3_cache = s3_cache
+        if s3_cache is not None:
+            # Make the cache specific to the batch size and stmt type. This
+            # guards against technical errors resulting from mixing these key
+            # parameters.
+            if not isinstance(s3_cache, S3Path):
+                raise TypeError(f"Expected s3_cache to be type S3Path, but got "
+                                f"type {type(s3_cache)}.")
+            specifications = f'bs{batch_size}_st{stmt_type}/'
+            self.s3_cache = s3_cache.get_element_path(specifications)
 
-        self.cache_start_time = None
-        # TODO: Do some datestamp things and "start" and "end" the run.
+            # Report on what caches may already exist. This should hopefully
+            # prevent re-doing work just because different batch sizes were
+            # used.
+            import boto3
+            s3 = boto3.client('s3')
+            if s3_cache.exists(s3):
+                if self.s3_cache.exists(s3):
+                    logger.info(f"A prior with these parameters exists in "
+                                f"the cache: {s3_cache}.")
+                else:
+                    logger.info(f"Prior job or jobs with different batch size "
+                                f"and/or Statement type exist for the cache: "
+                                f"{s3_cache}.")
+            else:
+                logger.info(f"No prior jobs appear in the cache: {s3_cache}.")
+        else:
+            self.s3_cache = None
         self.pa = Preassembler(bio_ontology)
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs

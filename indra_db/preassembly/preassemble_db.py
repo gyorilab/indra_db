@@ -435,14 +435,11 @@ class DbPreassembler:
         old_mk_set = {mk for mk, in db.select_all(db.PAStatements.mk_hash)}
         self._log("Found %d old pa statements." % len(old_mk_set))
 
-        result_dict = self._run_cached(
+        new_mk_set = self._run_cached(
             continuing,
             self._extract_and_push_unique_statements,
             db, new_stmt_ids, len(new_stmt_ids), old_mk_set
         )
-        start_date = result_dict['start']
-        end_date = result_dict['end']
-        new_mk_set = result_dict['mk_set']
 
         if continuing:
             self._log("Original old mk set: %d" % len(old_mk_set))
@@ -450,53 +447,54 @@ class DbPreassembler:
             self._log("Adjusted old mk set: %d" % len(old_mk_set))
 
         self._log("Found %d new pa statements." % len(new_mk_set))
-        return start_date, end_date
+        return new_mk_set
 
-    def _supplement_support(self, db, start_date, end_date, continuing=False):
+    def _supplement_support(self, db, new_hashes, start_time, continuing=False):
         """Calculate the support for the given date range of pa statements."""
+        if not isinstance(new_hashes, list):
+            new_hashes = list(new_hashes)
 
         # If we are continuing, check for support links that were already found
         new_support_links = set()
-
-        # Now find the new support links that need to be added.
-        batching_args = (self.batch_size,
-                         db.PAStatements.json,
-                         db.PAStatements.create_date >= start_date,
-                         db.PAStatements.create_date <= end_date)
-        if self.stmt_type is not None:
-            batching_args += (db.PAStatements.type == self.stmt_type,)
-        npa_json_iter = db.select_all_batched(*batching_args,
-                                              order_by=db.PAStatements.mk_hash)
-        for outer_idx, npa_json_batch in npa_json_iter:
+        N = len(new_hashes)
+        B = self.batch_size
+        new_idx_batches = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
+        for outer_idx, (out_s, out_e) in enumerate(new_idx_batches):
             # Create the statements from the jsons.
-            npa_batch = [_stmt_from_json(s_json) for s_json in npa_json_batch]
+            npa_json_q = db.filter_query(
+                db.PAStatements.json,
+                db.PAStatements.mk_hash.in_(new_hashes[out_s:out_e])
+            )
+            npa_batch = [_stmt_from_json(s_json) for s_json in npa_json_q.all()]
 
             # Compare internally
             self._log("Getting support for new pa batch %d." % outer_idx)
             some_support_links = self._get_support_links(npa_batch)
 
             # Compare against the other new batch statements.
-            other_npa_json_iter = db.select_all_batched(
-                *batching_args,
-                order_by=db.PAStatements.mk_hash,
-                skip_idx=outer_idx
-            )
-            for inner_idx, other_npa_json_batch in other_npa_json_iter:
-                other_npa_batch = [_stmt_from_json(s_json)
-                                   for s_json, in other_npa_json_batch]
+            in_start = outer_idx + 1
+            for in_idx, (in_s, in_e) in enumerate(new_idx_batches[in_start:]):
+                other_npa_q = db.filter_query(
+                    db.PAStatements.json,
+                    db.PAStatements.mk_hash.in_(new_hashes[in_s:in_e])
+                )
+                other_npa_batch = [_stmt_from_json(sj)
+                                   for sj, in other_npa_q.all()]
                 split_idx = len(npa_batch)
                 full_list = npa_batch + other_npa_batch
                 self._log("Comparing outer batch %d to inner batch %d of "
-                          "other new statements." % (outer_idx, inner_idx))
+                          "other new statements." % (outer_idx, in_idx))
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx)
 
             # Compare against the existing statements.
-            opa_json_iter = db.select_all_batched(
-                self.batch_size,
-                db.PAStatements.json,
-                db.PAStatements.create_date < start_date
-            )
+            opa_args = (db.PAStatements.create_date < start_time,)
+            if self.stmt_type is not None:
+                opa_args += (db.PAStatements.type == self.stmt_type,)
+
+            opa_json_iter = db.select_all_batched(self.batch_size,
+                                                  db.PAStatements.json,
+                                                  *opa_args)
             for opa_idx, opa_json_batch in opa_json_iter:
                 opa_batch = [_stmt_from_json(s_json)
                              for s_json, in opa_json_batch]
@@ -511,11 +509,9 @@ class DbPreassembler:
         if new_support_links:
             self._log("Copying %d support links into db."
                       % len(new_support_links))
-            skipped = db.copy_report_lazy(
-                'pa_support_links',
-                new_support_links,
-                ('supported_mk_hash', 'supporting_mk_hash')
-            )
+            skipped = db.copy_report_lazy('pa_support_links', new_support_links,
+                                          ('supported_mk_hash',
+                                           'supporting_mk_hash'))
             gatherer.add('links', len(new_support_links - set(skipped)))
         return
 
@@ -533,12 +529,12 @@ class DbPreassembler:
         raw statements.
         """
         self.__tag = 'supplement'
-        self._init_cache(continuing)
+        start_time = self._init_cache(continuing)
 
         self.pickle_stashes = []
 
-        start_date, end_date = self._supplement_statements(db, continuing)
-        self._supplement_support(db, start_date, end_date, continuing)
+        new_hashes = self._supplement_statements(db, continuing)
+        self._supplement_support(db, new_hashes, start_time, continuing)
 
         self._clear_cache()
         self.__tag = 'Unpurposed'

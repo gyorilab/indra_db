@@ -371,7 +371,7 @@ class DbPreassembler:
 
         if not continuing:
             # Make sure the discarded statements table is cleared.
-            db.drop_tables([db.DiscardedStatements])
+            db.drop_tables([db.DiscardedStatements], force=self.yes_all)
             db.create_tables([db.DiscardedStatements])
             db.session.close()
             db.grab_session()

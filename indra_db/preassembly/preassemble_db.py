@@ -443,7 +443,7 @@ class DbPreassembler:
 
             # Get internal support links
             self._log(f'Getting internal support links outer batch '
-                      f'{outer_idx}/{N//B}.')
+                      f'{outer_idx}/{len(idx_batches)}.')
             some_support_links = self._get_support_links(outer_batch)
 
             # Get links with all other batches
@@ -457,8 +457,8 @@ class DbPreassembler:
                 split_idx = len(inner_batch)
                 full_list = inner_batch + outer_batch
                 self._log(f'Getting support between outer batch {outer_idx}/'
-                          f'{N//B} and inner batch {inner_idx}/'
-                          f'{N//B - in_start}.')
+                          f'{len(idx_batches)} and inner batch {inner_idx}/'
+                          f'{len(idx_batches) - in_start}.')
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx)
 
@@ -560,7 +560,8 @@ class DbPreassembler:
             npa_batch = [_stmt_from_json(s_json) for s_json in npa_json_q.all()]
 
             # Compare internally
-            self._log(f"Getting support for new pa batch {outer_idx}/{N//B}.")
+            self._log(f"Getting support for new pa batch {outer_idx}/"
+                      f"{len(idx_batches)}.")
             some_support_links = self._get_support_links(npa_batch)
 
             # Compare against the other new batch statements.
@@ -574,8 +575,9 @@ class DbPreassembler:
                                    for sj, in other_npa_q.all()]
                 split_idx = len(npa_batch)
                 full_list = npa_batch + other_npa_batch
-                self._log(f"Comparing outer batch {outer_idx}/{N//B} to inner "
-                          f"batch {in_idx}/{N//B - in_start} of other new "
+                self._log(f"Comparing outer batch {outer_idx}/"
+                          f"{len(idx_batches)} to inner batch {in_idx}/"
+                          f"{len(idx_batches) - in_start} of other new "
                           f"statements.")
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx)
@@ -593,8 +595,8 @@ class DbPreassembler:
                              for s_json, in opa_json_batch]
                 split_idx = len(npa_batch)
                 full_list = npa_batch + opa_batch
-                self._log(f"Comparing new batch {outer_idx}/{N//B} to batch "
-                          f"{opa_idx} of old pa statements.")
+                self._log(f"Comparing new batch {outer_idx}/{len(idx_batches)} "
+                          f"to batch {opa_idx} of old pa statements.")
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx)
 

@@ -1,12 +1,11 @@
 import json
 import pickle
 import logging
-from os import path, remove
+from os import path
 from functools import wraps
 from datetime import datetime
 from collections import defaultdict
 from argparse import ArgumentParser
-from botocore import errorfactory
 
 from indra.util import batch_iter, clockit
 from indra.statements import Statement
@@ -25,7 +24,7 @@ from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
 
 site_logger.setLevel(logging.INFO)
 grounding_logger.setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('preassemble_db')
 
 HERE = path.dirname(path.abspath(__file__))
 ipa_logger.setLevel(logging.INFO)
@@ -713,8 +712,14 @@ def _make_parser():
         default=f's3://{bucket_name}/preassembly_results/temp',
         help=('Choose where on s3 the temp files that allow jobs to continue '
               'after stopping are stored. Value should be given in the form:'
-              's3://{bucket_name}/{prefix}. NOTE THAT A "/" WILL *NOT* BE '
-              'ADDED TO THE END OF THE PREFIX.')
+              's3://{bucket_name}/{prefix}.')
+    )
+    parser.add_argument(
+        '-T', '--stmt_type',
+        help=('Optionally select a particular statement type on which to run '
+              'preassembly on. In general types are not compared so you can '
+              'greatly multi-process the task by having separate machines '
+              'preassemble different types.')
     )
     return parser
 
@@ -731,7 +736,8 @@ def _main():
     assert db is not None
     db.grab_session()
     s3_cache = S3Path.from_string(args.cache)
-    pa = DbPreassembler(args.num_procs, args.batch, s3_cache)
+    pa = DbPreassembler(args.num_procs, args.batch, s3_cache,
+                        stmt_type=args.stmt_type)
 
     desc = 'Continuing' if args.continuing else 'Beginning'
     print("%s to %s preassembled corpus." % (desc, args.task))

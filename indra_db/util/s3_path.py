@@ -47,7 +47,7 @@ class S3Path(object):
     def put(self, s3, body):
         if not self.key:
             raise ValueError("Cannot 'put' to a key-less s3 path.")
-        return s3.put_bject(Body=body, **self.kw())
+        return s3.put_object(Body=body, **self.kw())
 
     def list_objects(self, s3):
         raw_res = s3.list_objects_v2(**self.kw(prefix=True))

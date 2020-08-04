@@ -723,8 +723,7 @@ def _make_parser():
         help='Continue uploading or updating, picking up where you left off.'
     )
     parser.add_argument(
-        '-n', '--num_procs',
-        dest='num_procs',
+        '-n', '--num-procs',
         type=int,
         default=None,
         help=('Select the number of processors to use during this operation. '
@@ -739,7 +738,6 @@ def _make_parser():
     )
     parser.add_argument(
         '-d', '--debug',
-        dest='debug',
         action='store_true',
         help='Run with debugging level output.'
     )
@@ -759,11 +757,16 @@ def _make_parser():
               's3://{bucket_name}/{prefix}.')
     )
     parser.add_argument(
-        '-T', '--stmt_type',
+        '-T', '--stmt-type',
         help=('Optionally select a particular statement type on which to run '
               'preassembly on. In general types are not compared so you can '
               'greatly multi-process the task by having separate machines '
               'preassemble different types.')
+    )
+    parser.add_argument(
+        '-Y', '--yes-all',
+        action='store_true',
+        help='Select the "yes" option for all user options during runtime.'
     )
     return parser
 
@@ -781,7 +784,7 @@ def _main():
     db.grab_session()
     s3_cache = S3Path.from_string(args.cache)
     pa = DbPreassembler(args.num_procs, args.batch, s3_cache,
-                        stmt_type=args.stmt_type)
+                        stmt_type=args.stmt_type, yes_all=args.yes_all)
 
     desc = 'Continuing' if args.continuing else 'Beginning'
     print("%s to %s preassembled corpus." % (desc, args.task))

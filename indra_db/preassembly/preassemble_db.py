@@ -23,7 +23,7 @@ from indra_db.util import insert_pa_stmts, distill_stmts, get_db, \
     extract_agent_data, insert_pa_agents, hash_pa_agents, S3Path
 
 site_logger.setLevel(logging.INFO)
-grounding_logger.setLevel(logging.WARNING)
+grounding_logger.setLevel(logging.INFO)
 logger = logging.getLogger('preassemble_db')
 
 HERE = path.dirname(path.abspath(__file__))

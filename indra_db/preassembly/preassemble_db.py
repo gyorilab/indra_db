@@ -54,29 +54,6 @@ class UserQuit(BaseException):
     pass
 
 
-def _yes_input(message, default='yes'):
-    valid = {'yes': True, 'ye': True, 'y': True, 'no': False, 'n': False}
-
-    if default is None:
-        prompt = '[y/n]'
-    elif default == 'yes':
-        prompt = '[Y/n]'
-    elif default == 'no':
-        prompt = '[y/N]'
-    else:
-        raise ValueError(f"Argument 'default' must be 'yes' or 'no', got "
-                         f"'{default}'.")
-
-    resp = input(f'{message} {prompt}: ')
-    while True:
-        if resp == '' and default is not None:
-            return valid[default]
-        elif resp.lower() in valid:
-            return valid[resp.lower()]
-        resp = input(f'Please answer "yes" (or "y") or "no" (or "n"). '
-                     f'{prompt}: ')
-
-
 class DbPreassembler:
     """Class used to manage the preassembly pipeline
 
@@ -129,6 +106,31 @@ class DbPreassembler:
         self.yes_all = yes_all
         return
 
+    def _yes_input(self, message, default='yes'):
+        if self.yes_all:
+            return True
+
+        valid = {'yes': True, 'ye': True, 'y': True, 'no': False, 'n': False}
+
+        if default is None:
+            prompt = '[y/n]'
+        elif default == 'yes':
+            prompt = '[Y/n]'
+        elif default == 'no':
+            prompt = '[y/N]'
+        else:
+            raise ValueError(f"Argument 'default' must be 'yes' or 'no', got "
+                             f"'{default}'.")
+
+        resp = input(f'{message} {prompt}: ')
+        while True:
+            if resp == '' and default is not None:
+                return valid[default]
+            elif resp.lower() in valid:
+                return valid[resp.lower()]
+            resp = input(f'Please answer "yes" (or "y") or "no" (or "n"). '
+                         f'{prompt}: ')
+
     def _get_latest_updatetime(self, db):
         """Get the date of the latest update."""
         update_list = db.select_all(db.PreassemblyUpdates)
@@ -153,27 +155,25 @@ class DbPreassembler:
             s3_resp = start_file.get(s3)
             start_data = pickle.loads(s3_resp['Body'].read())
             start_time = start_data['start_time']
+            batch_size = start_data['batch_size']
             cache_desc = f"Do you want to %s {self._get_cache_path('')} " \
                          f"started {start_time}?"
             if continuing:
-                if not self.yes_all:
-                    if _yes_input(cache_desc % 'continue with'):
-                        return start_time
-                    else:
-                        raise UserQuit("Aborting job.")
+                if self._yes_input(cache_desc % 'continue with'):
+                    return start_time, batch_size
                 else:
-                    return start_time
-            elif not self.yes_all \
-                    and not _yes_input(cache_desc % 'overwrite existing',
-                                       default='no'):
+                    raise UserQuit("Aborting job.")
+            elif not self._yes_input(cache_desc % 'overwrite existing',
+                                     default='no'):
                 raise UserQuit("Aborting job.")
 
             self._clear_cache()
 
         start_time = datetime.utcnow()
-        start_data = {'start_time': start_time}
+        batch_size = self.batch_size
+        start_data = {'start_time': start_time, 'batch_size': batch_size}
         start_file.put(s3, pickle.dumps(start_data))
-        return start_time
+        return start_time, batch_size
 
     def _clear_cache(self):
         if self.s3_cache is None:

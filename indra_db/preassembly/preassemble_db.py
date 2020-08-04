@@ -50,6 +50,33 @@ class IndraDBPreassemblyError(Exception):
     pass
 
 
+class UserQuit(BaseException):
+    pass
+
+
+def _yes_input(message, default='yes'):
+    valid = {'yes': True, 'ye': True, 'y': True, 'no': False, 'n': False}
+
+    if default is None:
+        prompt = '[y/n]'
+    elif default == 'yes':
+        prompt = '[Y/n]'
+    elif default == 'no':
+        prompt = '[y/N]'
+    else:
+        raise ValueError(f"Argument 'default' must be 'yes' or 'no', got "
+                         f"'{default}'.")
+
+    resp = input(f'{message} {prompt}: ')
+    while True:
+        if resp == '' and default is not None:
+            return valid[default]
+        elif resp.lower() in valid:
+            return valid[resp.lower()]
+        resp = input(f'Please answer "yes" (or "y") or "no" (or "n"). '
+                     f'{prompt}: ')
+
+
 class DbPreassembler:
     """Class used to manage the preassembly pipeline
 

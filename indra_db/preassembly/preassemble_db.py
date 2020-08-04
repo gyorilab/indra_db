@@ -91,7 +91,7 @@ class DbPreassembler:
         require much more memory.
     """
     def __init__(self, n_proc=1, batch_size=10000, s3_cache=None,
-                 print_logs=False, stmt_type=None):
+                 print_logs=False, stmt_type=None, yes_all=False):
         self.n_proc = n_proc
         self.batch_size = batch_size
         if s3_cache is not None:
@@ -126,6 +126,7 @@ class DbPreassembler:
         self.__print_logs = print_logs
         self.pickle_stashes = None
         self.stmt_type = stmt_type
+        self.yes_all = yes_all
         return
 
     def _get_latest_updatetime(self, db):
@@ -148,14 +149,30 @@ class DbPreassembler:
         import boto3
         s3 = boto3.client('s3')
         start_file = self._get_cache_path('start.pkl')
-        if start_file.exists(s3) and continuing:
+        if start_file.exists(s3):
             s3_resp = start_file.get(s3)
             start_data = pickle.loads(s3_resp['Body'].read())
             start_time = start_data['start_time']
-        else:
-            start_time = datetime.utcnow()
-            start_data = {'start_time': start_time}
-            start_file.put(s3, pickle.dumps(start_data))
+            cache_desc = f"Do you want to %s {self._get_cache_path('')} " \
+                         f"started {start_time}?"
+            if continuing:
+                if not self.yes_all:
+                    if _yes_input(cache_desc % 'continue with'):
+                        return start_time
+                    else:
+                        raise UserQuit("Aborting job.")
+                else:
+                    return start_time
+            elif not self.yes_all \
+                    and not _yes_input(cache_desc % 'overwrite existing',
+                                       default='no'):
+                raise UserQuit("Aborting job.")
+
+            self._clear_cache()
+
+        start_time = datetime.utcnow()
+        start_data = {'start_time': start_time}
+        start_file.put(s3, pickle.dumps(start_data))
         return start_time
 
     def _clear_cache(self):

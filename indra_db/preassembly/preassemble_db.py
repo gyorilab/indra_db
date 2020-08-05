@@ -69,7 +69,7 @@ class DbPreassembler:
         time. In general, a larger batch size will somewhat be faster, but
         require much more memory.
     """
-    def __init__(self, n_proc=1, batch_size=10000, s3_cache=None,
+    def __init__(self, n_proc=None, batch_size=10000, s3_cache=None,
                  print_logs=False, stmt_type=None, yes_all=False):
         self.n_proc = n_proc
         self.batch_size = batch_size
@@ -99,6 +99,8 @@ class DbPreassembler:
         else:
             self.s3_cache = None
         self.pa = Preassembler(bio_ontology)
+        bio_ontology.initialize()
+        bio_ontology._build_transitive_closure()
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
         self.pickle_stashes = None

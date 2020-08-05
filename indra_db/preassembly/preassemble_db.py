@@ -154,12 +154,11 @@ class DbPreassembler:
             s3_resp = start_file.get(s3)
             start_data = pickle.loads(s3_resp['Body'].read())
             start_time = start_data['start_time']
-            batch_size = start_data['batch_size']
             cache_desc = f"Do you want to %s {self._get_cache_path('')} " \
                          f"started {start_time}?"
             if continuing:
                 if self._yes_input(cache_desc % 'continue with'):
-                    return start_time, batch_size
+                    return start_time
                 else:
                     raise UserQuit("Aborting job.")
             elif not self._yes_input(cache_desc % 'overwrite existing',
@@ -169,10 +168,9 @@ class DbPreassembler:
             self._clear_cache()
 
         start_time = datetime.utcnow()
-        batch_size = self.batch_size
-        start_data = {'start_time': start_time, 'batch_size': batch_size}
+        start_data = {'start_time': start_time}
         start_file.put(s3, pickle.dumps(start_data))
-        return start_time, batch_size
+        return start_time
 
     def _clear_cache(self):
         if self.s3_cache is None:
@@ -212,7 +210,7 @@ class DbPreassembler:
         s3 = boto3.client('s3')
 
         supp_file = self._get_cache_path('support_idx.pkl')
-        supp_file.put(s3, pickle.dumps(outer_idx))
+        supp_file.put(s3, pickle.dumps(outer_idx*self.batch_size))
         return
 
     def _get_support_mark(self, continuing):
@@ -229,7 +227,7 @@ class DbPreassembler:
         if not supp_file.exists(s3):
             return -1
         s3_resp = supp_file.get(s3)
-        return pickle.loads(s3_resp['Body'].read())
+        return pickle.loads(s3_resp['Body'].read()) // self.batch_size
 
     def _raw_sid_stmt_iter(self, db, id_set, do_enumerate=False):
         """Return a generator over statements with the given database ids."""
@@ -260,14 +258,11 @@ class DbPreassembler:
             else:
                 yield data
 
-    def _make_idx_batches(self, hash_list, continuing, cont_batch_size):
+    def _make_idx_batches(self, hash_list, continuing):
         N = len(hash_list)
         B = self.batch_size
         idx_batch_list = [(n*B, min((n + 1)*B, N)) for n in range(0, N//B + 1)]
-        naive_start_idx = self._get_support_mark(continuing) + 1
-        start_idx = floor((cont_batch_size / self.batch_size)*naive_start_idx)
-        logger.info(f"Original start idx={naive_start_idx}, scaled "
-                    f"start_idx={start_idx}")
+        start_idx = self._get_support_mark(continuing) + 1
         return idx_batch_list, start_idx
 
     @clockit
@@ -376,11 +371,7 @@ class DbPreassembler:
         For more detail on preassembly, see indra/preassembler/__init__.py
         """
         self.__tag = 'create'
-        _, cont_batch_size = self._init_cache(continuing)
-        if continuing and cont_batch_size != self.batch_size:
-            logger.info("Continuing from job that had a different batch size. "
-                        "Supplement batching will be adjusted as best as "
-                        "possible.")
+        self._init_cache(continuing)
 
         if not continuing:
             # Make sure the discarded statements table is cleared.
@@ -431,8 +422,7 @@ class DbPreassembler:
         support_links = set()
         hash_list = list(new_mk_set)
         hash_list.sort()
-        idx_batches, start_idx = self._make_idx_batches(hash_list, continuing,
-                                                        cont_batch_size)
+        idx_batches, start_idx = self._make_idx_batches(hash_list, continuing)
         for outer_idx, (out_si, out_ei) in enumerate(idx_batches[start_idx:]):
             outer_idx += start_idx
             sj_query = db.filter_query(
@@ -539,8 +529,7 @@ class DbPreassembler:
         self._log("Found %d new pa statements." % len(new_mk_set))
         return new_mk_set
 
-    def _supplement_support(self, db, new_hashes, start_time, cont_batch_size,
-                            continuing=False):
+    def _supplement_support(self, db, new_hashes, start_time, continuing=False):
         """Calculate the support for the given date range of pa statements."""
         if not isinstance(new_hashes, list):
             new_hashes = list(new_hashes)
@@ -548,8 +537,7 @@ class DbPreassembler:
 
         # If we are continuing, check for support links that were already found
         support_links = set()
-        idx_batches, start_idx = self._make_idx_batches(new_hashes, continuing,
-                                                        cont_batch_size)
+        idx_batches, start_idx = self._make_idx_batches(new_hashes, continuing)
         for outer_idx, (out_s, out_e) in enumerate(idx_batches[start_idx:]):
             outer_idx += start_idx
             # Create the statements from the jsons.
@@ -630,13 +618,12 @@ class DbPreassembler:
         raw statements.
         """
         self.__tag = 'supplement'
-        start_time, cont_batch_size = self._init_cache(continuing)
+        start_time = self._init_cache(continuing)
 
         self.pickle_stashes = []
 
         new_hashes = self._supplement_statements(db, continuing)
-        self._supplement_support(db, new_hashes, start_time, cont_batch_size,
-                                 continuing)
+        self._supplement_support(db, new_hashes, start_time, continuing)
 
         self._clear_cache()
         self.__tag = 'Unpurposed'

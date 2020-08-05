@@ -1,6 +1,6 @@
 from indra.statements import get_all_descendants, Statement
 from indra_reading.batch.submitters.submitter import Submitter
-
+from indra_reading.batch.util import bucket_name
 
 DEFAULT_AVOID_STATEMENTS = ['Event', 'Influence', 'Unresolved']
 VALID_STATEMENTS = [st.__name__ for st in get_all_descendants(Statement)
@@ -26,16 +26,19 @@ class PreassemblySubmitter(Submitter):
                 continue
             yield jq
 
-    def _get_command(self, job_type_set, stmt_type):
+    def _get_command(self, job_type_set, *args):
+        stmt_type, batch_size = args
         if self.task not in job_type_set:
             return None, None
         job_name = f'{self.job_base}_{self.task}_{stmt_type}'
+        s3_cache = f's3://{bucket_name}/{self.s3_base}/{job_name}'
         cmd = ['python3', '-m', 'indra_db.preassembly.preassemble_db',
-               self.task, '-n', '32', '-C', f'{self.s3_base}/{job_name}',
-               '-T', stmt_type, '-Y']
+               self.task, '-n', '32', '-C', s3_cache, '-T', stmt_type, '-Y',
+               '-b', str(batch_size)]
         return job_name, cmd
 
-    def _iter_job_args(self, type_list=None):
+    def _iter_job_args(self, *args):
+        type_list, batch_size = args
         if type_list is None:
             type_list = VALID_STATEMENTS
 
@@ -44,5 +47,5 @@ class PreassemblySubmitter(Submitter):
             raise ValueError(f"Found invalid statement types: {invalid_types}")
 
         for stmt_type in type_list:
-            yield (stmt_type,)
+            yield stmt_type, batch_size
 

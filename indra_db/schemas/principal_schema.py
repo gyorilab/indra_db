@@ -484,6 +484,7 @@ def get_schema(Base):
         id = Column(Integer, primary_key=True)
         corpus_init = Column(Boolean, nullable=False)
         run_datetime = Column(DateTime, default=func.now())
+        stmt_type = Column(String)
     table_dict[PreassemblyUpdates.__tablename__] = PreassemblyUpdates
 
     class PAStatements(Base, IndraDBTable):

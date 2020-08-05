@@ -1,12 +1,13 @@
 import json
 import pickle
 import logging
-from math import floor
 from os import path
 from functools import wraps
 from datetime import datetime
 from collections import defaultdict
 from argparse import ArgumentParser
+
+from sqlalchemy import or_
 
 from indra.util import batch_iter, clockit
 from indra.statements import Statement
@@ -36,13 +37,13 @@ gatherer = DataGatherer('preassembly', ['stmts', 'evidence', 'links'])
 
 def _handle_update_table(func):
     @wraps(func)
-    def run_and_record_update(cls, db, *args, **kwargs):
+    def run_and_record_update(obj, db, *args, **kwargs):
         run_datetime = datetime.utcnow()
-        completed = func(cls, db, *args, **kwargs)
+        completed = func(obj, db, *args, **kwargs)
         if completed:
             is_corpus_init = (func.__name__ == 'create_corpus')
             db.insert('preassembly_updates', corpus_init=is_corpus_init,
-                      run_datetime=run_datetime)
+                      run_datetime=run_datetime, stmt_type=obj.stmt_type)
         return completed
     return run_and_record_update
 
@@ -132,7 +133,12 @@ class DbPreassembler:
 
     def _get_latest_updatetime(self, db):
         """Get the date of the latest update."""
-        update_list = db.select_all(db.PreassemblyUpdates)
+        if self.stmt_type is not None:
+            st_const = or_(db.PreassemblyUpdates.stmt_type == self.stmt_type,
+                           db.PreassemblyUpdates.stmt_type.is_(None))
+        else:
+            st_const = db.PreassemblyUpdates.stmt_type.is_(None)
+        update_list = db.select_all(db.PreassemblyUpdates, st_const)
         if not len(update_list):
             logger.warning("The preassembled corpus has not been initialized, "
                            "or else the updates table has not been populated.")

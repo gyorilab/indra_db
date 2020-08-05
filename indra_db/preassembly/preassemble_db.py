@@ -381,13 +381,7 @@ class DbPreassembler:
         self.__tag = 'create'
         self._init_cache(continuing)
 
-        if not continuing:
-            # Make sure the discarded statements table is cleared.
-            db.drop_tables([db.DiscardedStatements], force=self.yes_all)
-            db.create_tables([db.DiscardedStatements])
-            db.session.close()
-            db.grab_session()
-        else:
+        if continuing:
             # Get discarded statements
             skip_ids = {i for i, in db.select_all(db.DiscardedStatements.stmt_id)}
             self._log("Found %d discarded statements from earlier run."

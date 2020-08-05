@@ -435,7 +435,7 @@ class DbPreassembler:
 
             # Get internal support links
             self._log(f'Getting internal support links outer batch '
-                      f'{outer_idx}/{len(idx_batches)}.')
+                      f'{outer_idx}/{len(idx_batches)-1}.')
             some_support_links = self._get_support_links(outer_batch)
 
             # Get links with all other batches

@@ -27,7 +27,11 @@ class PreassemblySubmitter(Submitter):
             yield jq
 
     def _get_command(self, job_type_set, *args):
-        stmt_type, batch_size = args
+        if len(args) == 2:
+            stmt_type, batch_size = args
+            continuing = False
+        else:
+            stmt_type, batch_size, continuing = args
         if self.task not in job_type_set:
             return None, None
         job_name = f'{self.job_base}_{self.task}_{stmt_type}'
@@ -35,10 +39,12 @@ class PreassemblySubmitter(Submitter):
         cmd = ['python3', '-m', 'indra_db.preassembly.preassemble_db',
                self.task, '-n', '32', '-C', s3_cache, '-T', stmt_type, '-Y',
                '-b', str(batch_size)]
+        if continuing:
+            cmd += ['-c']
         return job_name, cmd
 
     def _iter_job_args(self, *args):
-        type_list, batch_size = args
+        type_list = args[0]
         if type_list is None:
             type_list = VALID_STATEMENTS
 
@@ -47,5 +53,5 @@ class PreassemblySubmitter(Submitter):
             raise ValueError(f"Found invalid statement types: {invalid_types}")
 
         for stmt_type in type_list:
-            yield stmt_type, batch_size
+            yield (stmt_type,) + tuple(args[1:])
 

@@ -38,7 +38,7 @@ class XddManager:
         self.text_content = {}
         for group in self.groups:
             logger.info(f"Processing {group.key}")
-            file_pair_dict = _get_file_pairs_from_group(s3, group)
+            file_pair_dict, got_all = _get_file_pairs_from_group(s3, group)
             for (run_id, id_src), (bibs, stmts) in file_pair_dict.items():
                 logger.info(f"Loading {run_id}")
                 doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
@@ -71,7 +71,7 @@ class XddManager:
                         self.text_content[trid] = \
                             (trid, src, 'xdd', 'fulltext',
                              pub_lookup[xddid] == 'bioRxiv')
-        return
+        return got_all
 
     def dump_statements(self, db):
         tc_rows = set(self.text_content.values())
@@ -122,17 +122,19 @@ class XddManager:
             insert_raw_agents(db, stmt_batch_id, stmts, verbose=False,
                               commit=False)
 
-        update_rows = [(json.dumps(self.reader_versions), self.indra_version,
-                        group.key[:-1])
-                       for group in self.groups]
-        db.copy('xdd_updates', update_rows,
-                ('reader_versions', 'indra_version', 'day_str'))
         return
 
     def run(self, db):
         self.load_groups(db)
-        self.load_statements(db)
+        got_all = self.load_statements(db)
         self.dump_statements(db)
+        if got_all:
+            update_rows = [(json.dumps(self.reader_versions),
+                            self.indra_version, group.key[:-1])
+                           for group in self.groups]
+            db.copy('xdd_updates', update_rows,
+                    ('reader_versions', 'indra_version', 'day_str'))
+        return got_all
 
 
 class XDDFileError(Exception):
@@ -142,6 +144,7 @@ class XDDFileError(Exception):
 def _get_file_pairs_from_group(s3, group: S3Path):
     files = group.list_objects(s3)
     file_pairs = defaultdict(dict)
+    got_all = True
     for file_path in files:
         # Get information from the filename, including the cases with and
         # without the id_src label.
@@ -166,6 +169,7 @@ def _get_file_pairs_from_group(s3, group: S3Path):
             logger.exception(e)
             if run_id in file_pairs:
                 del file_pairs[run_id]
+            got_all = False
 
     # Create a dict of tuples from the pairs of files.
     ret = {}
@@ -173,9 +177,10 @@ def _get_file_pairs_from_group(s3, group: S3Path):
         if len(files) != 2 or 'bib' not in files or 'stmts' not in files:
             logger.warning(f"Run {batch_id} does not have both 'bib' and "
                            f"'stmts' in files: {files.keys()}. Skipping.")
+            got_all = False
             continue
         ret[batch_id] = (files['bib'], files['stmts'])
-    return ret
+    return ret, got_all
 
 
 def _get_trids_from_dois(db, dois):

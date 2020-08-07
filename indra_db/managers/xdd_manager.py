@@ -18,6 +18,7 @@ class XddManager:
 
     def __init__(self):
         self.groups = None
+        self.groups_done = None
         self.statements = None
         self.text_content = None
 
@@ -36,9 +37,11 @@ class XddManager:
         s3 = boto3.client('s3')
         self.statements = defaultdict(lambda: defaultdict(list))
         self.text_content = {}
+        self.groups_done = {}
         for group in self.groups:
             logger.info(f"Processing {group.key}")
             file_pair_dict, got_all = _get_file_pairs_from_group(s3, group)
+            self.groups_done[group.key[:-1]] = got_all
             for (run_id, id_src), (bibs, stmts) in file_pair_dict.items():
                 logger.info(f"Loading {run_id}")
                 doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
@@ -71,7 +74,7 @@ class XddManager:
                         self.text_content[trid] = \
                             (trid, src, 'xdd', 'fulltext',
                              pub_lookup[xddid] == 'bioRxiv')
-        return got_all
+        return
 
     def dump_statements(self, db):
         tc_rows = set(self.text_content.values())
@@ -126,15 +129,15 @@ class XddManager:
 
     def run(self, db):
         self.load_groups(db)
-        got_all = self.load_statements(db)
+        self.load_statements(db)
         self.dump_statements(db)
-        if got_all:
-            update_rows = [(json.dumps(self.reader_versions),
-                            self.indra_version, group.key[:-1])
-                           for group in self.groups]
-            db.copy('xdd_updates', update_rows,
-                    ('reader_versions', 'indra_version', 'day_str'))
-        return got_all
+        update_rows = [(json.dumps(self.reader_versions),
+                        self.indra_version, grp_key)
+                       for grp_key, is_done in self.groups_done.items()
+                       if is_done]
+        db.copy('xdd_updates', update_rows,
+                ('reader_versions', 'indra_version', 'day_str'))
+        return
 
 
 class XDDFileError(Exception):

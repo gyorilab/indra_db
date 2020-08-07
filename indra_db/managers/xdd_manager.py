@@ -18,6 +18,7 @@ class XddManager:
 
     def __init__(self):
         self.groups = None
+        self.groups_done = None
         self.statements = None
         self.text_content = None
 
@@ -36,9 +37,11 @@ class XddManager:
         s3 = boto3.client('s3')
         self.statements = defaultdict(lambda: defaultdict(list))
         self.text_content = {}
+        self.groups_done = {}
         for group in self.groups:
             logger.info(f"Processing {group.key}")
-            file_pair_dict = _get_file_pairs_from_group(s3, group)
+            file_pair_dict, got_all = _get_file_pairs_from_group(s3, group)
+            self.groups_done[group.key[:-1]] = got_all
             for (run_id, id_src), (bibs, stmts) in file_pair_dict.items():
                 logger.info(f"Loading {run_id}")
                 doi_lookup = {bib['_xddid']: bib['identifier'][0]['id'].upper()
@@ -116,23 +119,28 @@ class XddManager:
         db.copy_lazy('reading', r_rows, r_cols, commit=False)
 
         logger.info(f"Dumping {len(s_rows)} raw statements.")
-        db.copy_lazy('raw_statements', s_rows,
-                     DatabaseStatementData.get_cols(), commit=False)
-        if len(stmts):
-            insert_raw_agents(db, stmt_batch_id, stmts, verbose=False,
+        skipped = db.copy_report_lazy('raw_statements', s_rows,
+                                      DatabaseStatementData.get_cols(),
+                                      commit=False)
+        skipped_uuids = {t[DatabaseStatementData.get_cols().index('uuid')]
+                         for t in skipped}
+        new_stmts = [s for s in stmts if s.uuid not in skipped_uuids]
+        if len(new_stmts):
+            insert_raw_agents(db, stmt_batch_id, new_stmts, verbose=False,
                               commit=False)
-
-        update_rows = [(json.dumps(self.reader_versions), self.indra_version,
-                        group.key[:-1])
-                       for group in self.groups]
-        db.copy('xdd_updates', update_rows,
-                ('reader_versions', 'indra_version', 'day_str'))
         return
 
     def run(self, db):
         self.load_groups(db)
         self.load_statements(db)
         self.dump_statements(db)
+        update_rows = [(json.dumps(self.reader_versions),
+                        self.indra_version, grp_key)
+                       for grp_key, is_done in self.groups_done.items()
+                       if is_done]
+        db.copy('xdd_updates', update_rows,
+                ('reader_versions', 'indra_version', 'day_str'))
+        return
 
 
 class XDDFileError(Exception):
@@ -142,6 +150,7 @@ class XDDFileError(Exception):
 def _get_file_pairs_from_group(s3, group: S3Path):
     files = group.list_objects(s3)
     file_pairs = defaultdict(dict)
+    got_all = True
     for file_path in files:
         # Get information from the filename, including the cases with and
         # without the id_src label.
@@ -166,6 +175,7 @@ def _get_file_pairs_from_group(s3, group: S3Path):
             logger.exception(e)
             if run_id in file_pairs:
                 del file_pairs[run_id]
+            got_all = False
 
     # Create a dict of tuples from the pairs of files.
     ret = {}
@@ -173,9 +183,10 @@ def _get_file_pairs_from_group(s3, group: S3Path):
         if len(files) != 2 or 'bib' not in files or 'stmts' not in files:
             logger.warning(f"Run {batch_id} does not have both 'bib' and "
                            f"'stmts' in files: {files.keys()}. Skipping.")
+            got_all = False
             continue
         ret[batch_id] = (files['bib'], files['stmts'])
-    return ret
+    return ret, got_all
 
 
 def _get_trids_from_dois(db, dois):

@@ -119,12 +119,15 @@ class XddManager:
         db.copy_lazy('reading', r_rows, r_cols, commit=False)
 
         logger.info(f"Dumping {len(s_rows)} raw statements.")
-        db.copy_lazy('raw_statements', s_rows,
-                     DatabaseStatementData.get_cols(), commit=False)
-        if len(stmts):
-            insert_raw_agents(db, stmt_batch_id, stmts, verbose=False,
+        skipped = db.copy_report_lazy('raw_statements', s_rows,
+                                      DatabaseStatementData.get_cols(),
+                                      commit=False)
+        skipped_uuids = {t[DatabaseStatementData.get_cols().index('uuid')]
+                         for t in skipped}
+        new_stmts = [s for s in stmts if s.uuid not in skipped_uuids]
+        if len(new_stmts):
+            insert_raw_agents(db, stmt_batch_id, new_stmts, verbose=False,
                               commit=False)
-
         return
 
     def run(self, db):

@@ -145,7 +145,6 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None, commit=True):
 
 
 def hash_pa_agents(agent_tuples):
-    logger.info("Adding hashes to %d pa agent refs." % len(agent_tuples))
     hashed_tuples = []
     for ref in agent_tuples:
         h = make_hash(':'.join([str(r) for r in ref[:-1]]), 16)

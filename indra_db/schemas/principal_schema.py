@@ -235,7 +235,6 @@ def get_schema(Base):
         )
     table_dict[MeshRefAnnotations.__tablename__] = MeshRefAnnotations
 
-
     class MtiRefAnnotationsTest(Base, IndraDBTable):
         __tablename__ = 'mti_ref_annotations_test'
         _always_disp = ['pmid_num', 'mesh_num', 'qual_num']
@@ -253,7 +252,6 @@ def get_schema(Base):
                                 name='mesh-uniqueness'),
         )
     table_dict[MtiRefAnnotationsTest.__tablename__] = MtiRefAnnotationsTest
-
 
     class SourceFile(Base, IndraDBTable):
         __tablename__ = 'source_file'
@@ -486,6 +484,7 @@ def get_schema(Base):
         id = Column(Integer, primary_key=True)
         corpus_init = Column(Boolean, nullable=False)
         run_datetime = Column(DateTime, default=func.now())
+        stmt_type = Column(String)
     table_dict[PreassemblyUpdates.__tablename__] = PreassemblyUpdates
 
     class PAStatements(Base, IndraDBTable):
@@ -571,6 +570,10 @@ def get_schema(Base):
         supported_mk_hash = Column(BigInteger,
                                    ForeignKey('pa_statements.mk_hash'),
                                    nullable=False)
+        __table_args__ = (
+            UniqueConstraint('supporting_mk_hash', 'supported_mk_hash',
+                             name='pa_support_links_link_uniqueness'),
+        )
     table_dict[PASupportLinks.__tablename__] = PASupportLinks
 
     class Curation(Base, IndraDBTable):

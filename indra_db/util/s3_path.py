@@ -44,6 +44,11 @@ class S3Path(object):
             raise ValueError("Cannot get key-less s3 path.")
         return s3.get_object(**self.kw())
 
+    def put(self, s3, body):
+        if not self.key:
+            raise ValueError("Cannot 'put' to a key-less s3 path.")
+        return s3.put_object(Body=body, **self.kw())
+
     def list_objects(self, s3):
         raw_res = s3.list_objects_v2(**self.kw(prefix=True))
         return [self.__class__(self.bucket, e['Key'])
@@ -53,6 +58,12 @@ class S3Path(object):
         raw_res = s3.list_objects_v2(Delimiter='/', **self.kw(prefix=True))
         return [self.__class__(self.bucket, e['Prefix'])
                 for e in raw_res['CommonPrefixes']]
+
+    def exists(self, s3):
+        return 'Contents' in s3.list_objects_v2(**self.kw(prefix=True))
+
+    def delete(self, s3):
+        return s3.delete_object(**self.kw())
 
     def get_element_path(self, *subkeys):
         args = []

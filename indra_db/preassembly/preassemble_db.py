@@ -89,7 +89,7 @@ class DbPreassembler:
             s3 = boto3.client('s3')
             if s3_cache.exists(s3):
                 if self.s3_cache.exists(s3):
-                    logger.info(f"A prior with these parameters exists in "
+                    logger.info(f"A prior run with these parameters exists in "
                                 f"the cache: {s3_cache}.")
                 else:
                     logger.info(f"Prior job or jobs with different Statement "
@@ -396,33 +396,38 @@ class DbPreassembler:
                                     clauses=clauses)
 
         # Handle the possibility we're picking up after an earlier job...
-        done_pa_ids = set()
+        mk_done = set()
         if continuing:
             self._log("Getting set of statements already de-duplicated...")
-            link_resp = db.select_all([db.RawUniqueLinks.raw_stmt_id,
-                                       db.RawUniqueLinks.pa_stmt_mk_hash])
+            link_q = db.filter_query([db.RawUniqueLinks.raw_stmt_id,
+                                      db.RawUniqueLinks.pa_stmt_mk_hash])
+            if self.stmt_type is not None:
+                link_q = (link_q
+                          .join(db.RawStatements)
+                          .filter(db.RawStatements.type == self.stmt_type))
+            link_resp = link_q.all()
             if link_resp:
-                checked_raw_stmt_ids, pa_stmt_hashes = \
-                    zip(*db.select_all([db.RawUniqueLinks.raw_stmt_id,
-                                        db.RawUniqueLinks.pa_stmt_mk_hash]))
+                checked_raw_stmt_ids, pa_stmt_hashes = zip(*link_resp)
                 stmt_ids -= set(checked_raw_stmt_ids)
                 self._log("Found %d raw statements without links to unique."
                           % len(stmt_ids))
                 stmt_ids -= skip_ids
                 self._log("Found %d raw statements that still need to be "
                           "processed." % len(stmt_ids))
-                done_pa_ids = set(pa_stmt_hashes)
+                mk_done = set(pa_stmt_hashes)
                 self._log("Found %d preassembled statements already done."
-                          % len(done_pa_ids))
+                          % len(mk_done))
 
         # Get the set of unique statements
         new_mk_set = self._run_cached(continuing,
                                       self._extract_and_push_unique_statements,
-                                      db, stmt_ids, len(stmt_ids), done_pa_ids)
+                                      db, stmt_ids, len(stmt_ids), mk_done)
 
         # Now get the support links between all batches.
         support_links = set()
-        hash_list = list(new_mk_set)
+        hash_list = list(new_mk_set | mk_done)
+        self._log(f"Beginning to find support relations for {len(hash_list)} "
+                  f"new statements.")
         hash_list.sort()
         idx_batches, start_idx = self._make_idx_batches(hash_list, continuing)
         for outer_idx, (out_si, out_ei) in enumerate(idx_batches[start_idx:]):

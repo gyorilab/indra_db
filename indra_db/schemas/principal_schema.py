@@ -466,6 +466,10 @@ def get_schema(Base):
     class RawUniqueLinks(Base, IndraDBTable):
         __tablename__ = 'raw_unique_links'
         _always_disp = ['raw_stmt_id', 'pa_stmt_mk_hash']
+        _indices = [BtreeIndex('raw_unique_links_raw_stmt_id_idx',
+                               'raw_stmt_id'),
+                    BtreeIndex('raw_unique_links_pa_stmt_mk_hash_idx',
+                               'pa_stmt_mk_hash')]
         id = Column(Integer, primary_key=True)
         raw_stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
                              nullable=False)

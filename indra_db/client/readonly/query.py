@@ -361,7 +361,7 @@ class Query(object):
         # Execute the query.
         selection = select(cols).select_from(stmts_q)
 
-        logger.info(f"Executing query (get_statements):\n{selection}")
+        logger.debug(f"Executing query (get_statements):\n{selection}")
 
         proxy = ro.session.connection().execute(selection)
         res = proxy.fetchall()
@@ -489,7 +489,7 @@ class Query(object):
                                          best_first)
 
         # Make the query, and package the results.
-        logger.info(f"Executing query (get_hashes):\n{mk_hashes_q}")
+        logger.debug(f"Executing query (get_hashes):\n{mk_hashes_q}")
         result = mk_hashes_q.all()
         evidence_totals = {h: cnt for h, cnt in result}
 
@@ -727,7 +727,7 @@ class Query(object):
         q = self._apply_limits(q, [desc(sq.c.ev_count), sq.c.agent_json],
                                limit, offset, best_first)
 
-        logger.info(f"Executing query (get_agents):\n{q}")
+        logger.debug(f"Executing query (get_agents):\n{q}")
         names = q.all()
 
         results = {}

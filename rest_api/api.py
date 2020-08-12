@@ -214,7 +214,7 @@ class ApiCall:
                     self.ev_filter &= minus_q.ev_filter()
 
             if self.strict:
-                num_agents = (self.db_query.get_component_queries()
+                num_agents = (self.db_query.list_component_queries()
                               .count(HasAgent.__name__))
                 self.db_query &= HasNumAgents((num_agents,))
 
@@ -577,7 +577,7 @@ class StatementApiCall(ApiCall):
                              f"mapped to db query.")
         assert isinstance(db_query, Query), "Somehow db_query is not Query."
 
-        component_queries = set(db_query.get_component_queries())
+        component_queries = set(db_query.list_component_queries())
         if require_any and not set(require_any) & component_queries:
             raise DbAPIError(f'None of the required query elements '
                              f'found: {require_any}')
@@ -668,7 +668,7 @@ class QueryApiCall(ApiCall):
         query_json = json.loads(self._pop('json', '{}'))
         q = Query.from_json(query_json)
         required_queries = {'HasAgent', 'FromPapers', 'FromMeshIds'}
-        if not required_queries & set(q.get_component_queries()):
+        if not required_queries & set(q.list_component_queries()):
             abort(Response(f"Query must contain at least one of "
                            f"{required_queries}."), 400)
         if q.full:

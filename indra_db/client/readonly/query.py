@@ -306,7 +306,7 @@ class Query(object):
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
-        mk_hashes_q = self.get_hash_query(ro)
+        mk_hashes_q = self.build_hash_query(ro)
         mk_hashes_q = mk_hashes_q.distinct()
         mk_hash_obj, n_ev_obj = self._hash_count_pair(ro)
         mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
@@ -482,7 +482,7 @@ class Query(object):
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
-        mk_hashes_q = self.get_hash_query(ro)
+        mk_hashes_q = self.build_hash_query(ro)
         mk_hashes_q = mk_hashes_q.distinct()
         _, n_ev_obj = self._hash_count_pair(ro)
         mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
@@ -498,7 +498,7 @@ class Query(object):
                            'hashes')
 
     def _get_name_query(self, ro):
-        mk_hashes_q = self.get_hash_query(ro)
+        mk_hashes_q = self.build_hash_query(ro)
 
         mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
         q = (ro.session.query(ro.AgentInteractions.mk_hash,
@@ -800,7 +800,7 @@ class Query(object):
         return cls(** {k: v for k, v in constraint_json.items()
                        if not k.startswith('_')})
 
-    def get_component_queries(self) -> list:
+    def list_component_queries(self) -> list:
         """Get a list of the query elements included, in no particular order."""
         return [self.__class__.__name__]
 
@@ -816,7 +816,7 @@ class Query(object):
         meta = self._get_table(ro)
         return meta.mk_hash, meta.ev_count
 
-    def get_hash_query(self, ro, type_queries=None):
+    def build_hash_query(self, ro, type_queries=None):
         """[Internal] Build the query for hashes."""
         # If the query is by definition everything, save much time and effort.
         if self.full:
@@ -1132,7 +1132,7 @@ class SourceIntersection(Query):
                       for qj in constraint_json['source_queries']]
         return cls(query_list)
 
-    def get_component_queries(self) -> list:
+    def list_component_queries(self) -> list:
         return [q.__class__.__name__ for q in self.source_queries] \
                + [self.__class__.__name__]
 
@@ -1938,10 +1938,10 @@ class MergeQuery(Query):
                       for qj in constraint_json['query_list']]
         return cls(query_list)
 
-    def get_component_queries(self) -> list:
+    def list_component_queries(self) -> list:
         type_list = []
         for q in self.queries:
-            type_list += q.get_component_queries()
+            type_list += q.list_component_queries()
         return type_list + [self.__class__.__name__]
 
     def _hash_count_pair(self, ro) -> tuple:
@@ -2104,11 +2104,11 @@ class Intersection(MergeQuery):
         in_queries = [q for d in self._in_queries.values() for q in d.values()]
         if not in_queries:
             in_queries = None
-        queries = [q.get_hash_query(ro, in_queries) for q in self.queries
+        queries = [q.build_hash_query(ro, in_queries) for q in self.queries
                    if not q.full and not isinstance(q, IntrusiveQuery)]
         if not queries:
             if in_queries:
-                queries = [q.get_hash_query(ro) for q in in_queries]
+                queries = [q.build_hash_query(ro) for q in in_queries]
                 self._mk_hashes_al = self._merge(*queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,
@@ -2223,7 +2223,7 @@ class Union(MergeQuery):
                         continue
                 if not in_queries:
                     in_queries = None
-                mkhq = q.get_hash_query(ro, in_queries)
+                mkhq = q.build_hash_query(ro, in_queries)
                 mk_hashes_q_list.append(mkhq)
 
             if len(mk_hashes_q_list) == 1:

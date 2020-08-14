@@ -188,25 +188,31 @@ class AgentJsonSQL:
                                   ro.AgentInteractions.activity,
                                   ro.AgentInteractions.is_active,
                                   ro.AgentInteractions.src_json)
+        self.agg_q = None
         if not with_complex_dups:
             self.filter(ro.AgentInteractions.is_complex_dup.isnot(True))
-        self.order_param = NotImplemented
         return
 
     def filter(self, *args, **kwargs):
-        self.q = self.q.filter(*args, **kwargs)
+        if self.agg_q is None:
+            self.q = self.q.filter(*args, **kwargs)
+        else:
+            self.agg_q = self.agg_q.filter(*args, **kwargs)
+
+    def agg(self, ro, with_hashes=True):
+        raise NotImplementedError
 
     def run(self):
         raise NotImplementedError
 
 
 class InteractionSQL(AgentJsonSQL):
-    def __init__(self, ro, with_complex_dups=False):
-        super(InteractionSQL, self).__init__(ro, with_complex_dups)
-        self.order_param = [desc(ro.AgentInteractions.ev_count),
-                            ro.AgentInteractions.type_num,
-                            ro.AgentInteractions.agent_json]
-        return
+
+    def agg(self, ro, with_hashes=True):
+        self.agg_q = self.q
+        return [desc(ro.AgentInteractions.ev_count),
+                ro.AgentInteractions.type_num,
+                ro.AgentInteractions.agent_json]
 
     def run(self):
         logger.debug(f"Executing query (interaction):\n{self.q}")
@@ -229,8 +235,8 @@ class InteractionSQL(AgentJsonSQL):
 
 
 class RelationSQL(AgentJsonSQL):
-    def __init__(self, ro, with_complex_dups=False, with_hashes=False):
-        super(RelationSQL, self).__init__(ro, with_complex_dups)
+
+    def agg(self, ro, with_hashes=True):
         names_sq = self.q.subquery('names')
         rel_q = ro.session.query(
             names_sq.c.agent_json,
@@ -251,16 +257,15 @@ class RelationSQL(AgentJsonSQL):
         )
 
         sq = rel_q.subquery('relations')
-        self.order_param = [desc(sq.c.ev_count), sq.c.type_num]
-        self.q = ro.session.query(sq.c.agent_json, sq.c.type_num,
-                                  sq.c.agent_count, sq.c.ev_count,
-                                  sq.c.activity, sq.c.is_active,
-                                  sq.c.src_jsons, sq.c.hashes)
-        return
+        self.agg_q = ro.session.query(sq.c.agent_json, sq.c.type_num,
+                                      sq.c.agent_count, sq.c.ev_count,
+                                      sq.c.activity, sq.c.is_active,
+                                      sq.c.src_jsons, sq.c.hashes)
+        return [desc(sq.c.ev_count), sq.c.type_num]
 
     def run(self):
         logger.debug(f"Executing query (get_relations):\n{self.q}")
-        names = self.q.all()
+        names = self.agg_q.all()
         results = {}
         ev_totals = {}
         num_hashes = 0
@@ -297,8 +302,8 @@ class RelationSQL(AgentJsonSQL):
 
 
 class AgentSQL(AgentJsonSQL):
-    def __init__(self, ro, with_complex_dups=True, with_hashes=False):
-        super(AgentSQL, self).__init__(ro, with_complex_dups)
+
+    def agg(self, ro, with_hashes=True):
         names_sq = self.q.subquery('names')
         agent_q = ro.session.query(
             names_sq.c.agent_json,
@@ -311,16 +316,15 @@ class AgentSQL(AgentJsonSQL):
             names_sq.c.agent_json,
             names_sq.c.agent_count
         )
-
         sq = agent_q.subquery('agents')
-        self.order_param =[desc(sq.c.ev_count), sq.c.agent_json]
-        self.q = ro.session.query(sq.c.agent_json, sq.c.agent_count,
-                                  sq.c.ev_count, sq.c.src_jsons, sq.c.hashes)
-        return
+        self.agg_q = ro.session.query(sq.c.agent_json, sq.c.agent_count,
+                                      sq.c.ev_count, sq.c.src_jsons,
+                                      sq.c.hashes)
+        return [desc(sq.c.ev_count), sq.c.agent_json]
 
     def run(self):
-        logger.debug(f"Executing query (get_agents):\n{self.q}")
-        names = self.q.all()
+        logger.info(f"Executing query (get_agents):\n{self.agg_q}")
+        names = self.agg_q.all()
 
         results = {}
         ev_totals = {}
@@ -700,8 +704,9 @@ class Query(object):
         il = InteractionSQL(ro)
         mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
         il.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
-        il.q = self._apply_limits(il.q, il.order_param, limit, offset,
-                                  best_first)
+        order_param = il.agg(ro)
+        il.agg_q = self._apply_limits(il.agg_q, order_param, limit, offset,
+                                      best_first)
         results, ev_totals = il.run()
         return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'interactions')
@@ -742,15 +747,9 @@ class Query(object):
             return self._rest_get('relations', limit, offset, best_first,
                                   with_hashes=with_hashes)
 
-        r_sql = RelationSQL(ro, with_hashes=with_hashes)
-        mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
-        r_sql.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
-        r_sql.q = self._apply_limits(r_sql.q, r_sql.order_param, limit, offset,
-                                     best_first)
-        results, ev_totals = r_sql.run()
-
-        return QueryResult(results, limit, offset, len(results), ev_totals,
-                           self.to_json(), 'relations')
+        r_sql = RelationSQL(ro)
+        return self._run_meta_sql(r_sql, ro, limit, offset, best_first,
+                                  with_hashes)
 
     def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
                    with_hashes=False) \
@@ -788,12 +787,18 @@ class Query(object):
             return self._rest_get('agents', limit, offset, best_first,
                                   with_hashes=with_hashes)
 
-        ag_sql = AgentSQL(ro, with_hashes=with_hashes)
+        ag_sql = AgentSQL(ro)
+        return self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
+                                  with_hashes)
+
+    def _run_meta_sql(self, ms, ro, limit, offset, best_first,
+                      with_hashes=True):
         mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
-        ag_sql.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
-        ag_sql.q = self._apply_limits(ag_sql.q, ag_sql.order_param, limit,
+        ms.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
+        order_param = ms.agg(ro, with_hashes=with_hashes)
+        ms.agg_q = self._apply_limits(ms.agg_q, order_param, limit,
                                       offset, best_first)
-        results, ev_totals = ag_sql.run()
+        results, ev_totals = ms.run()
 
         return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'agents')

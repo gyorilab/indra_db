@@ -666,21 +666,6 @@ class Query(object):
                            len(result), evidence_totals, self.to_json(),
                            'hashes')
 
-    def _get_name_query(self, ro):
-        mk_hashes_q = self.build_hash_query(ro)
-
-        mk_hashes_sq = mk_hashes_q.subquery('mk_hashes')
-        q = (ro.session.query(ro.AgentInteractions.mk_hash,
-                              ro.AgentInteractions.agent_json,
-                              ro.AgentInteractions.type_num,
-                              ro.AgentInteractions.agent_count,
-                              ro.AgentInteractions.ev_count,
-                              ro.AgentInteractions.activity,
-                              ro.AgentInteractions.is_active,
-                              ro.AgentInteractions.src_json)
-             .filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash))
-        return q
-
     def get_interactions(self, ro=None, limit=None, offset=None,
                          best_first=True) -> QueryResult:
         """Get the simple interaction information from the Statements metadata.

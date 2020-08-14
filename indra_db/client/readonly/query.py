@@ -1696,6 +1696,10 @@ class FromPapers(_TextRefCore):
         qry = (self._base_query(ro)
                .filter(ro.EvidenceCounts.mk_hash == ro.FastRawPaLink.mk_hash,
                        ro.FastRawPaLink.reading_id == sub_al.c.rid))
+
+        if inject_queries is not None:
+            for tq in inject_queries:
+                qry = tq._apply_filter(self._get_table(ro), qry)
         return qry
 
     def ev_filter(self):

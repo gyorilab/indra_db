@@ -178,6 +178,175 @@ class ApiError(Exception):
     pass
 
 
+class AgentJsonSQL:
+    def __init__(self, ro, with_complex_dups=False):
+        self.q = ro.session.query(ro.AgentInteractions.mk_hash,
+                                  ro.AgentInteractions.agent_json,
+                                  ro.AgentInteractions.type_num,
+                                  ro.AgentInteractions.agent_count,
+                                  ro.AgentInteractions.ev_count,
+                                  ro.AgentInteractions.activity,
+                                  ro.AgentInteractions.is_active,
+                                  ro.AgentInteractions.src_json)
+        if not with_complex_dups:
+            self.filter(ro.AgentInteractions.is_complex_dup.isnot(True))
+        self.order_param = NotImplemented
+        return
+
+    def filter(self, *args, **kwargs):
+        self.q = self.q.filter(*args, **kwargs)
+
+    def run(self):
+        raise NotImplementedError
+
+
+class InteractionSQL(AgentJsonSQL):
+    def __init__(self, ro, with_complex_dups=False):
+        super(InteractionSQL, self).__init__(ro, with_complex_dups)
+        self.order_param = [desc(ro.AgentInteractions.ev_count),
+                            ro.AgentInteractions.type_num,
+                            ro.AgentInteractions.agent_json]
+        return
+
+    def run(self):
+        logger.debug(f"Executing query (interaction):\n{self.q}")
+        names = self.q.all()
+        results = {}
+        ev_totals = {}
+        for h, ag_json, type_num, n_ag, n_ev, act, is_act, src_json in names:
+            results[h] = {
+                'hash': h,
+                'id': str(h),
+                'agents': _make_agent_dict(ag_json),
+                'type': ro_type_map.get_str(type_num),
+                'activity': act,
+                'is_active': is_act,
+                'source_counts': src_json,
+            }
+            ev_totals[h] = sum(src_json.values())
+            assert ev_totals[h] == n_ev
+        return results, ev_totals
+
+
+class RelationSQL(AgentJsonSQL):
+    def __init__(self, ro, with_complex_dups=False, with_hashes=False):
+        super(RelationSQL, self).__init__(ro, with_complex_dups)
+        names_sq = self.q.subquery('names')
+        rel_q = ro.session.query(
+            names_sq.c.agent_json,
+            names_sq.c.type_num,
+            names_sq.c.agent_count,
+            func.sum(names_sq.c.ev_count).label('ev_count'),
+            names_sq.c.activity,
+            names_sq.c.is_active,
+            func.array_agg(names_sq.c.src_json).label('src_jsons'),
+            (func.array_agg(names_sq.c.mk_hash) if with_hashes
+             else null()).label('hashes')
+        ).group_by(
+            names_sq.c.agent_json,
+            names_sq.c.type_num,
+            names_sq.c.agent_count,
+            names_sq.c.activity,
+            names_sq.c.is_active
+        )
+
+        sq = rel_q.subquery('relations')
+        self.order_param = [desc(sq.c.ev_count), sq.c.type_num]
+        self.q = ro.session.query(sq.c.agent_json, sq.c.type_num,
+                                  sq.c.agent_count, sq.c.ev_count,
+                                  sq.c.activity, sq.c.is_active,
+                                  sq.c.src_jsons, sq.c.hashes)
+        return
+
+    def run(self):
+        logger.debug(f"Executing query (get_relations):\n{self.q}")
+        names = self.q.all()
+        results = {}
+        ev_totals = {}
+        num_hashes = 0
+        for ag_json, type_num, n_ag, n_ev, act, is_act, srcs, hashes in names:
+            if type_num == ro_type_map.get_int("Complex"):
+                ordered_agents = set(ag_json.values())
+            else:
+                ordered_agents = [ag_json.get(str(n))
+                                  for n in range(max(n_ag, int(max(ag_json))+1))]
+            agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
+
+            stmt_type = ro_type_map.get_str(type_num)
+
+            key = stmt_type + agent_key
+
+            if key in results:
+                if type_num != ro_type_map.get_int("Complex"):
+                    logger.warning("Something went weird processing relations.")
+                continue
+
+            source_counts = defaultdict(lambda: 0)
+            for src_json in srcs:
+                for src, cnt in src_json.items():
+                    source_counts[src] += cnt
+            results[key] = {'id': key, 'source_counts': dict(source_counts),
+                            'agents': _make_agent_dict(ag_json),
+                            'type': stmt_type, 'activity': act,
+                            'is_active': is_act, 'hashes': hashes}
+            ev_totals[key] = sum(source_counts.values())
+            assert ev_totals[key] == n_ev
+            num_hashes += 0 if hashes is None else len(hashes)
+
+        return results, ev_totals
+
+
+class AgentSQL(AgentJsonSQL):
+    def __init__(self, ro, with_complex_dups=True, with_hashes=False):
+        super(AgentSQL, self).__init__(ro, with_complex_dups)
+        names_sq = self.q.subquery('names')
+        agent_q = ro.session.query(
+            names_sq.c.agent_json,
+            names_sq.c.agent_count,
+            func.sum(names_sq.c.ev_count).label('ev_count'),
+            func.array_agg(names_sq.c.src_json).label('src_jsons'),
+            (func.array_agg(names_sq.c.mk_hash) if with_hashes
+             else null()).label('hashes')
+        ).group_by(
+            names_sq.c.agent_json,
+            names_sq.c.agent_count
+        )
+
+        sq = agent_q.subquery('agents')
+        self.order_param =[desc(sq.c.ev_count), sq.c.agent_json]
+        self.q = ro.session.query(sq.c.agent_json, sq.c.agent_count,
+                                  sq.c.ev_count, sq.c.src_jsons, sq.c.hashes)
+        return
+
+    def run(self):
+        logger.debug(f"Executing query (get_agents):\n{self.q}")
+        names = self.q.all()
+
+        results = {}
+        ev_totals = {}
+        num_hashes = 0
+        for ag_json, n_ag, n_ev, src_jsons, hashes in names:
+            ordered_agents = [ag_json.get(str(n))
+                              for n in range(max(n_ag, int(max(ag_json))+1))]
+            key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
+
+            if key in results:
+                logger.warning("Something went weird processing results for "
+                               "agents.")
+
+            source_counts = defaultdict(lambda: 0)
+            for src_json in src_jsons:
+                for src, cnt in src_json.items():
+                    source_counts[src] += cnt
+            results[key] = {'id': key, 'source_counts': dict(source_counts),
+                            'agents': _make_agent_dict(ag_json),
+                            'hashes': hashes}
+            ev_totals[key] = sum(source_counts.values())
+            assert n_ev == ev_totals[key]
+            num_hashes += 0 if hashes is None else len(hashes)
+        return results, ev_totals
+
+
 class Query(object):
     """The core class for all queries; not functional on its own."""
 
@@ -543,29 +712,12 @@ class Query(object):
         if ro is None:
             return self._rest_get('interactions', limit, offset, best_first)
 
-        q = self._get_name_query(ro)
-        q = self._apply_limits(q, [desc(ro.AgentInteractions.ev_count),
-                                   ro.AgentInteractions.type_num,
-                                   ro.AgentInteractions.agent_json],
-                               limit, offset, best_first)
-
-        logger.info(f"Executing (get_interactions):\n{q}")
-        names = q.all()
-        results = {}
-        ev_totals = {}
-        for h, ag_json, type_num, n_ag, n_ev, act, is_act, src_json in names:
-            results[h] = {
-                'hash': h,
-                'id': str(h),
-                'agents': _make_agent_dict(ag_json),
-                'type': ro_type_map.get_str(type_num),
-                'activity': act,
-                'is_active': is_act,
-                'source_counts': src_json,
-            }
-            ev_totals[h] = sum(src_json.values())
-            assert ev_totals[h] == n_ev
-
+        il = InteractionSQL(ro)
+        mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
+        il.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
+        il.q = self._apply_limits(il.q, il.order_param, limit, offset,
+                                  best_first)
+        results, ev_totals = il.run()
         return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'interactions')
 
@@ -605,67 +757,12 @@ class Query(object):
             return self._rest_get('relations', limit, offset, best_first,
                                   with_hashes=with_hashes)
 
-        names_q = self._get_name_query(ro)
-
-        names_sq = names_q.subquery('names')
-        rel_q = ro.session.query(
-            names_sq.c.agent_json,
-            names_sq.c.type_num,
-            names_sq.c.agent_count,
-            func.sum(names_sq.c.ev_count).label('ev_count'),
-            names_sq.c.activity,
-            names_sq.c.is_active,
-            func.array_agg(names_sq.c.src_json).label('src_jsons'),
-            (func.array_agg(names_sq.c.mk_hash) if with_hashes
-             else null()).label('hashes')
-        ).group_by(
-            names_sq.c.agent_json,
-            names_sq.c.type_num,
-            names_sq.c.agent_count,
-            names_sq.c.activity,
-            names_sq.c.is_active
-        )
-
-        sq = rel_q.subquery('relations')
-        q = ro.session.query(sq.c.agent_json, sq.c.type_num, sq.c.agent_count,
-                             sq.c.ev_count, sq.c.activity, sq.c.is_active,
-                             sq.c.src_jsons, sq.c.hashes)
-        q = self._apply_limits(q, [desc(sq.c.ev_count), sq.c.type_num],
-                               limit, offset, best_first)
-
-        logger.info(f"Executing (get_relations):\n{q}")
-        names = q.all()
-        results = {}
-        ev_totals = {}
-        num_hashes = 0
-        for ag_json, type_num, n_ag, n_ev, act, is_act, srcs, hashes in names:
-            if type_num == ro_type_map.get_int("Complex"):
-                ordered_agents = set(ag_json.values())
-            else:
-                ordered_agents = [ag_json.get(str(n))
-                                  for n in range(max(n_ag, int(max(ag_json))+1))]
-            agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
-
-            stmt_type = ro_type_map.get_str(type_num)
-
-            key = stmt_type + agent_key
-
-            if key in results:
-                if type_num != ro_type_map.get_int("Complex"):
-                    logger.warning("Something went weird processing relations.")
-                continue
-
-            source_counts = defaultdict(lambda: 0)
-            for src_json in srcs:
-                for src, cnt in src_json.items():
-                    source_counts[src] += cnt
-            results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': _make_agent_dict(ag_json),
-                            'type': stmt_type, 'activity': act,
-                            'is_active': is_act, 'hashes': hashes}
-            ev_totals[key] = sum(source_counts.values())
-            assert ev_totals[key] == n_ev
-            num_hashes += 0 if hashes is None else len(hashes)
+        r_sql = RelationSQL(ro, with_hashes=with_hashes)
+        mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
+        r_sql.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
+        r_sql.q = self._apply_limits(r_sql.q, r_sql.order_param, limit, offset,
+                                     best_first)
+        results, ev_totals = r_sql.run()
 
         return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'relations')
@@ -706,52 +803,12 @@ class Query(object):
             return self._rest_get('agents', limit, offset, best_first,
                                   with_hashes=with_hashes)
 
-        names_q = self._get_name_query(ro)
-
-        names_sq = names_q.subquery('names')
-        agent_q = ro.session.query(
-            names_sq.c.agent_json,
-            names_sq.c.agent_count,
-            func.sum(names_sq.c.ev_count).label('ev_count'),
-            func.array_agg(names_sq.c.src_json).label('src_jsons'),
-            (func.array_agg(names_sq.c.mk_hash) if with_hashes
-             else null()).label('hashes')
-        ).group_by(
-            names_sq.c.agent_json,
-            names_sq.c.agent_count
-        )
-
-        sq = agent_q.subquery('agents')
-        q = ro.session.query(sq.c.agent_json, sq.c.agent_count, sq.c.ev_count,
-                             sq.c.src_jsons, sq.c.hashes)
-        q = self._apply_limits(q, [desc(sq.c.ev_count), sq.c.agent_json],
-                               limit, offset, best_first)
-
-        logger.debug(f"Executing query (get_agents):\n{q}")
-        names = q.all()
-
-        results = {}
-        ev_totals = {}
-        num_hashes = 0
-        for ag_json, n_ag, n_ev, src_jsons, hashes in names:
-            ordered_agents = [ag_json.get(str(n))
-                              for n in range(max(n_ag, int(max(ag_json))+1))]
-            key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
-
-            if key in results:
-                logger.warning("Something went weird processing results for "
-                               "agents.")
-
-            source_counts = defaultdict(lambda: 0)
-            for src_json in src_jsons:
-                for src, cnt in src_json.items():
-                    source_counts[src] += cnt
-            results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': _make_agent_dict(ag_json),
-                            'hashes': hashes}
-            ev_totals[key] = sum(source_counts.values())
-            assert n_ev == ev_totals[key]
-            num_hashes += 0 if hashes is None else len(hashes)
+        ag_sql = AgentSQL(ro, with_hashes=with_hashes)
+        mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
+        ag_sql.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
+        ag_sql.q = self._apply_limits(ag_sql.q, ag_sql.order_param, limit,
+                                      offset, best_first)
+        results, ev_totals = ag_sql.run()
 
         return QueryResult(results, limit, offset, len(results), ev_totals,
                            self.to_json(), 'agents')

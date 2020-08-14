@@ -1039,6 +1039,72 @@ class EmptyQuery:
         return False
 
 
+class AgentInteractionMeta:
+    def __init__(self, agent_json, stmt_type=None, hashes=None):
+        self.agent_json = agent_json
+        self.stmt_type = stmt_type
+        self.hashes = hashes
+
+    def _apply_constraints(self, ro, query):
+        query = query.filter(ro.AgentInteractions.agent_json == self.agent_json)
+        if self.stmt_type is not None:
+            type_int = ro_type_map.get_int(self.stmt_type)
+            query = query.fitler(ro.AgentInteractions.type_num == type_int)
+
+        if self.hashes is not None:
+            query = query.filter(ro.AgentInteractions.mk_hash.in_(self.hashes))
+        return query
+
+
+class AgentJsonDigger(AgentInteractionMeta):
+    def expand(self):
+        pass
+
+
+class AgentJsonQuery(Query, AgentInteractionMeta):
+    """A Very special type of query that is used for digging into results."""
+
+    def __init__(self, agent_json, stmt_type=None, hashes=None):
+        AgentInteractionMeta.__init__(self, agent_json, stmt_type, hashes)
+        Query.__init__(self, False, False)
+
+    def _copy(self):
+        return self.__class__(self.agent_json, self.stmt_type, self.hashes)
+
+    def __and__(self, other):
+        if isinstance(other, self.__class__):
+            raise TypeError(f"Undefined operation '&' between "
+                            f"{self.__class__}'s")
+        return super(AgentJsonQuery, self).__and__(other)
+
+    def __or__(self, other):
+        if isinstance(other, self.__class__):
+            raise TypeError(f"Undefined operation '|' between "
+                            f"{self.__class__}'s")
+        return super(AgentJsonQuery, self).__and__(other)
+
+    def __sub__(self, other):
+        if isinstance(other, self.__class__):
+            raise TypeError(f"Undefined operation '-' between "
+                            f"{self.__class__}'s")
+        return super(AgentJsonQuery, self).__and__(other)
+
+    def _get_constraint_json(self) -> dict:
+        return {'agent_json': self.agent_json, 'stmt_type': self.stmt_type,
+                'hashes': self.hashes}
+
+    def _get_table(self, ro):
+        return ro.AgentInteractions
+
+    def _get_hash_query(self, ro, inject_queries=None):
+        query = self._apply_constraints(self._base_query(ro))
+
+        if inject_queries:
+            for tq in inject_queries:
+                query = tq._apply_filter(self._get_table(ro), query)
+        return query
+
+
 class SourceQuery(Query):
     """The core of all queries that use SourceMeta."""
 

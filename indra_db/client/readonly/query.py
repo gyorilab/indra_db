@@ -5,7 +5,7 @@ __all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
            'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter',
-           'AgentJsonExpander', 'AgentJsonQuery']
+           'AgentJsonExpander', 'FromAgentJson']
 
 import json
 import logging
@@ -1082,7 +1082,7 @@ class AgentJsonExpander(AgentInteractionMeta):
                    json_data.get('hashes'))
 
 
-class AgentJsonQuery(Query, AgentInteractionMeta):
+class FromAgentJson(Query, AgentInteractionMeta):
     """A Very special type of query that is used for digging into results."""
 
     def __init__(self, agent_json, stmt_type=None, hashes=None):
@@ -1096,19 +1096,19 @@ class AgentJsonQuery(Query, AgentInteractionMeta):
         if isinstance(other, self.__class__):
             raise TypeError(f"Undefined operation '&' between "
                             f"{self.__class__}'s")
-        return super(AgentJsonQuery, self).__and__(other)
+        return super(FromAgentJson, self).__and__(other)
 
     def __or__(self, other):
         if isinstance(other, self.__class__):
             raise TypeError(f"Undefined operation '|' between "
                             f"{self.__class__}'s")
-        return super(AgentJsonQuery, self).__and__(other)
+        return super(FromAgentJson, self).__and__(other)
 
     def __sub__(self, other):
         if isinstance(other, self.__class__):
             raise TypeError(f"Undefined operation '-' between "
                             f"{self.__class__}'s")
-        return super(AgentJsonQuery, self).__and__(other)
+        return super(FromAgentJson, self).__and__(other)
 
     def _get_constraint_json(self) -> dict:
         return {'agent_json': self.agent_json, 'stmt_type': self.stmt_type,

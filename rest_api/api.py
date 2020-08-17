@@ -1,6 +1,7 @@
 import sys
 import json
 import logging
+from collections import defaultdict
 from os import path, environ
 from datetime import datetime
 
@@ -437,21 +438,22 @@ class StatementApiCall(ApiCall):
         else:
             # Look up curations, if result with_curations was set.
             if self.w_cur_counts:
-                rel_hash_lookup = {}
+                rel_hash_lookup = defaultdict(list)
                 if result.result_type == 'hashes':
                     for rel in result.results.values():
                         rel['cur_count'] = 0
-                        rel_hash_lookup[rel['hash']] = rel
+                        rel_hash_lookup[rel['hash']].append(rel)
                 else:
                     for rel in result.results.values():
                         for h in rel['hashes']:
                             rel['cur_count'] = 0
-                            rel_hash_lookup[h] = rel
+                            rel_hash_lookup[h].append(rel)
                         if not self.special['with_hashes']:
                             rel['hashes'] = None
                 curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
                 for cur in curations:
-                    rel_hash_lookup[cur.pa_hash]['cur_count'] += 1
+                    for rel in rel_hash_lookup[cur.pa_hash]:
+                        rel['cur_count'] += 1
 
             logger.info("Returning with %s results after %.2f seconds."
                         % (len(result.results), sec_since(self.start_time)))

@@ -813,6 +813,9 @@ def expand_meta_row():
     stmt_type = request.json.get('stmt_type')
     hashes = request.json.get('hashes')
 
+    w_cur_counts = \
+        request.args.get('with_cur_counts', 'False').lower() == 'true'
+
     # Figure out authorization.
     has_medscan = False
     if not TESTING:
@@ -829,6 +832,7 @@ def expand_meta_row():
     result = q.expand()
 
     # Filter out any medscan content, and construct english.
+    entry_hash_lookup = defaultdict(list)
     for key, entry in result.results.copy().items():
         # Filter medscan...
         if not has_medscan:
@@ -849,9 +853,28 @@ def expand_meta_row():
                            f"{entry}")
         entry['english'] = eng
 
-    content = json.dumps(result.json())
+        # Prep curation counts
+        if w_cur_counts:
+            if 'hashes' in entry:
+                for h in entry['hashes']:
+                    entry['cur_count'] = 0
+                    entry_hash_lookup[h].append(entry)
+            elif 'hash' in entry:
+                entry['cur_count'] = 0
+                entry_hash_lookup[entry['hash']].append(entry)
+            else:
+                assert False, "Entry has no hash info."
 
-    resp = Response(content, mimetype='application/json')
+    if w_cur_counts:
+        curations = get_curations(pa_hash=set(entry_hash_lookup.keys()))
+        for cur in curations:
+            for entry in entry_hash_lookup[cur.pa_hash]:
+                entry['cur_count'] += 1
+
+    res_json = result.json()
+    res_json['relations'] = list(res_json['results'].values())
+    res_json.pop('results')
+    resp = Response(json.dumps(res_json), mimetype='application/json')
     logger.info(f"Returning expansion with {len(result.results)} meta results "
                 f"that represent {result.total_evidence} total evidence. Size "
                 f"is {sys.getsizeof(resp.data) / 1e6} MB after "

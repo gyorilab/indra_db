@@ -435,14 +435,14 @@ class StatementApiCall(ApiCall):
                            res_json['total_evidence'],
                            sys.getsizeof(resp.data) / 1e6,
                            sec_since(self.start_time)))
-        else:
+        elif result.result_type != 'hashes':
             # Look up curations, if result with_curations was set.
             if self.w_cur_counts:
                 rel_hash_lookup = defaultdict(list)
-                if result.result_type == 'hashes':
-                    for rel in result.results.values():
+                if result.result_type == 'interactions':
+                    for h, rel in result.results.items():
                         rel['cur_count'] = 0
-                        rel_hash_lookup[rel['hash']].append(rel)
+                        rel_hash_lookup[h].append(rel)
                 else:
                     for rel in result.results.values():
                         for h in rel['hashes']:

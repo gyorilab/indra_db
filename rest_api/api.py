@@ -20,7 +20,7 @@ from indra.statements import make_statement_camel, get_all_descendants, \
     Statement, Complex
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
     HasOnlySource, HasHash, Query, FromPapers, FromMeshIds, EvidenceFilter, \
-    EmptyQuery, AgentJsonExpander
+    EmptyQuery, AgentJsonExpander, FromAgentJson
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -672,6 +672,18 @@ class FromPapersApiCall(StatementApiCall):
         return self._db_query_from_web_query()
 
 
+class FromAgentJsonApiCall(StatementApiCall):
+    def _build_db_query(self):
+        agent_json = request.json.get('agent_json')
+        stmt_type = request.json.get('stmt_type')
+        hashes = request.json.get('hashes')
+        if hashes is not None:
+            hashes = [int(h) for h in hashes]
+        db_query = FromAgentJson(agent_json, stmt_type, hashes)
+        db_query = self._evidence_query_from_web_query(db_query)
+        return db_query
+
+
 class QueryApiCall(ApiCall):
     def _build_db_query(self):
         query_json = json.loads(self._pop('json', '{}'))
@@ -795,6 +807,8 @@ def get_statements(result_type, method):
         call.web_query['hash'] = method[len('from_hash/'):]
     elif method == 'from_papers' and request.method == 'POST':
         call = FromPapersApiCall()
+    elif method == 'from_agent_json' and request.method == 'POST':
+        call = FromAgentJsonApiCall()
     else:
         return abort(Response('Page not found.', 404))
 

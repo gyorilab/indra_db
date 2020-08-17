@@ -466,6 +466,8 @@ class StatementApiCall(ApiCall):
 
             logger.info("Result prepared after %.2f seconds."
                         % sec_since(self.start_time))
+        else:
+            return super(StatementApiCall, self).produce_response(result)
         return resp
 
     def _require_agent(self, ag, ns, num=None):

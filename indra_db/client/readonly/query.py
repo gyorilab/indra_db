@@ -1040,7 +1040,7 @@ class AgentInteractionMeta:
         query = query.filter(ro.AgentInteractions.agent_json == self.agent_json)
         if self.stmt_type is not None:
             type_int = ro_type_map.get_int(self.stmt_type)
-            query = query.fitler(ro.AgentInteractions.type_num == type_int)
+            query = query.filter(ro.AgentInteractions.type_num == type_int)
 
         if self.hashes is not None:
             query = query.filter(ro.AgentInteractions.mk_hash.in_(self.hashes))
@@ -1094,7 +1094,7 @@ class AgentJsonQuery(Query, AgentInteractionMeta):
         return ro.AgentInteractions
 
     def _get_hash_query(self, ro, inject_queries=None):
-        query = self._apply_constraints(self._base_query(ro))
+        query = self._apply_constraints(ro, self._base_query(ro))
 
         if inject_queries:
             for tq in inject_queries:

@@ -19,7 +19,7 @@ from indra.statements import make_statement_camel, get_all_descendants, \
     Statement, Complex
 from indra_db.client.readonly.query import HasAgent, HasType, HasNumAgents, \
     HasOnlySource, HasHash, Query, FromPapers, FromMeshIds, EvidenceFilter, \
-    EmptyQuery
+    EmptyQuery, AgentJsonExpander
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 
@@ -101,6 +101,29 @@ def dep_route(url, **kwargs):
         url = f'/{DEPLOYMENT}{url}'
     flask_dec = app.route(url, **kwargs)
     return flask_dec
+
+
+def _make_english_from_meta(agent_json, stmt_type=None):
+    if stmt_type is None:
+        if len(agent_json) == 0:
+            eng = ''
+        else:
+            ag_list = list(agent_json.values())
+            eng = f'<b>{ag_list[0]}</b>'
+            if len(agent_json) > 1:
+                eng += ' affects ' + f'<b>{ag_list[1]}</b>'
+                if len(agent_json) > 3:
+                    eng += ', ' \
+                           + ', '.join(f'<b>{ag}</b>'
+                                       for ag in ag_list[2:-1])
+                if len(agent_json) > 2:
+                    eng += ', and ' + f'<b>{ag_list[-1]}</b>'
+            else:
+                eng += ' is modified'
+    else:
+        eng = _format_stmt_text(stmt_from_interaction({'agents': agent_json,
+                                                       'type': stmt_type}))
+    return eng
 
 
 # ==========================
@@ -278,25 +301,9 @@ class ApiCall:
                             stmt = stmts_from_json([entry])[0]
                         eng = _format_stmt_text(stmt)
                         entry['evidence'] = _format_evidence_text(stmt)
-                    elif result.result_type == 'agents':
-                        ag_dict = entry['agents']
-                        if len(ag_dict) == 0:
-                            eng = ''
-                        else:
-                            ag_list = list(ag_dict.values())
-                            eng = f'<b>{ag_list[0]}</b>'
-                            if len(ag_dict) > 1:
-                                eng += ' affects ' + f'<b>{ag_list[1]}</b>'
-                                if len(ag_dict) > 3:
-                                    eng += ', ' \
-                                           + ', '.join(f'<b>{ag}</b>'
-                                                       for ag in ag_list[2:-1])
-                                if len(ag_dict) > 2:
-                                    eng += ', and ' + f'<b>{ag_list[-1]}</b>'
-                            else:
-                                eng += ' is modified'
                     else:
-                        eng = _format_stmt_text(stmt_from_interaction(entry))
+                        eng = _make_english_from_meta(entry['agents'],
+                                                      entry.get('type'))
                     if not eng:
                         logger.warning(f"English not formed for {key}:\n"
                                        f"{entry}")
@@ -790,6 +797,64 @@ def get_statements(result_type, method):
         return abort(Response('Page not found.', 404))
 
     return call.run(result_type=result_type)
+
+
+@dep_route('/expand', methods=['POST'])
+def expand_meta_row():
+    start_time = datetime.utcnow()
+
+    # Get the agent_json and hashes
+    agent_json = request.json.get('agent_json')
+    if not agent_json:
+        logger.error("No agent_json provided!")
+        return abort(Response("No agent_json in request!", 400))
+    stmt_type = request.json.get('stmt_type')
+    hashes = request.json.get('hashes')
+
+    # Figure out authorization.
+    has_medscan = False
+    if not TESTING:
+        user, roles = resolve_auth(request.args)
+        for role in roles:
+            has_medscan |= role.permissions.get('medscan', False)
+        logger.info(f'Auths for medscan: {has_medscan}')
+    else:
+        api_key = request.args.get('api_key', None)
+        has_medscan = api_key is not None
+
+    # Get the more detailed results.
+    q = AgentJsonExpander(agent_json, stmt_type=stmt_type, hashes=hashes)
+    result = q.expand()
+
+    # Filter out any medscan content, and construct english.
+    for key, entry in result.results.copy().items():
+        # Filter medscan...
+        if not has_medscan:
+            result.evidence_totals[key] -= \
+                entry['source_counts'].pop('medscan', 0)
+            entry['total_count'] = result.evidence_totals[key]
+            if not entry['source_counts']:
+                logger.warning("Censored content present. Removing it.")
+                result.results.pop(key)
+                result.evidence_totals.pop(key)
+                continue
+
+        # Add english...
+        eng = _make_english_from_meta(entry['agents'],
+                                      entry.get('type'))
+        if not eng:
+            logger.warning(f"English not formed for {key}:\n"
+                           f"{entry}")
+        entry['english'] = eng
+
+    content = json.dumps(result.json())
+
+    resp = Response(content, mimetype='application/json')
+    logger.info(f"Returning expansion with {len(result.results)} meta results "
+                f"that represent {result.total_evidence} total evidence. Size "
+                f"is {sys.getsizeof(resp.data) / 1e6} MB after "
+                f"{sec_since(start_time)} seconds.")
+    return resp
 
 
 @dep_route('/query/<result_type>', methods=['GET', 'POST'])

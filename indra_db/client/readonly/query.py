@@ -4,7 +4,8 @@ __all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
            'MergeQuery', 'HasAgent', 'FromMeshIds', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
-           'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter']
+           'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter',
+           'AgentJsonExpander', 'AgentJsonQuery']
 
 import json
 import logging
@@ -1046,9 +1047,15 @@ class AgentInteractionMeta:
         return query
 
 
-class AgentJsonDigger(AgentInteractionMeta):
-    def expand(self):
-        pass
+class AgentJsonExpander(AgentInteractionMeta):
+    def expand(self, ro):
+        if self.stmt_type is None:
+            meta = RelationSQL(ro, with_complex_dups=True)
+        else:
+            meta = InteractionSQL(ro, with_complex_dups=True)
+        meta.q = self._apply_constraints(ro, meta.q)
+        meta.agg(ro)
+        return meta.run()
 
 
 class AgentJsonQuery(Query, AgentInteractionMeta):

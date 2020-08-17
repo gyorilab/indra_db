@@ -833,7 +833,7 @@ def expand_meta_row():
     # Figure out authorization.
     has_medscan = False
     if not TESTING:
-        user, roles = resolve_auth(request.args)
+        user, roles = resolve_auth(request.args.copy())
         for role in roles:
             has_medscan |= role.permissions.get('medscan', False)
         logger.info(f'Auths for medscan: {has_medscan}')

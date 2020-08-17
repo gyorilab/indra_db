@@ -180,6 +180,8 @@ class ApiError(Exception):
 
 
 class AgentJsonSQL:
+    meta_type = NotImplemented
+
     def __init__(self, ro, with_complex_dups=False):
         self.q = ro.session.query(ro.AgentInteractions.mk_hash,
                                   ro.AgentInteractions.agent_json,
@@ -208,6 +210,7 @@ class AgentJsonSQL:
 
 
 class InteractionSQL(AgentJsonSQL):
+    meta_type = 'interactions'
 
     def agg(self, ro, with_hashes=True):
         self.agg_q = self.q
@@ -236,6 +239,7 @@ class InteractionSQL(AgentJsonSQL):
 
 
 class RelationSQL(AgentJsonSQL):
+    meta_type = 'relations'
 
     def agg(self, ro, with_hashes=True):
         names_sq = self.q.subquery('names')
@@ -303,6 +307,7 @@ class RelationSQL(AgentJsonSQL):
 
 
 class AgentSQL(AgentJsonSQL):
+    meta_type = 'agents'
 
     def agg(self, ro, with_hashes=True):
         names_sq = self.q.subquery('names')
@@ -802,7 +807,7 @@ class Query(object):
         results, ev_totals = ms.run()
 
         return QueryResult(results, limit, offset, len(results), ev_totals,
-                           self.to_json(), 'agents')
+                           self.to_json(), ms.meta_type)
 
     @staticmethod
     def _apply_limits(mk_hashes_q, ev_count_obj, limit=None, offset=None,
@@ -1048,14 +1053,33 @@ class AgentInteractionMeta:
 
 
 class AgentJsonExpander(AgentInteractionMeta):
-    def expand(self, ro):
+    def expand(self, ro=None):
+        if ro is None:
+            ro = get_ro('primary')
         if self.stmt_type is None:
             meta = RelationSQL(ro, with_complex_dups=True)
         else:
             meta = InteractionSQL(ro, with_complex_dups=True)
         meta.q = self._apply_constraints(ro, meta.q)
         meta.agg(ro)
-        return meta.run()
+        results, ev_totals = meta.run()
+        return QueryResult(results, None, None, len(results), ev_totals,
+                           self.to_json(), meta.meta_type)
+
+    def to_json(self):
+        return {'class': self.__class__.__name__,
+                'agent_json': self.agent_json,
+                'stmt_type': self.stmt_type,
+                'hashes': self.hashes}
+
+    @classmethod
+    def from_json(cls, json_data):
+        if json_data.get('class') != cls.__name__:
+            logger.warning(f"JSON class does not match class name: "
+                           f"{json_data.get('class')} given, {cls.__name__} "
+                           f"expected.")
+        return cls(json_data['agent_json'], json_data.get('stmt_type'),
+                   json_data.get('hashes'))
 
 
 class AgentJsonQuery(Query, AgentInteractionMeta):
@@ -1100,6 +1124,16 @@ class AgentJsonQuery(Query, AgentInteractionMeta):
             for tq in inject_queries:
                 query = tq._apply_filter(self._get_table(ro), query)
         return query
+
+
+# This is a good start but we are ending up circuitous here, going through
+# hashes when we should just be getting rows. That is the part that needs to be
+# implemented again. Actually a subclass of this class work, or else use
+# multiple inheritance, where the above class has two parents, one of which
+# defines the __init__ and the constraints, and the other is Query.
+
+# I also still need to address the issue of remembering evidence and passing
+# it along to this stage.
 
 
 class SourceQuery(Query):

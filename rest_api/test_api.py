@@ -519,21 +519,19 @@ class DbApiTestCase(unittest.TestCase):
 
     def test_drill_down(self):
         def drill_down(relation, result_type):
-            query_strs = []
-            for idx, ag in relation['agents'].items():
-                query_strs.append(f'ag_num_{idx}={ag}@NAME')
-            query_strs.extend(['limit=50', 'with_english=true',
-                               'with_cur_counts=true'])
-            if result_type == 'relations':
-                query_strs.append('strict=true')
-            elif result_type == 'statements':
-                query_strs.extend([f'type={relation["type"]}', 'ev_limit=10',
-                                   'format=json-js', 'filter_ev=true'])
-                if relation['type'] != 'Complex':
-                    query_strs.append('strict=true')
-            resp, dt, size = self.__time_query('get',
-                                               f'{result_type}/from_agents',
-                                               '&'.join(query_strs))
+            query_strs = ['with_cur_counts=true']
+            query_data = {'agent_json': relation['agents'],
+                          'hashes': relation['hashes']}
+            if result_type == 'statements':
+                query_data['type'] = relation['type']
+                query_strs.extend(['ev_limit=10', 'format=json-js',
+                                   'filter_ev=true', 'with_english=true'])
+                endpoint = 'statements/from_agent_json'
+            else:
+                endpoint = 'expand'
+            resp, dt, size = self.__time_query('post', endpoint,
+                                               '&'.join(query_strs),
+                                               **query_data)
             assert dt < 10
             res = resp.json
             if result_type == 'relations':
@@ -543,7 +541,7 @@ class DbApiTestCase(unittest.TestCase):
             assert all('english' in rel for rel in rels)
             if result_type == 'relations':
                 assert all('cur_count' in rel for rel in rels)
-                assert all(rel['hashes'] is None for rel in rels)
+                assert all(rel['hashes'] is not None for rel in rels)
                 assert all(rel['agents'] == relation['agents']
                            for rel in res['relations'])
                 num_complexes = sum(rel['type'] == 'Complex'
@@ -566,7 +564,7 @@ class DbApiTestCase(unittest.TestCase):
             sum_set = {s for s, c in src_cnt.items() if c > 0}
             assert rel_set == sum_set, f'Set mismatch: {rel_set} vs. {sum_set}'
             assert all(src_cnt[src] == rel_src_cnt[src] for src in rel_set), \
-                '\n'.join(f"{s}: parent={rel_src_cnt[s]}, net={src_cnt[s]}"
+                '\n'.join(f"{s}: parent={rel_src_cnt[s]}, child sum={src_cnt[s]}"
                           if rel_src_cnt[s] != src_cnt[s] else f'{s}: ok'
                           for s in rel_set)
             if result_type == 'relations':
@@ -577,14 +575,15 @@ class DbApiTestCase(unittest.TestCase):
         resp, dt, size = self.__time_query('get', url_base,
                                            (f"agent=MEK&limit=50"
                                             f"&with_cur_counts=true"
-                                            f"&with_english=true"))
+                                            f"&with_english=true"
+                                            f"&with_hashes=true"))
         res = resp.json
         assert len(res['relations']) == 50
         assert isinstance(res['relations'], list)
         assert dt < 10
         assert all('english' in rel for rel in res['relations'])
         assert all('cur_count' in rel for rel in res['relations'])
-        assert all(rel['hashes'] is None for rel in res['relations'])
+        assert all(rel['hashes'] is not None for rel in res['relations'])
 
         assert res['relations'][0]['id'] == 'Agents(None, MEK)'
         drill_down(res['relations'][0], 'relations')

@@ -321,7 +321,6 @@ class ApiCall:
                         entry['total_count'] = result.evidence_totals[key]
                         if not entry['source_counts']:
                             logger.warning("Censored content present.")
-                            continue
 
                 # In most cases we can stop here
                 if self.has['elsevier'] and self.fmt != 'json-js' \
@@ -829,7 +828,7 @@ def get_statements(result_type, method):
 
 @dep_route('/expand', methods=['POST'])
 def expand_meta_row():
-    start_time = datetime.utcnow()
+    start_time = datetime.now()
 
     # Get the agent_json and hashes
     agent_json = request.json.get('agent_json')
@@ -838,6 +837,8 @@ def expand_meta_row():
         return abort(Response("No agent_json in request!", 400))
     stmt_type = request.json.get('stmt_type')
     hashes = request.json.get('hashes')
+    logger.info(f"Expanding on agent_json={agent_json}, stmt_type={stmt_type}, "
+                f"hashes={hashes}")
 
     w_cur_counts = \
         request.args.get('with_cur_counts', 'False').lower() == 'true'
@@ -848,10 +849,10 @@ def expand_meta_row():
         user, roles = resolve_auth(request.args.copy())
         for role in roles:
             has_medscan |= role.permissions.get('medscan', False)
-        logger.info(f'Auths for medscan: {has_medscan}')
     else:
         api_key = request.args.get('api_key', None)
         has_medscan = api_key is not None
+    logger.info(f'Auths for medscan: {has_medscan}')
 
     # Get the more detailed results.
     q = AgentJsonExpander(agent_json, stmt_type=stmt_type, hashes=hashes)

@@ -793,7 +793,7 @@ class Query(object):
             return self._rest_get('agents', limit, offset, best_first,
                                   with_hashes=with_hashes)
 
-        ag_sql = AgentSQL(ro)
+        ag_sql = AgentSQL(ro, with_complex_dups=True)
         return self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
                                   with_hashes)
 
@@ -1061,7 +1061,8 @@ class AgentJsonExpander(AgentInteractionMeta):
         else:
             meta = InteractionSQL(ro, with_complex_dups=True)
         meta.q = self._apply_constraints(ro, meta.q)
-        meta.agg(ro)
+        order_param = meta.agg(ro)
+        meta.agg_q = meta.agg_q.order_by(*order_param)
         results, ev_totals = meta.run()
         return QueryResult(results, None, None, len(results), ev_totals,
                            self.to_json(), meta.meta_type)

@@ -1,6 +1,7 @@
 import sys
 import json
 import logging
+from argparse import ArgumentParser
 from collections import defaultdict
 from os import path, environ
 from datetime import datetime
@@ -41,8 +42,8 @@ else:
     TESTING = False
 
 app.register_blueprint(auth)
+app.config['DEBUG'] = True
 if not TESTING:
-    app.config['DEBUG'] = True
     SC, jwt = config_auth(app)
 
 Compress(app)
@@ -968,5 +969,12 @@ def list_curations(stmt_hash, src_hash):
     return jsonify(curation_json)
 
 
+def main():
+    parser = ArgumentParser()
+    parser.add_argument('-p', '--port', default=5000)
+    args = parser.parse_args()
+    app.run(port=args.port)
+
+
 if __name__ == '__main__':
-    app.run()
+    main()

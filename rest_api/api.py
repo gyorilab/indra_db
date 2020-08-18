@@ -549,7 +549,7 @@ class StatementApiCall(ApiCall):
             db_query &= HasHash(hashes)
         return db_query
 
-    def _evidence_query_from_web_query(self, db_query):
+    def _evidence_query_from_web_query(self, db_query=None):
         filter_ev = self._pop('filter_ev', False, bool)
         ev_filter = EvidenceFilter()
 
@@ -570,7 +570,8 @@ class StatementApiCall(ApiCall):
 
         if id_tpls:
             paper_q = FromPapers(id_tpls)
-            db_query &= paper_q
+            if db_query is not None:
+                db_query &= paper_q
             if filter_ev:
                 ev_filter &= paper_q.ev_filter()
 
@@ -578,7 +579,8 @@ class StatementApiCall(ApiCall):
         mesh_ids = self._pop('mesh_ids', [])
         if mesh_ids:
             mesh_q = FromMeshIds([process_mesh_term(m) for m in mesh_ids])
-            db_query &= mesh_q
+            if db_query is not None:
+                db_query &= mesh_q
             if filter_ev:
                 ev_filter &= mesh_q.ev_filter()
 
@@ -689,7 +691,7 @@ class FromAgentJsonApiCall(StatementApiCall):
         if hashes is not None:
             hashes = [int(h) for h in hashes]
         db_query = FromAgentJson(agent_json, stmt_type, hashes)
-        db_query = self._evidence_query_from_web_query(db_query)
+        self._evidence_query_from_web_query()
         return db_query
 
 

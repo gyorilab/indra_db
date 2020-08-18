@@ -324,22 +324,29 @@ class ApiCall:
 
                 # In most cases we can stop here
                 if self.has['elsevier'] and self.fmt != 'json-js' \
-                        and not self.w_english \
-                        or result.result_type != 'statements':
+                        and not self.w_english:
                     continue
 
-                # If there is evidence, loop through it if necessary.
-                for ev_json in entry['evidence'][:]:
-                    if self.fmt == 'json-js':
-                        ev_json['source_hash'] = str(ev_json['source_hash'])
+                if result.result_type == 'statements':
+                    # If there is evidence, loop through it if necessary.
+                    for ev_json in entry['evidence'][:]:
+                        if self.fmt == 'json-js':
+                            ev_json['source_hash'] = str(ev_json['source_hash'])
 
-                    # Check for elsevier and redact if necessary
-                    if not self.has['elsevier'] and \
-                            get_source(ev_json) == 'elsevier':
-                        text = ev_json['text']
-                        if len(text) > 200:
-                            ev_json['text'] = text[:200] + REDACT_MESSAGE
-                            elsevier_redactions += 1
+                        # Check for elsevier and redact if necessary
+                        if not self.has['elsevier'] and \
+                                get_source(ev_json) == 'elsevier':
+                            text = ev_json['text']
+                            if len(text) > 200:
+                                ev_json['text'] = text[:200] + REDACT_MESSAGE
+                                elsevier_redactions += 1
+                elif result.result_type != 'hashes' and self.fmt == 'json-js':
+                    # Stringify lists of hashes.
+                    if 'hashes' in entry:
+                        entry['hashes'] = [str(h) for h in entry['hashes']]
+                    elif 'hash' in entry:
+                        entry['hash'] = str(entry['hash'])
+
         if result.result_type == 'statements':
             logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
                         f"evidence.")
@@ -442,12 +449,12 @@ class StatementApiCall(ApiCall):
                 if result.result_type == 'interactions':
                     for h, rel in result.results.items():
                         rel['cur_count'] = 0
-                        rel_hash_lookup[h].append(rel)
+                        rel_hash_lookup[int(h)].append(rel)
                 else:
                     for rel in result.results.values():
                         for h in rel['hashes']:
                             rel['cur_count'] = 0
-                            rel_hash_lookup[h].append(rel)
+                            rel_hash_lookup[int(h)].append(rel)
                         if not self.special['with_hashes']:
                             rel['hashes'] = None
                 curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
@@ -880,6 +887,12 @@ def expand_meta_row():
                 entry_hash_lookup[entry['hash']].append(entry)
             else:
                 assert False, "Entry has no hash info."
+
+        # Stringify hashes for JavaScript
+        if 'hashes' in entry:
+            entry['hashes'] = [str(h) for h in entry['hashes']]
+        else:
+            entry['hash'] = str(entry['hash'])
 
     if w_cur_counts:
         curations = get_curations(pa_hash=set(entry_hash_lookup.keys()))

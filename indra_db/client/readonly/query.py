@@ -273,35 +273,32 @@ class RelationSQL(AgentJsonSQL):
         names = self.agg_q.all()
         results = {}
         ev_totals = {}
-        num_hashes = 0
         for ag_json, type_num, n_ag, n_ev, act, is_act, srcs, hashes in names:
-            if type_num == ro_type_map.get_int("Complex"):
-                ordered_agents = set(ag_json.values())
-            else:
-                ordered_agents = [ag_json.get(str(n))
-                                  for n in range(max(n_ag, int(max(ag_json))+1))]
+            # Build the unique key for this relation.
+            ordered_agents = [ag_json.get(str(n))
+                              for n in range(max(n_ag, int(max(ag_json))+1))]
             agent_key = '(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
-
             stmt_type = ro_type_map.get_str(type_num)
-
             key = stmt_type + agent_key
-
             if key in results:
-                if type_num != ro_type_map.get_int("Complex"):
-                    logger.warning("Something went weird processing relations.")
+                logger.warning("Something went weird processing relations.")
                 continue
 
+            # Aggregate the source counts.
             source_counts = defaultdict(lambda: 0)
             for src_json in srcs:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
+
+            # Add this relation to the results and ev_totals.
             results[key] = {'id': key, 'source_counts': dict(source_counts),
                             'agents': _make_agent_dict(ag_json),
                             'type': stmt_type, 'activity': act,
                             'is_active': is_act, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
-            assert ev_totals[key] == n_ev
-            num_hashes += 0 if hashes is None else len(hashes)
+
+            # Do a quick sanity check. If this fails, something went VERY wrong.
+            assert ev_totals[key] == n_ev, "Evidence totals don't add up."
 
         return results, ev_totals
 
@@ -329,31 +326,34 @@ class AgentSQL(AgentJsonSQL):
         return [desc(sq.c.ev_count), sq.c.agent_json]
 
     def run(self):
-        logger.info(f"Executing query (get_agents):\n{self.agg_q}")
+        logger.debug(f"Executing query (get_agents):\n{self.agg_q}")
         names = self.agg_q.all()
 
         results = {}
         ev_totals = {}
-        num_hashes = 0
         for ag_json, n_ag, n_ev, src_jsons, hashes in names:
+            # Generate the key for this pair of agents.
             ordered_agents = [ag_json.get(str(n))
                               for n in range(max(n_ag, int(max(ag_json))+1))]
             key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
-
             if key in results:
                 logger.warning("Something went weird processing results for "
                                "agents.")
 
+            # Aggregate the source counts.
             source_counts = defaultdict(lambda: 0)
             for src_json in src_jsons:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
+
+            # Add this entry to the results.
             results[key] = {'id': key, 'source_counts': dict(source_counts),
                             'agents': _make_agent_dict(ag_json),
                             'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
-            assert n_ev == ev_totals[key]
-            num_hashes += 0 if hashes is None else len(hashes)
+
+            # Sanity check. Only a coding error could cause this to fail.
+            assert n_ev == ev_totals[key], "Evidence counts don't add up."
         return results, ev_totals
 
 

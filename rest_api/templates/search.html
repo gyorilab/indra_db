@@ -62,12 +62,21 @@
   </div>
   <script>
     Vue.prototype.$ground_url = "{{ url_for('ground') }}";
-    Vue.prototype.$relation_url = "{{ url_for('get_metadata', result_type='relations') }}";
-    Vue.prototype.$agent_url = "{{ url_for('get_metadata', result_type='agents') }}";
-    Vue.prototype.$stmt_url = "{{ url_for('get_statements', method='from_agents') }}";
-    Vue.prototype.$stmt_hash_url = "{{ url_for('get_statements', method='from_hash/') }}";
-    Vue.prototype.$curation_url = "{{ url_for('submit_curation_endpoint', hash_val='') }}";
-    Vue.prototype.$curation_list_url = "{{ url_for('list_curations', stmt_hash='', src_hash='') }}".slice(0, -2);
+    Vue.prototype.$relation_url = "{{ url_for('expand_meta_row') }}";
+    Vue.prototype.$agent_url = "{{ url_for('get_statements',
+                                           result_type='agents',
+                                           method='from_agents') }}";
+    Vue.prototype.$stmt_url = "{{ url_for('get_statements',
+                                          result_type='statements',
+                                          method='from_agent_json') }}";
+    Vue.prototype.$stmt_hash_url = "{{ url_for('get_statements',
+                                               result_type='statements',
+                                               method='from_hash/') }}";
+    Vue.prototype.$curation_url = "{{ url_for('submit_curation_endpoint',
+                                              hash_val='') }}";
+    Vue.prototype.$curation_list_url = "{{ url_for('list_curations',
+                                                   stmt_hash='',
+                                                   src_hash='') }}".slice(0, -2);
     Vue.prototype.$stmt_types = {{ stmt_types_json }};
     Vue.prototype.$sources = {
       {% for category, data in source_colors %}

@@ -13,7 +13,7 @@ from collections import OrderedDict, Iterable, defaultdict
 
 import requests
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-    except_, func, null, and_
+   except_, func, null, and_, String
 
 from indra import get_config
 from indra.statements import stmts_from_json, get_statement_by_name, \
@@ -169,6 +169,27 @@ class StatementQueryResult(QueryResult):
         return stmts_from_json(list(self.results.values()))
 
 
+class AgentQueryResult(QueryResult):
+    """The result of a query for agent JSONs."""
+    def __init__(self, results: dict, limit: int, offset: int, num_rows: int,
+                 complexes_covered: set, evidence_totals: dict,
+                 query_json: dict):
+        super(AgentQueryResult, self).__init__(results, limit, offset, num_rows,
+                                               evidence_totals, query_json,
+                                               'agents')
+        self.complexes_covered = complexes_covered
+
+    def json(self) -> dict:
+        json_dict = super(AgentQueryResult, self).json()
+        json_dict['complexes_covered'] = list(self.complexes_covered)
+        return json_dict
+
+    @classmethod
+    def from_json(cls, json_dict):
+        nc = super(AgentQueryResult, cls).from_json(json_dict)
+        nc.complexes_covered = {int(h) for h in nc.complexes_covered}
+
+
 def _make_agent_dict(ag_dict):
     return {n: ag_dict[str(n)]
             for n in range(int(max(ag_dict.keys())) + 1)
@@ -248,7 +269,7 @@ class InteractionSQL(AgentJsonSQL):
             }
             ev_totals[h] = sum(src_json.values())
             assert ev_totals[h] == n_ev
-        return results, ev_totals
+        return results, ev_totals, len(names)
 
 
 class RelationSQL(AgentJsonSQL):
@@ -313,11 +334,20 @@ class RelationSQL(AgentJsonSQL):
             # Do a quick sanity check. If this fails, something went VERY wrong.
             assert ev_totals[key] == n_ev, "Evidence totals don't add up."
 
-        return results, ev_totals
+        return results, ev_totals, len(names)
 
 
 class AgentSQL(AgentJsonSQL):
     meta_type = 'agents'
+
+    def __init__(self, *args, **kwargs):
+        self.complexes_covered = kwargs.pop('complexes_covered', set())
+        super(AgentSQL, self).__init__(*args, **kwargs)
+        self._limit = None
+
+    def limit(self, limit):
+        self._limit = limit
+        return self
 
     def agg(self, ro, with_hashes=True):
         names_sq = self.q.subquery('names')
@@ -326,8 +356,10 @@ class AgentSQL(AgentJsonSQL):
             names_sq.c.agent_count,
             func.sum(names_sq.c.ev_count).label('ev_count'),
             func.array_agg(names_sq.c.src_json).label('src_jsons'),
-            (func.array_agg(names_sq.c.mk_hash) if with_hashes
-             else null()).label('hashes')
+            (func.jsonb_object(
+                func.array_agg(names_sq.c.mk_hash.cast(String)),
+                func.array_agg(names_sq.c.type_num.cast(String))
+             ) if with_hashes else null()).label('hashes')
         ).group_by(
             names_sq.c.agent_json,
             names_sq.c.agent_count
@@ -340,11 +372,21 @@ class AgentSQL(AgentJsonSQL):
 
     def run(self):
         logger.debug(f"Executing query (get_agents):\n{self.agg_q}")
-        names = self.agg_q.all()
+        names = self.agg_q.yield_per(self._limit)
 
         results = {}
         ev_totals = {}
+        num_entries = 0
+        num_rows = 0
         for ag_json, n_ag, n_ev, src_jsons, hashes in names:
+            num_rows += 1
+            # See if this row has anything new to offer.
+            if set(hashes.keys()) < self.complexes_covered:
+                continue
+            complex_num = str(ro_type_map.get_int("Complex"))
+            self.complexes_covered |= {h for h, type_num in hashes.items()
+                                       if type_num == complex_num}
+
             # Generate the key for this pair of agents.
             ordered_agents = [ag_json.get(str(n))
                               for n in range(max(n_ag, int(max(ag_json))+1))]
@@ -362,12 +404,18 @@ class AgentSQL(AgentJsonSQL):
             # Add this entry to the results.
             results[key] = {'id': key, 'source_counts': dict(source_counts),
                             'agents': _make_agent_dict(ag_json),
-                            'hashes': hashes}
+                            'hashes': [int(h) for h in hashes.keys()]}
             ev_totals[key] = sum(source_counts.values())
 
             # Sanity check. Only a coding error could cause this to fail.
             assert n_ev == ev_totals[key], "Evidence counts don't add up."
-        return results, ev_totals
+            num_entries += 1
+            if self._limit is not None and num_entries >= self._limit:
+                break
+        else:
+            num_rows = len(results)
+
+        return results, ev_totals, num_rows
 
 
 class Query(object):
@@ -721,14 +769,10 @@ class Query(object):
             return self._rest_get('interactions', limit, offset, best_first)
 
         il = InteractionSQL(ro)
-        mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
-        il.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
-        order_param = il.agg(ro)
-        il.agg_q = self._apply_limits(il.agg_q, order_param, limit, offset,
-                                      best_first)
-        results, ev_totals = il.run()
-        return QueryResult(results, limit, offset, len(results), ev_totals,
-                           self.to_json(), 'interactions')
+        results, ev_totals, off_comp = \
+            self._run_meta_sql(il, ro, limit, offset, best_first)
+        return QueryResult(results, limit, offset, off_comp, ev_totals,
+                           self.to_json(), il.meta_type)
 
     def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
                       with_hashes=False) \
@@ -767,11 +811,14 @@ class Query(object):
                                   with_hashes=with_hashes)
 
         r_sql = RelationSQL(ro)
-        return self._run_meta_sql(r_sql, ro, limit, offset, best_first,
-                                  with_hashes)
+        results, ev_totals, off_comp = \
+            self._run_meta_sql(r_sql, ro, limit, offset, best_first,
+                               with_hashes)
+        return QueryResult(results, limit, offset, off_comp, ev_totals,
+                           self.to_json(), r_sql.meta_type)
 
     def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
-                   with_hashes=False) \
+                   with_hashes=False, complexes_covered=None) \
             -> QueryResult:
         """Get the agent pairs from the Statements metadata.
 
@@ -799,28 +846,33 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
-                               'agents')
+            return AgentQueryResult({}, limit, offset, 0, set(), {},
+                                    self.to_json())
 
         if ro is None:
             return self._rest_get('agents', limit, offset, best_first,
-                                  with_hashes=with_hashes)
+                                  with_hashes=with_hashes,
+                                  complexes_covered=complexes_covered)
 
-        ag_sql = AgentSQL(ro, with_complex_dups=True)
-        return self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
-                                  with_hashes)
+        ag_sql = AgentSQL(ro, with_complex_dups=True,
+                          complexes_covered=complexes_covered)
+        results, ev_totals, off_comp = \
+            self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
+                               with_hashes)
+        return AgentQueryResult(results, limit, offset, off_comp,
+                                ag_sql.complexes_covered, ev_totals,
+                                self.to_json())
 
     def _run_meta_sql(self, ms, ro, limit, offset, best_first,
-                      with_hashes=True):
+                      with_hashes=None):
         mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
         ms.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
-        order_param = ms.agg(ro, with_hashes=with_hashes)
-        ms.agg_q = self._apply_limits(ms.agg_q, order_param, limit,
-                                      offset, best_first)
-        results, ev_totals = ms.run()
-
-        return QueryResult(results, limit, offset, len(results), ev_totals,
-                           self.to_json(), ms.meta_type)
+        kwargs = {}
+        if with_hashes is not None:
+            kwargs['with_hashes'] = with_hashes
+        order_param = ms.agg(ro, **kwargs)
+        ms = self._apply_limits(ms, order_param, limit, offset, best_first)
+        return ms.run()
 
     @staticmethod
     def _apply_limits(mk_hashes_q, ev_count_obj, limit=None, offset=None,
@@ -1076,8 +1128,8 @@ class AgentJsonExpander(AgentInteractionMeta):
         meta.q = self._apply_constraints(ro, meta.q)
         order_param = meta.agg(ro)
         meta.agg_q = meta.agg_q.order_by(*order_param)
-        results, ev_totals = meta.run()
-        return QueryResult(results, None, None, len(results), ev_totals,
+        results, ev_totals, off_comp = meta.run()
+        return QueryResult(results, None, None, off_comp, ev_totals,
                            self.to_json(), meta.meta_type)
 
     def to_json(self):

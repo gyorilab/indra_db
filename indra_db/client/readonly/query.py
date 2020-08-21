@@ -196,11 +196,24 @@ class AgentJsonSQL:
             self.filter(ro.AgentInteractions.is_complex_dup.isnot(True))
         return
 
-    def filter(self, *args, **kwargs):
+    def _do_to_query(self, method, *args, **kwargs):
         if self.agg_q is None:
-            self.q = self.q.filter(*args, **kwargs)
+            self.q = getattr(self.q, method)(*args, **kwargs)
         else:
-            self.agg_q = self.agg_q.filter(*args, **kwargs)
+            self.agg_q = getattr(self.agg_q, method)(*args, **kwargs)
+        return self
+
+    def filter(self, *args, **kwargs):
+        return self._do_to_query('filter', *args, **kwargs)
+
+    def limit(self, limit):
+        return self._do_to_query('limit', limit)
+
+    def offset(self, offset):
+        return self._do_to_query('offset', offset)
+
+    def order_by(self, *args, **kwargs):
+        return self._do_to_query('order_by', *args, **kwargs)
 
     def agg(self, ro, with_hashes=True):
         raise NotImplementedError
@@ -1125,16 +1138,6 @@ class FromAgentJson(Query, AgentInteractionMeta):
             for tq in inject_queries:
                 query = tq._apply_filter(self._get_table(ro), query)
         return query
-
-
-# This is a good start but we are ending up circuitous here, going through
-# hashes when we should just be getting rows. That is the part that needs to be
-# implemented again. Actually a subclass of this class work, or else use
-# multiple inheritance, where the above class has two parents, one of which
-# defines the __init__ and the constraints, and the other is Query.
-
-# I also still need to address the issue of remembering evidence and passing
-# it along to this stage.
 
 
 class SourceQuery(Query):

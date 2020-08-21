@@ -698,17 +698,30 @@ class FromAgentJsonApiCall(StatementApiCall):
         return db_query
 
 
-class QueryApiCall(ApiCall):
+def _check_query(query):
+    required_queries = {'HasAgent', 'FromPapers', 'FromMeshIds'}
+    if not required_queries & set(query.list_component_queries()):
+        abort(Response(f"Query must contain at least one of "
+                       f"{required_queries}."), 400)
+    if query.full:
+        abort(Response("Query would retrieve all statements. "
+                       "Please constrain further.", 400))
+    return
+
+
+class FromQueryJsonApiCall(StatementApiCall):
     def _build_db_query(self):
         query_json = json.loads(self._pop('json', '{}'))
         q = Query.from_json(query_json)
-        required_queries = {'HasAgent', 'FromPapers', 'FromMeshIds'}
-        if not required_queries & set(q.list_component_queries()):
-            abort(Response(f"Query must contain at least one of "
-                           f"{required_queries}."), 400)
-        if q.full:
-            abort(Response("Query would retrieve all statements. "
-                           "Please constrain further.", 400))
+        _check_query(q)
+        return q
+
+
+class FallbackQueryApiCall(ApiCall):
+    def _build_db_query(self):
+        query_json = json.loads(self._pop('json', '{}'))
+        q = Query.from_json(query_json)
+        _check_query(q)
         return q
 
 
@@ -823,6 +836,8 @@ def get_statements(result_type, method):
         call = FromPapersApiCall()
     elif method == 'from_agent_json' and request.method == 'POST':
         call = FromAgentJsonApiCall()
+    elif method == 'from_query_json' and request.method == 'POST':
+        call = FromQueryJsonApiCall()
     else:
         return abort(Response('Page not found.', 404))
 
@@ -920,7 +935,7 @@ def expand_meta_row():
 
 @dep_route('/query/<result_type>', methods=['GET', 'POST'])
 def get_statements_by_query_json(result_type):
-    return QueryApiCall().run(result_type)
+    return FallbackQueryApiCall().run(result_type)
 
 
 @dep_route('/curation', methods=['GET'])

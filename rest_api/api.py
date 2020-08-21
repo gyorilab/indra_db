@@ -467,6 +467,9 @@ class StatementApiCall(ApiCall):
 
             res_json = result.json()
             res_json['relations'] = list(res_json['results'].values())
+            if result.result_type == 'agents' and self.fmt == 'json-js':
+                res_json['complexes_covered'] = \
+                    [str(h) for h in res_json['complexes_covered']]
             res_json.pop('results')
             res_json['query_str'] = str(self.db_query)
             resp = Response(json.dumps(res_json), mimetype='application/json')

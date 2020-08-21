@@ -78,11 +78,14 @@ class QueryResult(object):
 
     @classmethod
     def from_json(cls, json_dict):
-        # Build a StatementQueryResult if appropriate
+        # Build a StatementQueryResult or AgentQueryResult if appropriate
         if cls != StatementQueryResult \
                 and json_dict['result_type'] == 'statements':
             json_dict.pop('result_type')
             return StatementQueryResult.from_json(json_dict)
+        elif cls != AgentQueryResult and json_dict['result_type'] == 'agents':
+            json_dict.pop('result_type')
+            return AgentQueryResult.from_json(json_dict)
 
         # Filter out some calculated values.
         next_offset = json_dict.pop('next_offset', None)

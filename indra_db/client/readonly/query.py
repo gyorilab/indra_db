@@ -384,7 +384,7 @@ class AgentSQL(AgentJsonSQL):
         for ag_json, n_ag, n_ev, src_jsons, hashes in names:
             num_rows += 1
             # See if this row has anything new to offer.
-            if set(hashes.keys()) < self.complexes_covered:
+            if set(hashes.keys()) <= self.complexes_covered:
                 continue
             complex_num = str(ro_type_map.get_int("Complex"))
             self.complexes_covered |= {h for h, type_num in hashes.items()

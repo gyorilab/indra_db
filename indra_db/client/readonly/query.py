@@ -343,7 +343,7 @@ class AgentSQL(AgentJsonSQL):
     meta_type = 'agents'
 
     def __init__(self, *args, **kwargs):
-        self.complexes_covered = kwargs.pop('complexes_covered', set())
+        self.complexes_covered = kwargs.pop('complexes_covered', None)
         super(AgentSQL, self).__init__(*args, **kwargs)
         self._limit = None
 
@@ -378,6 +378,7 @@ class AgentSQL(AgentJsonSQL):
 
         results = {}
         ev_totals = {}
+        self.complexes_covered = set()
         num_entries = 0
         num_rows = 0
         for ag_json, n_ag, n_ev, src_jsons, hashes in names:

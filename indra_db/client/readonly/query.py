@@ -1601,7 +1601,7 @@ class NoGroundingFound(Exception):
 def gilda_ground(agent_text):
     try:
         from gilda.api import ground
-        gilda_list = ground(agent_text)
+        gilda_list = [r.to_json() for r in ground(agent_text)]
     except ImportError:
         import requests
         res = requests.post('http://grounding.indra.bio/ground',
@@ -1636,15 +1636,13 @@ class HasAgent(Query):
         if namespace == 'AUTO':
             res = gilda_ground(agent_id)
             if not res:
-                if not res:
-                    raise NoGroundingFound(f"Could not resolve {agent_id} with "
-                                           f"gilda.")
-                namespace = res[0]['term']['db']
-                agent_id = res[0]['term']['id']
-                logger.info(f"Auto-mapped grounding with gilda to "
-                            f"agent_id={agent_id}, namespace={namespace} with "
-                            f"score={res[0]['score']} out of {len(res)} "
-                            f"options.")
+                raise NoGroundingFound(f"Could not resolve {agent_id} with "
+                                       f"gilda.")
+            namespace = res[0]['term']['db']
+            agent_id = res[0]['term']['id']
+            logger.info(f"Auto-mapped grounding with gilda to "
+                        f"agent_id={agent_id}, namespace={namespace} with "
+                        f"score={res[0]['score']} out of {len(res)} options.")
 
         self.agent_id = agent_id
         self.namespace = namespace

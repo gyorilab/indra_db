@@ -1,5 +1,3 @@
-from itertools import combinations
-
 __all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
            'MergeQuery', 'HasAgent', 'FromMeshIds', 'HasHash',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
@@ -9,15 +7,16 @@ __all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
 
 import json
 import logging
-from collections import OrderedDict, Iterable, defaultdict
-
 import requests
+from itertools import combinations
+from collections import OrderedDict, Iterable, defaultdict
 from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
    except_, func, null, and_, String
 
 from indra import get_config
 from indra.statements import stmts_from_json, get_statement_by_name, \
     get_all_descendants
+
 from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
     SOURCE_GROUPS
 from indra_db.util import regularize_agent_id, get_ro
@@ -1594,6 +1593,22 @@ class HasHash(SourceQuery):
         return query.filter(clause)
 
 
+class NoGroundingFound(Exception):
+    pass
+
+
+def gilda_ground(agent_text):
+    try:
+        from gilda.api import ground
+        gilda_list = ground(agent_text)
+    except ImportError:
+        import requests
+        res = requests.post('http://grounding.indra.bio/ground',
+                            json={'text': agent_text})
+        gilda_list = res.json()
+    return gilda_list
+
+
 class HasAgent(Query):
     """Get Statements that have a particular agent in a particular role.
 
@@ -1606,6 +1621,8 @@ class HasAgent(Query):
         (optional) By default, this is NAME, indicating the canonical name of
         the agent. Other options for namespace include FPLX (FamPlex), CHEBI,
         CHEMBL, HGNC, UP (UniProt), TEXT (for raw text mentions), and many more.
+        If you use the namespace "AUTO", GILDA will be used to try and guess the
+        proper namespace and agent ID.
     role : str or None
         (optional) None by default. Options are "SUBJECT", "OBJECT", or "OTHER".
     agent_num : int or None
@@ -1613,6 +1630,21 @@ class HasAgent(Query):
         Statement's list of agents.
     """
     def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):
+        # If the user sends the namespace "auto", use gilda to guess the
+        # true ID and namespace.
+        if namespace == 'AUTO':
+            res = gilda_ground(agent_id)
+            if not res:
+                if not res:
+                    raise NoGroundingFound(f"Could not resolve {agent_id} with "
+                                           f"gilda.")
+                namespace = res[0]['term']['db']
+                agent_id = res[0]['term']['id']
+                logger.info(f"Auto-mapped grounding with gilda to "
+                            f"agent_id={agent_id}, namespace={namespace} with "
+                            f"score={res[0]['score']} out of {len(res)} "
+                            f"options.")
+
         self.agent_id = agent_id
         self.namespace = namespace
 

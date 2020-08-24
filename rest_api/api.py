@@ -711,8 +711,11 @@ def _check_query(query):
 
 class FromQueryJsonApiCall(StatementApiCall):
     def _build_db_query(self):
-        query_json = json.loads(self._pop('json', '{}'))
-        q = Query.from_json(query_json)
+        query_json = request.json['query']
+        try:
+            q = Query.from_json(query_json)
+        except (KeyError, ValueError):
+            abort(Response("Invalid JSON.", 400))
         _check_query(q)
         return q
 

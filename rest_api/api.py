@@ -409,14 +409,11 @@ class StatementApiCall(ApiCall):
                 title = TITLE + ': ' + 'Results'
                 ev_totals = res_json.pop('evidence_totals')
                 stmts = stmts_from_json(stmts_json.values())
-                base_url = request.url_root[:-1]
-                if DEPLOYMENT is not None:
-                    base_url = f'{base_url}/{DEPLOYMENT}/'
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,
                                   ev_counts=ev_totals, title=title,
                                   source_counts=result.source_counts,
-                                  db_rest_url=base_url)
+                                  db_rest_url=request.url_root[:-1])
                 idbr_template = env.get_template('idbr_statements_view.html')
                 if not TESTING:
                     identity = self.user.identity() if self.user else None
@@ -821,9 +818,12 @@ def serve_stages(stage):
 @jwt_nontest_optional
 def get_statements_query_format():
     # Create a template object from the template file, load once
+    url_base = request.url_root
+    if DEPLOYMENT is not None:
+        url_base = f'{url_base}{DEPLOYMENT}/'
     return render_my_template('search_statements.html', 'Search',
                               message="Welcome! Try asking a question.",
-                              endpoint=request.url_root)
+                              endpoint=url_base)
 
 
 @dep_route('/<result_type>/<path:method>', methods=['GET', 'POST'])

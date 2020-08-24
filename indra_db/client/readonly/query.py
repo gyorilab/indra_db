@@ -1650,7 +1650,7 @@ class HasAgent(Query):
         if role is not None and agent_num is not None:
             raise ValueError("Only specify role OR agent_num, not both.")
 
-        self.role = role.upper()
+        self.role = role.upper() if isinstance(role, str) else role
         self.agent_num = agent_num
 
         # Regularize ID based on Database optimization (e.g. striping prefixes)

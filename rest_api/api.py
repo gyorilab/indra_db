@@ -409,11 +409,14 @@ class StatementApiCall(ApiCall):
                 title = TITLE + ': ' + 'Results'
                 ev_totals = res_json.pop('evidence_totals')
                 stmts = stmts_from_json(stmts_json.values())
+                base_url = request.url_root[:-1]
+                if DEPLOYMENT is not None:
+                    base_url = f'{base_url}/{DEPLOYMENT}/'
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,
                                   ev_counts=ev_totals, title=title,
                                   source_counts=result.source_counts,
-                                  db_rest_url=request.url_root[:-1])
+                                  db_rest_url=base_url)
                 idbr_template = env.get_template('idbr_statements_view.html')
                 if not TESTING:
                     identity = self.user.identity() if self.user else None

@@ -204,8 +204,11 @@ class ApiCall:
             )
         elif result_type == 'agents':
             self.special['with_hashes'] = self._pop('with_hashes', False, bool)
+            self.special['complexes_covered'] = \
+                self._pop('complexes_covered', None)
             res = self.get_db_query().get_agents(
                 with_hashes=self.special['with_hashes'] or self.w_cur_counts,
+                complexes_covered=self.special['complexes_covered'],
                 **params
             )
         elif result_type == 'hashes':
@@ -716,6 +719,8 @@ class FromQueryJsonApiCall(StatementApiCall):
             q = Query.from_json(query_json)
         except (KeyError, ValueError):
             abort(Response("Invalid JSON.", 400))
+        self.web_query['complexes_covered'] = \
+            request.json.get('complexes_covered')
         _check_query(q)
         return q
 
@@ -758,6 +763,25 @@ def search():
 def serve_data_vis(file_path):
     full_path = path.join(HERE, 'data-vis/dist', file_path)
     logger.info('data-vis: ' + full_path)
+    if not path.exists(full_path):
+        return abort(404)
+    ext = full_path.split('.')[-1]
+    if ext == 'js':
+        ct = 'application/javascript'
+    elif ext == 'css':
+        ct = 'text/css'
+    else:
+        ct = None
+    with open(full_path, 'rb') as f:
+        return Response(f.read(),
+                        content_type=ct)
+
+
+@dep_route('/ilv/<path:file>')
+def serve_indralab_vue(file):
+    full_path = path.join('/home/patrick/Workspace/indralab-vue/dist',
+                          file)
+    logger.info('IndraLab Vue: ' + full_path)
     if not path.exists(full_path):
         return abort(404)
     ext = full_path.split('.')[-1]

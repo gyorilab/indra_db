@@ -167,7 +167,7 @@ class Belief(Dumper):
 
     def dump(self, continuing=False):
         db = get_db(self.db_label)
-        belief_dict = get_belief(db)
+        belief_dict = get_belief(db, partition=False)
         s3 = boto3.client('s3')
         s3.put_object(Body=json.dumps(belief_dict), **self.get_s3_path().kw())
 
@@ -356,11 +356,12 @@ def main():
         starter = Start()
         starter.dump(continuing=args.allow_continue)
 
-        ro_dumper = Readonly.from_list(starter.manifest)
-        if not args.allow_continue or not ro_dumper:
+        dump_file = Readonly.from_list(starter.manifest)
+        if not args.allow_continue or not dump_file:
             logger.info("Generating readonly schema (est. a long time)")
             ro_dumper = Readonly(date_stamp=starter.date_stamp)
             ro_dumper.dump(continuing=args.allow_continue)
+            dump_file = ro_dumper.get_s3_path()
         else:
             logger.info("Readonly dump exists, skipping.")
 
@@ -400,15 +401,15 @@ def main():
         s3 = boto3.client('s3')
         for dump in sorted(dumps, reverse=True):
             manifest = dump.list_objects(s3)
-            ro_dumper = Readonly.from_list(manifest)
-            if ro_dumper is not None:
-                # ro_dumper will be the file we want, leave it assigned.
+            dump_file = Readonly.from_list(manifest)
+            if dump_file is not None:
+                # dump_file will be the file we want, leave it assigned.
                 break
         else:
             raise Exception("Could not find any suitable readonly dumps.")
-    dump_file = ro_dumper.get_s3_path()
 
     if not args.dump_only:
+        print(dump_file)
         load_readonly_dump(args.database, args.readonly, dump_file)
 
     if not args.load_only:

@@ -2147,6 +2147,11 @@ class HasType(IntrusiveQuery):
     def _get_query_values(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
 
+    @classmethod
+    def _from_constraint_json(cls, constraint_json):
+        return cls(constraint_json[cls.list_name],
+                   constraint_json.get('include_subclasses', False))
+
 
 class MergeQuery(Query):
     """This is the parent of the two merge classes: Intersection and Union.

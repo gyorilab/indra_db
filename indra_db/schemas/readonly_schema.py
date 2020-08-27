@@ -480,7 +480,8 @@ def get_schema(Base):
         __dbname__ = 'TEXT'
         _indices = [StringIndex('text_meta_db_id_idx', 'db_id'),
                     BtreeIndex('text_meta_type_num_idx', 'type_num'),
-                    StringIndex('text_meta_activity_idx', 'activity')]
+                    StringIndex('text_meta_activity_idx', 'activity'),
+                    BtreeIndex('text_meta_mk_hash_idx', 'mk_hash')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_id = Column(String)
@@ -499,7 +500,8 @@ def get_schema(Base):
         __dbname__ = 'NAME'
         _indices = [StringIndex('name_meta_db_id_idx', 'db_id'),
                     BtreeIndex('name_meta_type_num_idx', 'type_num'),
-                    StringIndex('name_meta_activity_idx', 'activity')]
+                    StringIndex('name_meta_activity_idx', 'activity'),
+                    BtreeIndex('name_meta_mk_hash_idx', 'mk_hash')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_id = Column(String)
@@ -523,7 +525,8 @@ def get_schema(Base):
         _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
                     BtreeIndex('other_meta_type_num_idx', 'type_num'),
                     StringIndex('other_meta_db_name_idx', 'db_name'),
-                    StringIndex('other_meta_activity_idx', 'activity')]
+                    StringIndex('other_meta_activity_idx', 'activity'),
+                    BtreeIndex('other_meta_mk_hash_idx', 'mk_hash')]
         ag_id = Column(Integer, primary_key=True)
         ag_num = Column(Integer)
         db_name = Column(String)
@@ -623,7 +626,9 @@ def get_schema(Base):
                           "  low_level_names.activity, \n"
                           "  low_level_names.is_active, \n"
                           "  CAST(low_level_names.src_json AS JSONB)")
-        _indices = [BtreeIndex('agent_interactions_mk_hash_idx', 'mk_hash')]
+        _indices = [BtreeIndex('agent_interactions_mk_hash_idx', 'mk_hash'),
+                    BtreeIndex('agent_interactions_agent_json_idx', 'agent_json'),
+                    BtreeIndex('agent_interactions_type_num_idx', 'type_num')]
         _always_disp = ['mk_hash', 'agent_json']
 
         @classmethod

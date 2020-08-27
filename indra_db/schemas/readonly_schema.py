@@ -29,6 +29,7 @@ CREATE_ORDER = [
     'name_meta',
     'other_meta',
     'mesh_meta',
+    'agent_interactions'
 ]
 CREATE_UNORDERED = {}
 
@@ -109,6 +110,7 @@ def get_schema(Base):
      12. name_meta
      13. other_meta
      14. mesh_meta
+     15. agent_interactions
     The following can be built at any time and in any order:
         (None currently)
     Note that the order of views below is determined not by the above

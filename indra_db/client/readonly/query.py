@@ -78,14 +78,14 @@ class QueryResult(object):
     @classmethod
     def from_json(cls, json_dict):
         # Build a StatementQueryResult or AgentQueryResult if appropriate
-        if cls != StatementQueryResult \
-                and json_dict['result_type'] == 'statements':
-            json_dict.pop('result_type')
+        if json_dict['result_type'] == 'statements':
             return StatementQueryResult.from_json(json_dict)
-        elif cls != AgentQueryResult and json_dict['result_type'] == 'agents':
-            json_dict.pop('result_type')
+        elif json_dict['result_type'] == 'agents':
             return AgentQueryResult.from_json(json_dict)
+        return cls._parse_json(json_dict)
 
+    @classmethod
+    def _parse_json(cls, json_dict):
         # Filter out some calculated values.
         next_offset = json_dict.pop('next_offset', None)
         total_evidence = json_dict.pop('total_evidence', None)
@@ -162,7 +162,12 @@ class StatementQueryResult(QueryResult):
 
     @classmethod
     def from_json(cls, json_dict):
-        nc = super(StatementQueryResult, cls).from_json(json_dict)
+        json_dict = json_dict.copy()
+        result_type = json_dict.pop('result_type')
+        if result_type != 'statements':
+            raise ValueError(f'Invalid result type {result_type} for this '
+                             f'result class {cls}')
+        nc = super(StatementQueryResult, cls)._parse_json(json_dict)
         nc.source_counts = {int(k): v for k, v in nc.source_counts.items()}
         return nc
 
@@ -183,12 +188,17 @@ class AgentQueryResult(QueryResult):
 
     def json(self) -> dict:
         json_dict = super(AgentQueryResult, self).json()
-        json_dict['complexes_covered'] = list(self.complexes_covered)
+        json_dict['complexes_covered'] = [str(h) for h in self.complexes_covered]
         return json_dict
 
     @classmethod
     def from_json(cls, json_dict):
-        nc = super(AgentQueryResult, cls).from_json(json_dict)
+        json_dict = json_dict.copy()
+        result_type = json_dict.pop('result_type')
+        if result_type != 'agents':
+            raise ValueError(f'Invalid result type {result_type} for this '
+                             f'result class {cls}')
+        nc = super(AgentQueryResult, cls)._parse_json(json_dict)
         nc.complexes_covered = {int(h) for h in nc.complexes_covered}
 
 

@@ -713,14 +713,17 @@ def _check_query(query):
 
 
 class FromQueryJsonApiCall(StatementApiCall):
+    def __init__(self):
+        super(FromQueryJsonApiCall, self).__init__()
+        self.web_query['complexes_covered'] = \
+            request.json.get('complexes_covered')
+
     def _build_db_query(self):
         query_json = request.json['query']
         try:
             q = Query.from_json(query_json)
         except (KeyError, ValueError):
             abort(Response("Invalid JSON.", 400))
-        self.web_query['complexes_covered'] = \
-            request.json.get('complexes_covered')
         _check_query(q)
         return q
 

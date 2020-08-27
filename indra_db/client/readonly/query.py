@@ -349,11 +349,31 @@ class RelationSQL(AgentJsonSQL):
         return results, ev_totals, len(names)
 
 
+class _AgentHashes:
+    def __init__(self, hashes):
+        complex_num = str(ro_type_map.get_int("Complex"))
+        self.hashes = set()
+        self.complex_hashes = set()
+        self.has_other_types = False
+
+        for h, type_num in hashes.items():
+            self.hashes.add(int(h))
+            if type_num == complex_num:
+                self.complex_hashes.add(int(h))
+            else:
+                self.has_other_types = True
+
+        self.hashes = list(self.hashes)
+        return
+
+
 class AgentSQL(AgentJsonSQL):
     meta_type = 'agents'
 
     def __init__(self, *args, **kwargs):
         self.complexes_covered = kwargs.pop('complexes_covered', None)
+        if self.complexes_covered is not None:
+            self.complexes_covered = {int(h) for h in self.complexes_covered}
         super(AgentSQL, self).__init__(*args, **kwargs)
         self._limit = None
 
@@ -388,17 +408,19 @@ class AgentSQL(AgentJsonSQL):
 
         results = {}
         ev_totals = {}
-        self.complexes_covered = set()
+        if self.complexes_covered is None:
+            self.complexes_covered = set()
         num_entries = 0
         num_rows = 0
         for ag_json, n_ag, n_ev, src_jsons, hashes in names:
             num_rows += 1
+
             # See if this row has anything new to offer.
-            if set(hashes.keys()) <= self.complexes_covered:
+            my_hashes = _AgentHashes(hashes)
+            if not my_hashes.has_other_types \
+                    and my_hashes.complex_hashes <= self.complexes_covered:
                 continue
-            complex_num = str(ro_type_map.get_int("Complex"))
-            self.complexes_covered |= {h for h, type_num in hashes.items()
-                                       if type_num == complex_num}
+            self.complexes_covered |= my_hashes.complex_hashes
 
             # Generate the key for this pair of agents.
             ordered_agents = [ag_json.get(str(n))
@@ -417,7 +439,7 @@ class AgentSQL(AgentJsonSQL):
             # Add this entry to the results.
             results[key] = {'id': key, 'source_counts': dict(source_counts),
                             'agents': _make_agent_dict(ag_json),
-                            'hashes': [int(h) for h in hashes.keys()]}
+                            'hashes': my_hashes.hashes}
             ev_totals[key] = sum(source_counts.values())
 
             # Sanity check. Only a coding error could cause this to fail.

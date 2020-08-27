@@ -137,7 +137,8 @@ def get_schema(Base):
     class ReadingRefLink(Base, ReadonlyTable):
         __tablename__ = 'reading_ref_link'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ('SELECT pmid, pmcid, tr.id AS trid, doi, '
+        __definition__ = ('SELECT pmid, pmid_num, pmcid, pmcid_num, '
+                          'pmcid_version, doi, doi_ns, doi_id, tr.id AS trid,'
                           'pii, url, manuscript_id, tc.id AS tcid, '
                           'source, r.id AS rid, reader '
                           'FROM text_ref AS tr JOIN text_content AS tc '
@@ -145,15 +146,24 @@ def get_schema(Base):
                           'ON tc.id = r.text_content_id')
         _indices = [BtreeIndex('rrl_rid_idx', 'rid'),
                     StringIndex('rrl_pmid_idx', 'pmid'),
+                    BtreeIndex('rrl_pmid_num_idx', 'pmid_num'),
                     StringIndex('rrl_pmcid_idx', 'pmcid'),
+                    BtreeIndex('rrl_pmcid_num_idx', 'pmcid_num'),
                     StringIndex('rrl_doi_idx', 'doi'),
+                    BtreeIndex('rrl_doi_ns_idx', 'doi_ns'),
+                    StringIndex('rrl_doi_id_idx', 'doi_id'),
                     StringIndex('rrl_manuscript_id_idx', 'manuscript_id'),
                     BtreeIndex('rrl_tcid_idx', 'tcid'),
                     BtreeIndex('rrl_trid_idx', 'trid')]
         trid = Column(Integer)
         pmid = Column(String(20))
+        pmid_num = Column(Integer)
         pmcid = Column(String(20))
+        pmcid_num = Column(Integer)
+        pmcid_version = Column(Integer)
         doi = Column(String(100))
+        doi_ns = Column(Integer)
+        doi_id = Column(String)
         pii = Column(String(250))
         url = Column(String(250))
         manuscript_id = Column(String(100))

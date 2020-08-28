@@ -23,12 +23,14 @@ CREATE_ORDER = [
     'reading_ref_link',
     'pa_ref_link',
     'pa_meta',
-    'raw_stmt_mesh',
+    'raw_stmt_mesh_terms',
+    'raw_stmt_mesh_concepts',
     'source_meta',
     'text_meta',
     'name_meta',
     'other_meta',
-    'mesh_meta',
+    'mesh_term_meta',
+    'mesh_concept_meta',
     'agent_interactions'
 ]
 CREATE_UNORDERED = {}
@@ -104,13 +106,15 @@ def get_schema(Base):
       6. reading_ref_link
       7. pa_ref_link
       8. pa_meta
-      9. raw_stmt_mesh
-     10. source_meta
-     11. text_meta
-     12. name_meta
-     13. other_meta
-     14. mesh_meta
-     15. agent_interactions
+      9. raw_stmt_mesh_terms
+     10. raw_stmt_mesh_concepts
+     11. source_meta
+     12. text_meta
+     13. name_meta
+     14. other_meta
+     15. mesh_term_meta
+     16. mesh_concept_meta
+     17. agent_interactions
     The following can be built at any time and in any order:
         (None currently)
     Note that the order of views below is determined not by the above
@@ -366,24 +370,51 @@ def get_schema(Base):
         reader = Column(String)
     read_views[PaRefLink.__tablename__] = PaRefLink
 
-    class RawStmtMesh(Base, ReadonlyTable):
-        __tablename__ = 'raw_stmt_mesh'
+    class RawStmtMeshTerms(Base, ReadonlyTable):
+        __tablename__ = 'raw_stmt_mesh_terms'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT DISTINCT raw_statements.id as sid,\n'
                           '       mesh_num\n'
                           'FROM text_ref\n'
-                          '  JOIN mesh_ref_annotations AS mra\n'
+                          '  JOIN (SELECT * FROM mesh_ref_annotations\n'
+                          '          WHERE is_concept IS NOT true\n'
+                          '        UNION\n'
+                          '        SELECT * FROM mti_ref_annotations_test\n'
+                          '          WHERE is_concept IS NOT true) AS mra\n'
                           '    ON text_ref.pmid_num = mra.pmid_num\n'
                           '  JOIN text_content ON text_ref.id = text_ref_id\n'
                           '  JOIN reading\n'
                           '    ON text_content.id = text_content_id\n'
                           '  JOIN raw_statements ON reading.id = reading_id\n')
-        _indices = [BtreeIndex('rsm_mesh_num_idx', 'mesh_num'),
-                    BtreeIndex('rsm_sid_idx', 'sid')]
+        _indices = [BtreeIndex('rsmd_mesh_num_idx', 'mesh_num'),
+                    BtreeIndex('rsmd_sid_idx', 'sid')]
 
         sid = Column(Integer, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
-    read_views[RawStmtMesh.__tablename__] = RawStmtMesh
+    read_views[RawStmtMeshTerms.__tablename__] = RawStmtMeshTerms
+
+    class RawStmtMeshConcepts(Base, ReadonlyTable):
+        __tablename__ = 'raw_stmt_mesh_concepts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('SELECT DISTINCT raw_statements.id as sid,\n'
+                          '       mesh_num\n'
+                          'FROM text_ref\n'
+                          '  JOIN (SELECT * FROM mesh_ref_annotations\n'
+                          '          WHERE is_concept IS true\n'
+                          '        UNION\n'
+                          '        SELECT * FROM mti_ref_annotations_test\n'
+                          '          WHERE is_concept IS true) AS mra\n'
+                          '    ON text_ref.pmid_num = mra.pmid_num\n'
+                          '  JOIN text_content ON text_ref.id = text_ref_id\n'
+                          '  JOIN reading\n'
+                          '    ON text_content.id = text_content_id\n'
+                          '  JOIN raw_statements ON reading.id = reading_id\n')
+        _indices = [BtreeIndex('rsmc_mesh_num_idx', 'mesh_num'),
+                    BtreeIndex('rsmc_sid_idx', 'sid')]
+
+        sid = Column(Integer, primary_key=True)
+        mesh_num = Column(Integer, primary_key=True)
+    read_views[RawStmtMeshConcepts.__tablename__] = RawStmtMeshConcepts
 
     class SourceMeta(Base, SpecialColumnTable):
         __tablename__ = 'source_meta'
@@ -541,8 +572,8 @@ def get_schema(Base):
         is_complex_dup = Column(Boolean)
     read_views[OtherMeta.__tablename__] = OtherMeta
 
-    class MeshMeta(Base, ReadonlyTable):
-        __tablename__ = 'mesh_meta'
+    class MeshTermMeta(Base, ReadonlyTable):
+        __tablename__ = 'mesh_term_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ("WITH meta AS (\n"
                           "  SELECT DISTINCT mk_hash, type_num, \n"
@@ -555,19 +586,20 @@ def get_schema(Base):
                           "       meta.ev_count,\n"
                           "       meta.mk_hash, mesh_num, type_num,\n"
                           "       activity, is_active, agent_count\n"
-                          "FROM readonly.raw_stmt_mesh JOIN raw_unique_links\n"
-                          "     ON readonly.raw_stmt_mesh.sid\n"
+                          "FROM readonly.raw_stmt_mesh_terms "
+                          "   JOIN raw_unique_links\n"
+                          "     ON readonly.raw_stmt_mesh_terms.sid\n"
                           "        = raw_unique_links.raw_stmt_id\n"
                           "   JOIN meta\n"
                           "     ON meta.mk_hash\n"
                           "        = raw_unique_links.pa_stmt_mk_hash\n"
                           "GROUP BY meta.mk_hash, mesh_num, type_num, \n"
                           "  meta.ev_count, is_active, activity, agent_count")
-        _indices = [BtreeIndex('mesh_meta_mesh_num_idx', 'mesh_num',
+        _indices = [BtreeIndex('mesh_term_meta_mesh_num_idx', 'mesh_num',
                                cluster=True),
-                    BtreeIndex('mesh_meta_mk_hash_idx', 'mk_hash'),
-                    BtreeIndex('mesh_meta_type_num_idx', 'type_num'),
-                    StringIndex('mesh_meta_activity_idx', 'activity')]
+                    BtreeIndex('mesh_term_meta_mk_hash_idx', 'mk_hash'),
+                    BtreeIndex('mesh_term_meta_type_num_idx', 'type_num'),
+                    StringIndex('mesh_term_meta_activity_idx', 'activity')]
         mk_hash = Column(BigInteger, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
         tr_count = Column(Integer)
@@ -576,7 +608,44 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
-    read_views[MeshMeta.__tablename__] = MeshMeta
+    read_views[MeshTermMeta.__tablename__] = MeshTermMeta
+
+    class MeshConceptMeta(Base, ReadonlyTable):
+        __tablename__ = 'mesh_concept_meta'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ("WITH meta AS (\n"
+                          "  SELECT DISTINCT mk_hash, type_num, \n"
+                          "                  ev_count, activity, \n"
+                          "                  is_active, agent_count \n"
+                          "  FROM readonly.pa_meta\n"
+                          "  WHERE NOT is_complex_dup\n"
+                          ")\n"
+                          "SELECT COUNT(DISTINCT sid) as mesh_ev_count,\n"
+                          "       meta.ev_count,\n"
+                          "       meta.mk_hash, mesh_num, type_num,\n"
+                          "       activity, is_active, agent_count\n"
+                          "FROM readonly.raw_stmt_mesh_concepts "
+                          "   JOIN raw_unique_links\n"
+                          "     ON readonly.raw_stmt_mesh_concepts.sid\n"
+                          "        = raw_unique_links.raw_stmt_id\n"
+                          "   JOIN meta\n"
+                          "     ON meta.mk_hash\n"
+                          "        = raw_unique_links.pa_stmt_mk_hash\n"
+                          "GROUP BY meta.mk_hash, mesh_num, type_num, \n"
+                          "  meta.ev_count, is_active, activity, agent_count")
+        _indices = [BtreeIndex('mesh_concept_meta_mesh_num_idx', 'mesh_num'),
+                    BtreeIndex('mesh_concept_meta_mk_hash_idx', 'mk_hash'),
+                    BtreeIndex('mesh_concept_meta_type_num_idx', 'type_num'),
+                    StringIndex('mesh_concept_meta_activity_idx', 'activity')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        mesh_num = Column(Integer, primary_key=True)
+        tr_count = Column(Integer)
+        ev_count = Column(Integer)
+        type_num = Column(SmallInteger)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
+    read_views[MeshConceptMeta.__tablename__] = MeshConceptMeta
 
     class AgentInteractions(Base, ReadonlyTable):
         __tablename__ = 'agent_interactions'

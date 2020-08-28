@@ -247,10 +247,15 @@ class StatementHashMeshId(Dumper):
         else:
             ro = get_ro(self.db_label)
 
-        q = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num])
+        mesh_term_tuples = ro.select_all([ro.MeshTermMeta.mk_hash,
+                                          ro.MeshTermMeta.mesh_num])
+        mesh_concept_tuples = ro.select_all([ro.MeshConceptMeta.mk_hash,
+                                             ro.MeshConceptMeta.mesh_num])
+        mesh_data = {'terms': mesh_term_tuples,
+                     'concepts': mesh_concept_tuples}
 
         s3 = boto3.client('s3')
-        s3.put_object(Body=pickle.dumps(q.all()), **self.get_s3_path().kw())
+        s3.put_object(Body=pickle.dumps(mesh_data), **self.get_s3_path().kw())
 
 
 def load_readonly_dump(db_label, ro_label, dump_file):

@@ -1919,7 +1919,19 @@ class FromMeshIds(_TextRefCore):
                 raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
                                  "the rest must be a number." % mesh_id)
         self.mesh_ids = tuple(set(mesh_ids))
-        self.mesh_nums = tuple([int(mesh_id[1:]) for mesh_id in self.mesh_ids])
+        self._mesh_term_nums = []
+        self._mesh_concept_nums = []
+        for mesh_id in self.mesh_ids:
+            mesh_num = int(mesh_id[1:])
+            if mesh_id.startswith('D'):
+                self._mesh_term_nums.append(mesh_num)
+            elif mesh_id.startswith('C'):
+                self._mesh_concept_nums.append(mesh_num)
+            else:
+                raise ValueError(f"Invalid mesh_id: {mesh_id}, must start "
+                                 f"with C or D.")
+        if self._mesh_concept_nums:
+            logger.warning("Mesh concepts not yet fully integrated.")
         super(FromMeshIds, self).__init__(len(mesh_ids) == 0)
 
     def __str__(self):
@@ -1931,18 +1943,19 @@ class FromMeshIds(_TextRefCore):
 
     def _get_constraint_json(self) -> dict:
         return {'mesh_ids': list(self.mesh_ids),
-                '_mesh_nums': list(self.mesh_nums)}
+                '_mesh_term_nums': list(self._mesh_term_nums),
+                '_mesh_concept_nums': list(self._mesh_concept_nums)}
 
     def _get_table(self, ro):
-        return ro.MeshMeta
+        return ro.MeshTermMeta
 
     def _get_hash_query(self, ro, inject_queries=None):
         meta = self._get_table(ro)
         qry = self._base_query(ro)
-        if len(self.mesh_nums) == 1:
-            qry = qry.filter(meta.mesh_num == self.mesh_nums[0])
+        if len(self._mesh_term_nums) == 1:
+            qry = qry.filter(meta.mesh_num == self._mesh_term_nums[0])
         else:
-            qry = qry.filter(meta.mesh_num.in_(self.mesh_nums))
+            qry = qry.filter(meta.mesh_num.in_(self._mesh_term_nums))
 
         if not self._inverted:
             if inject_queries:
@@ -1968,20 +1981,20 @@ class FromMeshIds(_TextRefCore):
 
     def ev_filter(self):
         if not self._inverted:
-            if len(self.mesh_nums) == 1:
+            if len(self._mesh_term_nums) == 1:
                 def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num == self.mesh_nums[0]
+                    return ro.RawStmtMesh.mesh_num == self._mesh_term_nums[0]
             else:
                 def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.in_(self.mesh_nums)
+                    return ro.RawStmtMesh.mesh_num.in_(self._mesh_term_nums)
         else:
-            if len(self.mesh_nums) == 1:
+            if len(self._mesh_term_nums) == 1:
                 def get_clause(ro):
                     return (ro.RawStmtMesh.mesh_num
-                            .is_distinct_from(self.mesh_nums[0]))
+                            .is_distinct_from(self._mesh_term_nums[0]))
             else:
                 def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.notin_(self.mesh_nums)
+                    return ro.RawStmtMesh.mesh_num.notin_(self._mesh_term_nums)
 
         return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
 

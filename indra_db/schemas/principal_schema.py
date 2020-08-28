@@ -249,7 +249,7 @@ def get_schema(Base):
         is_concept = Column(Boolean, default=False)
         __table_args__ = (
             UniqueConstraint('pmid_num', 'mesh_num', 'qual_num', 'is_concept',
-                                name='mesh-uniqueness'),
+                                name='mti-uniqueness'),
         )
     table_dict[MtiRefAnnotationsTest.__tablename__] = MtiRefAnnotationsTest
 

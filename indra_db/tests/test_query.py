@@ -144,11 +144,11 @@ def _build_test_set():
     db = get_temp_db(clear=True)
     src_meta_cols = [{'name': col} for col, _ in sources]
     db.SourceMeta.load_cols(db.engine, src_meta_cols)
-    for tbl in [db.SourceMeta, db.MeshMeta, db.NameMeta, db.TextMeta,
-                db.OtherMeta]:
+    for tbl in [db.SourceMeta, db.MeshTermMeta, db.NameMeta,
+                db.TextMeta, db.OtherMeta]:
         tbl.__table__.create(db.engine)
     db.copy('readonly.source_meta', source_meta_rows, source_meta_cols)
-    db.copy('readonly.mesh_meta', mesh_meta_rows, mesh_meta_cols)
+    db.copy('readonly.mesh_term_meta', mesh_meta_rows, mesh_meta_cols)
     db.copy('readonly.name_meta', name_meta_rows, name_meta_cols)
     db.copy('readonly.text_meta', text_meta_rows, text_meta_cols)
     db.copy('readonly.other_meta', other_meta_rows, other_meta_cols)
@@ -335,8 +335,8 @@ def test_from_mesh():
     ro = get_db('primary')
     q = FromMeshIds(['D001943'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
-    mm_entries = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num],
-                               ro.MeshMeta.mk_hash.in_(set(res.results.keys())))
+    mm_entries = ro.select_all([ro.MeshTermMeta.mk_hash, ro.MeshTermMeta.mesh_num],
+                               ro.MeshTermMeta.mk_hash.in_(set(res.results.keys())))
     mm_dict = defaultdict(list)
     for h, mn in mm_entries:
         mm_dict[h].append(mn)

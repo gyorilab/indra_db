@@ -1983,20 +1983,20 @@ class FromMeshIds(_TextRefCore):
         if not self._inverted:
             if len(self._mesh_term_nums) == 1:
                 def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num == self._mesh_term_nums[0]
+                    return ro.RawStmtMeshTerms.mesh_num == self._mesh_term_nums[0]
             else:
                 def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.in_(self._mesh_term_nums)
+                    return ro.RawStmtMeshTerms.mesh_num.in_(self._mesh_term_nums)
         else:
             if len(self._mesh_term_nums) == 1:
                 def get_clause(ro):
-                    return (ro.RawStmtMesh.mesh_num
+                    return (ro.RawStmtMeshTerms.mesh_num
                             .is_distinct_from(self._mesh_term_nums[0]))
             else:
                 def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.notin_(self._mesh_term_nums)
+                    return ro.RawStmtMeshTerms.mesh_num.notin_(self._mesh_term_nums)
 
-        return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
+        return EvidenceFilter.from_filter('raw_stmt_mesh_terms', get_clause)
 
 
 class IntrusiveQuery(Query):

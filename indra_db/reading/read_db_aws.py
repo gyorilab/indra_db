@@ -13,6 +13,7 @@ import logging
 import random
 from argparse import ArgumentParser
 
+from indra.util import batch_iter
 from indra_reading.readers import get_reader_classes
 from indra_reading.util import get_s3_job_log_prefix
 
@@ -92,6 +93,11 @@ def get_parser():
         action='store_true',
         help="Use the test database."
     )
+    parser.add_argument(
+        '-b', '--batch',
+        default=None,
+        help="Select the size of batches for the content to be read."
+    )
     return parser
 
 
@@ -163,8 +169,13 @@ def main():
         db = None
 
     # Read everything ========================================
-    run_reading(readers, tcids, verbose=True, db=db,
-                reading_mode=args.read_mode, rslt_mode=args.rslt_mode)
+    if args.batch is None:
+        run_reading(readers, tcids, verbose=True, db=db,
+                    reading_mode=args.read_mode, rslt_mode=args.rslt_mode)
+    else:
+        for tcid_batch in batch_iter(tcids, args.batch):
+            run_reading(readers, tcid_batch, verbose=True, db=db,
+                        reading_mode=args.read_mode, rslt_mode=args.rslt_mode)
 
     # Preserve the sparser logs
     contents = os.listdir('.')

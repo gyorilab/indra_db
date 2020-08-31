@@ -254,7 +254,10 @@ def get_schema(Base):
 
         @classmethod
         def create(cls, db, commit=True):
-            sql = ReadonlyTable.create(cls, db, False) + '\n'
+            sql = cls.__create_table_fmt__ \
+                  % (cls.full_name(force_schema=True),
+                     cls.get_definition())
+            sql += '\n'
             sql += (f'INSERT INTO readonly.pa_meta \n'
                     f'SELECT db_name, db_id, ag_id,\n '
                     f'  generate_series(-1, 1, 2) AS role_num,\n'

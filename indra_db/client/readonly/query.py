@@ -10,8 +10,8 @@ import logging
 import requests
 from itertools import combinations
 from collections import OrderedDict, Iterable, defaultdict
-from sqlalchemy import desc, true, select, intersect_all, union_all, or_, \
-   except_, func, null, and_, String
+from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
+    String, union, intersect
 
 from indra import get_config
 from indra.statements import stmts_from_json, get_statement_by_name, \
@@ -2375,7 +2375,7 @@ class Intersection(MergeQuery):
 
     @staticmethod
     def _merge(*queries):
-        return intersect_all(*queries)
+        return intersect(*queries)
 
     def _get_table(self, ro):
         if self._mk_hashes_al is not None:
@@ -2476,7 +2476,7 @@ class Union(MergeQuery):
 
     @staticmethod
     def _merge(*queries):
-        return union_all(*queries)
+        return union(*queries)
 
     def _get_table(self, ro):
         if self._mk_hashes_al is None:

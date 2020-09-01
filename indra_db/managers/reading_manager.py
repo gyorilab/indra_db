@@ -209,6 +209,7 @@ class BulkAwsReadingManager(BulkReadingManager):
 
     def __init__(self, *args, **kwargs):
         self.project_name = kwargs.pop('project_name', None)
+        self.batch_batch = kwargs.pop('batch_batch', None)
         super(BulkAwsReadingManager, self).__init__(*args, **kwargs)
         self.reader_versions = {}
         return
@@ -241,7 +242,8 @@ class BulkAwsReadingManager(BulkReadingManager):
         logger.info("Submitting jobs...")
         sub = DbReadingSubmitter(basename, [reader_name.lower()],
                                  project_name=self.project_name,
-                                 group_name=group_name)
+                                 group_name=group_name,
+                                 batch_batch=self.batch_batch)
         sub.submit_reading(file_name, 0, None,
                            self.ids_per_job[reader_name.lower()])
 
@@ -370,6 +372,12 @@ def get_parser():
               'which this reading is being done. This is used to label jobs '
               'on aws batch for monitoring and accounting purposes.')
     )
+    aws_read_parser.add_argument(
+        '-B', '--batch-batch',
+        default=None,
+        type=int,
+        help="Specify the size of batches within each batch instance."
+    )
     subparsers = parser.add_subparsers(title='Method')
     subparsers.required = True
     subparsers.dest = 'method'
@@ -417,7 +425,8 @@ def main():
         bulk_manager = BulkAwsReadingManager(readers,
                                              buffer_days=args.buffer,
                                              project_name=args.project_name,
-                                             only_unread=args.only_unread)
+                                             only_unread=args.only_unread,
+                                             batch_batch=args.batch_batch)
     else:
         assert False, "This shouldn't be allowed."
 

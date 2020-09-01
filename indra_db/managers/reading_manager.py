@@ -30,13 +30,17 @@ class ReadingManager(object):
         The number of days before the previous update/initial upload to look for
         "new" content to be read. This prevents any issues with overlaps between
         the content upload pipeline and the reading pipeline.
+    only_unread : bool
+        Only read papers that have not been read (making the determination can
+        be expensive).
     """
-    def __init__(self, reader_names, buffer_days=1):
+    def __init__(self, reader_names, buffer_days=1, only_unread=False):
         self.reader_names = reader_names
         self.buffer = timedelta(days=buffer_days)
         self.run_datetime = None
         self.begin_datetime = None
         self.end_datetime = None
+        self.only_unread = only_unread
         return
 
     @classmethod
@@ -133,8 +137,10 @@ class BulkReadingManager(ReadingManager):
 
         constraints = self._get_constraints(db, reader_name)
 
-        tcids = {tcid for tcid, in db.select_all(db.TextContent.id,
-                                                 *constraints)}
+        tcid_q = db.filter_query(db.TextContent.id, *constraints)
+        if self.only_unread:
+            tcid_q = tcid_q.except_(db.filter_query(db.Reading.text_content_id))
+        tcids = {tcid for tcid, in tcid_q.all()}
         if not tcids:
             logger.info("Nothing found to read with %s." % reader_name)
             return False
@@ -159,6 +165,8 @@ class BulkReadingManager(ReadingManager):
             db.TextContent.insert_date > self.begin_datetime,
             *constraints
             )
+        if self.only_unread:
+            tcid_q = tcid_q.except_(db.filter_query(db.Reading.text_content_id))
         tcids = {tcid for tcid, in tcid_q.all()}
         if not tcids:
             logger.info("Nothing new to read with %s." % reader_name)
@@ -332,6 +340,11 @@ def get_parser():
         help=('Set the number number of buffer days read prior to the most '
               'recent update. The default is 1 day.')
     )
+    parent_read_parser.add_argument(
+        '-u', '--only-unread',
+        action='store_true',
+        help="Only read content that has no prior readings."
+    )
     local_read_parser = ArgumentParser(add_help=False)
     local_read_parser.add_argument(
         '-n', '--num_procs',
@@ -398,11 +411,13 @@ def main():
     if args.method == 'local':
         bulk_manager = BulkLocalReadingManager(readers,
                                                buffer_days=args.buffer,
-                                               n_procs=args.num_procs)
+                                               n_procs=args.num_procs,
+                                               only_unread=args.only_unread)
     elif args.method == 'aws':
         bulk_manager = BulkAwsReadingManager(readers,
                                              buffer_days=args.buffer,
-                                             project_name=args.project_name)
+                                             project_name=args.project_name,
+                                             only_unread=args.only_unread)
     else:
         assert False, "This shouldn't be allowed."
 

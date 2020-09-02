@@ -358,17 +358,18 @@ def get_schema(Base):
     class PaRefLink(Base, ReadonlyTable):
         __tablename__ = 'pa_ref_link'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ('SELECT mk_hash, trid, pmid, pmcid, source, reader '
-                          'FROM readonly.fast_raw_pa_link '
+        __definition__ = ('SELECT mk_hash, trid, pmid_num, pmcid_num, source,\n'
+                          '       reader\n'
+                          'FROM readonly.fast_raw_pa_link\n'
                           '  JOIN readonly.reading_ref_link '
                           '  ON reading_id = rid')
         _indices = [BtreeIndex('pa_ref_link_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('pa_ref_link_trid_idx', 'trid'),
-                    BtreeIndex('pa_ref_link_pmid_idx', 'pmid')]
+                    BtreeIndex('pa_ref_link_pmid_num_idx', 'pmid_num')]
         mk_hash = Column(BigInteger, primary_key=True)
         trid = Column(Integer, primary_key=True)
-        pmid = Column(String)
-        pmcid = Column(String)
+        pmid_num = Column(String)
+        pmcid_num = Column(String)
         source = Column(String)
         reader = Column(String)
     read_views[PaRefLink.__tablename__] = PaRefLink

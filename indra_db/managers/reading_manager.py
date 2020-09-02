@@ -204,7 +204,7 @@ class BulkAwsReadingManager(BulkReadingManager):
         'isi': 5000,
         'trips': 500,
         'eidos': 5000,
-        'mti': 1000,
+        'mti': None,  # meaning all content run in a single job.
     }
 
     batch_batch = {

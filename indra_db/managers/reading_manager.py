@@ -208,7 +208,7 @@ class BulkAwsReadingManager(BulkReadingManager):
     }
 
     batch_batch = {
-        'mti': 10
+        'mti': 100
     }
 
     def __init__(self, *args, **kwargs):

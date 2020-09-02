@@ -67,6 +67,7 @@ class DbReadingSubmitter(ReadingSubmitter):
         super(DbReadingSubmitter, self).__init__(*args, **kwargs)
         self.s3_prefix = get_s3_log_prefix(self.s3_base)
         self.time_tag = datetime.now().strftime('%Y%m%d_%H%M')
+        self.batch_batch = kwargs.pop('batch_batch', None)
         self.run_record = {}
         self.start_time = None
         self.end_time = None
@@ -85,6 +86,8 @@ class DbReadingSubmitter(ReadingSubmitter):
                 self.job_base, job_name, self.s3_base]
         base += ['/sw/tmp', read_mode, rslt_mode, '32', str(start_ix),
                  str(end_ix)]
+        if self.batch_batch is not None:
+            base += ['-b', self.batch_batch]
         return base
 
     def _get_extensions(self):

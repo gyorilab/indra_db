@@ -166,7 +166,13 @@ class BulkReadingManager(ReadingManager):
             *constraints
             )
         if self.only_unread:
-            tcid_q = tcid_q.except_(db.filter_query(db.Reading.text_content_id))
+            reader_class = get_reader_class(reader_name)
+            reader_version = reader_class.get_version()
+            tcid_q = tcid_q.except_(
+                db.filter_query(db.Reading.text_content_id,
+                                db.Reading.reader == reader_name,
+                                db.Reading.reader_version == reader_version)
+            )
         tcids = {tcid for tcid, in tcid_q.all()}
         if not tcids:
             logger.info("Nothing new to read with %s." % reader_name)

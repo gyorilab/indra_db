@@ -42,11 +42,17 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
         db = get_primary_db()
 
     # Get the attribute for this id type.
-    id_attr = _get_id_col(db.TextRef, id_type)
+    if id_type == 'pmid':
+        id_constraint = db.TextRef.pmid_in(id_list, filter_ids=True)
+    elif id_type == 'pmcid':
+        id_constraint = db.TextContent.pmcid_in(id_list, filter_ids=True)
+    elif id_type == 'doi':
+        id_constraint = db.TextContent.doi_in(id_list, filter_ids=True)
+    else:
+        id_constraint = _get_id_col(db.TextRef, id_type).in_(id_list)
 
     # Get the results.
-    res = db.select_all([db.TextRef, db.RawStatements.json],
-                        id_attr.in_(id_list),
+    res = db.select_all([db.TextRef, db.RawStatements.json], id_constraint,
                         *db.link(db.RawStatements, db.TextRef))
 
     # Organized the results into a dict of lists keyed by id value.

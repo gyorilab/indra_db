@@ -34,7 +34,7 @@ def get_mesh_ref_counts(mesh_terms, require_all=False, ro=None):
         raise ValueError("All mesh terms must begin with D.")
 
     # Convert the IDs to numbers for faster lookup.
-    mesh_nums = [int(m[1:]) for m in mesh_terms]
+    mesh_num_map = {int(m[1:]): m for m in mesh_terms}
 
     # Build the query.
     t = ro.MeshRefCounts
@@ -42,10 +42,10 @@ def get_mesh_ref_counts(mesh_terms, require_all=False, ro=None):
     counts = func.array_agg(t.ref_count)
     q = ro.session.query(t.mk_hash, nums.label('nums'),
                          counts.label('ref_counts'))
-    if len(mesh_nums) == 1:
-        q = q.filter(t.mesh_num == mesh_nums[0])
-    elif len(mesh_nums) > 1:
-        q = q.filter(t.mesh_num.in_(mesh_nums))
+    if len(mesh_num_map.keys()) == 1:
+        q = q.filter(t.mesh_num == list(mesh_num_map.keys())[0])
+    elif len(mesh_num_map.keys()) > 1:
+        q = q.filter(t.mesh_num.in_(mesh_num_map.keys()))
     else:
         raise ValueError("Must submit at least one mesh term.")
     q = q.group_by(t.mk_hash)
@@ -53,11 +53,11 @@ def get_mesh_ref_counts(mesh_terms, require_all=False, ro=None):
     # Apply the require all option by comparing the length of the nums array
     # to the number of inputs.
     if require_all:
-        q = q.having(func.cardinality(nums) == len(mesh_nums))
+        q = q.having(func.cardinality(nums) == len(mesh_num_map.keys()))
 
     # Parse the results.
     result = {}
     for mk_hash, nums, counts in q.all():
-        result[mk_hash] = {mesh_num: ref_count
+        result[mk_hash] = {mesh_num_map[mesh_num]: ref_count
                            for mesh_num, ref_count in zip(nums, counts)}
     return result

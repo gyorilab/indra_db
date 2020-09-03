@@ -229,7 +229,8 @@ class BulkAwsReadingManager(BulkReadingManager):
         return self.reader_versions[reader_name]
 
     def _run_reading(self, db, tcids, reader_name):
-        if len(tcids)/self.ids_per_job[reader_name.lower()] >= 1000:
+        ids_per_job = self.ids_per_job[reader_name.lower()]
+        if ids_per_job is not None and len(tcids)/ids_per_job >= 1000:
             raise ReadingUpdateError("Too many id's for one submission. "
                                      "Break it up and do it manually.")
 

@@ -374,6 +374,39 @@ def get_schema(Base):
         reader = Column(String)
     read_views[PaRefLink.__tablename__] = PaRefLink
 
+    class MeshRefCounts(Base, ReadonlyTable):
+        __tablename__ = 'mesh_ref_counts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('WITH hash_pmid_counts AS (\n'
+                          '    SELECT mk_hash, count(distinct pmid_num) as pmid_count\n'
+                          '    FROM readonly.pa_ref_link GROUP BY mk_hash\n'
+                          '), mesh_terms AS (\n'
+                          '    SELECT pmid_num, mesh_num FROM mesh_ref_annotations\n'
+                          '    UNION\n'
+                          '    SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
+                          '      WHERE NOT is_concept\n'
+                          '), mesh_hash_pmids AS (\n'
+                          '    SELECT mesh_terms.pmid_num, mk_hash, mesh_num\n'
+                          '    FROM mesh_terms, readonly.pa_ref_link\n'
+                          '    WHERE mesh_terms.pmid_num = readonly.pa_ref_link.pmid_num\n'
+                          '), mesh_ref_counts_proto AS (\n'
+                          '    SELECT mk_hash, mesh_num,\n'
+                          '           COUNT(DISTINCT pmid_num) AS ref_count\n'
+                          '    FROM mesh_hash_pmids GROUP BY mk_hash, mesh_num\n'
+                          ')\n'
+                          'SELECT hash_pmid_counts.mk_hash, mesh_num,\n'
+                          '       ref_count, pmid_count\n'
+                          'FROM mesh_ref_counts_proto, hash_pmid_counts\n'
+                          'WHERE mesh_ref_counts_proto.mk_hash = hash_pmid_counts.mk_hash')
+        _indices = [BtreeIndex('mrc_mesh_num_idx', 'mesh_num', cluster=True),
+                    BtreeIndex('mrc_mk_hash_idx', 'mk_hash')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        mesh_num = Column(Integer, primary_key=True)
+        ref_count = Column(BigInteger)
+        #pmid_count = Column(BigInteger)
+    read_views[MeshRefCounts.__tablename__] = MeshRefCounts
+
+
     class RawStmtMeshTerms(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_mesh_terms'
         __table_args__ = {'schema': 'readonly'}

@@ -45,9 +45,9 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
     if id_type == 'pmid':
         id_constraint = db.TextRef.pmid_in(id_list, filter_ids=True)
     elif id_type == 'pmcid':
-        id_constraint = db.TextContent.pmcid_in(id_list, filter_ids=True)
+        id_constraint = db.TextRef.pmcid_in(id_list, filter_ids=True)
     elif id_type == 'doi':
-        id_constraint = db.TextContent.doi_in(id_list, filter_ids=True)
+        id_constraint = db.TextRef.doi_in(id_list, filter_ids=True)
     else:
         id_constraint = _get_id_col(db.TextRef, id_type).in_(id_list)
 

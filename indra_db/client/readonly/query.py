@@ -376,9 +376,14 @@ class AgentSQL(AgentJsonSQL):
             self.complexes_covered = {int(h) for h in self.complexes_covered}
         super(AgentSQL, self).__init__(*args, **kwargs)
         self._limit = None
+        self._offset = None
 
     def limit(self, limit):
         self._limit = limit
+        return self
+
+    def offset(self, offset):
+        self._offset = offset
         return self
 
     def agg(self, ro, with_hashes=True):
@@ -402,9 +407,19 @@ class AgentSQL(AgentJsonSQL):
                                       sq.c.hashes)
         return [desc(sq.c.ev_count), sq.c.agent_json]
 
+    def _get_next(self, more_offset=0):
+        q = self.agg_q
+        if self._offset is not None:
+            q = q.offset(self._offset + more_offset)
+
+        if self._limit is not None:
+            q = q.limit(self._limit)
+
+        return q.all()
+
     def run(self):
         logger.debug(f"Executing query (get_agents):\n{self.agg_q}")
-        names = self.agg_q.yield_per(self._limit)
+        names = self._get_next()
 
         results = {}
         ev_totals = {}
@@ -412,43 +427,51 @@ class AgentSQL(AgentJsonSQL):
             self.complexes_covered = set()
         num_entries = 0
         num_rows = 0
-        for ag_json, n_ag, n_ev, src_jsons, hashes in names:
-            num_rows += 1
+        while True:
+            for ag_json, n_ag, n_ev, src_jsons, hashes in names:
+                num_rows += 1
 
-            # See if this row has anything new to offer.
-            my_hashes = _AgentHashes(hashes)
-            if not my_hashes.has_other_types \
-                    and my_hashes.complex_hashes <= self.complexes_covered:
-                continue
-            self.complexes_covered |= my_hashes.complex_hashes
+                # See if this row has anything new to offer.
+                my_hashes = _AgentHashes(hashes)
+                if not my_hashes.has_other_types \
+                        and my_hashes.complex_hashes <= self.complexes_covered:
+                    continue
+                self.complexes_covered |= my_hashes.complex_hashes
 
-            # Generate the key for this pair of agents.
-            ordered_agents = [ag_json.get(str(n))
-                              for n in range(max(n_ag, int(max(ag_json))+1))]
-            key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
-            if key in results:
-                logger.warning("Something went weird processing results for "
-                               "agents.")
+                # Generate the key for this pair of agents.
+                ordered_agents = [ag_json.get(str(n))
+                                  for n in range(max(n_ag, int(max(ag_json))+1))]
+                key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
+                if key in results:
+                    logger.warning("Something went weird processing results for "
+                                   "agents.")
 
-            # Aggregate the source counts.
-            source_counts = defaultdict(lambda: 0)
-            for src_json in src_jsons:
-                for src, cnt in src_json.items():
-                    source_counts[src] += cnt
+                # Aggregate the source counts.
+                source_counts = defaultdict(lambda: 0)
+                for src_json in src_jsons:
+                    for src, cnt in src_json.items():
+                        source_counts[src] += cnt
 
-            # Add this entry to the results.
-            results[key] = {'id': key, 'source_counts': dict(source_counts),
-                            'agents': _make_agent_dict(ag_json),
-                            'hashes': my_hashes.hashes}
-            ev_totals[key] = sum(source_counts.values())
+                # Add this entry to the results.
+                results[key] = {'id': key, 'source_counts': dict(source_counts),
+                                'agents': _make_agent_dict(ag_json),
+                                'hashes': my_hashes.hashes}
+                ev_totals[key] = sum(source_counts.values())
 
-            # Sanity check. Only a coding error could cause this to fail.
-            assert n_ev == ev_totals[key], "Evidence counts don't add up."
-            num_entries += 1
-            if self._limit is not None and num_entries >= self._limit:
+                # Sanity check. Only a coding error could cause this to fail.
+                assert n_ev == ev_totals[key], "Evidence counts don't add up."
+                num_entries += 1
+                if self._limit is not None and num_entries >= self._limit:
+                    break
+            else:
+                num_rows = len(results)
+
+            if self._limit is None or num_entries >= self._limit:
                 break
-        else:
-            num_rows = len(results)
+
+            names = self._get_next(num_rows)
+            if not names:
+                break
 
         return results, ev_totals, num_rows
 

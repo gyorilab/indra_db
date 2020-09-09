@@ -1134,7 +1134,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
         self.tables = readonly_schema.get_schema(self.Base)
         for tbl in self.tables.values():
-            if tbl.__name__ == 'PaStmtSrc':
+            if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl
             elif tbl.__name__ == 'SourceMeta':
                 self.__SourceMeta = tbl
@@ -1142,7 +1142,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
                 setattr(self, tbl.__name__, tbl)
 
     def __getattribute__(self, item):
-        if item == 'PaStmtSrc':
+        if item == '_PaStmtSrc':
             self.__PaStmtSrc.load_cols(self.engine)
             return self.__PaStmtSrc
         elif item == 'SourceMeta':

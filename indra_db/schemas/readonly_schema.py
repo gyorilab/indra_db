@@ -125,8 +125,7 @@ def get_schema(Base):
     Base : type
         The base class for database tables
     """
-    read_views = {}
-    tmp_views = {}
+    ro_tables = {}
 
     class EvidenceCounts(Base, ReadonlyTable):
         __tablename__ = 'evidence_counts'
@@ -137,7 +136,7 @@ def get_schema(Base):
         _indices = [BtreeIndex('evidence_counts_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
         ev_count = Column(Integer)
-    read_views[EvidenceCounts.__tablename__] = EvidenceCounts
+    ro_tables[EvidenceCounts.__tablename__] = EvidenceCounts
 
     class ReadingRefLink(Base, ReadonlyTable):
         __tablename__ = 'reading_ref_link'
@@ -176,7 +175,7 @@ def get_schema(Base):
         source = Column(String(250))
         rid = Column(Integer, primary_key=True)
         reader = Column(String(20))
-    read_views[ReadingRefLink.__tablename__] = ReadingRefLink
+    ro_tables[ReadingRefLink.__tablename__] = ReadingRefLink
 
     class FastRawPaLink(Base, ReadonlyTable):
         __tablename__ = 'fast_raw_pa_link'
@@ -216,7 +215,7 @@ def get_schema(Base):
         mk_hash = Column(BigInteger)
         pa_json = Column(BYTEA)
         type_num = Column(SmallInteger)
-    read_views[FastRawPaLink.__tablename__] = FastRawPaLink
+    ro_tables[FastRawPaLink.__tablename__] = FastRawPaLink
 
     class PAAgentCounts(Base, ReadonlyTable):
         __tablename__ = 'pa_agent_counts'
@@ -227,7 +226,7 @@ def get_schema(Base):
         _indices = [BtreeIndex('pa_agent_counts_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
         agent_count = Column(Integer)
-    read_views[PAAgentCounts.__tablename__] = PAAgentCounts
+    ro_tables[PAAgentCounts.__tablename__] = PAAgentCounts
 
     class _PaMeta(Base, ReadonlyTable):
         __tablename__ = 'pa_meta'
@@ -290,7 +289,7 @@ def get_schema(Base):
         is_active = Column(Boolean)
         agent_count = Column(Integer)
         is_complex_dup = Column(Boolean)
-    tmp_views[_PaMeta.__tablename__] = _PaMeta
+    ro_tables[_PaMeta.__tablename__] = _PaMeta
 
     class RawStmtSrc(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_src'
@@ -308,7 +307,7 @@ def get_schema(Base):
                     StringIndex('raw_stmt_src_src_idx', 'src')]
         sid = Column(Integer, primary_key=True)
         src = Column(String)
-    read_views[RawStmtSrc.__tablename__] = RawStmtSrc
+    ro_tables[RawStmtSrc.__tablename__] = RawStmtSrc
 
     class PaStmtSrc(Base, SpecialColumnTable):
         __tablename__ = 'pa_stmt_src'
@@ -354,7 +353,7 @@ def get_schema(Base):
                     if include_none or v is not None:
                         src_dict[k] = v
             return src_dict
-    read_views[PaStmtSrc.__tablename__] = PaStmtSrc
+    ro_tables[_PaStmtSrc.__tablename__] = _PaStmtSrc
 
     class _PaRefLink(Base, ReadonlyTable):
         __tablename__ = 'pa_ref_link'
@@ -373,7 +372,7 @@ def get_schema(Base):
         pmcid_num = Column(String)
         source = Column(String)
         reader = Column(String)
-    tmp_views[_PaRefLink.__tablename__] = _PaRefLink
+    ro_tables[_PaRefLink.__tablename__] = _PaRefLink
 
     class _MeshTerms(Base, ReadonlyTable):
         __tablename__ = 'mesh_terms'
@@ -385,7 +384,7 @@ def get_schema(Base):
         _indices = [BtreeIndex('mt_pmid_num_idx', 'pmid_num')]
         mesh_num = Column(Integer, primary_key=True)
         pmid_num = Column(Integer, primary_key=True)
-    tmp_views[_MeshTerms.__tablename__] = _MeshTerms
+    ro_tables[_MeshTerms.__tablename__] = _MeshTerms
 
     class _MeshConcepts(Base, ReadonlyTable):
         __tablename__ = 'mesh_concepts'
@@ -397,7 +396,7 @@ def get_schema(Base):
         _indices = [BtreeIndex('mc_pmid_num_idx', 'pmid_num')]
         mesh_num = Column(Integer, primary_key=True)
         pmid_num = Column(Integer, primary_key=True)
-    tmp_views[_MeshConcepts.__tablename__] = _MeshConcepts
+    ro_tables[_MeshConcepts.__tablename__] = _MeshConcepts
 
     class _HashPmidCounts(Base, ReadonlyTable):
         __tablename__ = 'hash_pmid_counts'
@@ -408,7 +407,7 @@ def get_schema(Base):
         _indices = [BtreeIndex('hpc_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
         pmid_count = Column(Integer)
-    tmp_views[_HashPmidCounts.__tablename__] = _HashPmidCounts
+    ro_tables[_HashPmidCounts.__tablename__] = _HashPmidCounts
 
     class MeshTermRefCounts(Base, ReadonlyTable):
         __tablename__ = 'mesh_term_ref_counts'
@@ -432,7 +431,7 @@ def get_schema(Base):
         mesh_num = Column(Integer, primary_key=True)
         ref_count = Column(Integer)
         pmid_count = Column(Integer)
-    read_views[MeshTermRefCounts.__tablename__] = MeshTermRefCounts
+    ro_tables[MeshTermRefCounts.__tablename__] = MeshTermRefCounts
 
     class MeshConceptRefCounts(Base, ReadonlyTable):
         __tablename__ = 'mesh_concept_ref_counts'
@@ -456,7 +455,7 @@ def get_schema(Base):
         mesh_num = Column(Integer, primary_key=True)
         ref_count = Column(Integer)
         pmid_count = Column(Integer)
-    read_views[MeshConceptRefCounts.__tablename__] = MeshConceptRefCounts
+    ro_tables[MeshConceptRefCounts.__tablename__] = MeshConceptRefCounts
 
     class RawStmtMeshTerms(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_mesh_terms'
@@ -475,7 +474,7 @@ def get_schema(Base):
 
         sid = Column(Integer, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
-    read_views[RawStmtMeshTerms.__tablename__] = RawStmtMeshTerms
+    ro_tables[RawStmtMeshTerms.__tablename__] = RawStmtMeshTerms
 
     class RawStmtMeshConcepts(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_mesh_concepts'
@@ -494,7 +493,7 @@ def get_schema(Base):
 
         sid = Column(Integer, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
-    read_views[RawStmtMeshConcepts.__tablename__] = RawStmtMeshConcepts
+    ro_tables[RawStmtMeshConcepts.__tablename__] = RawStmtMeshConcepts
 
     class SourceMeta(Base, SpecialColumnTable):
         __tablename__ = 'source_meta'
@@ -583,7 +582,7 @@ def get_schema(Base):
                                                 reading_sources=rd_sources,
                                                 db_sources=db_sources)
             return sql
-    read_views[SourceMeta.__tablename__] = SourceMeta
+    ro_tables[SourceMeta.__tablename__] = SourceMeta
 
     class TextMeta(Base, NamespaceLookup):
         __tablename__ = 'text_meta'
@@ -603,7 +602,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
-    read_views[TextMeta.__tablename__] = TextMeta
+    ro_tables[TextMeta.__tablename__] = TextMeta
 
     class NameMeta(Base, NamespaceLookup):
         __tablename__ = 'name_meta'
@@ -623,7 +622,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
-    read_views[NameMeta.__tablename__] = NameMeta
+    ro_tables[NameMeta.__tablename__] = NameMeta
 
     class OtherMeta(Base, ReadonlyTable):
         __tablename__ = 'other_meta'
@@ -650,7 +649,7 @@ def get_schema(Base):
         is_active = Column(Boolean)
         agent_count = Column(Integer)
         is_complex_dup = Column(Boolean)
-    read_views[OtherMeta.__tablename__] = OtherMeta
+    ro_tables[OtherMeta.__tablename__] = OtherMeta
 
     class MeshTermMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_term_meta'
@@ -688,7 +687,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
-    read_views[MeshTermMeta.__tablename__] = MeshTermMeta
+    ro_tables[MeshTermMeta.__tablename__] = MeshTermMeta
 
     class MeshConceptMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_concept_meta'
@@ -725,7 +724,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
-    read_views[MeshConceptMeta.__tablename__] = MeshConceptMeta
+    ro_tables[MeshConceptMeta.__tablename__] = MeshConceptMeta
 
     class AgentInteractions(Base, ReadonlyTable):
         __tablename__ = 'agent_interactions'
@@ -816,9 +815,9 @@ def get_schema(Base):
         agent_json = Column(JSONB)
         src_json = Column(JSONB)
         is_complex_dup = Column(Boolean)
-    read_views[AgentInteractions.__tablename__] = AgentInteractions
+    ro_tables[AgentInteractions.__tablename__] = AgentInteractions
 
-    return read_views, tmp_views
+    return ro_tables
 
 
 SOURCE_GROUPS = {'databases': ['phosphosite', 'cbn', 'pc11', 'biopax',

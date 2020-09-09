@@ -310,7 +310,7 @@ def get_schema(Base):
         src = Column(String)
     ro_tables[RawStmtSrc.__tablename__] = RawStmtSrc
 
-    class PaStmtSrc(Base, SpecialColumnTable):
+    class _PaStmtSrc(Base, SpecialColumnTable):
         __tablename__ = 'pa_stmt_src'
         __table_args__ = {'schema': 'readonly'}
         __definition_fmt__ = ("SELECT * FROM crosstab("
@@ -320,6 +320,7 @@ def get_schema(Base):
                               "$$SELECT unnest('{%s}'::text[])$$"
                               " ) final_result(mk_hash bigint, %s)")
         _indices = [BtreeIndex('pa_stmt_src_mk_hash_idx', 'mk_hash')]
+        _temp = True
         loaded = False
 
         mk_hash = Column(BigInteger, primary_key=True)

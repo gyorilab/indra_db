@@ -409,8 +409,10 @@ class AgentSQL(AgentJsonSQL):
 
     def _get_next(self, more_offset=0):
         q = self.agg_q
-        if self._offset is not None:
-            q = q.offset(self._offset + more_offset)
+        if self._offset or more_offset:
+            net_offset = 0 if self._offset is None else self._offset
+            net_offset += more_offset
+            q = q.offset(net_offset)
 
         if self._limit is not None:
             q = q.limit(self._limit)
@@ -463,8 +465,6 @@ class AgentSQL(AgentJsonSQL):
                 num_entries += 1
                 if self._limit is not None and num_entries >= self._limit:
                     break
-            else:
-                num_rows = len(results)
 
             if self._limit is None or num_entries >= self._limit:
                 break

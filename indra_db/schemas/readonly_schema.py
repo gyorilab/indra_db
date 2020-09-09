@@ -248,6 +248,7 @@ def get_schema(Base):
             '  AND pa_agents.role = role_map.role\n'
             '  AND LENGTH(pa_agents.db_id) < 2000'
         )
+        _temp = True
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     StringIndex('pa_meta_db_id_idx', 'db_id'),
                     BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
@@ -366,6 +367,7 @@ def get_schema(Base):
         _indices = [BtreeIndex('pa_ref_link_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('pa_ref_link_trid_idx', 'trid'),
                     BtreeIndex('pa_ref_link_pmid_num_idx', 'pmid_num')]
+        _temp = True
         mk_hash = Column(BigInteger, primary_key=True)
         trid = Column(Integer, primary_key=True)
         pmid_num = Column(String)
@@ -381,6 +383,7 @@ def get_schema(Base):
                           'UNION\n'
                           'SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
                           '  WHERE NOT is_concept')
+        _temp = True
         _indices = [BtreeIndex('mt_pmid_num_idx', 'pmid_num')]
         mesh_num = Column(Integer, primary_key=True)
         pmid_num = Column(Integer, primary_key=True)
@@ -393,6 +396,7 @@ def get_schema(Base):
                           'UNION\n'
                           'SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
                           '  WHERE is_concept IS true')
+        _temp = True
         _indices = [BtreeIndex('mc_pmid_num_idx', 'pmid_num')]
         mesh_num = Column(Integer, primary_key=True)
         pmid_num = Column(Integer, primary_key=True)
@@ -404,6 +408,7 @@ def get_schema(Base):
         __definition__ = ('SELECT mk_hash,\n'
                           '       count(distinct pmid_num)::integer as pmid_count\n'
                           'FROM readonly.pa_ref_link GROUP BY mk_hash')
+        _temp = True
         _indices = [BtreeIndex('hpc_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
         pmid_count = Column(Integer)

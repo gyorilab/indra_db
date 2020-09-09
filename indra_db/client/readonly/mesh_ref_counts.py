@@ -41,14 +41,14 @@ def get_mesh_ref_counts(mesh_terms, require_all=False, ro=None):
     nums = func.array_agg(t.mesh_num)
     counts = func.array_agg(t.ref_count)
     q = ro.session.query(t.mk_hash, nums.label('nums'),
-                         counts.label('ref_counts'))
+                         counts.label('ref_counts'), t.pmid_count)
     if len(mesh_num_map.keys()) == 1:
         q = q.filter(t.mesh_num == list(mesh_num_map.keys())[0])
     elif len(mesh_num_map.keys()) > 1:
         q = q.filter(t.mesh_num.in_(mesh_num_map.keys()))
     else:
         raise ValueError("Must submit at least one mesh term.")
-    q = q.group_by(t.mk_hash)
+    q = q.group_by(t.mk_hash, t.pmid_count)
 
     # Apply the require all option by comparing the length of the nums array
     # to the number of inputs.
@@ -57,7 +57,8 @@ def get_mesh_ref_counts(mesh_terms, require_all=False, ro=None):
 
     # Parse the results.
     result = {}
-    for mk_hash, nums, counts in q.all():
+    for mk_hash, nums, counts, pmid_count in q.all():
         result[mk_hash] = {mesh_num_map[mesh_num]: ref_count
                            for mesh_num, ref_count in zip(nums, counts)}
+        result[mk_hash]['total'] = pmid_count
     return result

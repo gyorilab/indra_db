@@ -403,9 +403,8 @@ def get_schema(Base):
         mk_hash = Column(BigInteger, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
         ref_count = Column(BigInteger)
-        #pmid_count = Column(BigInteger)
+        pmid_count = Column(BigInteger)
     read_views[MeshRefCounts.__tablename__] = MeshRefCounts
-
 
     class RawStmtMeshTerms(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_mesh_terms'

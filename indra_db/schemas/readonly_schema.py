@@ -126,6 +126,7 @@ def get_schema(Base):
         The base class for database tables
     """
     read_views = {}
+    tmp_views = {}
 
     class EvidenceCounts(Base, ReadonlyTable):
         __tablename__ = 'evidence_counts'
@@ -228,7 +229,7 @@ def get_schema(Base):
         agent_count = Column(Integer)
     read_views[PAAgentCounts.__tablename__] = PAAgentCounts
 
-    class PaMeta(Base, ReadonlyTable):
+    class _PaMeta(Base, ReadonlyTable):
         __tablename__ = 'pa_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = (
@@ -289,7 +290,7 @@ def get_schema(Base):
         is_active = Column(Boolean)
         agent_count = Column(Integer)
         is_complex_dup = Column(Boolean)
-    read_views[PaMeta.__tablename__] = PaMeta
+    tmp_views[_PaMeta.__tablename__] = _PaMeta
 
     class RawStmtSrc(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_src'
@@ -355,7 +356,7 @@ def get_schema(Base):
             return src_dict
     read_views[PaStmtSrc.__tablename__] = PaStmtSrc
 
-    class PaRefLink(Base, ReadonlyTable):
+    class _PaRefLink(Base, ReadonlyTable):
         __tablename__ = 'pa_ref_link'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT mk_hash, trid, pmid_num, pmcid_num, source,\n'
@@ -372,39 +373,90 @@ def get_schema(Base):
         pmcid_num = Column(String)
         source = Column(String)
         reader = Column(String)
-    read_views[PaRefLink.__tablename__] = PaRefLink
+    tmp_views[_PaRefLink.__tablename__] = _PaRefLink
 
-    class MeshRefCounts(Base, ReadonlyTable):
-        __tablename__ = 'mesh_ref_counts'
+    class _MeshTerms(Base, ReadonlyTable):
+        __tablename__ = 'mesh_terms'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ('WITH hash_pmid_counts AS (\n'
-                          '    SELECT mk_hash, count(distinct pmid_num) as pmid_count\n'
-                          '    FROM readonly.pa_ref_link GROUP BY mk_hash\n'
-                          '), mesh_terms AS (\n'
-                          '    SELECT pmid_num, mesh_num FROM mesh_ref_annotations\n'
-                          '    UNION\n'
-                          '    SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
-                          '      WHERE NOT is_concept\n'
-                          '), mesh_hash_pmids AS (\n'
+        __definition__ = ('SELECT pmid_num, mesh_num FROM mesh_ref_annotations\n'
+                          'UNION\n'
+                          'SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
+                          '  WHERE NOT is_concept')
+        _indices = [BtreeIndex('mt_pmid_num_idx', 'pmid_num')]
+        mesh_num = Column(Integer, primary_key=True)
+        pmid_num = Column(Integer, primary_key=True)
+    tmp_views[_MeshTerms.__tablename__] = _MeshTerms
+
+    class _MeshConcepts(Base, ReadonlyTable):
+        __tablename__ = 'mesh_concepts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('SELECT pmid_num, mesh_num FROM mesh_ref_annotations\n'
+                          'UNION\n'
+                          'SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
+                          '  WHERE is_concept IS true')
+        _indices = [BtreeIndex('mc_pmid_num_idx', 'pmid_num')]
+        mesh_num = Column(Integer, primary_key=True)
+        pmid_num = Column(Integer, primary_key=True)
+    tmp_views[_MeshConcepts.__tablename__] = _MeshConcepts
+
+    class _HashPmidCounts(Base, ReadonlyTable):
+        __tablename__ = 'hash_pmid_counts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('SELECT mk_hash,\n'
+                          '       count(distinct pmid_num)::integer as pmid_count\n'
+                          'FROM readonly.pa_ref_link GROUP BY mk_hash')
+        _indices = [BtreeIndex('hpc_mk_hash_idx', 'mk_hash')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        pmid_count = Column(Integer)
+    tmp_views[_HashPmidCounts.__tablename__] = _HashPmidCounts
+
+    class MeshTermRefCounts(Base, ReadonlyTable):
+        __tablename__ = 'mesh_term_ref_counts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('WITH mesh_hash_pmids AS (\n'
                           '    SELECT mesh_terms.pmid_num, mk_hash, mesh_num\n'
                           '    FROM mesh_terms, readonly.pa_ref_link\n'
                           '    WHERE mesh_terms.pmid_num = readonly.pa_ref_link.pmid_num\n'
                           '), mesh_ref_counts_proto AS (\n'
                           '    SELECT mk_hash, mesh_num,\n'
-                          '           COUNT(DISTINCT pmid_num) AS ref_count\n'
+                          '           COUNT(DISTINCT pmid_num)::integer AS ref_count\n'
                           '    FROM mesh_hash_pmids GROUP BY mk_hash, mesh_num\n'
                           ')\n'
                           'SELECT hash_pmid_counts.mk_hash, mesh_num,\n'
                           '       ref_count, pmid_count\n'
                           'FROM mesh_ref_counts_proto, hash_pmid_counts\n'
                           'WHERE mesh_ref_counts_proto.mk_hash = hash_pmid_counts.mk_hash')
-        _indices = [BtreeIndex('mrc_mesh_num_idx', 'mesh_num', cluster=True),
-                    BtreeIndex('mrc_mk_hash_idx', 'mk_hash')]
+        _indices = [BtreeIndex('mtrc_mesh_num_idx', 'mesh_num', cluster=True),
+                    BtreeIndex('mtrc_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
-        ref_count = Column(BigInteger)
-        pmid_count = Column(BigInteger)
-    read_views[MeshRefCounts.__tablename__] = MeshRefCounts
+        ref_count = Column(Integer)
+        pmid_count = Column(Integer)
+    read_views[MeshTermRefCounts.__tablename__] = MeshTermRefCounts
+
+    class MeshConceptRefCounts(Base, ReadonlyTable):
+        __tablename__ = 'mesh_concept_ref_counts'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = ('WITH mesh_hash_pmids AS (\n'
+                          '    SELECT mesh_concepts.pmid_num, mk_hash, mesh_num\n'
+                          '    FROM mesh_concepts, readonly.pa_ref_link\n'
+                          '    WHERE mesh_concepts.pmid_num = readonly.pa_ref_link.pmid_num\n'
+                          '), mesh_ref_counts_proto AS (\n'
+                          '    SELECT mk_hash, mesh_num,\n'
+                          '           COUNT(DISTINCT pmid_num)::integer AS ref_count\n'
+                          '    FROM mesh_hash_pmids GROUP BY mk_hash, mesh_num\n'
+                          ')\n'
+                          'SELECT hash_pmid_counts.mk_hash, mesh_num,\n'
+                          '       ref_count, pmid_count\n'
+                          'FROM mesh_ref_counts_proto, hash_pmid_counts\n'
+                          'WHERE mesh_ref_counts_proto.mk_hash = hash_pmid_counts.mk_hash')
+        _indices = [BtreeIndex('mcrc_mesh_num_idx', 'mesh_num'),
+                    BtreeIndex('mcrc_mk_hash_idx', 'mk_hash')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        mesh_num = Column(Integer, primary_key=True)
+        ref_count = Column(Integer)
+        pmid_count = Column(Integer)
+    read_views[MeshConceptRefCounts.__tablename__] = MeshConceptRefCounts
 
     class RawStmtMeshTerms(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_mesh_terms'
@@ -412,11 +464,7 @@ def get_schema(Base):
         __definition__ = ('SELECT DISTINCT raw_statements.id as sid,\n'
                           '       mesh_num\n'
                           'FROM text_ref\n'
-                          '  JOIN (SELECT * FROM mesh_ref_annotations\n'
-                          '          WHERE is_concept IS NOT true\n'
-                          '        UNION\n'
-                          '        SELECT * FROM mti_ref_annotations_test\n'
-                          '          WHERE is_concept IS NOT true) AS mra\n'
+                          '  JOIN readonly.mesh_terms AS mra\n'
                           '    ON text_ref.pmid_num = mra.pmid_num\n'
                           '  JOIN text_content ON text_ref.id = text_ref_id\n'
                           '  JOIN reading\n'
@@ -435,11 +483,7 @@ def get_schema(Base):
         __definition__ = ('SELECT DISTINCT raw_statements.id as sid,\n'
                           '       mesh_num\n'
                           'FROM text_ref\n'
-                          '  JOIN (SELECT * FROM mesh_ref_annotations\n'
-                          '          WHERE is_concept IS true\n'
-                          '        UNION\n'
-                          '        SELECT * FROM mti_ref_annotations_test\n'
-                          '          WHERE is_concept IS true) AS mra\n'
+                          '  JOIN readonly.mesh_concepts AS mra\n'
                           '    ON text_ref.pmid_num = mra.pmid_num\n'
                           '  JOIN text_content ON text_ref.id = text_ref_id\n'
                           '  JOIN reading\n'
@@ -774,7 +818,7 @@ def get_schema(Base):
         is_complex_dup = Column(Boolean)
     read_views[AgentInteractions.__tablename__] = AgentInteractions
 
-    return read_views
+    return read_views, tmp_views
 
 
 SOURCE_GROUPS = {'databases': ['phosphosite', 'cbn', 'pc11', 'biopax',

@@ -11,6 +11,7 @@ from indra_db.belief import get_belief
 from indra_db.config import CONFIG
 from indra_db.config import get_s3_dump
 from indra_db.util import get_db, get_ro, S3Path
+from indra_db.util.aws import get_role_kwargs
 from indra_db.util.dump_sif import dump_sif, get_source_counts
 
 
@@ -262,25 +263,8 @@ def load_readonly_dump(db_label, ro_label, dump_file):
         readonly_db.load_dump(dump_file)
 
 
-def uncamel(word):
-    return re.sub(r'([a-z])([A-Z])', '\g<1>_\g<2>', word).lower()
-
-
 def get_lambda_client():
-    sts = boto3.client('sts')
-
-    # Check the current role
-    kwargs = {}
-    ident = sts.get_caller_identity()
-    if aws_role and not ident['Arn'].endswith(aws_role):
-        # If the role is not the default, assume that role.
-        new_role_arn = "arn:aws:iam::%s:role/%s" % (ident['Account'], aws_role)
-        res = sts.assume_role(RoleArn=new_role_arn,
-                              RoleSessionName="AssumeRoleReadonlyDBUpdate")
-        kwargs = {'aws_' + uncamel(k): v for k, v in res['Credentials'].items()
-                  if 'expiration' not in k.lower()}
-
-    # Get a client to Lambda
+    kwargs, _ = get_role_kwargs(aws_role)
     return boto3.client('lambda', **kwargs)
 
 

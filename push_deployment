@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+if [[ $# -eq 0 ]] ; then
+  echo "Please specify a deployment."
+  exit 0
+fi
+
+echo "Updating" $1 "deployment."
+zappa update $1
+./after_zappa $1

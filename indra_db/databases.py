@@ -967,12 +967,11 @@ class PrincipalDatabaseManager(DatabaseManager):
                 yield '-', view
 
         temp_tables = []
-        tables_done = self.get_active_tables(schema='readonly')
         for i, ro_name in iter_names():
             if ro_list is not None and ro_name not in ro_list:
                 continue
 
-            if ro_name in tables_done:
+            if ro_name in self.get_active_tables(schema='readonly'):
                 logger.info(f"[{i}] Build of {ro_name} done, continuing...")
                 continue
 

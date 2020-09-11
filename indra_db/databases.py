@@ -966,6 +966,11 @@ class PrincipalDatabaseManager(DatabaseManager):
             for view in CREATE_UNORDERED:
                 yield '-', view
 
+        assert len(set(CREATE_ORDER)) == len(CREATE_ORDER),\
+            "Elements in CREATE_ORDERED are NOT unique."
+        assert len(set(CREATE_UNORDERED)) == len(CREATE_UNORDERED),\
+            "Elements in CREATE_UNORDERED are NOT unique."
+
         temp_tables = []
         for i, ro_name in iter_names():
             if ro_list is not None and ro_name not in ro_list:

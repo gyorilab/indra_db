@@ -322,6 +322,7 @@ def get_schema(Base):
         __tablename__ = 'mesh_terms'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT pmid_num, mesh_num FROM mesh_ref_annotations\n'
+                          '  WHERE NOT is_concept\n'
                           'UNION\n'
                           'SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
                           '  WHERE NOT is_concept')
@@ -335,6 +336,7 @@ def get_schema(Base):
         __tablename__ = 'mesh_concepts'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT pmid_num, mesh_num FROM mesh_ref_annotations\n'
+                          '  WHERE is_concept IS true\n'
                           'UNION\n'
                           'SELECT pmid_num, mesh_num FROM mti_ref_annotations_test\n'
                           '  WHERE is_concept IS true')

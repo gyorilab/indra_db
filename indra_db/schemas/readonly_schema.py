@@ -22,7 +22,6 @@ CREATE_ORDER = [
     'evidence_counts',
     'reading_ref_link',
     'pa_ref_link',
-    'pa_meta',
     'mesh_terms',
     'mesh_concepts',
     'hash_pmid_counts',
@@ -30,6 +29,7 @@ CREATE_ORDER = [
     'mesh_concept_ref_counts',
     'raw_stmt_mesh_terms',
     'raw_stmt_mesh_concepts',
+    'pa_meta',
     'source_meta',
     'text_meta',
     'name_meta',
@@ -232,70 +232,6 @@ def get_schema(Base):
         mk_hash = Column(BigInteger, primary_key=True)
         agent_count = Column(Integer)
     ro_tables[PAAgentCounts.__tablename__] = PAAgentCounts
-
-    class _PaMeta(Base, ReadonlyTable):
-        __tablename__ = 'pa_meta'
-        __table_args__ = {'schema': 'readonly'}
-        __definition__ = (
-            'SELECT pa_agents.db_name, pa_agents.db_id,\n'
-            '       pa_agents.id AS ag_id, role_num, pa_agents.ag_num,\n'
-            '       type_num, pa_statements.mk_hash,\n'
-            '       readonly.evidence_counts.ev_count, activity, is_active,\n'
-            '       agent_count, false AS is_complex_dup\n'
-            'FROM pa_agents, pa_statements, readonly.pa_agent_counts, type_map,'
-            '  role_map, readonly.evidence_counts'
-            '  LEFT JOIN pa_activity'
-            '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
-            'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
-            '  AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
-            '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash\n'
-            '  AND pa_statements.type = type_map.type\n'
-            '  AND pa_agents.role = role_map.role\n'
-            '  AND LENGTH(pa_agents.db_id) < 2000'
-        )
-        _temp = True
-        _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
-                    StringIndex('pa_meta_db_id_idx', 'db_id'),
-                    BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
-
-        @classmethod
-        def create(cls, db, commit=True):
-            sql = cls.__create_table_fmt__ \
-                  % (cls.full_name(force_schema=True),
-                     cls.get_definition())
-            sql += '\n'
-            sql += (f'INSERT INTO readonly.pa_meta \n'
-                    f'SELECT db_name, db_id, ag_id,\n '
-                    f'  generate_series(-1, 1, 2) AS role_num,\n'
-                    f'  generate_series(0, 1) AS ag_num,\n'
-                    f'  type_num, mk_hash, ev_count, activity, is_active,\n'
-                    f'  agent_count, true AS is_complex_dup\n'
-                    f'FROM readonly.pa_meta\n'
-                    f'WHERE type_num = {ro_type_map.get_int("Complex")}\n')
-            if commit:
-                cls.execute(db, sql)
-            return sql
-
-        @classmethod
-        def get_definition(cls):
-            with_clause = 'WITH\n'
-            with_clause += ro_type_map.get_with_clause() + ','
-            with_clause += ro_role_map.get_with_clause() + '\n'
-            return with_clause + cls.__definition__
-
-        ag_id = Column(Integer, primary_key=True)
-        ag_num = Column(Integer)
-        db_name = Column(String)
-        db_id = Column(String)
-        role_num = Column(SmallInteger)
-        type_num = Column(SmallInteger)
-        mk_hash = Column(BigInteger)
-        ev_count = Column(Integer)
-        activity = Column(String)
-        is_active = Column(Boolean)
-        agent_count = Column(Integer)
-        is_complex_dup = Column(Boolean)
-    ro_tables[_PaMeta.__tablename__] = _PaMeta
 
     class RawStmtSrc(Base, ReadonlyTable):
         __tablename__ = 'raw_stmt_src'
@@ -507,6 +443,70 @@ def get_schema(Base):
         sid = Column(Integer, primary_key=True)
         mesh_num = Column(Integer, primary_key=True)
     ro_tables[RawStmtMeshConcepts.__tablename__] = RawStmtMeshConcepts
+
+    class _PaMeta(Base, ReadonlyTable):
+        __tablename__ = 'pa_meta'
+        __table_args__ = {'schema': 'readonly'}
+        __definition__ = (
+            'SELECT pa_agents.db_name, pa_agents.db_id,\n'
+            '       pa_agents.id AS ag_id, role_num, pa_agents.ag_num,\n'
+            '       type_num, pa_statements.mk_hash,\n'
+            '       readonly.evidence_counts.ev_count, activity, is_active,\n'
+            '       agent_count, false AS is_complex_dup\n'
+            'FROM pa_agents, pa_statements, readonly.pa_agent_counts, type_map,'
+            '  role_map, readonly.evidence_counts'
+            '  LEFT JOIN pa_activity'
+            '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
+            'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
+            '  AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
+            '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash\n'
+            '  AND pa_statements.type = type_map.type\n'
+            '  AND pa_agents.role = role_map.role\n'
+            '  AND LENGTH(pa_agents.db_id) < 2000'
+        )
+        _temp = True
+        _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
+                    StringIndex('pa_meta_db_id_idx', 'db_id'),
+                    BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
+
+        @classmethod
+        def create(cls, db, commit=True):
+            sql = cls.__create_table_fmt__ \
+                  % (cls.full_name(force_schema=True),
+                     cls.get_definition())
+            sql += '\n'
+            sql += (f'INSERT INTO readonly.pa_meta \n'
+                    f'SELECT db_name, db_id, ag_id,\n '
+                    f'  generate_series(-1, 1, 2) AS role_num,\n'
+                    f'  generate_series(0, 1) AS ag_num,\n'
+                    f'  type_num, mk_hash, ev_count, activity, is_active,\n'
+                    f'  agent_count, true AS is_complex_dup\n'
+                    f'FROM readonly.pa_meta\n'
+                    f'WHERE type_num = {ro_type_map.get_int("Complex")}\n')
+            if commit:
+                cls.execute(db, sql)
+            return sql
+
+        @classmethod
+        def get_definition(cls):
+            with_clause = 'WITH\n'
+            with_clause += ro_type_map.get_with_clause() + ','
+            with_clause += ro_role_map.get_with_clause() + '\n'
+            return with_clause + cls.__definition__
+
+        ag_id = Column(Integer, primary_key=True)
+        ag_num = Column(Integer)
+        db_name = Column(String)
+        db_id = Column(String)
+        role_num = Column(SmallInteger)
+        type_num = Column(SmallInteger)
+        mk_hash = Column(BigInteger)
+        ev_count = Column(Integer)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
+        is_complex_dup = Column(Boolean)
+    ro_tables[_PaMeta.__tablename__] = _PaMeta
 
     class SourceMeta(Base, SpecialColumnTable):
         __tablename__ = 'source_meta'

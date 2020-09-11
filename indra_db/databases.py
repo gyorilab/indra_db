@@ -916,7 +916,7 @@ class PrincipalDatabaseManager(DatabaseManager):
 
         for tbl in (t for d in [self.tables, self.readonly]
                     for t in d.values()):
-            if tbl.__name__ == 'PaStmtSrc':
+            if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl
             elif tbl.__name__ == 'SourceMeta':
                 self.__SourceMeta = tbl
@@ -927,7 +927,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         return
 
     def __getattribute__(self, item):
-        if item == 'PaStmtSrc':
+        if item == '_PaStmtSrc':
             self.__PaStmtSrc.load_cols(self.engine)
             return self.__PaStmtSrc
         elif item == 'SourceMeta':

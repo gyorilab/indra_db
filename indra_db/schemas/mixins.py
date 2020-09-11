@@ -144,6 +144,10 @@ class ReadonlyTable(IndraDBTable):
     def get_definition(cls):
         return cls.__definition__
 
+    @classmethod
+    def definition(cls, db):
+        return cls.get_definition()
+
 
 class SpecialColumnTable(ReadonlyTable):
 

@@ -38,7 +38,6 @@ CREATE_ORDER = [
     'mesh_concept_meta',
     'agent_interactions'
 ]
-CREATE_UNORDERED = {}
 
 
 class StringIntMapping(object):

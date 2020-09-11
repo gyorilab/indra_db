@@ -586,7 +586,7 @@ def get_schema(Base):
         @classmethod
         def definition(cls, db):
             db.grab_session()
-            srcs = set(db.get_column_names(db.PaStmtSrc)) - {'mk_hash'}
+            srcs = set(db.get_column_names(db._PaStmtSrc)) - {'mk_hash'}
             all_sources = ', '.join(s for src in srcs
                                     for s in (repr(src), src))
             rd_sources = ', '.join(repr(src)

@@ -231,96 +231,6 @@ class DatabaseManager(object):
         except:
             print("Failed to execute rollback of database upon deletion.")
 
-    def create_tables(self, tbl_list=None):
-        "Create the tables for INDRA database."
-        ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
-                          'reading', 'db_info', 'raw_statements', 'raw_agents',
-                          'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
-                          'pa_mods', 'pa_muts', 'raw_unique_links',
-                          'support_links']
-        if tbl_list is None:
-            tbl_list = list(self.tables.keys())
-
-        tbl_name_list = []
-        for tbl in tbl_list:
-            if isinstance(tbl, str):
-                tbl_name_list.append(tbl)
-            else:
-                tbl_name_list.append(tbl.__tablename__)
-        # These tables must be created in this order.
-        for tbl_name in ordered_tables:
-            if tbl_name in tbl_name_list:
-                tbl_name_list.remove(tbl_name)
-                logger.debug("Creating %s..." % tbl_name)
-                if not self.tables[tbl_name].__table__.exists(self.engine):
-                    self.tables[tbl_name].__table__.create(bind=self.engine)
-                    logger.debug("Table created.")
-                else:
-                    logger.debug("Table already existed.")
-        # The rest can be started any time.
-        for tbl_name in tbl_name_list:
-            logger.debug("Creating %s..." % tbl_name)
-            self.tables[tbl_name].__table__.create(bind=self.engine)
-            logger.debug("Table created.")
-        return
-
-    def drop_tables(self, tbl_list=None, force=False):
-        """Drop the tables for INDRA database given in tbl_list.
-
-        If tbl_list is None, all tables will be dropped. Note that if `force`
-        is False, a warning prompt will be raised to asking for confirmation,
-        as this action will remove all data from that table.
-        """
-        if tbl_list is not None:
-            tbl_objs = []
-            for tbl in tbl_list:
-                if isinstance(tbl, str):
-                    tbl_objs.append(self.tables[tbl])
-                else:
-                    tbl_objs.append(tbl)
-        if not force:
-            # Build the message
-            if tbl_list is None:
-                msg = ("Do you really want to clear the %s database? [y/N]: "
-                       % self.label)
-            else:
-                msg = "You are going to clear the following tables:\n"
-                msg += str([tbl.__tablename__ for tbl in tbl_objs]) + '\n'
-                msg += ("Do you really want to clear these tables from %s? "
-                        "[y/N]: " % self.label)
-            # Check to make sure.
-            resp = input(msg)
-            if resp != 'y' and resp != 'yes':
-                logger.info('Aborting clear.')
-                return False
-        if tbl_list is None:
-            logger.info("Removing all tables...")
-            self.Base.metadata.drop_all(self.engine)
-            logger.debug("All tables removed.")
-        else:
-            for tbl in tbl_list:
-                logger.info("Removing %s..." % tbl.__tablename__)
-                if tbl.__table__.exists(self.engine):
-                    tbl.__table__.drop(self.engine)
-                    logger.debug("Table removed.")
-                else:
-                    logger.debug("Table doesn't exist.")
-        return True
-
-    def _clear(self, tbl_list=None, force=False):
-        "Brutal clearing of all tables in tbl_list, or all tables."
-        # This is intended for testing purposes, not general use.
-        # Use with care.
-        self.grab_session()
-        logger.debug("Rolling back before clear...")
-        self.session.rollback()
-        logger.debug("Rolled back.")
-        if self.drop_tables(tbl_list, force=force):
-            self.create_tables(tbl_list)
-            return True
-        else:
-            return False
-
     def grab_session(self):
         "Get an active session with the database."
         if not self.available:
@@ -1056,6 +966,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             for view in CREATE_UNORDERED:
                 yield '-', view
 
+        temp_tables = []
         tables_done = self.get_active_tables(schema='readonly')
         for i, ro_name in iter_names():
             if ro_list is not None and ro_name not in ro_list:
@@ -1069,6 +980,11 @@ class PrincipalDatabaseManager(DatabaseManager):
             logger.info(f"[{i}] Creating {ro_name} readonly table...")
             ro_tbl.create(self)
             ro_tbl.build_indices(self)
+
+            if ro_tbl._temp:
+                temp_tables.append(ro_tbl)
+
+        self.drop_tables(temp_tables, force=True)
         return
 
     def dump_readonly(self, dump_file=None):
@@ -1081,6 +997,98 @@ class PrincipalDatabaseManager(DatabaseManager):
             dump_loc = get_s3_dump()
             dump_file = dump_loc.get_element_path('readonly-%s.dump' % now_str)
         return self.pg_dump(dump_file, schema='readonly')
+
+    def create_tables(self, tbl_list=None):
+        "Create the tables for INDRA database."
+        ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
+                          'reading', 'db_info', 'raw_statements', 'raw_agents',
+                          'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
+                          'pa_mods', 'pa_muts', 'raw_unique_links',
+                          'support_links']
+        if tbl_list is None:
+            tbl_list = list(self.tables.keys())
+
+        tbl_name_list = []
+        for tbl in tbl_list:
+            if isinstance(tbl, str):
+                tbl_name_list.append(tbl)
+            else:
+                tbl_name_list.append(tbl.__tablename__)
+        # These tables must be created in this order.
+        for tbl_name in ordered_tables:
+            if tbl_name in tbl_name_list:
+                tbl_name_list.remove(tbl_name)
+                logger.debug("Creating %s..." % tbl_name)
+                if not self.tables[tbl_name].__table__.exists(self.engine):
+                    self.tables[tbl_name].__table__.create(bind=self.engine)
+                    logger.debug("Table created.")
+                else:
+                    logger.debug("Table already existed.")
+        # The rest can be started any time.
+        for tbl_name in tbl_name_list:
+            logger.debug("Creating %s..." % tbl_name)
+            self.tables[tbl_name].__table__.create(bind=self.engine)
+            logger.debug("Table created.")
+        return
+
+    def drop_tables(self, tbl_list=None, force=False):
+        """Drop the tables for INDRA database given in tbl_list.
+
+        If tbl_list is None, all tables will be dropped. Note that if `force`
+        is False, a warning prompt will be raised to asking for confirmation,
+        as this action will remove all data from that table.
+        """
+        if tbl_list is not None:
+            for i, tbl in enumerate(tbl_list[:]):
+                if isinstance(tbl, str):
+                    if tbl in self.tables:
+                        tbl_list[i] = self.tables[tbl]
+                    elif tbl in self.readonly:
+                        tbl_list[i] = self.readonly[tbl]
+                    else:
+                        raise ValueError(f"Did not recognize table name: {tbl}")
+        if not force:
+            # Build the message
+            if tbl_list is None:
+                msg = ("Do you really want to clear the %s database? [y/N]: "
+                       % self.label)
+            else:
+                msg = "You are going to clear the following tables:\n"
+                msg += str([tbl.__tablename__ for tbl in tbl_list]) + '\n'
+                msg += ("Do you really want to clear these tables from %s? "
+                        "[y/N]: " % self.label)
+            # Check to make sure.
+            resp = input(msg)
+            if resp != 'y' and resp != 'yes':
+                logger.info('Aborting clear.')
+                return False
+        if tbl_list is None:
+            logger.info("Removing all tables...")
+            self.Base.metadata.drop_all(self.engine)
+            logger.debug("All tables removed.")
+        else:
+            for tbl in tbl_list:
+                logger.info("Removing %s..." % tbl.__tablename__)
+                if tbl.__table__.exists(self.engine):
+                    tbl.__table__.drop(self.engine)
+                    logger.debug("Table removed.")
+                else:
+                    logger.debug("Table doesn't exist.")
+        return True
+
+    def _clear(self, tbl_list=None, force=False):
+        "Brutal clearing of all tables in tbl_list, or all tables."
+        # This is intended for testing purposes, not general use.
+        # Use with care.
+        self.grab_session()
+        logger.debug("Rolling back before clear...")
+        self.session.rollback()
+        logger.debug("Rolled back.")
+        if self.drop_tables(tbl_list, force=force):
+            self.create_tables(tbl_list)
+            return True
+        else:
+            return False
 
     @staticmethod
     def get_latest_dump_file():

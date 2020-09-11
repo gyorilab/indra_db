@@ -27,7 +27,7 @@ from indra.util import batch_iter
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
-from indra_db.schemas.readonly_schema import CREATE_ORDER, CREATE_UNORDERED
+from indra_db.schemas.readonly_schema import CREATE_ORDER
 
 
 try:
@@ -935,14 +935,11 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def generate_readonly(self, ro_list=None, allow_continue=True):
+    def generate_readonly(self, allow_continue=True):
         """Manage the materialized views.
 
         Parameters
         ----------
-        ro_list : list or None
-            Default None. A list of readonly table names or None. If None,
-            all defined readonly tables will be build.
         allow_continue : bool
             If True (default), continue to build the schema if it already
             exists. If False, give up if the schema already exists.
@@ -959,36 +956,51 @@ class PrincipalDatabaseManager(DatabaseManager):
             logger.info("Creating the schema.")
             self.create_schema('readonly')
 
-        # Create each of the readonly view tables (in order, where necessary).
-        def iter_names():
-            for i, view in enumerate(CREATE_ORDER):
-                yield str(i), view
-            for view in CREATE_UNORDERED:
-                yield '-', view
+        # Create function to quickly check if a table will be used further down
+        # the line.
+        def table_is_used(tbl, other_tables):
+            for tbl_name in other_tables:
+                other_tbl = self.readonly[tbl_name]
+                if tbl.full_name() in other_tbl.definition(self):
+                    return True
+            return False
 
         assert len(set(CREATE_ORDER)) == len(CREATE_ORDER),\
             "Elements in CREATE_ORDERED are NOT unique."
-        assert len(set(CREATE_UNORDERED)) == len(CREATE_UNORDERED),\
-            "Elements in CREATE_UNORDERED are NOT unique."
 
         temp_tables = []
-        for i, ro_name in iter_names():
-            if ro_list is not None and ro_name not in ro_list:
-                continue
-
+        for i, ro_name in enumerate(CREATE_ORDER):
+            # Check to see if the table has already been build (skip if so).
             if ro_name in self.get_active_tables(schema='readonly'):
                 logger.info(f"[{i}] Build of {ro_name} done, continuing...")
                 continue
 
+            # Get table object, and check to see that if it is temp it is used.
             ro_tbl = self.readonly[ro_name]
+            if ro_tbl._temp and not table_is_used(ro_tbl, CREATE_ORDER[i+1:]):
+                logger.warning(f"[{i}] {ro_name} is marked as a temp table "
+                               f"but is not used in future tables. Skipping.")
+                continue
+
+            # Build the table and its indices.
             logger.info(f"[{i}] Creating {ro_name} readonly table...")
             ro_tbl.create(self)
             ro_tbl.build_indices(self)
 
+            # If it is temp, add it to the list.
             if ro_tbl._temp:
                 temp_tables.append(ro_tbl)
 
-        self.drop_tables(temp_tables, force=True)
+            # Drop any temp tables that will not be used further down the line.
+            to_drop = []
+            for tmp in temp_tables:
+                if not table_is_used(tmp, CREATE_ORDER[i+1:]):
+                    to_drop.append(tmp)
+                    temp_tables.remove(tmp)
+            self.drop_tables(to_drop, force=True)
+
+        if temp_tables:
+            logger.warning("Temporary tables remain after build completed.")
         return
 
     def dump_readonly(self, dump_file=None):

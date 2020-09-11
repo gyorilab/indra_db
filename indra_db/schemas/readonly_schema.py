@@ -433,10 +433,10 @@ def get_schema(Base):
                           '           COUNT(DISTINCT pmid_num)::integer AS ref_count\n'
                           '    FROM mesh_hash_pmids GROUP BY mk_hash, mesh_num\n'
                           ')\n'
-                          'SELECT hash_pmid_counts.mk_hash, mesh_num,\n'
+                          'SELECT readonly.hash_pmid_counts.mk_hash, mesh_num,\n'
                           '       ref_count, pmid_count\n'
-                          'FROM mesh_ref_counts_proto, hash_pmid_counts\n'
-                          'WHERE mesh_ref_counts_proto.mk_hash = hash_pmid_counts.mk_hash')
+                          'FROM mesh_ref_counts_proto, readonly.hash_pmid_counts\n'
+                          'WHERE mesh_ref_counts_proto.mk_hash = readonly.hash_pmid_counts.mk_hash')
         _indices = [BtreeIndex('mtrc_mesh_num_idx', 'mesh_num', cluster=True),
                     BtreeIndex('mtrc_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)
@@ -449,7 +449,8 @@ def get_schema(Base):
         __tablename__ = 'mesh_concept_ref_counts'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('WITH mesh_hash_pmids AS (\n'
-                          '    SELECT readonly.mesh_concepts.pmid_num, mk_hash, mesh_num\n'
+                          '    SELECT readonly.mesh_concepts.pmid_num, mk_hash,\n'
+                          '           mesh_num\n'
                           '    FROM readonly.mesh_concepts, readonly.pa_ref_link\n'
                           '    WHERE readonly.mesh_concepts.pmid_num = readonly.pa_ref_link.pmid_num\n'
                           '), mesh_ref_counts_proto AS (\n'
@@ -457,10 +458,10 @@ def get_schema(Base):
                           '           COUNT(DISTINCT pmid_num)::integer AS ref_count\n'
                           '    FROM mesh_hash_pmids GROUP BY mk_hash, mesh_num\n'
                           ')\n'
-                          'SELECT hash_pmid_counts.mk_hash, mesh_num,\n'
+                          'SELECT readonly.hash_pmid_counts.mk_hash, mesh_num,\n'
                           '       ref_count, pmid_count\n'
-                          'FROM mesh_ref_counts_proto, hash_pmid_counts\n'
-                          'WHERE mesh_ref_counts_proto.mk_hash = hash_pmid_counts.mk_hash')
+                          'FROM mesh_ref_counts_proto, readonly.hash_pmid_counts\n'
+                          'WHERE mesh_ref_counts_proto.mk_hash = readonly.hash_pmid_counts.mk_hash')
         _indices = [BtreeIndex('mcrc_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mcrc_mk_hash_idx', 'mk_hash')]
         mk_hash = Column(BigInteger, primary_key=True)

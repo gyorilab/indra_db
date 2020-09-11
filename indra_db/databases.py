@@ -334,16 +334,23 @@ class DatabaseManager(object):
                 raise IndraDbException("Failed to grab session.")
 
     def get_tables(self):
-        "Get a list of available tables."
+        """Get a list of available tables."""
         return [tbl_name for tbl_name in self.tables.keys()]
 
     def show_tables(self):
-        "Print a list of all the available tables."
+        """Print a list of all the available tables."""
         print(self.get_tables())
 
-    def get_active_tables(self):
-        "Get the tables currently active in the database."
-        return inspect(self.engine).get_table_names()
+    def get_active_tables(self, schema=None):
+        """Get the tables currently active in the database.
+
+        Parameters
+        ----------
+        schema : None or st
+            The name of the schema whose tables you wish to see. The default is
+            public.
+        """
+        return inspect(self.engine).get_table_names(schema=schema)
 
     def get_schemas(self):
         """Return the list of schema names currently in the database."""
@@ -1049,13 +1056,17 @@ class PrincipalDatabaseManager(DatabaseManager):
             for view in CREATE_UNORDERED:
                 yield '-', view
 
+        tables_done = self.get_active_tables(schema='readonly')
         for i, ro_name in iter_names():
             if ro_list is not None and ro_name not in ro_list:
                 continue
 
-            ro_tbl = self.readonly[ro_name]
+            if ro_name in tables_done:
+                logger.info(f"[{i}] Build of {ro_name} done, continuing...")
+                continue
 
-            logger.info('[%s] Creating %s readonly table...' % (i, ro_name))
+            ro_tbl = self.readonly[ro_name]
+            logger.info(f"[{i}] Creating {ro_name} readonly table...")
             ro_tbl.create(self)
             ro_tbl.build_indices(self)
         return
@@ -1149,6 +1160,17 @@ class ReadonlyDatabaseManager(DatabaseManager):
             self.__SourceMeta.load_cols(self.engine)
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
+
+    def get_active_tables(self, schema='readonly'):
+        """Get the tables currently active in the database.
+
+        Parameters
+        ----------
+        schema : None or st
+            The name of the schema whose tables you wish to see. The default is
+            readonly.
+        """
+        return super(ReadonlyDatabaseManager, self).get_active_tables(schema)
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""

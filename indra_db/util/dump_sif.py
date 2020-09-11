@@ -68,16 +68,23 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
         if not ro:
             ro = get_ro('primary')
         logger.info("Querying the database for statement metadata...")
-        results = []
+        results = {}
         for ns in ns_list:
             logger.info("Querying for {ns}".format(ns=ns))
-            res = ro.select_all([ro.PaMeta.mk_hash, ro.PaMeta.db_name,
-                                 ro.PaMeta.db_id, ro.PaMeta.ag_num,
-                                 ro.PaMeta.ev_count, ro.PaMeta.type_num],
-                                ro.PaMeta.db_name.like(ns))
-            results.extend(res)
+            filters = []
+            if ns == 'NAME':
+                tbl = ro.NameMeta
+            elif ns == 'TEXT':
+                tbl = ro.TextMeta
+            else:
+                tbl = ro.OtherMeta
+                filters.append(tbl.db_name.like(ns))
+            res = ro.select_all([tbl.mk_hash, tbl.db_id, tbl.ag_num,
+                                 tbl.ev_count, tbl.type_num], *filters)
+            results[ns] = res
         results = {(h, dbn, dbi, ag_num, ev_cnt, ro_type_map.get_str(tn))
-                   for h, dbn, dbi, ag_num, ev_cnt, tn in results}
+                   for dbn, value_list in results.items()
+                   for h, dbi, ag_num, ev_cnt, tn in value_list}
         if pkl_filename:
             if isinstance(pkl_filename, S3Path):
                 upload_pickle_to_s3(results, pkl_filename)

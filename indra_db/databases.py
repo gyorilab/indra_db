@@ -944,6 +944,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             If True (default), continue to build the schema if it already
             exists. If False, give up if the schema already exists.
         """
+        # Optionally create the schema.
         if 'readonly' in self.get_schemas():
             if allow_continue:
                 logger.warning("Schema already exists. State could be "
@@ -965,9 +966,14 @@ class PrincipalDatabaseManager(DatabaseManager):
                     return True
             return False
 
+        # Perform some sanity checks (this would fail only due to developer
+        # errors.)
         assert len(set(CREATE_ORDER)) == len(CREATE_ORDER),\
             "Elements in CREATE_ORDERED are NOT unique."
+        assert set(CREATE_ORDER) == set(self.readonly.keys()),\
+            "Not all readonly tables included in CREATE_ORDER."
 
+        # Build the tables.
         temp_tables = []
         for i, ro_name in enumerate(CREATE_ORDER):
             # Check to see if the table has already been build (skip if so).

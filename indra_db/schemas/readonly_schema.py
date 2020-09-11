@@ -101,26 +101,29 @@ def get_schema(Base):
     through sqlalchemy: instead they are generated and updated manually
     (or by other non-sqlalchemy scripts).
 
-    The following views must be built in this specific order:
+    The following views must be built in this specific order (_temp_):
       1. raw_stmt_src
       2. fast_raw_pa_link
       3. pa_agent_counts
-      4. pa_stmt_src
+      4. _pa_stmt_src_
       5. evidence_counts
       6. reading_ref_link
-      7. pa_ref_link
-      8. pa_meta
-      9. raw_stmt_mesh_terms
-     10. raw_stmt_mesh_concepts
-     11. source_meta
-     12. text_meta
-     13. name_meta
-     14. other_meta
-     15. mesh_term_meta
-     16. mesh_concept_meta
-     17. agent_interactions
-    The following can be built at any time and in any order:
-        (None currently)
+      7. _pa_ref_link_
+      8. _mesh_terms_
+      9. _mesh_concepts_
+      10. _hash_pmid_counts_
+      11. mesh_term_ref_counts
+      12. mesh_concept_ref_counts
+      13. raw_stmt_mesh_terms
+      14. raw_stmt_mesh_concepts
+      15. _pa_meta_
+      16. source_meta
+      17. text_meta
+      18. name_meta
+      19. other_meta
+      20. mesh_term_meta
+      21. mesh_concept_meta
+      22. agent_interactions
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
 

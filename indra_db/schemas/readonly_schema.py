@@ -798,7 +798,7 @@ def get_schema(Base):
 
         @classmethod
         def create(cls, db, commit=True):
-            ReadonlyTable.create(cls, db, commit)
+            super(AgentInteractions, cls).create(db, commit)
             from itertools import permutations
             interactions = db.select_all(
                 db.AgentInteractions,

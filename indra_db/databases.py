@@ -961,6 +961,8 @@ class PrincipalDatabaseManager(DatabaseManager):
         # the line.
         def table_is_used(tbl, other_tables):
             for tbl_name in other_tables:
+                if tbl_name in self.get_active_tables(schema='readonly'):
+                    continue
                 other_tbl = self.readonly[tbl_name]
                 if tbl.full_name() in other_tbl.definition(self):
                     return True
@@ -984,8 +986,8 @@ class PrincipalDatabaseManager(DatabaseManager):
             # Get table object, and check to see that if it is temp it is used.
             ro_tbl = self.readonly[ro_name]
             if ro_tbl._temp and not table_is_used(ro_tbl, CREATE_ORDER[i+1:]):
-                logger.warning(f"[{i}] {ro_name} is marked as a temp table "
-                               f"but is not used in future tables. Skipping.")
+                logger.info(f"[{i}] {ro_name} is marked as a temp table "
+                            f"but is not used in future tables. Skipping.")
                 continue
 
             # Build the table and its indices.

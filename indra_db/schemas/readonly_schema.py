@@ -671,26 +671,21 @@ def get_schema(Base):
     class MeshTermMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_term_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("WITH meta AS (\n"
-                          "  SELECT DISTINCT mk_hash, type_num, \n"
-                          "                  ev_count, activity, \n"
-                          "                  is_active, agent_count \n"
-                          "  FROM readonly.pa_meta\n"
-                          "  WHERE NOT is_complex_dup\n"
-                          ")\n"
-                          "SELECT COUNT(DISTINCT sid) as mesh_ev_count,\n"
-                          "       meta.ev_count,\n"
-                          "       meta.mk_hash, mesh_num, type_num,\n"
-                          "       activity, is_active, agent_count\n"
+        __definition__ = ("SELECT COUNT(DISTINCT sid) as mesh_ev_count,\n"
+                          "       readonly.pa_meta.ev_count,\n"
+                          "       readonly.pa_meta.mk_hash, mesh_num,\n"
+                          "       type_num, activity, is_active, agent_count\n"
                           "FROM readonly.raw_stmt_mesh_terms "
                           "   JOIN raw_unique_links\n"
                           "     ON readonly.raw_stmt_mesh_terms.sid\n"
                           "        = raw_unique_links.raw_stmt_id\n"
-                          "   JOIN meta\n"
-                          "     ON meta.mk_hash\n"
+                          "   JOIN readonly.pa_meta\n"
+                          "     ON readonly.pa_meta.mk_hash\n"
                           "        = raw_unique_links.pa_stmt_mk_hash\n"
-                          "GROUP BY meta.mk_hash, mesh_num, type_num, \n"
-                          "  meta.ev_count, is_active, activity, agent_count")
+                          "WHERE NOT is_complex_dup\n"
+                          "GROUP BY readonly.pa_meta.mk_hash, mesh_num,\n"
+                          "  type_num, readonly.pa_meta.ev_count, is_active,\n"
+                          "  activity, agent_count")
         _indices = [BtreeIndex('mesh_term_meta_mesh_num_idx', 'mesh_num',
                                cluster=True),
                     BtreeIndex('mesh_term_meta_mk_hash_idx', 'mk_hash'),

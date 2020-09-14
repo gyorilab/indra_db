@@ -470,7 +470,6 @@ def get_schema(Base):
         )
         _temp = True
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
-                    StringIndex('pa_meta_db_id_idx', 'db_id'),
                     BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
 
         @classmethod

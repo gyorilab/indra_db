@@ -960,6 +960,8 @@ class PrincipalDatabaseManager(DatabaseManager):
         # Create function to quickly check if a table will be used further down
         # the line.
         def table_is_used(tbl, other_tables):
+            if not tbl._temp:
+                return True
             for other_idx, tbl_name in enumerate(other_tables):
                 if tbl_name in self.get_active_tables(schema='readonly'):
                     continue
@@ -978,7 +980,6 @@ class PrincipalDatabaseManager(DatabaseManager):
             "Not all readonly tables included in CREATE_ORDER."
 
         # Build the tables.
-        temp_tables = []
         for i, ro_name in enumerate(CREATE_ORDER):
             # Check to see if the table has already been build (skip if so).
             if ro_name in self.get_active_tables(schema='readonly'):
@@ -987,7 +988,7 @@ class PrincipalDatabaseManager(DatabaseManager):
 
             # Get table object, and check to see that if it is temp it is used.
             ro_tbl = self.readonly[ro_name]
-            if ro_tbl._temp and not table_is_used(ro_tbl, CREATE_ORDER[i+1:]):
+            if not table_is_used(ro_tbl, CREATE_ORDER[i+1:]):
                 logger.info(f"[{i}] {ro_name} is marked as a temp table "
                             f"but is not used in future tables. Skipping.")
                 continue
@@ -997,20 +998,13 @@ class PrincipalDatabaseManager(DatabaseManager):
             ro_tbl.create(self)
             ro_tbl.build_indices(self)
 
-            # If it is temp, add it to the list.
-            if ro_tbl._temp:
-                temp_tables.append(ro_tbl)
-
             # Drop any temp tables that will not be used further down the line.
             to_drop = []
-            for tmp in temp_tables:
-                if not table_is_used(tmp, CREATE_ORDER[i+1:]):
-                    to_drop.append(tmp)
-                    temp_tables.remove(tmp)
+            for existing_tbl in self.get_active_tables(schema='readonly'):
+                if not table_is_used(existing_tbl, CREATE_ORDER[i+1:]):
+                    to_drop.append(existing_tbl)
             self.drop_tables(to_drop, force=True)
 
-        if temp_tables:
-            logger.warning("Temporary tables remain after build completed.")
         return
 
     def dump_readonly(self, dump_file=None):

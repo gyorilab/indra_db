@@ -960,11 +960,11 @@ class PrincipalDatabaseManager(DatabaseManager):
         # Create function to quickly check if a table will be used further down
         # the line.
         def table_is_used(tbl, other_tables):
-            for i, tbl_name in enumerate(other_tables):
+            for other_idx, tbl_name in enumerate(other_tables):
                 if tbl_name in self.get_active_tables(schema='readonly'):
                     continue
                 other_tbl = self.readonly[tbl_name]
-                if not table_is_used(other_tbl, other_tables[i+1:]):
+                if not table_is_used(other_tbl, other_tables[other_idx+1:]):
                     continue
                 if tbl.full_name() in other_tbl.definition(self):
                     return True

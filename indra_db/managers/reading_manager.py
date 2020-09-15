@@ -7,7 +7,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from indra_reading.readers import get_reader_class
 
 from indra_db.reading import read_db as rdb
-from indra_db.util import get_primary_db, get_db
+from indra_db.util import get_db
 from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
 
 logger = logging.getLogger(__name__)
@@ -414,8 +414,6 @@ def main():
             db = get_temp_db()
         else:
             db = get_db(args.database)
-    elif args.database == 'primary':
-        db = get_primary_db()
     else:
         db = get_db(args.database)
 

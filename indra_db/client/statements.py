@@ -15,7 +15,7 @@ from indra.databases import hgnc_client
 from indra.util import batch_iter, clockit
 from indra.statements import Unresolved, Evidence, Statement
 
-from indra_db.util import get_primary_db, get_raw_stmts_frm_db_list, \
+from indra_db.util import get_db, get_raw_stmts_frm_db_list, \
     get_statement_object
 
 
@@ -249,7 +249,7 @@ def get_statements(clauses, count=1000, do_stmt_count=False, db=None,
                   DeprecationWarning)
     cnt = count
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     stmts_tblname = 'pa_statements' if preassembled else 'raw_statements'
 
@@ -394,7 +394,7 @@ def get_evidence(pa_stmt_list, db=None, fix_refs=True, use_views=True):
                    'but some results may be subtly different.'),
                   DeprecationWarning)
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     # Turn the list into a dict.
     stmt_dict = {s.get_hash(shallow=True): s for s in pa_stmt_list}
@@ -506,7 +506,7 @@ def get_support(statements, db=None, recursive=False):
                   DeprecationWarning)
     # TODO: Allow recursive mode (argument should probably be an integer level)
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     if not isinstance(statements, dict):
         stmt_dict = {s.get_hash(shallow=True): s for s in statements}

@@ -24,7 +24,7 @@ from indra.literature import pubmed_client
 from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
 
-from indra_db.util import get_primary_db, get_db
+from indra_db.util import get_db
 from indra_db.databases import texttypes, formats
 from indra_db.databases import sql_expressions as sql_exp
 from indra_db.util.data_gatherer import DataGatherer, DGContext
@@ -1667,8 +1667,6 @@ def _main():
             db = get_temp_db()
         else:
             db = get_db(args.database)
-    elif args.database == 'primary':
-        db = get_primary_db()
     else:
         db = get_db(args.database)
 

@@ -3,7 +3,7 @@ from itertools import permutations
 from sqlalchemy import or_
 
 from indra.databases import hgnc_client
-from indra_db.util import get_primary_db, get_statement_object
+from indra_db.util import get_db, get_statement_object
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def get_statement_essentials(clauses, count=1000, db=None, preassembled=True):
         `(uuid, sid, hash, type, (agent_1, agent_2, ...))`.
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     stmts_tblname = 'pa_statements' if preassembled else 'raw_statements'
 

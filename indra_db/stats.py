@@ -6,7 +6,7 @@ from datetime import datetime
 import boto3
 from sqlalchemy import func
 
-from indra_db.util import get_primary_db
+from indra_db.util import get_db
 
 
 def __report_stat(report_str, fname=None, do_print=True):
@@ -37,7 +37,7 @@ def _report_groups(db, count_obj, group_obj, fname, *filters):
 
 def get_text_ref_stats(fname=None, db=None):
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     tc_rdng_link = db.TextContent.id == db.Reading.text_content_id
     __report_stat("Text ref statistics:", fname)
     __report_stat("--------------------", fname)
@@ -61,7 +61,7 @@ def get_text_ref_stats(fname=None, db=None):
 
 def get_text_content_stats(fname=None, db=None):
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     tc_rdng_link = db.TextContent.id == db.Reading.text_content_id
     __report_stat("\nText Content statistics:", fname)
     __report_stat('------------------------', fname)
@@ -93,7 +93,7 @@ def get_text_content_stats(fname=None, db=None):
 
 def get_readings_stats(fname=None, db=None):
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     __report_stat('\nReading statistics:', fname)
     __report_stat('-------------------', fname)
@@ -121,7 +121,7 @@ def get_readings_stats(fname=None, db=None):
 
 def get_statements_stats(fname=None, db=None, indra_version=None):
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     tc_rdng_link = db.TextContent.id == db.Reading.text_content_id
     stmt_rdng_link = db.Reading.id == db.RawStatements.reader_ref
 
@@ -156,7 +156,7 @@ def get_statements_stats(fname=None, db=None, indra_version=None):
 
 def get_pa_statement_stats(fname=None, db=None):
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     __report_stat('\nStatement Statistics:', fname)
     __report_stat('---------------------', fname)
     stmt_q = db.filter_query(db.PAStatements)
@@ -178,7 +178,7 @@ def get_pa_statement_stats(fname=None, db=None):
 def get_db_statistics(fname=None, db=None, tables=None):
     """Get statistics on the contents of the database"""
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     task_dict = {
         'text_ref': get_text_ref_stats,

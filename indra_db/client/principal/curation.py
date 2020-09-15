@@ -7,7 +7,7 @@ from collections import Counter
 
 from sqlalchemy.exc import IntegrityError
 
-from indra_db.util import get_primary_db
+from indra_db import get_db
 from indra_db.exceptions import BadHashError
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def submit_curation(hash_val, tag, curator, ip, text=None,
         A database manager object used to access the database.
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     inp = {'tag': tag, 'text': text, 'curator': curator, 'ip': ip,
            'source': source, 'pa_hash': hash_val, 'source_hash': ev_hash}
@@ -69,7 +69,7 @@ def submit_curation(hash_val, tag, curator, ip, text=None,
 def get_curations(db=None, **params):
     """Get all curations for a certain level given certain criteria."""
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     cur = db.Curation
 
     constraints = []
@@ -152,7 +152,7 @@ def get_curator_counts(db=None):
         submitted.
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     res = db.select_all(db.Curation)
     curators = [r.curator for r in res]
     counter = Counter(curators)

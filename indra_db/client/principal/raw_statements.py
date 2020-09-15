@@ -8,7 +8,7 @@ from sqlalchemy import intersect_all
 
 from indra.util import clockit
 
-from indra_db import get_primary_db
+from indra_db import get_db
 from indra_db.util import regularize_agent_id
 
 # ====
@@ -39,7 +39,7 @@ def get_raw_stmt_jsons_from_papers(id_list, id_type='pmid', db=None):
         not be included in the dict.
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     # Get the attribute for this id type.
     if id_type == 'pmid':
@@ -85,7 +85,7 @@ def get_direct_raw_stmt_jsons_from_agents(agents=None, stmt_type=None, db=None,
                                           max_stmts=None, offset=None):
     """Get Raw statement jsons from a list of agent refs and Statement type."""
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     # Turn the agents parameters into an intersection of queries for stmt ids.
     entity_queries = []

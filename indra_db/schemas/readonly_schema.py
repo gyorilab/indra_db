@@ -699,25 +699,17 @@ def get_schema(Base):
     class MeshConceptMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_concept_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("WITH meta AS (\n"
-                          "  SELECT DISTINCT mk_hash, type_num, \n"
-                          "                  ev_count, activity, \n"
-                          "                  is_active, agent_count \n"
-                          "  FROM readonly.pa_meta\n"
-                          "  WHERE NOT is_complex_dup\n"
-                          ")\n"
-                          "SELECT meta.mk_hash, meta.ev_count,\n"
-                          "       mesh_num, type_num, activity, is_active,\n"
-                          "       agent_count\n"
+        __definition__ = ("SELECT readonly.pa_meta.ev_count,\n"
+                          "       readonly.pa_meta.mk_hash, mesh_num,\n"
+                          "       type_num, activity, is_active, agent_count\n"
                           "FROM readonly.raw_stmt_mesh_concepts\n"
                           "   JOIN raw_unique_links\n"
                           "     ON readonly.raw_stmt_mesh_concepts.sid\n"
                           "        = raw_unique_links.raw_stmt_id\n"
-                          "   JOIN meta\n"
-                          "     ON meta.mk_hash\n"
+                          "   JOIN readonly.pa_meta\n"
+                          "     ON readonly.pa_meta.mk_hash\n"
                           "        = raw_unique_links.pa_stmt_mk_hash\n"
-                          "GROUP BY meta.mk_hash, mesh_num, type_num, \n"
-                          "  meta.ev_count, is_active, activity, agent_count")
+                          "WHERE NOT is_complex_dup")
         _indices = [BtreeIndex('mesh_concept_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_concept_meta_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('mesh_concept_meta_type_num_idx', 'type_num'),

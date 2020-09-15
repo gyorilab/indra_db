@@ -167,7 +167,7 @@ class DatabaseManager(object):
     large data transfers.
 
     If you wish to access the primary database, you can simply use the
-    `get_primary_db` to get an instance of this object using the default
+    `get_db` function to get an instance of this object using the default
     settings.
 
     Parameters
@@ -176,15 +176,15 @@ class DatabaseManager(object):
         The database to which you want to interface.
     label : OPTIONAL[str]
         A short string to indicate the purpose of the db instance. Set as
-        primary when initialized be `get_primary_db` or `get_db`.
+        `db_label` when initialized with `get_db(db_label)`.
 
     Example
     -------
     If you wish to acces the primary database and find the the metadata for a
     particular pmid, 1234567:
 
-    >> from indra.db import get_primary_db()
-    >> db = get_primary_db()
+    >> from indra.db import get_db
+    >> db = get_db('primary')
     >> res = db.select_all(db.TextRef, db.TextRef.pmid == '1234567')
 
     You will get a list of objects whose attributes give the metadata contained

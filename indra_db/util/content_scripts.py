@@ -4,7 +4,7 @@ from sqlalchemy import text
 from functools import lru_cache
 from collections import defaultdict
 
-from .constructors import get_primary_db
+from .constructors import get_db
 from .helpers import unpack, _get_trids
 
 
@@ -36,7 +36,7 @@ def get_stmts_with_agent_text_like(pattern, filter_genes=False,
         in its db_refs
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     # Query Raw agents table for agents with TEXT db_ref matching pattern
     # Selects agent texts, statement ids and agent numbers. The agent number
@@ -90,7 +90,7 @@ def get_stmts_with_agent_text_in(agent_texts, filter_genes=False, db=None):
         containing an agent with that TEXT in its db_refs.
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
 
     # Query Raw agents table for agents with TEXT db_ref matching pattern
     # Selects agent texts, statement ids and agent numbers. The agent number
@@ -151,7 +151,7 @@ def get_text_content_from_stmt_ids(stmt_ids, db=None):
         fulltext xml > plaintext abstract > title
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     identifiers = get_content_identifiers_from_stmt_ids(stmt_ids)
     content = _get_text_content(identifiers.values())
     return identifiers, content
@@ -186,7 +186,7 @@ def get_text_content_from_pmids(pmids, db=None):
         to the best available text content.
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     identifiers = get_content_identifiers_from_pmids(pmids)
     content = _get_text_content(identifiers.values())
     return identifiers, content
@@ -216,7 +216,7 @@ def get_content_identifiers_from_stmt_ids(stmt_ids, db=None):
         (these typically come from databases)
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     stmt_ids = tuple(set(stmt_ids))
     query = """SELECT
                    sub.stmt_id, tc.text_ref_id, tc.source,
@@ -266,7 +266,7 @@ def get_content_identifiers_from_pmids(pmids, db=None):
         fulltext xml > plaintext abstract > title
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     pmids = tuple(set(pmids))
     query = """SELECT
                    tr.pmid, tr.id, tc.source, tc.format, tc.text_type
@@ -326,7 +326,7 @@ def _get_text_content(content_identifiers, db=None):
         exists in the database are excluded as keys.
     """
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
     # Remove duplicate identifiers
     content_identifiers = set(content_identifiers)
     # Query finds content associated to each identifier by joining
@@ -392,7 +392,7 @@ def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
     """
     primary = False
     if db is None:
-        db = get_primary_db()
+        db = get_db('primary')
         primary = True
     if primary and use_cache:
         frozen_text_refs = frozenset(text_refs.items())
@@ -408,7 +408,7 @@ def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
 
 @lru_cache(10000)
 def _get_text_content_from_text_refs_cached(frozen_text_refs):
-    db = get_primary_db()
+    db = get_db('primary')
     text_refs = dict(frozen_text_refs)
     text_ref_id = _get_text_ref_id_from_text_refs(text_refs, db)
     if text_ref_id is None:

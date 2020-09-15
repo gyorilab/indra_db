@@ -22,7 +22,7 @@ from indra_reading.readers import ReadingData, get_reader, Content,\
 from indra_reading.readers.util import get_dir
 from indra.util import zip_string
 
-from indra_db import get_primary_db, formats
+from indra_db import get_db, formats
 from indra_db.databases import readers, reader_versions
 from indra_db.util.data_gatherer import DataGatherer, DGContext
 from indra_db.util import insert_raw_agents, unpack
@@ -248,7 +248,7 @@ class DatabaseReader(object):
         yielded by the database at a given time.
     db : indra_db.DatabaseManager instance
         Optional, default is None, in which case the primary database provided
-        by `get_primary_db` function is used. Used to interface with a
+        by `get_db('primary')` function is used. Used to interface with a
         different database.
     """
     def __init__(self, tcids, reader, verbose=True, reading_mode='unread',
@@ -262,7 +262,7 @@ class DatabaseReader(object):
         self.batch_size = batch_size
         self.n_proc = n_proc
         if db is None:
-            self._db = get_primary_db()
+            self._db = get_db('primary')
         else:
             self._db = db
         self._tc_rd_link = \

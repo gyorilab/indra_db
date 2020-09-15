@@ -670,7 +670,7 @@ def get_schema(Base):
     class MeshTermMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_term_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT readonly.pa_meta.ev_count,\n"
+        __definition__ = ("SELECT DISTINCT readonly.pa_meta.ev_count,\n"
                           "       readonly.pa_meta.mk_hash, mesh_num,\n"
                           "       type_num, activity, is_active, agent_count\n"
                           "FROM readonly.raw_stmt_mesh_terms\n"
@@ -699,7 +699,7 @@ def get_schema(Base):
     class MeshConceptMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_concept_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT readonly.pa_meta.ev_count,\n"
+        __definition__ = ("SELECT DISTINCT readonly.pa_meta.ev_count,\n"
                           "       readonly.pa_meta.mk_hash, mesh_num,\n"
                           "       type_num, activity, is_active, agent_count\n"
                           "FROM readonly.raw_stmt_mesh_concepts\n"

@@ -676,8 +676,7 @@ def get_schema(Base):
                           "FROM readonly.raw_stmt_mesh_terms AS rsmt,\n"
                           "     readonly.source_meta AS meta,\n"
                           "     raw_unique_links AS link\n"
-                          "WHERE NOT is_complex_dup\n"
-                          "  AND rsmt.sid = link.raw_stmt_id\n"
+                          "WHERE rsmt.sid = link.raw_stmt_id\n"
                           "  AND meta.mk_hash = link.pa_stmt_mk_hash")
         _indices = [BtreeIndex('mesh_term_meta_mesh_num_idx', 'mesh_num',
                                cluster=True),
@@ -703,8 +702,7 @@ def get_schema(Base):
                           "FROM readonly.raw_stmt_mesh_concepts AS rsmc,\n"
                           "     readonly.source_meta AS meta,\n"
                           "     raw_unique_links AS link\n"
-                          "WHERE NOT is_complex_dup\n"
-                          "  AND rsmc.sid = link.raw_stmt_id\n"
+                          "WHERE rsmc.sid = link.raw_stmt_id\n"
                           "  AND meta.mk_hash = link.pa_stmt_mk_hash")
         _indices = [BtreeIndex('mesh_concept_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_concept_meta_mk_hash_idx', 'mk_hash'),

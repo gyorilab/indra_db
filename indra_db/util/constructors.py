@@ -53,6 +53,7 @@ def get_primary_db(force_new=False):
         An instance of the database manager that is attached to the primary
         database.
     """
+    logger.warning("DEPRECATION WARNING: This function is being deprecated.")
     defaults = get_databases()
     if 'primary' in defaults.keys():
         primary_host = defaults['primary']

@@ -30,10 +30,10 @@ CREATE_ORDER = [
     'raw_stmt_mesh_terms',
     'raw_stmt_mesh_concepts',
     'pa_meta',
-    'source_meta',
     'text_meta',
     'name_meta',
     'other_meta',
+    'source_meta',
     'mesh_term_meta',
     'mesh_concept_meta',
     'agent_interactions'
@@ -524,7 +524,7 @@ def get_schema(Base):
             'meta AS ('
             '    SELECT distinct mk_hash, type_num, activity, is_active,\n'
             '                    ev_count, agent_count'
-            '    FROM readonly.pa_meta'
+            '    FROM readonly.name_meta'
             '    WHERE NOT is_complex_dup'
             ')\n'
             'SELECT readonly.pa_stmt_src.*, \n'
@@ -670,17 +670,15 @@ def get_schema(Base):
     class MeshTermMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_term_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT DISTINCT readonly.pa_meta.ev_count,\n"
-                          "       readonly.pa_meta.mk_hash, mesh_num,\n"
-                          "       type_num, activity, is_active, agent_count\n"
-                          "FROM readonly.raw_stmt_mesh_terms\n"
-                          "   JOIN raw_unique_links\n"
-                          "     ON readonly.raw_stmt_mesh_terms.sid\n"
-                          "        = raw_unique_links.raw_stmt_id\n"
-                          "   JOIN readonly.pa_meta\n"
-                          "     ON readonly.pa_meta.mk_hash\n"
-                          "        = raw_unique_links.pa_stmt_mk_hash\n"
-                          "WHERE NOT is_complex_dup")
+        __definition__ = ("SELECT DISTINCT meta.mk_hash, meta.ev_count,\n"
+                          "       mesh_num, type_num, activity, is_active,\n"
+                          "       agent_count\n"
+                          "FROM readonly.raw_stmt_mesh_terms AS rsmt,\n"
+                          "     readonly.source_meta AS meta,\n"
+                          "     raw_unique_links AS link\n"
+                          "WHERE NOT is_complex_dup\n"
+                          "  AND rsmt.sid = link.raw_stmt_id\n"
+                          "  AND meta.mk_hash = link.pa_stmt_mk_hash")
         _indices = [BtreeIndex('mesh_term_meta_mesh_num_idx', 'mesh_num',
                                cluster=True),
                     BtreeIndex('mesh_term_meta_mk_hash_idx', 'mk_hash'),
@@ -699,17 +697,15 @@ def get_schema(Base):
     class MeshConceptMeta(Base, ReadonlyTable):
         __tablename__ = 'mesh_concept_meta'
         __table_args__ = {'schema': 'readonly'}
-        __definition__ = ("SELECT DISTINCT readonly.pa_meta.ev_count,\n"
-                          "       readonly.pa_meta.mk_hash, mesh_num,\n"
-                          "       type_num, activity, is_active, agent_count\n"
-                          "FROM readonly.raw_stmt_mesh_concepts\n"
-                          "   JOIN raw_unique_links\n"
-                          "     ON readonly.raw_stmt_mesh_concepts.sid\n"
-                          "        = raw_unique_links.raw_stmt_id\n"
-                          "   JOIN readonly.pa_meta\n"
-                          "     ON readonly.pa_meta.mk_hash\n"
-                          "        = raw_unique_links.pa_stmt_mk_hash\n"
-                          "WHERE NOT is_complex_dup")
+        __definition__ = ("SELECT DISTINCT meta.mk_hash, meta.ev_count,\n"
+                          "       mesh_num, type_num, activity, is_active,\n"
+                          "       agent_count\n"
+                          "FROM readonly.raw_stmt_mesh_concepts AS rsmc,\n"
+                          "     readonly.source_meta AS meta,\n"
+                          "     raw_unique_links AS link\n"
+                          "WHERE NOT is_complex_dup\n"
+                          "  AND rsmc.sid = link.raw_stmt_id\n"
+                          "  AND meta.mk_hash = link.pa_stmt_mk_hash")
         _indices = [BtreeIndex('mesh_concept_meta_mesh_num_idx', 'mesh_num'),
                     BtreeIndex('mesh_concept_meta_mk_hash_idx', 'mk_hash'),
                     BtreeIndex('mesh_concept_meta_type_num_idx', 'type_num'),

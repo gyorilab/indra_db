@@ -3,6 +3,7 @@ import json
 import boto3
 import pickle
 import logging
+from io import BytesIO
 from datetime import datetime
 from argparse import ArgumentParser
 
@@ -217,7 +218,8 @@ class FullPaStmts(Dumper):
         stmt_list = stmts_from_json([json.loads(js[0]) for js in
                                      query_res.all()])
         s3 = boto3.client('s3')
-        s3.put_object(Body=pickle.dumps(stmt_list), **self.get_s3_path().kw())
+        bytes_io = BytesIO(pickle.dumps(stmt_list))
+        s3.upload_fileobj(bytes_io, **self.get_s3_path().kw())
 
 
 class Readonly(Dumper):

@@ -243,6 +243,10 @@ class StatementHashMeshId(Dumper):
     name = 'mti_mesh_ids'
     fmi = 'pkl'
 
+    def __init__(self, db_label='primary', use_principal=False, **kwargs):
+        self.use_principal = use_principal
+        super(StatementHashMeshId, self).__init__(db_label, **kwargs)
+
     def dump(self, continuing=False):
         if self.use_principal:
             ro = get_db(self.db_label)
@@ -390,7 +394,8 @@ def main():
         if not args.allow_continue \
                 or not StatementHashMeshId.from_list(starter.manifest):
             logger.info("Dumping hash-mesh tuples.")
-            StatementHashMeshId(date_stamp=starter.date_stamp)\
+            StatementHashMeshId(use_principal=True,
+                                date_stamp=starter.date_stamp)\
                 .dump(continuing=args.allow_continue)
 
         if not args.allow_continue or not Belief.from_list(starter.manifest):

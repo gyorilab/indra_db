@@ -1,9 +1,7 @@
-import re
 import json
 import boto3
 import pickle
 import logging
-from io import BytesIO
 from datetime import datetime
 from argparse import ArgumentParser
 
@@ -170,7 +168,7 @@ class Belief(Dumper):
         db = get_db(self.db_label)
         belief_dict = get_belief(db, partition=False)
         s3 = boto3.client('s3')
-        s3.put_object(Body=json.dumps(belief_dict), **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, json.dumps(belief_dict))
 
 
 class SourceCount(Dumper):
@@ -198,7 +196,7 @@ class FullPaJson(Dumper):
         query_res = ro.session.query(ro.FastRawPaLink.pa_json.distinct())
         json_list = [json.loads(js[0]) for js in query_res.all()]
         s3 = boto3.client('s3')
-        s3.put_object(Body=json.dumps(json_list), **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, json.dumps(json_list))
 
 
 class FullPaStmts(Dumper):
@@ -218,8 +216,7 @@ class FullPaStmts(Dumper):
         stmt_list = stmts_from_json([json.loads(js[0]) for js in
                                      query_res.all()])
         s3 = boto3.client('s3')
-        bytes_io = BytesIO(pickle.dumps(stmt_list))
-        s3.upload_fileobj(bytes_io, **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, pickle.dumps(stmt_list))
 
 
 class Readonly(Dumper):
@@ -261,7 +258,7 @@ class StatementHashMeshId(Dumper):
                      'concepts': mesh_concept_tuples}
 
         s3 = boto3.client('s3')
-        s3.put_object(Body=pickle.dumps(mesh_data), **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, pickle.dumps(mesh_data))
 
 
 def load_readonly_dump(db_label, ro_label, dump_file):

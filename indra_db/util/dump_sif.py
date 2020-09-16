@@ -40,7 +40,7 @@ def upload_pickle_to_s3(obj, s3_path):
                 % (s3_path.key.split('/')[-1], s3_path.bucket))
     s3 = get_s3_client(unsigned=False)
     try:
-        s3.put_object(Body=pickle.dumps(obj=obj), **s3_path.kw())
+        s3_path.upload(s3, pickle.dumps(obj))
         logger.info('Finished dumping file to s3')
     except Exception as e:
         logger.error('Failed to upload to s3')
@@ -325,7 +325,7 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
                     s3 = get_s3_client(unsigned=False)
                     csv_buf = StringIO()
                     type_counts.to_csv(csv_buf)
-                    s3.put_object(Body=csv_buf.getvalue(), **csv_file.kw())
+                    csv_file.upload(s3, csv_buf)
                     logger.info('Uploaded CSV file to s3')
                 except Exception as second_e:
                     logger.error('Failed to upload csv file with fallback '

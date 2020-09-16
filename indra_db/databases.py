@@ -503,7 +503,7 @@ class DatabaseManager(object):
             for element in entry:
                 if isinstance(element, str):
                     new_entry.append(element.encode('utf8'))
-                if isinstance(element, dict):
+                elif isinstance(element, dict):
                     new_entry.append(json.dumps(element).encode('utf-8'))
                 elif (isinstance(element, bytes)
                       or element is None
@@ -512,7 +512,7 @@ class DatabaseManager(object):
                     new_entry.append(element)
                 else:
                     raise IndraDbException(
-                        "Don't know what to do with element of type %s."
+                        "Don't know what to do with element of type %s. "
                         "Should be str, bytes, datetime, None, or a "
                         "number." % type(element)
                     )

@@ -1001,7 +1001,8 @@ class PrincipalDatabaseManager(DatabaseManager):
             # Drop any temp tables that will not be used further down the line.
             to_drop = []
             for existing_tbl in self.get_active_tables(schema='readonly'):
-                if not table_is_used(existing_tbl, CREATE_ORDER[i+1:]):
+                if not table_is_used(self.readonly[existing_tbl],
+                                     CREATE_ORDER[i+1:]):
                     to_drop.append(existing_tbl)
             self.drop_tables(to_drop, force=True)
 

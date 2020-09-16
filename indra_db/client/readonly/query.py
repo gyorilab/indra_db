@@ -2013,21 +2013,31 @@ class FromMeshIds(_TextRefCore):
         return qry
 
     def ev_filter(self):
+        """Get an evidence filter to enforce mesh constraints at ev level."""
+        # Make sure we get the correct table, depending on mesh ID type.
+        if self._mesh_type == 'D':
+            def get_col(ro):
+                return ro.RawStmtMeshTerms.mesh_num
+        else:
+            def get_col(ro):
+                return ro.RawStmtMeshConcepts.mesh_num
+
+        # Make the evidence clause function depending on whether it is inverted
+        # and optimized for the 1-member case.
         if not self._inverted:
             if len(self._mesh_nums) == 1:
                 def get_clause(ro):
-                    return ro.RawStmtMeshTerms.mesh_num == self._mesh_nums[0]
+                    return get_col(ro) == self._mesh_nums[0]
             else:
                 def get_clause(ro):
-                    return ro.RawStmtMeshTerms.mesh_num.in_(self._mesh_nums)
+                    return get_col(ro).in_(self._mesh_nums)
         else:
             if len(self._mesh_nums) == 1:
                 def get_clause(ro):
-                    return (ro.RawStmtMeshTerms.mesh_num
-                            .is_distinct_from(self._mesh_nums[0]))
+                    return get_col(ro).is_distinct_from(self._mesh_nums[0])
             else:
                 def get_clause(ro):
-                    return ro.RawStmtMeshTerms.mesh_num.notin_(self._mesh_nums)
+                    return get_col(ro).notin_(self._mesh_nums)
 
         return EvidenceFilter.from_filter('raw_stmt_mesh_terms', get_clause)
 

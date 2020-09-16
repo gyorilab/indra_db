@@ -391,7 +391,7 @@ def main():
                 or not StatementHashMeshId.from_list(starter.manifest):
             logger.info("Dumping hash-mesh tuples.")
             StatementHashMeshId(date_stamp=starter.date_stamp)\
-                .dump(continuing=args.continuing)
+                .dump(continuing=args.allow_continue)
 
         if not args.allow_continue or not Belief.from_list(starter.manifest):
             logger.info("Dumping belief.")

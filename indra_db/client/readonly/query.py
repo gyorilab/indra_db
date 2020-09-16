@@ -1132,6 +1132,9 @@ class Query(object):
             return False
         return self._inverted != other._inverted
 
+    def ev_filter(self):
+        return None
+
 
 class EmptyQuery:
     def __and__(self, other):
@@ -2321,6 +2324,14 @@ class MergeQuery(Query):
             self._injected_queries = None
         return qry
 
+    def _iter_ev_filters(self):
+        """Iter over the evidence filters of sub-queries, skipping Nones."""
+        for q in self.queries:
+            ev_filter = q.ev_filter()
+            if ev_filter is None:
+                continue
+            yield ev_filter
+
 
 class Intersection(MergeQuery):
     """The Intersection of multiple queries.
@@ -2485,6 +2496,16 @@ class Intersection(MergeQuery):
 
         return self._mk_hashes_al
 
+    def ev_filter(self):
+        """Get an evidence filter composed of the "and" of sub-query filters."""
+        ev_filter = None
+        for sub_ev_filter in self._iter_ev_filters():
+            if ev_filter is None:
+                ev_filter = sub_ev_filter
+            else:
+                ev_filter &= sub_ev_filter
+        return ev_filter
+
 
 class Union(MergeQuery):
     """The union of multiple queries.
@@ -2597,6 +2618,16 @@ class Union(MergeQuery):
                 self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
                                           .alias(self.name))
         return self._mk_hashes_al
+
+    def ev_filter(self):
+        """Get an evidence filter composed of the "or" of sub-query filters."""
+        ev_filter = None
+        for sub_ev_filter in self._iter_ev_filters():
+            if ev_filter is None:
+                ev_filter = sub_ev_filter
+            else:
+                ev_filter |= sub_ev_filter
+        return ev_filter
 
 
 class _QueryEvidenceFilter:

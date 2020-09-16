@@ -1128,7 +1128,7 @@ class Query(object):
         """Check if a query is the exact opposite of another."""
         if not isinstance(other, self.__class__):
             return False
-        if not self._get_constraint_json() == other._get_constraint_json():
+        if self._get_constraint_json() != other._get_constraint_json():
             return False
         return self._inverted != other._inverted
 
@@ -1795,10 +1795,13 @@ class _TextRefCore(Query):
     def _copy(self):
         raise NotImplementedError()
 
+    def _can_merge_with(self, other):
+        return isinstance(other, self.__class__) \
+               and self._inverted == other._inverted
+
     def _do_or(self, other) -> Query:
         cls = self.__class__
-        if isinstance(other, cls) and not self._inverted \
-                and not other._inverted:
+        if self._can_merge_with(other) and not self._inverted:
             my_list = getattr(self, self.list_name)
             thr_list = getattr(other, self.list_name)
             return cls(list(set(my_list) | set(thr_list)))
@@ -1809,8 +1812,7 @@ class _TextRefCore(Query):
 
     def _do_and(self, other) -> Query:
         cls = self.__class__
-        if isinstance(other, self.__class__) and self._inverted \
-                and other._inverted:
+        if self._can_merge_with(other) and self._inverted:
             my_list = getattr(self, self.list_name)
             thr_list = getattr(other, self.list_name)
             return ~cls(list(set(my_list) | set(thr_list)))
@@ -1909,53 +1911,84 @@ class FromMeshIds(_TextRefCore):
     Parameters
     ----------
     mesh_ids : list
-        A canonical MeSH ID, of the "D" variety, e.g. "D000135".
+        A canonical MeSH ID, of the "C" or "D" variety, e.g. "D000135".
+
+    Attributes
+    ----------
+    mesh_ids : tuple
+        The mesh IDs.
+    _mesh_type : str
+        "C" or "D" indicating which types of IDs are held in this object.
     """
     list_name = 'mesh_ids'
 
-    def __init__(self, mesh_ids: list):
+    @classmethod
+    def __make(cls, mesh_ids):
+        new_obj = super(FromMeshIds, cls).__new__(cls)
+        new_obj.__init__(mesh_ids)
+        return new_obj
+
+    def __new__(cls, mesh_ids: list):
+        # Validate the IDs and break them into groups (as appropriate)
+        id_groups = defaultdict(set)
         for mesh_id in mesh_ids:
-            if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
+            if len(mesh_id) == 0 or mesh_id[0] not in ['C', 'D'] \
+                    or not mesh_id[1:].isdigit():
                 raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
                                  "the rest must be a number." % mesh_id)
+            id_groups[mesh_id[0]].add(mesh_id)
+
+        # If there is just one kind, return a normal __new__ response. Otherwise
+        # return a union of two classes.
+        if len(id_groups) <= 1:
+            return super(FromMeshIds, cls).__new__(cls)
+        else:
+            c_obj = cls.__make(id_groups['C'])
+            d_obj = cls.__make(id_groups['D'])
+            return Union([c_obj, d_obj])
+
+    def __init__(self, mesh_ids):
         self.mesh_ids = tuple(set(mesh_ids))
-        self._mesh_term_nums = []
+        self._mesh_nums = []
         self._mesh_concept_nums = []
+        self._mesh_type = None
         for mesh_id in self.mesh_ids:
-            mesh_num = int(mesh_id[1:])
-            if mesh_id.startswith('D'):
-                self._mesh_term_nums.append(mesh_num)
-            elif mesh_id.startswith('C'):
-                self._mesh_concept_nums.append(mesh_num)
+            if self._mesh_type is None:
+                self._mesh_type = mesh_id[0]
             else:
-                raise ValueError(f"Invalid mesh_id: {mesh_id}, must start "
-                                 f"with C or D.")
-        if self._mesh_concept_nums:
-            logger.warning("Mesh concepts not yet fully integrated.")
+                assert mesh_id[0] == self._mesh_type
+            self._mesh_nums.append(int(mesh_id[1:]))
         super(FromMeshIds, self).__init__(len(mesh_ids) == 0)
 
     def __str__(self):
         inv = 'not ' if self._inverted else ''
         return f"are {inv}from papers with MeSH ID {_join_list(self.mesh_ids)}"
 
+    def _can_merge_with(self, other):
+        return super(FromMeshIds, self)._can_merge_with(other) \
+               and self._mesh_type == other._mesh_type
+
     def _copy(self):
         return self.__class__(self.mesh_ids)
 
     def _get_constraint_json(self) -> dict:
         return {'mesh_ids': list(self.mesh_ids),
-                '_mesh_term_nums': list(self._mesh_term_nums),
-                '_mesh_concept_nums': list(self._mesh_concept_nums)}
+                '_mesh_nums': list(self._mesh_nums),
+                '_mesh_type': self._mesh_type}
 
     def _get_table(self, ro):
-        return ro.MeshTermMeta
+        if self._mesh_type == "D":
+            return ro.MeshTermMeta
+        else:
+            return ro.MeshConceptMeta
 
     def _get_hash_query(self, ro, inject_queries=None):
         meta = self._get_table(ro)
         qry = self._base_query(ro)
-        if len(self._mesh_term_nums) == 1:
-            qry = qry.filter(meta.mesh_num == self._mesh_term_nums[0])
+        if len(self._mesh_nums) == 1:
+            qry = qry.filter(meta.mesh_num == self._mesh_nums[0])
         else:
-            qry = qry.filter(meta.mesh_num.in_(self._mesh_term_nums))
+            qry = qry.filter(meta.mesh_num.in_(self._mesh_nums))
 
         if not self._inverted:
             if inject_queries:

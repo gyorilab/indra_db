@@ -1631,7 +1631,7 @@ class HasHash(SourceQuery):
                 return "have any hash"
 
     def _get_constraint_json(self) -> dict:
-        return {'stmt_hashes': list(self.stmt_hashes)}
+        return {'stmt_hashes': sorted(list(self.stmt_hashes))}
 
     def _get_empty(self):
         return self.__class__([])

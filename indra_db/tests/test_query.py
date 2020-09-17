@@ -415,7 +415,7 @@ def test_query_set_behavior():
         HasAgent('ERK', namespace='FPLX', role='OBJECT'),
         FromMeshIds(['D015536']),
         FromMeshIds(['D002352', 'D015536']),
-        FromMeshIds(['D0000334']),
+        FromMeshIds(['D0000334', 'C0001243']),
         HasHash(lookup_hashes[:-3]),
         HasHash(lookup_hashes[-1:]),
         HasHash(lookup_hashes[-4:-1]),

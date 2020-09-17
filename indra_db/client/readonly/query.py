@@ -1621,8 +1621,14 @@ class HasHash(SourceQuery):
         return self.__class__(self.stmt_hashes)
 
     def __str__(self):
-        inv = 'do not ' if self._inverted else ''
-        return f"{inv}have hash {_join_list(self.stmt_hashes)}"
+        if self.stmt_hashes:
+            inv = 'do not ' if self._inverted else ''
+            return f"{inv}have hash {_join_list(self.stmt_hashes)}"
+        else:
+            if not self._inverted:
+                return "have no hash"
+            else:
+                return "have any hash"
 
     def _get_constraint_json(self) -> dict:
         return {'stmt_hashes': list(self.stmt_hashes)}

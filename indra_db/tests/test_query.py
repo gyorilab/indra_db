@@ -27,14 +27,16 @@ def _build_test_set():
     stypes = ['Phosphorylation', 'Activation', 'Inhibition', 'Complex']
     sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc11', 'db'),
                ('signor', 'db')]
-    mesh_ids = ['D000225', 'D002352', 'D015536', 'D00123413', 'D0000334']
+    mesh_term_ids = ['D000225', 'D002352', 'D015536', 'D00123413', 'D0000334']
+    mesh_concept_ids = ['C0001243', 'C005758']
+    all_mesh_ids = mesh_term_ids + mesh_concept_ids
 
     mesh_combos = []
     for num_mesh in range(0, 3):
         if num_mesh == 1:
-            mesh_groups = [[mid] for mid in mesh_ids]
+            mesh_groups = [[mid] for mid in all_mesh_ids]
         else:
-            mesh_groups = combinations(mesh_ids, num_mesh)
+            mesh_groups = combinations(all_mesh_ids, num_mesh)
 
         mesh_combos.extend(list(mesh_groups))
     random.shuffle(mesh_combos)
@@ -88,9 +90,13 @@ def _build_test_set():
                         'agent_count', 'num_srcs', 'src_json', 'only_src',
                         'has_rd', 'has_db')
 
-    mesh_meta_rows = []
-    mesh_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
-                      'activity', 'is_active', 'agent_count')
+    mesh_term_meta_rows = []
+    mesh_term_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
+                           'activity', 'is_active', 'agent_count')
+
+    mesh_concept_meta_rows = []
+    mesh_concept_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
+                              'activity', 'is_active', 'agent_count')
     for stype, refs, activity, is_active in stmts:
         # Extract agents, and make a Statement.
         StmtClass = get_statement_by_name(stype)
@@ -122,9 +128,16 @@ def _build_test_set():
 
         # Add mesh rows
         for mesh_id in source_dict['mesh_ids']:
-            mesh_meta_rows.append((stmt.get_hash(), ev_count, int(mesh_id[1:]),
-                                   ro_type_map.get_int(stype), activity,
-                                   is_active, len(refs)))
+            if mesh_id[0] == 'D':
+                mesh_term_meta_rows.append(
+                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                     ro_type_map.get_int(stype), activity, is_active, len(refs))
+                )
+            else:
+                mesh_concept_meta_rows.append(
+                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                     ro_type_map.get_int(stype), activity, is_active, len(refs))
+                )
 
         # Generate agent rows.
         ref_rows, _, _ = extract_agent_data(stmt, stmt.get_hash())
@@ -144,11 +157,13 @@ def _build_test_set():
     db = get_temp_db(clear=True)
     src_meta_cols = [{'name': col} for col, _ in sources]
     db.SourceMeta.load_cols(db.engine, src_meta_cols)
-    for tbl in [db.SourceMeta, db.MeshTermMeta, db.NameMeta,
+    for tbl in [db.SourceMeta, db.MeshTermMeta, db.MeshConceptMeta, db.NameMeta,
                 db.TextMeta, db.OtherMeta]:
         tbl.__table__.create(db.engine)
     db.copy('readonly.source_meta', source_meta_rows, source_meta_cols)
-    db.copy('readonly.mesh_term_meta', mesh_meta_rows, mesh_meta_cols)
+    db.copy('readonly.mesh_term_meta', mesh_term_meta_rows, mesh_term_meta_cols)
+    db.copy('readonly.mesh_concept_meta', mesh_concept_meta_rows,
+            mesh_concept_meta_cols)
     db.copy('readonly.name_meta', name_meta_rows, name_meta_cols)
     db.copy('readonly.text_meta', text_meta_rows, text_meta_cols)
     db.copy('readonly.other_meta', other_meta_rows, other_meta_cols)

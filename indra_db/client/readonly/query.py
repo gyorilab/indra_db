@@ -2333,6 +2333,59 @@ class MergeQuery(Query):
             yield ev_filter
 
 
+class _QueryCollector:
+    """An object used with Intersections to optimally merge queries.
+
+    This handles the dividing of intrusive queries into their various types and
+    polarities, and merges those that are compatible.
+    """
+    def __init__(self, queries=None):
+        self.positives = {}
+        self.negatives = {}
+        if queries is not None:
+            for query in queries:
+                self.add(query)
+
+    def add(self, query):
+        """Add another query to the list."""
+        name = query.name
+        if not query._inverted:
+            if name not in self.positives:
+                self.positives[name] = query
+            else:
+                self.positives[name] &= query
+        else:
+            if name not in self.negatives:
+                self.negatives[name] = query
+            else:
+                self.negatives[name] &= query
+
+    def has_queries(self):
+        return self.positives or self.negatives
+
+    def cancellations(self):
+        return [pq.is_inverse_of(self.negatives[pn])
+                for pn, pq in self.positives.items() if pn in self.negatives]
+
+    def all_cancel(self):
+        return all(self.cancellations())
+
+    def any_cancel(self):
+        return any(self.cancellations())
+
+    def list(self, name=None):
+        return [q for d in [self.positives, self.negatives]
+                for q in d.values() if name is None or q.name == name]
+
+    def copy(self):
+        new_collector = self.__class__()
+        new_collector.positives = {name: query.copy()
+                                   for name, query in self.positives.items()}
+        new_collector.negatives = {name: query.copy()
+                                   for name, query in self.negatives.items()}
+        return new_collector
+
+
 class Intersection(MergeQuery):
     """The Intersection of multiple queries.
 
@@ -2351,7 +2404,7 @@ class Intersection(MergeQuery):
         mergeable_groups = {C: [] for C in mergeable_query_types}
         query_groups = defaultdict(list)
         filtered_queries = set()
-        self._in_queries = {'pos': {}, 'neg': {}}
+        self._my_intrusive_queries = _QueryCollector()
         empty = False
         all_full = True
         for query in query_list:
@@ -2370,17 +2423,7 @@ class Intersection(MergeQuery):
                     # Extract the intrusive (type, agent number, evidence
                     # number) queries, and merge them together as much as
                     # possible.
-                    name = query.name
-                    if not query._inverted:
-                        if name not in self._in_queries['pos']:
-                            self._in_queries['pos'][name] = query
-                        else:
-                            self._in_queries['pos'][name] &= query
-                    else:
-                        if name not in self._in_queries['neg']:
-                            self._in_queries['neg'][name] = query
-                        else:
-                            self._in_queries['neg'][name] &= query
+                    self._my_intrusive_queries.add(query)
                 else:
                     query_groups[query.__class__].append(query)
                 filtered_queries.add(query)
@@ -2431,16 +2474,15 @@ class Intersection(MergeQuery):
                 # this query empty. Furthermore, trying to apply that Union
                 # would result in an empty query and errors and headaches. And
                 # late nights debugging code.
-                if cls == Union and any(d for d in self._in_queries.values()):
+                if cls == Union and self._my_intrusive_queries.has_queries():
                     for q in q_list:
                         all_empty = True
                         for sub_q in q.queries:
                             if not isinstance(sub_q, IntrusiveQuery):
                                 all_empty = False
                                 break
-                            compare_ins = [q for d in self._in_queries.values()
-                                           for q in d.values()
-                                           if q.name == sub_q.name]
+                            compare_ins = \
+                                self._my_intrusive_queries.list(sub_q.name)
                             if not compare_ins:
                                 all_empty = False
                                 break
@@ -2453,9 +2495,7 @@ class Intersection(MergeQuery):
                         empty = all_empty
 
         # Check to see if the types overlap
-        empty |= any(pq.is_inverse_of(self._in_queries['neg'][pn])
-                     for pn, pq in self._in_queries['pos'].items()
-                     if pn in self._in_queries['neg'])
+        empty |= self._my_intrusive_queries.any_cancel()
 
         super(Intersection, self).__init__(filtered_queries, empty, all_full)
 
@@ -2468,22 +2508,26 @@ class Intersection(MergeQuery):
         return intersect(*queries)
 
     def _get_table(self, ro):
+        # If we already did the work, just return the result.
         if self._mk_hashes_al is not None:
             return self._mk_hashes_al
 
+        # collect all the intrusive queries.
+        intrusive_queries = self._my_intrusive_queries.copy()
         if self._injected_queries is not None:
-            raise ValueError("Type queries should not be applied to "
-                             "Intersection, but handled as an intersected "
-                             "query.")
+            for q in self._injected_queries:
+                intrusive_queries.add(q)
+        intrusive_list = intrusive_queries.list()
+        if not intrusive_list:
+            intrusive_list = None
 
-        in_queries = [q for d in self._in_queries.values() for q in d.values()]
-        if not in_queries:
-            in_queries = None
-        queries = [q.build_hash_query(ro, in_queries) for q in self.queries
+        # Build the sub queries.
+        queries = [q.build_hash_query(ro, intrusive_list) for q in self.queries
                    if not q.full and not isinstance(q, IntrusiveQuery)]
         if not queries:
-            if in_queries:
-                queries = [q.build_hash_query(ro) for q in in_queries]
+            # Handle the special case that all queries are intrusive.
+            if intrusive_list:
+                queries = [q.build_hash_query(ro) for q in intrusive_list]
                 self._mk_hashes_al = self._merge(*queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,

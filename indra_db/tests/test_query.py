@@ -344,6 +344,28 @@ def test_from_mesh():
     assert all(1943 in mn_list for mn_list in mm_dict.values())
 
 
+def test_is_inverse_of_for_intersections():
+    q = FromMeshIds(['D001943']) & HasAgent('MEK')
+    nq = ~q
+    assert q.is_inverse_of(nq)
+    assert nq.is_inverse_of(q)
+
+    q2 = FromMeshIds(['D001943']) | ~HasAgent('MEK')
+    assert not q.is_inverse_of(q2)
+    assert not q2.is_inverse_of(q)
+
+
+def test_is_inverse_of_for_unions():
+    q = HasHash([1, 2, 3]) | HasDatabases()
+    nq = ~q
+    assert q.is_inverse_of(nq)
+    assert nq.is_inverse_of(q)
+
+    q2 = HasHash([1, 2, 3]) & ~HasDatabases()
+    assert not q.is_inverse_of(q2)
+    assert not q2.is_inverse_of(q)
+
+
 def test_query_set_behavior():
     db = _build_test_set()
     all_hashes = {h for h, in db.select_all(db.SourceMeta.mk_hash)}

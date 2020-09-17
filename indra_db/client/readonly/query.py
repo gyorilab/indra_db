@@ -1372,6 +1372,15 @@ class SourceIntersection(Query):
     def __invert__(self):
         return Union([~q for q in self.source_queries])
 
+    def is_inverse_of(self, other):
+        """Check if this query is the inverse of another."""
+        # The inverse of a SourceIntersection must be a Union.
+        if not isinstance(other, Union):
+            return False
+
+        # Now we can just use the Union's implementation!
+        return other.is_inverse_of(self)
+
     def _do_and(self, other):
         # This is the complement of _do_and in SourceQuery, together ensuring
         # that any intersecting group of Source queries goes into this class.
@@ -2550,6 +2559,15 @@ class Intersection(MergeQuery):
                 ev_filter &= sub_ev_filter
         return ev_filter
 
+    def is_inverse_of(self, other):
+        """Check if this query is the inverse of another."""
+        # The inverse of an Intersection must be a Union.
+        if not isinstance(other, Union):
+            return False
+
+        # Now we can just use the Union's implementation!
+        return other.is_inverse_of(self)
+
 
 class Union(MergeQuery):
     """The union of multiple queries.
@@ -2672,6 +2690,35 @@ class Union(MergeQuery):
             else:
                 ev_filter |= sub_ev_filter
         return ev_filter
+
+    def is_inverse_of(self, other):
+        """Check if this query is the inverse of another."""
+        # The inverse of a Union must be a type of Intersection.
+        if isinstance(other, Intersection):
+            intersection_queries = list(other.queries[:])
+        elif isinstance(other, SourceIntersection):
+            intersection_queries = list(other.source_queries[:])
+        else:
+            return False
+
+        # A simple all-by-all comparison, O(n^2), should be fine for the small
+        # O(10) number of queries.
+        for query in self.queries:
+            for intersection_query in intersection_queries:
+                if query.is_inverse_of(intersection_query):
+                    # This query has an inverse.
+                    break
+            else:
+                # This query has no inverse. Therefore they cannot all have
+                # inverses.
+                return False
+
+            # Remove this query from future considerations.
+            intersection_queries.remove(intersection_query)
+
+        # If there are any union queries leftover, these cannot be perfect
+        # opposites.
+        return len(intersection_queries) == 0
 
 
 class _QueryEvidenceFilter:

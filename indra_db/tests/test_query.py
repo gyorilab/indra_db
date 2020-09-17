@@ -436,9 +436,12 @@ def test_query_set_behavior():
 
     failures = []
     results = []
+    n_runs = 0
     unfound = []
+    collecting_results = True
 
     def try_query(q, compair=None, md=None):
+        nonlocal n_runs
 
         # Test query logical consistency
         result = None
@@ -448,12 +451,16 @@ def test_query_set_behavior():
                 assert result == compair, 'Result mismatch.'
             if not q.empty and not result:
                 unfound.append(q)
-            results.append((result, q))
+            if collecting_results:
+                results.append((result, q))
+            n_runs += 1
             c.up(True)
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
                              'compair': compair, 'md': md})
-            results.append((result, q))
+            if collecting_results:
+                results.append((result, q))
+            n_runs += 1
             c.up(False)
             return
 
@@ -474,7 +481,9 @@ def test_query_set_behavior():
 
             if not nq.empty and not negative_result:
                 unfound.append(nq)
-            results.append((negative_result, nq))
+            if collecting_results:
+                results.append((negative_result, nq))
+            n_runs += 1
             c.up(True)
         except Exception as e:
             if md is not None:
@@ -483,7 +492,9 @@ def test_query_set_behavior():
                 neg_md = 'not (' + str(q) + ')'
             failures.append({'query': nq, 'error': e, 'result': negative_result,
                              'compair': all_hashes - result, 'md': neg_md})
-            results.append((negative_result, nq))
+            if collecting_results:
+                results.append((negative_result, nq))
+            n_runs += 1
             c.up(False)
             return
 
@@ -493,6 +504,7 @@ def test_query_set_behavior():
     for q in queries:
         try_query(q)
     original_results = [res for res in results if res[1] is not None]
+    collecting_results = False
 
     c.mark("Testing pairs...")
     for (r1, q1), (r2, q2) in permutations(original_results, 2):
@@ -510,7 +522,7 @@ def test_query_set_behavior():
         try_query(q1 | q2 & q3, r1 | r2 & r3, md=f'({q1} or {q2}) and {q3}')
 
     c.mark('Done!')
-    print(f"Ran {len(results)} checks...")
+    print(f"Ran {n_runs} checks...")
 
     print(f"UNFOUND:")
     for q in unfound[:10]:
@@ -541,9 +553,9 @@ def test_query_set_behavior():
                 print(f'...overall {len(examples)} errors...')
             print()
 
-    assert not failures, f"{len(failures)}/{len(results)} checks failed."
+    assert not failures, f"{len(failures)}/{n_runs} checks failed."
 
-    return results, failures
+    return
 
 
 def test_get_interactions():

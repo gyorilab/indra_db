@@ -1327,13 +1327,9 @@ class SourceIntersection(Query):
 
         # Add the hash queries.
         if add_hashes and rem_hashes and add_hashes == rem_hashes:
-            # In this special case I am empty, and to make sure my inversion
-            # works smoothly, I keep these two queries around so the Union can
-            # successfully work out the logic without special communication
-            # being necessary.
+            # In this special case I am empty.
             empty = True
-            filtered_queries |= {HasHash(add_hashes),
-                                 ~HasHash(rem_hashes)}
+            filtered_queries |= {HasHash([])}
         else:
             # Check for added hashes and add a positive and an inverted hash
             # query for the net positive and net negative hashes.

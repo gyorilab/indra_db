@@ -2595,15 +2595,46 @@ class Union(MergeQuery):
         merge_grps = defaultdict(lambda: {True: [], False: []})
         full = False
         all_empty = True
+        rem_hashes = None
+        add_hashes = set()
         for query in query_list:
             if not query.empty:
                 all_empty = False
 
-            if any(isinstance(query, t) for t in mergeable_types):
+            if isinstance(query, HasHash):
+                # Collect all hashes to include and those to exclude.
+                if query._inverted:
+                    # This is a part of a union, so union is appropriate.
+                    if rem_hashes is None:
+                        rem_hashes = set(query.stmt_hashes)
+                    else:
+                        rem_hashes &= set(query.stmt_hashes)
+                else:
+                    # This follows form De Morgan's Law
+                    add_hashes |= set(query.stmt_hashes)
+            elif any(isinstance(query, t) for t in mergeable_types):
                 merge_grps[query.__class__][query._inverted].append(query)
             else:
                 other_queries.add(query)
                 query_groups[query.__class__].append(query)
+
+        # Add the hash queries.
+        if rem_hashes and add_hashes and rem_hashes == add_hashes:
+            # In this special case I am empty.
+            full = True
+            other_queries |= {~HasHash([])}
+        else:
+            # Check for added hashes and add a positive and an inverted hash
+            # query for the net positive and net negative hashes.
+            if rem_hashes is not None:
+                if not rem_hashes:
+                    full = True
+
+                other_queries.add(~HasHash(rem_hashes - add_hashes))
+                add_hashes -= rem_hashes
+
+            if add_hashes:
+                other_queries.add(HasHash(add_hashes))
 
         # Merge up the hash queries.
         for grp in (g for d in merge_grps.values() for g in d.values()):

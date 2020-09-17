@@ -2088,7 +2088,7 @@ class IntrusiveQuery(Query):
                                  super(IntrusiveQuery, self)._do_or)
 
     def _get_constraint_json(self) -> dict:
-        return {self.list_name: list(self._get_list())}
+        return {self.list_name: sorted(list(self._get_list()))}
 
     @classmethod
     def _from_constraint_json(cls, constraint_json):

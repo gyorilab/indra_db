@@ -2726,7 +2726,9 @@ class Union(MergeQuery):
                 mkhq = q.build_hash_query(ro, in_queries)
                 mk_hashes_q_list.append(mkhq)
 
-            if len(mk_hashes_q_list) == 1:
+            if len(mk_hashes_q_list) == 0:
+                raise ApiError("List of sub-queries came up with zero elements.")
+            elif len(mk_hashes_q_list) == 1:
                 self._mk_hashes_al = (mk_hashes_q_list[0].subquery()
                                                          .alias(self.name))
             else:

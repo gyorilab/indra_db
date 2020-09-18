@@ -518,8 +518,8 @@ def test_query_set_behavior():
 
     c.mark("Testing mixed triples...")
     for (r1, q1), (r2, q2), (r3, q3) in permutations(original_results, 3):
-        try_query(q1 & q2 | q3, r1 & r2 | r3, md=f'({q1} and {q2}) or {q3}')
-        try_query(q1 | q2 & q3, r1 | r2 & r3, md=f'({q1} or {q2}) and {q3}')
+        try_query((q1 & q2) | q3, (r1 & r2) | r3, md=f'({q1} and {q2}) or {q3}')
+        try_query((q1 | q2) & q3, (r1 | r2) & r3, md=f'({q1} or {q2}) and {q3}')
 
     c.mark('Done!')
     print(f"Ran {n_runs} checks...")

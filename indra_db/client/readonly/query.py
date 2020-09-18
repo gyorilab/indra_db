@@ -2467,6 +2467,10 @@ class Intersection(MergeQuery):
         # Check to see if the types overlap
         empty |= self._my_intrusive_queries.any_cancel()
 
+        # Check if any of the resulting queries so far is a logical query of
+        # everything.
+        empty |= any(q.empty for q in filtered_queries)
+
         super(Intersection, self).__init__(filtered_queries, empty, all_full)
 
     def __invert__(self):

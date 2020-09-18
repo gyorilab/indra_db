@@ -2383,10 +2383,8 @@ class Intersection(MergeQuery):
         # Look for groups of queries that can be merged otherwise, and gather
         # up the type queries for special handling. Also, check to see if any
         # queries are empty, in which case the net query is necessarily empty.
-        mergeable_query_types = [SourceIntersection, SourceQuery, FromPapers]
-        mergeable_groups = {C: [] for C in mergeable_query_types}
-        for C in get_all_descendants(IntrusiveQuery):
-            mergeable_groups[C] = []
+        mergeable_query_types = [SourceIntersection, HasHash, FromPapers]
+        mergeable_groups = defaultdict(list)
         query_groups = defaultdict(list)
         filtered_queries = set()
         self._my_intrusive_queries = _QueryCollector()
@@ -2401,7 +2399,7 @@ class Intersection(MergeQuery):
                 # If this is any kind of source query, add it to a list to be
                 # merged with its own kind.
                 if isinstance(query, C):
-                    mergeable_groups[C].append(query)
+                    mergeable_groups[query.__class__].append(query)
                     break
             else:
                 if isinstance(query, IntrusiveQuery):

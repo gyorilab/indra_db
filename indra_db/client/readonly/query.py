@@ -2608,30 +2608,21 @@ class Union(MergeQuery):
         query_groups = defaultdict(list)
         mergeable_types = (HasHash, FromPapers, IntrusiveQuery)
         merge_grps = defaultdict(list)
+        intrusive_queries = []
         full = False
         all_empty = True
-        rem_hashes = None
-        add_hashes = set()
         for query in query_list:
             if not query.empty:
                 all_empty = False
 
-            if isinstance(query, HasHash):
-                # Collect all hashes to include and those to exclude.
-                if query._inverted:
-                    # This is a part of a union, so union is appropriate.
-                    if rem_hashes is None:
-                        rem_hashes = set(query.stmt_hashes)
-                    else:
-                        rem_hashes &= set(query.stmt_hashes)
-                else:
-                    # This follows form De Morgan's Law
-                    add_hashes |= set(query.stmt_hashes)
-            elif any(isinstance(query, t) for t in mergeable_types):
-                merge_grps[query.__class__][query._inverted].append(query)
+            if any(isinstance(query, t) for t in mergeable_types):
+                merge_grps[query.__class__].append(query)
             else:
                 other_queries.add(query)
                 query_groups[query.__class__].append(query)
+
+                if isinstance(query, IntrusiveQuery):
+                    intrusive_queries.append(query)
 
         # Merge up the mergeable queries.
         for grp in merge_grps.values():
@@ -2639,6 +2630,8 @@ class Union(MergeQuery):
             res_set = {~q for q in neg_res_set}
             other_queries |= res_set
             full |= is_empty
+            intrusive_queries.extend([q for q in res_set
+                                      if isinstance(q, IntrusiveQuery)])
             query_groups[grp[0].__class__].extend(res_set)
 
         # Check if any of the resulting queries so far is a logical query of
@@ -2649,11 +2642,39 @@ class Union(MergeQuery):
         # the query groups for inverse pairs, any one of which would mean we
         # contain everything.
         if not full:
-            for q_list in query_groups.values():
+            for cls, q_list in query_groups.items():
+                # Check for exact contradictions.
                 if len(q_list) > 1:
                     for q1, q2 in combinations(q_list, 2):
                         if q1.is_inverse_of(q2):
                             full = True
+
+                # Special care is needed to make sure my intrusive queries
+                # don't identically include the universe for everything in my
+                # Intersections. Specifically, if the Intersection has only
+                # intrusive queries, and the union of every one each of the
+                # classes of intrusive query "cancels" with counterparts in my
+                # set of intrusive queries, then the result is a full query,
+                # making this query full.
+                if cls == Intersection and intrusive_queries:
+                    for q in q_list:
+                        all_full = True
+                        for sub_q in q.queries:
+                            if not isinstance(sub_q, IntrusiveQuery):
+                                all_full = False
+                                continue
+                            compare_ins = [q for q in intrusive_queries
+                                           if q.name == sub_q.name]
+                            if not compare_ins:
+                                all_full = False
+                                break
+                            for in_q in compare_ins:
+                                if not (sub_q | in_q).full:
+                                    all_full = False
+                                    break
+                            if not all_full:
+                                break
+                        full |= all_full
 
         super(Union, self).__init__(other_queries, all_empty, full)
 

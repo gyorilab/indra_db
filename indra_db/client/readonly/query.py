@@ -1301,51 +1301,23 @@ class SourceIntersection(Query):
 
         # Look through all the queries, picking out special cases and grouping
         # the rest by class.
-        add_hashes = None
-        rem_hashes = set()
         class_groups = defaultdict(list)
         for sq in source_queries:
-            if isinstance(sq, HasHash):
-                # Collect all hashes to include and those to exclude.
-                if not sq._inverted:
-                    # This is a part of an intersection, so intersection is
-                    # appropriate.
-                    if add_hashes is None:
-                        add_hashes = set(sq.stmt_hashes)
-                    else:
-                        add_hashes &= set(sq.stmt_hashes)
-                else:
-                    # This follows form De Morgan's Law
-                    rem_hashes |= set(sq.stmt_hashes)
-            else:
-                # We will need to check other class groups for inversion, so
-                # group them now for efficiency.
-                class_groups[sq.__class__].append(sq)
+            # We will need to check other class groups for inversion, so
+            # group them now for efficiency.
+            class_groups[sq.__class__].append(sq)
 
         # Start building up the true set of queries.
         filtered_queries = set()
 
-        # Add the hash queries.
-        if add_hashes and rem_hashes and add_hashes == rem_hashes:
-            # In this special case I am empty.
-            empty = True
-            filtered_queries |= {HasHash([])}
-        else:
-            # Check for added hashes and add a positive and an inverted hash
-            # query for the net positive and net negative hashes.
-            if add_hashes is not None:
-                if not add_hashes:
-                    empty = True
-                filtered_queries.add(HasHash(add_hashes - rem_hashes))
-                rem_hashes -= add_hashes
-
-            if rem_hashes:
-                filtered_queries.add(~HasHash(rem_hashes))
-
         # Now add in all the other queries, removing those that cancel out.
-        for q_list in class_groups.values():
+        for query_class, q_list in class_groups.items():
             if len(q_list) == 1:
                 filtered_queries.add(q_list[0])
+            elif query_class == HasHash:
+                res_set, is_empty = _consolidate_queries(q_list)
+                filtered_queries |= res_set
+                empty |= is_empty
             else:
                 filtered_queries |= set(q_list)
                 if not empty:
@@ -2447,29 +2419,12 @@ class Intersection(MergeQuery):
 
         # Add mergeable queries into the final set.
         for queries in mergeable_groups.values():
-            if len(queries) == 1:
-                filtered_queries.add(queries[0])
-            elif len(queries) > 1:
-                # Merge the queries based on their inversion.
-                pos_query = None
-                neg_query = None
-                for q in queries:
-                    if not q._inverted:
-                        if pos_query is None:
-                            pos_query = q
-                        else:
-                            pos_query &= q
-                    else:
-                        if neg_query is None:
-                            neg_query = q
-                        else:
-                            neg_query &= q
-
-                # Add the merged query to the final set.
-                for query in [neg_query, pos_query]:
-                    if query is not None:
-                        filtered_queries.add(query)
-                        query_groups[query.__class__].append(query)
+            if len(queries) == 0:
+                continue
+            res_set, is_empty = _consolidate_queries(queries)
+            filtered_queries |= res_set
+            query_groups[queries[0].__class__].extend(res_set)
+            empty |= is_empty
 
         # Look for exact contradictions (any one of which makes this empty).
         # Also make sure there is no empty-inducing interaction between my
@@ -2577,6 +2532,64 @@ class Intersection(MergeQuery):
         return other.is_inverse_of(self)
 
 
+def _consolidate_queries(queries):
+    """Consolidate list-type queries of the same class."""
+    # Check for simple 0 and 1 member cases.
+    if len(queries) == 0:
+        return {}, None
+    elif len(queries) == 1:
+        return {queries[0]}, queries[0].empty
+
+    # Make sure all the elements are the same class.
+    if not all(isinstance(q, queries[0].__class__) for q in queries):
+        assert False
+
+    # Merge the queries.
+    resulting_queries = set()
+    empty = False
+    pos_query = None
+    neg_query = None
+    for query in queries:
+        if not query._inverted:
+            if pos_query is None:
+                pos_query = query
+            else:
+                pos_query &= query
+        else:
+            if neg_query is None:
+                neg_query = query
+            else:
+                neg_query &= query
+
+    # Add the hash queries.
+    if pos_query and neg_query and pos_query.is_inverse_of(neg_query):
+        # In this special case I am empty.
+        empty = True
+        resulting_queries.add(pos_query.__class__([]))
+    elif isinstance(pos_query, HasHash):
+        pos_hashes = None if pos_query is None else set(pos_query.stmt_hashes)
+        neg_hashes = set() if neg_query is None else set(neg_query.stmt_hashes)
+
+        # Check for added hashes and add a positive and an inverted hash
+        # query for the net positive and net negative hashes.
+        if pos_hashes is not None:
+            if not pos_hashes:
+                empty = True
+
+            resulting_queries.add(HasHash(pos_hashes - neg_hashes))
+            neg_hashes -= pos_hashes
+
+        if neg_hashes:
+            resulting_queries.add(~HasHash(neg_hashes))
+    else:
+        if pos_query is not None:
+            resulting_queries.add(pos_query)
+        if neg_query is not None:
+            resulting_queries.add(neg_query)
+
+    return resulting_queries, empty
+
+
 class Union(MergeQuery):
     """The union of multiple queries.
 
@@ -2594,7 +2607,7 @@ class Union(MergeQuery):
         other_queries = set()
         query_groups = defaultdict(list)
         mergeable_types = (HasHash, FromPapers, IntrusiveQuery)
-        merge_grps = defaultdict(lambda: {True: [], False: []})
+        merge_grps = defaultdict(list)
         full = False
         all_empty = True
         rem_hashes = None
@@ -2620,35 +2633,13 @@ class Union(MergeQuery):
                 other_queries.add(query)
                 query_groups[query.__class__].append(query)
 
-        # Add the hash queries.
-        if rem_hashes and add_hashes and rem_hashes == add_hashes:
-            # In this special case I am empty.
-            full = True
-            other_queries |= {~HasHash([])}
-        else:
-            # Check for added hashes and add a positive and an inverted hash
-            # query for the net positive and net negative hashes.
-            if rem_hashes is not None:
-                if not rem_hashes:
-                    full = True
-
-                other_queries.add(~HasHash(rem_hashes - add_hashes))
-                add_hashes -= rem_hashes
-
-            if add_hashes:
-                other_queries.add(HasHash(add_hashes))
-
-        # Merge up the hash queries.
-        for grp in (g for d in merge_grps.values() for g in d.values()):
-            if len(grp) == 1:
-                other_queries.add(grp[0])
-            elif len(grp) > 1:
-                query = grp[0]
-                for other_query in grp[1:]:
-                    query |= other_query
-                if query.full:
-                    full = True
-                other_queries.add(query)
+        # Merge up the mergeable queries.
+        for grp in merge_grps.values():
+            neg_res_set, is_empty = _consolidate_queries([~q for q in grp])
+            res_set = {~q for q in neg_res_set}
+            other_queries |= res_set
+            full |= is_empty
+            query_groups[grp[0].__class__].extend(res_set)
 
         # Check if any of the resulting queries so far is a logical query of
         # everything.

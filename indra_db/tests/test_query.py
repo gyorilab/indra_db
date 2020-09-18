@@ -491,7 +491,7 @@ def test_query_set_behavior():
             else:
                 neg_md = 'not (' + str(q) + ')'
             failures.append({'query': nq, 'error': e, 'result': negative_result,
-                             'compair': all_hashes - result, 'md': neg_md})
+                             'compare': all_hashes - result, 'md': neg_md})
             if collecting_results:
                 results.append((negative_result, nq))
             n_runs += 1

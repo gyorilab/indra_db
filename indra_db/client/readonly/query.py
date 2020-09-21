@@ -270,7 +270,7 @@ class InteractionSQL(AgentJsonSQL):
 
     def run(self):
         logger.debug(f"Executing query (interaction):\n{self.q}")
-        names = self.q.all()
+        names = self.agg_q.all()
         results = {}
         ev_totals = {}
         for h, ag_json, type_num, n_ag, n_ev, act, is_act, src_json in names:
@@ -489,6 +489,7 @@ class Query(object):
         self.empty = empty
         self.full = full
         self._inverted = False
+        self._print_only = False
 
     def __repr__(self) -> str:
         args = self._get_constraint_json()
@@ -542,6 +543,13 @@ class Query(object):
         which is harder to read.
         """
         return self.__invert__()
+
+    def set_print_only(self, print_only):
+        """Choose to only print the SQL and not execute it.
+
+        This is very useful for debugging the SQL queries that are generated.
+        """
+        self._print_only = print_only
 
     def _rest_get(self, result_type, limit=None, offset=None, best_first=True,
                   **other_params):
@@ -650,7 +658,7 @@ class Query(object):
                     json_content_al.c.ev_count, json_content_al.c.raw_json,
                     json_content_al.c.pa_json]
 
-            # Join up with other tables to pull metadata.
+        # Join up with other tables to pull metadata.
         stmts_q = (stmts_q
                    .outerjoin(ro.ReadingRefLink,
                               ro.ReadingRefLink.rid == json_content_al.c.rid))
@@ -660,11 +668,15 @@ class Query(object):
 
         cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
 
-        # Execute the query.
+        # Put it all together.
         selection = select(cols).select_from(stmts_q)
+        if self._print_only:
+            print(selection)
+            return
 
         logger.debug(f"Executing query (get_statements):\n{selection}")
 
+        # Execute the query.
         proxy = ro.session.connection().execute(selection)
         res = proxy.fetchall()
         if res:
@@ -790,6 +802,10 @@ class Query(object):
         mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
                                          best_first)
 
+        if self._print_only:
+            print(mk_hashes_q)
+            return
+
         # Make the query, and package the results.
         logger.debug(f"Executing query (get_hashes):\n{mk_hashes_q}")
         result = mk_hashes_q.all()
@@ -824,6 +840,9 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
+            if self._print_only:
+                print("Query is empty, no SQL run.")
+                return
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'interactions')
 
@@ -831,8 +850,10 @@ class Query(object):
             return self._rest_get('interactions', limit, offset, best_first)
 
         il = InteractionSQL(ro)
-        results, ev_totals, off_comp = \
-            self._run_meta_sql(il, ro, limit, offset, best_first)
+        result_tuple = self._run_meta_sql(il, ro, limit, offset, best_first)
+        if result_tuple is None:
+            return
+        results, ev_totals, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_totals,
                            self.to_json(), il.meta_type)
 
@@ -873,9 +894,12 @@ class Query(object):
                                   with_hashes=with_hashes)
 
         r_sql = RelationSQL(ro)
-        results, ev_totals, off_comp = \
-            self._run_meta_sql(r_sql, ro, limit, offset, best_first,
-                               with_hashes)
+        result_tuple = self._run_meta_sql(r_sql, ro, limit, offset, best_first,
+                                          with_hashes)
+        if result_tuple is None:
+            return None
+
+        results, ev_totals, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_totals,
                            self.to_json(), r_sql.meta_type)
 
@@ -921,9 +945,12 @@ class Query(object):
 
         ag_sql = AgentSQL(ro, with_complex_dups=True,
                           complexes_covered=complexes_covered)
-        results, ev_totals, off_comp = \
-            self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
+        result_tuple = self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
                                with_hashes)
+        if result_tuple is None:
+            return
+
+        results, ev_totals, off_comp = result_tuple
         return AgentQueryResult(results, limit, offset, off_comp,
                                 ag_sql.complexes_covered, ev_totals,
                                 self.to_json())
@@ -937,6 +964,9 @@ class Query(object):
             kwargs['with_hashes'] = with_hashes
         order_param = ms.agg(ro, **kwargs)
         ms = self._apply_limits(ms, order_param, limit, offset, best_first)
+        if self._print_only:
+            print(ms.agg_q)
+            return
         return ms.run()
 
     @staticmethod

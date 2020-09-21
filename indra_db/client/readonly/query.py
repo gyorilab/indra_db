@@ -689,13 +689,13 @@ class Query(object):
         ev_totals = OrderedDict()
         source_counts = OrderedDict()
         returned_evidence = 0
-        src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
+        src_set = ro.get_source_names()
         for row in res:
             # Unpack the row
             row_gen = iter(row)
 
             mk_hash = next(row_gen)
-            src_dict = dict.fromkeys(src_list, 0)
+            src_dict = dict.fromkeys(src_set, 0)
             src_dict.update(next(row_gen))
             ev_count = next(row_gen)
             raw_json_bts = next(row_gen)

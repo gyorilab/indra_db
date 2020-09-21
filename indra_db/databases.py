@@ -1180,12 +1180,21 @@ class ReadonlyDatabaseManager(DatabaseManager):
                 self.__SourceMeta = tbl
             else:
                 setattr(self, tbl.__name__, tbl)
+        self.__non_source_cols = None
+
+    def get_source_names(self):
+        """Get a list of the source names as they appear in SourceMeta cols."""
+        all_cols = set(self.get_column_names(self.SourceMeta))
+        return all_cols - self.__non_source_cols
 
     def __getattribute__(self, item):
         if item == '_PaStmtSrc':
             self.__PaStmtSrc.load_cols(self.engine)
             return self.__PaStmtSrc
         elif item == 'SourceMeta':
+            if self.__non_source_cols is None:
+                self.__non_source_cols = \
+                    set(self.get_column_names(self.__SourceMeta))
             self.__SourceMeta.load_cols(self.engine)
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)

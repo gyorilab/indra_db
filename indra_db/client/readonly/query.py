@@ -9,6 +9,7 @@ import json
 import logging
 import requests
 from itertools import combinations
+from typing import Union as TypeUnion, Optional, Iterable as TypeIterable
 from collections import OrderedDict, Iterable, defaultdict
 from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
     String, union, intersect
@@ -31,7 +32,7 @@ class QueryResult(object):
 
     Parameters
     ----------
-    results : dict
+    results : Iterable
         The results of the query keyed by unique IDs (mk_hash for PA Statements,
         IDs for Raw Statements, etc.)
     limit : int
@@ -45,7 +46,7 @@ class QueryResult(object):
 
     Attributes
     ----------
-    results : dict
+    results : Iterable
         The results of the query keyed by unique IDs (mk_hash for PA Statements,
         IDs for Raw Statements, etc.)
     limit : int
@@ -57,8 +58,9 @@ class QueryResult(object):
     query_json : dict
         A description of the query that was used.
     """
-    def __init__(self, results, limit: int, offset: int, offset_comp: int,
-                 evidence_totals: dict, query_json: dict, result_type: str):
+    def __init__(self, results: TypeIterable, limit: int, offset: int,
+                 offset_comp: int, evidence_totals: dict, query_json: dict,
+                 result_type: str):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
                              "and not a string.")
@@ -76,7 +78,9 @@ class QueryResult(object):
         self.query_json = query_json
 
     @classmethod
-    def from_json(cls, json_dict):
+    def from_json(cls, json_dict) \
+            -> TypeUnion['QueryResult', 'StatementQueryResult',
+                         'AgentQueryResult']:
         # Build a StatementQueryResult or AgentQueryResult if appropriate
         if json_dict['result_type'] == 'statements':
             return StatementQueryResult.from_json(json_dict)
@@ -445,8 +449,8 @@ class AgentSQL(AgentJsonSQL):
                                   for n in range(max(n_ag, int(max(ag_json))+1))]
                 key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
                 if key in results:
-                    logger.warning("Something went weird processing results for "
-                                   "agents.")
+                    logger.warning("Something went weird processing results "
+                                   "for agents.")
 
                 # Aggregate the source counts.
                 source_counts = defaultdict(lambda: 0)
@@ -557,7 +561,7 @@ class Query(object):
 
     def get_statements(self, ro=None, limit=None, offset=None, best_first=True,
                        ev_limit=None, evidence_filter=None) \
-            -> StatementQueryResult:
+            -> Optional[StatementQueryResult]:
         """Get the statements that satisfy this query.
 
         Parameters
@@ -743,7 +747,7 @@ class Query(object):
                                     self.to_json())
 
     def get_hashes(self, ro=None, limit=None, offset=None, best_first=True) \
-            -> QueryResult:
+            -> Optional[QueryResult]:
         """Get the hashes of statements that satisfy this query.
 
         Parameters
@@ -796,7 +800,7 @@ class Query(object):
                            'hashes')
 
     def get_interactions(self, ro=None, limit=None, offset=None,
-                         best_first=True) -> QueryResult:
+                         best_first=True) -> Optional[QueryResult]:
         """Get the simple interaction information from the Statements metadata.
 
        Each entry in the result corresponds to a single preassembled Statement,
@@ -834,7 +838,7 @@ class Query(object):
 
     def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
                       with_hashes=False) \
-            -> QueryResult:
+            -> Optional[QueryResult]:
         """Get the agent and type information from the Statements metadata.
 
          Each entry in the result corresponds to a relation, meaning an
@@ -877,7 +881,7 @@ class Query(object):
 
     def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
                    with_hashes=False, complexes_covered=None) \
-            -> QueryResult:
+            -> Optional[QueryResult]:
         """Get the agent pairs from the Statements metadata.
 
          Each entry is simply a pair (or more) of Agents involved in an
@@ -885,13 +889,13 @@ class Query(object):
 
         Parameters
         ----------
-        ro : DatabaseManager
+        ro : Optional[DatabaseManager]
             A database manager handle that has valid Readonly tables built.
-        limit : int
+        limit : Optional[int]
             Control the maximum number of results returned. As a rule, unless
             you are quite sure the query will result in a small number of
             matches, you should limit the query.
-        offset : int
+        offset : Optional[int]
             Get results starting from the value of offset. This along with limit
             allows you to page through results.
         best_first : bool
@@ -899,6 +903,9 @@ class Query(object):
         with_hashes : bool
             Default is False. If True, retrieve all the hashes that fit within
             each agent pair grouping.
+        complexes_covered : Optional[set]
+            The set of hashes for complexes that you have already seen and would
+            like skipped.
         """
         if ro is None:
             ro = get_ro('primary')

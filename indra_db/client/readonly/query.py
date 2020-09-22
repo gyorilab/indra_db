@@ -2533,21 +2533,60 @@ class Intersection(MergeQuery):
             intrusive_list = None
 
         # Build the sub queries.
-        queries = [q.build_hash_query(ro, intrusive_list) for q in self.queries
-                   if not q.full and not isinstance(q, IntrusiveQuery)]
-        if not queries:
+        chosen_queries = [q for q in self.queries
+                          if not q.full and not isinstance(q, IntrusiveQuery)]
+        if not chosen_queries:
             # Handle the special case that all queries are intrusive.
             if intrusive_list:
-                queries = [q.build_hash_query(ro) for q in intrusive_list]
-                self._mk_hashes_al = self._merge(*queries).alias(self.name)
+                sql_queries = [q.build_hash_query(ro) for q in intrusive_list]
+                self._mk_hashes_al = self._merge(*sql_queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,
                 # they could simply have been merged together.
                 raise RuntimeError("Malformed Intersection occurred.")
-        elif len(queries) == 1:
-            self._mk_hashes_al = queries[0].subquery().alias(self.name)
+        elif len(chosen_queries) == 1:
+            self._mk_hashes_al = (chosen_queries[0]
+                                  .build_hash_query(ro, intrusive_list)
+                                  .subquery()
+                                  .alias(self.name))
         else:
-            self._mk_hashes_al = self._merge(*queries).alias(self.name)
+            pos = []
+            neg = []
+            for query in chosen_queries:
+                if not query._inverted:
+                    pos.append(query)
+                else:
+                    neg.append(query)
+
+            if pos and neg:
+                if len(pos) == 1:
+                    pos_sql = pos[0].build_hash_query(ro, intrusive_list)
+                else:
+                    pos_tbl = self._merge(
+                        *[q.build_hash_query(ro, intrusive_list) for q in pos]
+                    ).alias('pos')
+                    pos_sql = ro.session.query(
+                        pos_tbl.c.mk_hash.label('mk_hash'),
+                        pos_tbl.c.ev_count.label('ev_count')
+                    )
+
+                if len(neg) == 1:
+                    neg_sql = (neg[0].invert()
+                               .build_hash_query(ro, intrusive_list))
+                else:
+                    neg_tbl = union(
+                        *[q.invert().build_hash_query(ro, intrusive_list)
+                          for q in neg]
+                    ).alias('neg')
+                    neg_sql = ro.session.query(
+                        neg_tbl.c.mk_hash.label('mk_hash'),
+                        neg_tbl.c.ev_count.label('ev_count')
+                    )
+                self._mk_hashes_al = except_(pos_sql, neg_sql).alias(self.name)
+            else:
+                sql_queries = [q.build_hash_query(ro, intrusive_list)
+                               for q in chosen_queries]
+                self._mk_hashes_al = self._merge(*sql_queries).alias(self.name)
 
         return self._mk_hashes_al
 

@@ -2550,6 +2550,7 @@ class Intersection(MergeQuery):
                                   .subquery()
                                   .alias(self.name))
         else:
+            # Sort the queries into positive and negative.
             pos = []
             neg = []
             for query in chosen_queries:
@@ -2558,7 +2559,12 @@ class Intersection(MergeQuery):
                 else:
                     neg.append(query)
 
+            # If we have both kinds, do something special. We will except the
+            # positive sense of the negative (inverted) queries, which in
+            # general will mean more smaller queries are run (think of "not MEK"
+            # verses jsut looking for "MEK").
             if pos and neg:
+                # Build a subquery out of the positive query or queries.
                 if len(pos) == 1:
                     pos_sql = pos[0].build_hash_query(ro, intrusive_list)
                 else:
@@ -2570,6 +2576,9 @@ class Intersection(MergeQuery):
                         pos_tbl.c.ev_count.label('ev_count')
                     )
 
+                # Build a subquery out of the negative query or queries,
+                # re-inverting them into their positive sense, which generally
+                # results in a smaller set of hashes than the negative sense.
                 if len(neg) == 1:
                     neg_sql = (neg[0].invert()
                                .build_hash_query(ro, intrusive_list))
@@ -2582,6 +2591,8 @@ class Intersection(MergeQuery):
                         neg_tbl.c.mk_hash.label('mk_hash'),
                         neg_tbl.c.ev_count.label('ev_count')
                     )
+
+                # Take the positive except the negative as our "table".
                 self._mk_hashes_al = except_(pos_sql, neg_sql).alias(self.name)
             else:
                 sql_queries = [q.build_hash_query(ro, intrusive_list)

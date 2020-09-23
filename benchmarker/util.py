@@ -6,7 +6,7 @@ import json
 import boto3
 import logging
 from datetime import datetime
-from inspect import getmembers, isfunction
+from inspect import getmembers, isfunction, isclass, ismethod
 from importlib.util import spec_from_file_location, module_from_spec
 
 
@@ -14,6 +14,32 @@ logger = logging.getLogger('benchmark_tools')
 
 BUCKET = 'bigmech'
 PREFIX = 'indra-db/benchmarks/'
+
+
+def run_test(test_name, test_func):
+    test_results = dict.fromkeys(['passed', 'error_type', 'error_str',
+                                  'duration'])
+    print(test_name)
+    print('-' * len(test_name))
+    print("LOGS:")
+    start = datetime.now()
+    try:
+        test_func()
+        print('-' * len(test_name))
+        print("PASSED!")
+        test_results['passed'] = True
+    except Exception as e:
+        print('-' * len(test_name))
+        print("FAILED!", type(e), e)
+        logger.exception(e)
+        test_results['passed'] = False
+        test_results['error_type'] = str(type(e))
+        test_results['error_str'] = str(e)
+    finally:
+        end = datetime.now()
+        test_results['duration'] = (end - start).total_seconds()
+        print()
+    return test_results
 
 
 def benchmark(loc, base_name=None):
@@ -64,33 +90,26 @@ def benchmark(loc, base_name=None):
         logger.exception(err)
         return results
 
-    # Run tests
-    tests = (f for f, _ in getmembers(test_module, isfunction) if 'test' in f)
+    # Run test functions
+    tests = [f for f, _ in getmembers(test_module, isfunction) if 'test' in f]
     for test_name in tests:
-        test_results = dict.fromkeys(['passed', 'error_type', 'error_str',
-                                      'duration'])
-        print(test_name)
-        print('-'*len(test_name))
-        print("LOGS:")
         test = getattr(test_module, test_name)
-        start = datetime.now()
-        try:
-            test()
-            print('-'*len(test_name))
-            print("PASSED!")
-            test_results['passed'] = True
-        except Exception as e:
-            print('-'*len(test_name))
-            print("FAILED!", type(e), e)
-            logger.exception(e)
-            test_results['passed'] = False
-            test_results['error_type'] = str(type(e))
-            test_results['error_str'] = str(e)
-        finally:
-            end = datetime.now()
-            test_results['duration'] = (end - start).total_seconds()
-            print()
-            results[f'{mod_name}.{test_name}'] = test_results
+        results[f'{mod_name}.{test_name}'] = run_test(test_name, test)
+
+    # Run test classes
+    test_classes = [c for c, _ in getmembers(test_module, isclass)
+                    if c.lower().startswith('test')]
+    for class_name in test_classes:
+        test_methods = [m for m, _ in getmembers(test_module, ismethod)
+                        if m.lower().startswith('test')]
+        cls = getattr(test_module, class_name)
+        obj = cls()
+        for method_name in test_methods:
+            obj.setUp()
+            test = getattr(obj, method_name)
+            results[f'{mod_name}.{class_name}.{method_name}'] = \
+                run_test(method_name, test)
+            obj.tearDown()
 
     return results
 

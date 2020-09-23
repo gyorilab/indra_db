@@ -1,22 +1,26 @@
-import pickle
-import unittest
-import json
-from collections import defaultdict
-from os import path
 import sys
-
-from itertools import combinations
+import json
+import pickle
+import logging
+from os import path
+from collections import defaultdict
 from datetime import datetime
-from unittest import SkipTest
-from warnings import warn
+from itertools import combinations
 
-from indra import get_config
-from indra.statements import stmts_from_json
+import unittest
+from unittest.case import SkipTest
+
 from indra.databases import hgnc_client
-from indra_db.client import HasAgent, HasType
-from indra_db.client.readonly.query import QueryResult, StatementQueryResult
+from indra.statements import stmts_from_json
 
-from .api import app, MAX_STMTS, get_source, REDACT_MESSAGE
+from indra_db.client.readonly.query import QueryResult
+from indra_db.client import HasAgent, HasType, StatementQueryResult
+
+from rest_api.util import get_source
+from rest_api.api import MAX_STMTS, REDACT_MESSAGE
+
+
+logger = logging.getLogger('db_api_unit_tests')
 
 
 HERE = path.dirname(path.abspath(__file__))
@@ -40,18 +44,10 @@ def _check_stmt_agents(resp, agents):
                 assert db_id in db_ids
 
 
-class TimeWarning(Warning):
-    pass
-
-
-class DbApiTestCase(unittest.TestCase):
-
+class _DbApiTests(unittest.TestCase):
     def setUp(self):
-        app.testing = True
-        self.app = app.test_client()
-
-    def tearDown(self):
-        pass
+        self.app = None
+        raise NotImplementedError()
 
     def __check_time(self, dt, time_goal=TIMEGOAL):
         print(dt)
@@ -59,21 +55,36 @@ class DbApiTestCase(unittest.TestCase):
             ("Query took %f seconds. Must be less than %f seconds."
              % (dt, TIMELIMIT))
         if dt >= time_goal:
-            warn("Query took %f seconds, goal is less than %f seconds."
-                 % (dt, time_goal), TimeWarning)
+            logger.warning("Query took %f seconds, goal is less than %f seconds."
+                           % (dt, time_goal))
         return
 
     def __time_get_query(self, end_point, query_str):
         return self.__time_query('get', end_point, query_str)
 
+    @staticmethod
+    def _get_api_key():
+        raise NotImplementedError()
+
+    def _add_auth(self, url):
+        api_key = self._get_api_key()
+        if '?' not in url:
+            url += '?'
+        else:
+            url += '&'
+        url += f'api_key={api_key}'
+        return url
+
     def __time_query(self, method, end_point, query_str=None, url_fmt='/%s?%s',
-                     **data):
+                     with_auth=False, **data):
         print(end_point)
         start_time = datetime.now()
         if query_str is not None:
             url = url_fmt % (end_point, query_str)
         else:
             url = end_point
+        if with_auth:
+            url = self._add_auth(url)
         meth_func = getattr(self.app, method)
         if data:
             resp = meth_func(url, data=json.dumps(data),
@@ -430,14 +441,8 @@ class DbApiTestCase(unittest.TestCase):
         if elsevier_long_found == 0:
             raise SkipTest("No redactable (>200 char) Elsevier content "
                            "occurred.")
-
-        key_param = 'api_key=TESTKEY'
-        if base_qstr:
-            new_qstr = '&'.join(base_qstr.replace('?', '').split('&')
-                                + [key_param])
-        else:
-            new_qstr = key_param
-        resp, dt, size = self.__time_query(method, endpoint, new_qstr, **data)
+        resp, dt, size = self.__time_query(method, endpoint, base_qstr,
+                                           with_auth=True, **data)
         resp_dict = json.loads(resp.data)
         stmt_dict_intact = resp_dict['statements']
         assert stmt_dict_intact.keys() == stmt_dict_redact.keys(), \
@@ -533,7 +538,7 @@ class DbApiTestCase(unittest.TestCase):
                                                '&'.join(query_strs),
                                                **query_data)
             assert dt < 10
-            res = resp.json
+            res = json.loads(resp.data)
             if result_type == 'relations':
                 rels = res['relations']
             elif result_type == 'statements':
@@ -591,7 +596,3 @@ class DbApiTestCase(unittest.TestCase):
         assert res['relations'][1]['agents'] == {'0': 'MEK', '1': 'ERK'}
         drill_down(res['relations'][1], 'relations')
         print(resp)
-
-
-if __name__ == '__main__':
-    unittest.main()

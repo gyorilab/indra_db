@@ -168,6 +168,7 @@ class StatementQueryResult(QueryResult):
     def from_json(cls, json_dict):
         json_dict = json_dict.copy()
         result_type = json_dict.pop('result_type')
+        json_dict.pop('offset_comp', None)
         if result_type != 'statements':
             raise ValueError(f'Invalid result type {result_type} for this '
                              f'result class {cls}')

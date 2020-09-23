@@ -35,15 +35,16 @@ logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
+TESTING = {}
 if environ.get('TESTING_DB_APP') == '1':
     logger.warning("TESTING: No auth will be enabled.")
-    TESTING = True
+    TESTING['status'] = True
 else:
-    TESTING = False
+    TESTING['status'] = False
 
 app.register_blueprint(auth)
 app.config['DEBUG'] = True
-if not TESTING:
+if not TESTING['status']:
     SC, jwt = config_auth(app)
 
 Compress(app)
@@ -75,13 +76,13 @@ REDACT_MESSAGE = '[MISSING/INVALID CREDENTIALS: limited to 200 char for Elsevier
 
 def render_my_template(template, title, **kwargs):
     kwargs['title'] = TITLE + ': ' + title
-    if not TESTING:
+    if not TESTING['status']:
         kwargs['identity'] = get_jwt_identity()
     return env.get_template(template).render(**kwargs)
 
 
 def jwt_nontest_optional(func):
-    if TESTING:
+    if TESTING['status']:
         return func
     else:
         return jwt_optional(func)
@@ -156,7 +157,7 @@ class ApiCall:
 
         # Figure out authorization.
         self.has = dict.fromkeys(['elsevier', 'medscan'], False)
-        if not TESTING:
+        if not TESTING['status']:
             self.user, roles = resolve_auth(self.web_query)
             for role in roles:
                 for resource in self.has.keys():
@@ -418,7 +419,7 @@ class StatementApiCall(ApiCall):
                                   source_counts=result.source_counts,
                                   db_rest_url=request.url_root[:-1])
                 idbr_template = env.get_template('idbr_statements_view.html')
-                if not TESTING:
+                if not TESTING['status']:
                     identity = self.user.identity() if self.user else None
                 else:
                     identity = None
@@ -896,7 +897,7 @@ def expand_meta_row():
 
     # Figure out authorization.
     has_medscan = False
-    if not TESTING:
+    if not TESTING['status']:
         user, roles = resolve_auth(request.args.copy())
         for role in roles:
             has_medscan |= role.permissions.get('medscan', False)

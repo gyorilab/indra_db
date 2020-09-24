@@ -101,18 +101,45 @@
       },
 
       getColor: function(test_res) {
-        let color;
-        let text_color = 'white';
-        if (test_res.passed) {
-          color = 'green';
-        } else if (test_res.error_type === '<class \'unittest.case.SkipTest\'>') {
-          color = 'yellow';
-          text_color = 'black';
-        } else {
-          color = 'red';
-        }
+        let text_color = 'black';
+        let color = this.genColor(test_res.passed, test_res.error_type);
         return `background-color: ${color}; color: ${text_color};`
-      }
+      },
+
+      genColor: function(err, err_type) {
+        let skip_type = '<class \'unittest.case.SkipTest\'>';
+        // Handle the old style of doing it.
+        if (typeof err === "boolean") {
+          if (err)
+            if (err_type === skip_type)
+              return '#f0000020';
+            else
+              return '#f00000ff';
+          else
+            return '#00f000ff';
+        }
+
+        // Handle the newer way.
+        let num_skipped = 0
+        err_type.forEach((err_class) => {
+          if (err_class === skip_type)
+            num_skipped++;
+        })
+        let alpha = (0xff * (1 - num_skipped / err_type.length)).toString(16);
+        let k, red, green;
+        if (err < 0.5) {
+          k = 1 - (2*err - 1)**2;
+          red = Math.round(0xf0 * k).toString(16);
+          red = '00'.slice(red.length) + red;
+          green = 'f0';
+        } else {
+          k = 1 - 4*(err-0.5)**2;
+          red = 'f0';
+          green = Math.round(0xf0 * k).toString(16);
+          green = '00'.slice(green.length) + green;
+        }
+        return `#${red}${green}00${alpha}`;
+      },
     },
     computed: {
       minTestNameMap: function() {

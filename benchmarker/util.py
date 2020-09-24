@@ -100,10 +100,10 @@ def benchmark(loc, base_name=None):
     test_classes = [c for c, _ in getmembers(test_module, isclass)
                     if c.lower().startswith('test')]
     for class_name in test_classes:
-        test_methods = [m for m, _ in getmembers(test_module, ismethod)
-                        if m.lower().startswith('test')]
         cls = getattr(test_module, class_name)
         obj = cls()
+        test_methods = [m for m, _ in getmembers(obj, ismethod)
+                        if m.lower().startswith('test')]
         for method_name in test_methods:
             obj.setUp()
             test = getattr(obj, method_name)

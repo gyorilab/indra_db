@@ -30,6 +30,7 @@ from indra_db.client import submit_curation, stmt_from_interaction,\
     get_curations
 from .util import process_agent, DbAPIError, LogTracker, sec_since, get_source, \
     get_s3_client, gilda_ground, process_mesh_term
+from .config import *
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
@@ -50,9 +51,7 @@ if not TESTING['status']:
 Compress(app)
 CORS(app)
 
-TITLE = "The INDRA Database"
 HERE = path.abspath(path.dirname(__file__))
-DEPLOYMENT = environ.get('INDRA_DB_API_DEPLOYMENT')
 
 # Instantiate a jinja2 env.
 env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
@@ -68,10 +67,6 @@ def url_for(*args, **kwargs):
 
 # Here we can add functions to the jinja2 env.
 env.globals.update(url_for=url_for)
-
-
-MAX_STMTS = int(0.5e3)
-REDACT_MESSAGE = '[MISSING/INVALID CREDENTIALS: limited to 200 char for Elsevier]'
 
 
 def render_my_template(template, title, **kwargs):

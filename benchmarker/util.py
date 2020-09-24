@@ -9,6 +9,8 @@ from datetime import datetime
 from inspect import getmembers, isfunction, isclass, ismethod
 from importlib.util import spec_from_file_location, module_from_spec
 
+from numpy import array
+
 
 logger = logging.getLogger('benchmark_tools')
 
@@ -16,33 +18,41 @@ BUCKET = 'bigmech'
 PREFIX = 'indra-db/benchmarks/'
 
 
-def run_test(test_name, test_func):
+def run_test(test_name, test_func, num_runs):
     test_results = dict.fromkeys(['passed', 'error_type', 'error_str',
                                   'duration'])
+    test_results['passed'] = False
+    test_results['error_type'] = [None]*num_runs
+    test_results['error_str'] = [None]*num_runs
     print(test_name)
     print('-' * len(test_name))
-    print("LOGS:")
-    start = datetime.now()
-    try:
-        test_func()
-        print('-' * len(test_name))
-        print("PASSED!")
-        test_results['passed'] = True
-    except Exception as e:
-        print('-' * len(test_name))
-        print("FAILED!", type(e), e)
-        logger.exception(e)
-        test_results['passed'] = False
-        test_results['error_type'] = str(type(e))
-        test_results['error_str'] = str(e)
-    finally:
-        end = datetime.now()
-        test_results['duration'] = (end - start).total_seconds()
-        print()
+    durations = []
+    for i in range(num_runs):
+        print("LOGS:")
+        start = datetime.now()
+        try:
+            test_func()
+            print('-' * len(test_name))
+            print("PASSED!")
+            test_results['passed'] += True
+        except Exception as e:
+            print('-' * len(test_name))
+            print("FAILED!", type(e), e)
+            logger.exception(e)
+            test_results['passed'] += False
+            test_results['error_type'][i] = str(type(e))
+            test_results['error_str'][i] = str(e)
+        finally:
+            end = datetime.now()
+            durations.append((end - start).total_seconds())
+            print()
+    dur_array = array(durations)
+    test_results['duration'] = dur_array.mean()
+    test_results['deviation'] = dur_array.std()
     return test_results
 
 
-def benchmark(loc, base_name=None):
+def benchmark(loc, base_name=None, num_runs=1):
     # By default, just run in this directory
     if loc is None:
         loc = os.path.abspath('.')
@@ -70,7 +80,8 @@ def benchmark(loc, base_name=None):
             new_path = os.path.join(loc, file)
             if ('test' in file and os.path.isfile(new_path)
                     and new_path.endswith('.py')):
-                results.update(benchmark(new_path, base_name=mod_name))
+                results.update(benchmark(new_path, base_name=mod_name,
+                                         num_runs=num_runs))
         return results
 
     # Handle the case a file is specified.
@@ -94,7 +105,7 @@ def benchmark(loc, base_name=None):
     tests = [f for f, _ in getmembers(test_module, isfunction) if 'test' in f]
     for test_name in tests:
         test = getattr(test_module, test_name)
-        results[f'{mod_name}.{test_name}'] = run_test(test_name, test)
+        results[f'{mod_name}.{test_name}'] = run_test(test_name, test, num_runs)
 
     # Run test classes
     test_classes = [c for c, _ in getmembers(test_module, isclass)
@@ -108,7 +119,7 @@ def benchmark(loc, base_name=None):
             obj.setUp()
             test = getattr(obj, method_name)
             results[f'{mod_name}.{class_name}.{method_name}'] = \
-                run_test(method_name, test)
+                run_test(method_name, test, num_runs)
             obj.tearDown()
 
     return results

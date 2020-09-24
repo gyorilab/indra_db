@@ -27,6 +27,11 @@ def main():
                                   'This label is used to group test results on '
                                   's3. Whenever possible, try to use existing '
                                   'labels.'))
+    run_parser.add_argument(dest='num_runs',
+                            default=1,
+                            type=int,
+                            help=('Select the number of times to repeat the'
+                                  'test.'))
 
     # Setup the list parser
     list_parser = subparsers.add_parser('list', help='List certain properties.')
@@ -42,7 +47,7 @@ def main():
             for stack_name in list_stacks():
                 print(stack_name)
     elif args.task == 'run':
-        results = benchmark(args.location)
+        results = benchmark(args.location, num_runs=args.num_runs)
         for test, stats in results.items():
             print(test, stats)
         save_results(start_time, args.api_name, args.stack_name, results)

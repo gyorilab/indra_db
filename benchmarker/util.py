@@ -49,6 +49,7 @@ def run_test(test_name, test_func, num_runs):
     dur_array = array(durations)
     test_results['duration'] = dur_array.mean()
     test_results['deviation'] = dur_array.std()
+    test_results['passed'] = test_results['passed'] / num_runs
     return test_results
 
 

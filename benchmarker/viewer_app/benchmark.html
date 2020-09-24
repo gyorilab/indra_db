@@ -106,11 +106,11 @@
         return `background-color: ${color}; color: ${text_color};`
       },
 
-      genColor: function(err, err_type) {
+      genColor: function(passed, err_type) {
         let skip_type = '<class \'unittest.case.SkipTest\'>';
         // Handle the old style of doing it.
-        if (typeof err === "boolean") {
-          if (err)
+        if (typeof passed === "boolean") {
+          if (!passed)
             if (err_type === skip_type)
               return '#f0000020';
             else
@@ -120,6 +120,7 @@
         }
 
         // Handle the newer way.
+        let n = 1 - passed;
         let num_skipped = 0
         err_type.forEach((err_class) => {
           if (err_class === skip_type)
@@ -127,13 +128,13 @@
         })
         let alpha = (0xff * (1 - num_skipped / err_type.length)).toString(16);
         let k, red, green;
-        if (err < 0.5) {
-          k = 1 - (2*err - 1)**2;
+        if (n < 0.5) {
+          k = 1 - (2*n - 1)**2;
           red = Math.round(0xf0 * k).toString(16);
           red = '00'.slice(red.length) + red;
           green = 'f0';
         } else {
-          k = 1 - 4*(err-0.5)**2;
+          k = 1 - 4*(n-0.5)**2;
           red = 'f0';
           green = Math.round(0xf0 * k).toString(16);
           green = '00'.slice(green.length) + green;

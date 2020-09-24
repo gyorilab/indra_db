@@ -21,7 +21,6 @@ class WebResponse:
         try:
             return super(WebResponse, self).__getattribute__(item)
         except AttributeError:
-            print("in getattr:", self._resp)
             return getattr(self._resp, item)
 
 

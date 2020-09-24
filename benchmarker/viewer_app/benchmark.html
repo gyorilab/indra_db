@@ -55,8 +55,8 @@
         <div class="col-1"
              v-for="(test_run, date_str) in stack_tests[test_name]"
              :key="date_str"
-             :style="getColor(test_run)">
-          {{ Math.round( (test_run.duration + Number.EPSILON) * 10 ) / 10 }}
+             :style="getColor(test_run)"
+             v-html="genNumber(test_run)">
         </div>
       </div>
     </div>
@@ -139,6 +139,16 @@
           green = '00'.slice(green.length) + green;
         }
         return `#${red}${green}00${alpha}`;
+      },
+
+      genNumber: function(test_run) {
+        let x = Math.round( (test_run.duration + Number.EPSILON) * 10 ) / 10;
+        if (test_run.deviation !== undefined) {
+          let S = test_run.deviation / Math.sqrt(test_run.error_type.length);
+          S = Math.round( (S + Number.EPSILON) * 100 ) / 100
+          return `${x}&plusmn;${S}`
+        }
+        return x.toString()
       },
     },
     computed: {

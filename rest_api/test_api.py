@@ -8,14 +8,17 @@ from datetime import datetime
 from itertools import combinations
 
 import unittest
+import requests
 from unittest.case import SkipTest
 
+from indra import get_config
 from indra.databases import hgnc_client
 from indra.statements import stmts_from_json
 
 from indra_db.client.readonly.query import QueryResult
 from indra_db.client import HasAgent, HasType, StatementQueryResult
 
+from rest_api.api import app, TESTING
 from rest_api.util import get_source
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE
 
@@ -28,6 +31,7 @@ HERE = path.dirname(path.abspath(__file__))
 TIMEGOAL = 1
 TIMELIMIT = 30
 SIZELIMIT = 4e7
+TESTING['status'] = True
 
 
 def _check_stmt_agents(resp, agents):
@@ -44,12 +48,22 @@ def _check_stmt_agents(resp, agents):
                 assert db_id in db_ids
 
 
-class _DbApiTests(unittest.TestCase):
-    def setUp(self):
-        self.app = None
-        raise NotImplementedError()
+# Change this flag to choose to test a remote deployment.
+TEST_DEPLOYMENT = True
 
-    def __check_time(self, dt, time_goal=TIMEGOAL):
+
+class TestDbApi(unittest.TestCase):
+    def setUp(self):
+        if TEST_DEPLOYMENT:
+            url = get_config('INDRA_DB_REST_URL', failure_ok=False)
+            print("URL:", url)
+            self.app = WebApp(url)
+        else:
+            app.testing = True
+            self.app = app.test_client()
+
+    @staticmethod
+    def __check_time(dt, time_goal=TIMEGOAL):
         print(dt)
         assert dt <= TIMELIMIT, \
             ("Query took %f seconds. Must be less than %f seconds."
@@ -64,7 +78,14 @@ class _DbApiTests(unittest.TestCase):
 
     @staticmethod
     def _get_api_key():
-        raise NotImplementedError()
+        if TEST_DEPLOYMENT:
+            api_key = get_config('INDRA_DB_REST_API_KEY', failure_ok=True)
+            if api_key is None:
+                raise unittest.SkipTest(
+                    "No API KEY available. Cannot test auth.")
+            return api_key
+        else:
+            return 'TESTKEY'
 
     def _add_auth(self, url):
         api_key = self._get_api_key()
@@ -596,3 +617,44 @@ class _DbApiTests(unittest.TestCase):
         assert res['relations'][1]['agents'] == {'0': 'MEK', '1': 'ERK'}
         drill_down(res['relations'][1], 'relations')
         print(resp)
+
+
+class WebApp:
+    """Mock the behavior of the "app" but on the real service."""
+    def __init__(self, url):
+        self.base_url = url
+        if self.base_url.endswith('/'):
+            self.base_url = self.base_url[:-1]
+
+    def __process_url(self, url):
+        if not url.startswith('/'):
+            url = '/' + url
+        return self.base_url + url
+
+    def get(self, url):
+        full_url = self.__process_url(url)
+        raw_resp = requests.get(full_url)
+        return WebResponse(raw_resp)
+
+    def post(self, url, data, headers):
+        full_url = self.__process_url(url)
+        raw_resp = requests.post(full_url, data=data, headers=headers)
+        return WebResponse(raw_resp)
+
+
+class WebResponse:
+    """Imitate the response from the "app", but from real request responses."""
+    def __init__(self, resp):
+        self._resp = resp
+        self.data = resp.content
+
+    def __getattribute__(self, item):
+        """When in doubt, try to just get the item from the actual resp.
+
+        This should work much of the time because the results from the "app" are
+        intended to imitate and actual response.
+        """
+        try:
+            return super(WebResponse, self).__getattribute__(item)
+        except AttributeError:
+            return getattr(self._resp, item)

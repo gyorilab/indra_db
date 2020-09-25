@@ -228,7 +228,7 @@ class AgentJsonSQL:
                                   ro.AgentInteractions.ev_count,
                                   ro.AgentInteractions.activity,
                                   ro.AgentInteractions.is_active,
-                                  ro.AgentInteractions.src_json)
+                                  ro.AgentInteractions.src_json).distinct()
         self.agg_q = None
         if not with_complex_dups:
             self.filter(ro.AgentInteractions.is_complex_dup.isnot(True))

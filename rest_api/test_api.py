@@ -597,13 +597,16 @@ class TestDbApi(unittest.TestCase):
                 for rel in rels:
                     drill_down(rel, 'statements')
 
-        url_base = "agents/from_agents"
-        resp, dt, size = self.__time_query('get', url_base,
-                                           (f"agent=MEK&limit=50"
-                                            f"&with_cur_counts=true"
-                                            f"&with_english=true"
-                                            f"&with_hashes=true"))
+        url_base = "agents/from_query_json"
+        query = HasAgent('MEK')
+        query_str = ("limit=50&with_cur_counts=true&with_english=true"
+                     "&with_hashes=true")
+        complexes_covered = []
+        resp, dt, size = self.__time_query('post', url_base, query_str,
+                                           query=query.to_json(),
+                                           complexes_covered=complexes_covered)
         res = json.loads(resp.data)
+        complexes_covered = res['complexes_covered']
         assert len(res['relations']) == 50
         assert isinstance(res['relations'], list)
         assert dt < 10

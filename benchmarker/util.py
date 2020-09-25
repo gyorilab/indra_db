@@ -20,7 +20,7 @@ PREFIX = 'indra-db/benchmarks/'
 
 def run_test(test_name, test_func, num_runs):
     test_results = dict.fromkeys(['passed', 'error_type', 'error_str',
-                                  'duration'])
+                                  'duration', 'deviation', 'times'])
     test_results['passed'] = False
     test_results['error_type'] = [None]*num_runs
     test_results['error_str'] = [None]*num_runs
@@ -47,6 +47,7 @@ def run_test(test_name, test_func, num_runs):
             durations.append((end - start).total_seconds())
             print()
     dur_array = array(durations)
+    test_results['times'] = durations
     test_results['duration'] = dur_array.mean()
     test_results['deviation'] = dur_array.std()
     test_results['passed'] = test_results['passed'] / num_runs

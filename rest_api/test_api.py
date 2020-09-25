@@ -576,23 +576,27 @@ class TestDbApi(unittest.TestCase):
             elif result_type == 'statements':
                 assert 'num_curations' in res
                 assert all('evidence' in rel for rel in rels)
-            src_cnt = defaultdict(lambda: 0)
+            sum_src_cnt = defaultdict(lambda: 0)
             for rel in rels:
                 if result_type == 'relations':
                     this_src_counts = rel['source_counts']
                 else:
                     this_src_counts = res['source_counts'][rel['matches_hash']]
                 for src, cnt in this_src_counts.items():
-                    src_cnt[src] += cnt
-            src_cnt = dict(src_cnt)
-            rel_src_cnt = relation['source_counts']
-            rel_set = {s for s, c in rel_src_cnt.items() if c > 0}
-            sum_set = {s for s, c in src_cnt.items() if c > 0}
-            assert rel_set == sum_set, f'Set mismatch: {rel_set} vs. {sum_set}'
-            assert all(src_cnt[src] == rel_src_cnt[src] for src in rel_set), \
-                '\n'.join(f"{s}: parent={rel_src_cnt[s]}, child sum={src_cnt[s]}"
-                          if rel_src_cnt[s] != src_cnt[s] else f'{s}: ok'
-                          for s in rel_set)
+                    sum_src_cnt[src] += cnt
+            sum_src_cnt = dict(sum_src_cnt)
+            parent_src_cnt = relation['source_counts']
+            parent_set = {s for s, c in parent_src_cnt.items() if c > 0}
+            sum_set = {s for s, c in sum_src_cnt.items() if c > 0}
+            assert parent_set == sum_set, \
+                f'Set mismatch: {parent_set} vs. {sum_set}'
+            all_match = all(sum_src_cnt[src] == parent_src_cnt[src]
+                            for src in parent_set)
+            assert all_match, \
+                '\n'.join((f"{s}: parent={parent_src_cnt[s]}, "
+                           f"child sum={sum_src_cnt[s]}")
+                          if parent_src_cnt[s] != sum_src_cnt[s] else f'{s}: ok'
+                          for s in parent_set)
             if result_type == 'relations':
                 for rel in rels:
                     drill_down(rel, 'statements')

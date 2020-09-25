@@ -49,7 +49,7 @@ def _check_stmt_agents(resp, agents):
 
 
 # Change this flag to choose to test a remote deployment.
-TEST_DEPLOYMENT = True
+TEST_DEPLOYMENT = False
 
 
 class TestDbApi(unittest.TestCase):

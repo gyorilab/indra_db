@@ -603,7 +603,7 @@ class TestDbApi(unittest.TestCase):
                                             f"&with_cur_counts=true"
                                             f"&with_english=true"
                                             f"&with_hashes=true"))
-        res = resp.json
+        res = json.loads(resp.data)
         assert len(res['relations']) == 50
         assert isinstance(res['relations'], list)
         assert dt < 10

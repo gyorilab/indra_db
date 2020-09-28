@@ -217,7 +217,7 @@ class ApiCall:
 
     def _pop(self, key, default=None, type_cast=None):
         if isinstance(default, bool):
-            val = self.web_query.pop(key, str(default).lower()) == 'true'
+            val = self.web_query.pop(key, str(default).lower()).lower() == 'true'
         else:
             val = self.web_query.pop(key, default)
 

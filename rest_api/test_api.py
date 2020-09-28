@@ -546,7 +546,7 @@ class TestDbApi(unittest.TestCase):
                     "Evidence counts don't match."
 
             for ev1, ev2 in zip(s1.evidence, s2.evidence):
-                if ev1.text_refs['SOURCE'] == 'elsevier':
+                if ev1.text_refs.get('SOURCE') == 'elsevier':
                     if len(ev1.text) > 200:
                         assert ev2.text.endswith(REDACT_MESSAGE),\
                             "Elsevier text not truncated."

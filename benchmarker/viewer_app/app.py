@@ -30,24 +30,35 @@ def serve_page():
     return load(stacks=list_stacks(), apis=list_apis())
 
 
-@app.route('/fetch/<corpus_name>/<stack_name>', methods=['GET'])
-def get_stack_data(corpus_name, stack_name):
+@app.route('/fetch/<corpus_name>/<stack_name>/<test_file>', methods=['GET'])
+def get_stack_data(corpus_name, stack_name, test_file):
     try:
         s3 = boto3.client('s3')
-        res = s3.list_objects_v2(Bucket=BUCKET,
-                                 Prefix=f'{PREFIX}{corpus_name}/{stack_name}/')
-        keys = {path.basename(e['Key']).split('.')[0]: e['Key']
-                for e in res['Contents']}
-        sorted_keys = list(sorted(keys.items(), key=lambda t: t[0],
-                                  reverse=True))
-        result = defaultdict(dict)
-        for date_str, key in sorted_keys[:5]:
-            date_str = path.basename(key).split('.')[0]
-            file = s3.get_object(Bucket=BUCKET, Key=key)
-            data = json.loads(file['Body'].read())
-            for test_name, test_data in data.items():
-                result[test_name][date_str] = test_data
+        file = s3.get_object(
+            Bucket=BUCKET,
+            Key=f'{PREFIX}{corpus_name}/{stack_name}/{test_file}'
+        )
+        data = json.loads(file['Body'].read())
     except Exception as e:
         logger.exception(e)
         return jsonify({'message': f'Error: {e}'}), 500
-    return jsonify({'message': 'success', 'tests': result}), 200
+    return jsonify({'message': 'success', 'tests': data}), 200
+
+
+@app.route('/list/<corpus_name>', methods=['GET'])
+def list_corpus_options(corpus_name):
+    option_dict = {}
+    try:
+        s3 = boto3.client('s3')
+        prefix = f'{PREFIX}{corpus_name}/'
+        res = s3.list_objects_v2(Bucket=BUCKET, Prefix=prefix)
+        keys = [e['Key'][len(prefix):] for e in res['Contents']]
+        for key in keys:
+            stack, test = key.split('/')
+            test_time = test.split('.')[0]
+            label = f'{stack} @ {test_time}'
+            option_dict[label] = {'stack': stack, 'test': test}
+    except Exception as e:
+        logger.exception(e)
+        return jsonify({'message': f'Error: {e}'}), 500
+    return jsonify({'message': 'success', 'options': option_dict})

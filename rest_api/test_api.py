@@ -271,10 +271,20 @@ class TestDbApi(unittest.TestCase):
         resp1 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
                                                   check_stmts=False,
                                                   time_goal=20)
+        j1 = json.loads(resp1.data)
+        hashes1 = set(j1['statements'].keys())
+        ev_counts1 = j1['evidence_totals']
         resp2 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
                                                   offset=MAX_STMTS,
                                                   check_stmts=False,
                                                   time_goal=20)
+        j2 = json.loads(resp2.data)
+        hashes2 = set(j2['statements'].keys())
+        assert not hashes2 & hashes1
+
+        ev_counts2 = j2['evidence_totals']
+        assert max(ev_counts2.values()) <= min(ev_counts1.values())
+
         return
 
     def test_query_with_hgnc_ns(self):

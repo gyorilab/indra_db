@@ -1,5 +1,4 @@
 import json
-from collections import defaultdict
 
 import boto3
 import logging
@@ -56,7 +55,7 @@ def list_corpus_options(corpus_name):
         for key in keys:
             stack, test = key.split('/')
             test_time = test.split('.')[0]
-            label = f'{stack} @ {test_time}'
+            label = f'{test_time} ({stack})'
             option_dict[label] = {'stack': stack, 'test': test}
     except Exception as e:
         logger.exception(e)

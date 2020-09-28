@@ -626,7 +626,7 @@ class TestDbApi(unittest.TestCase):
         complexes_covered = res['complexes_covered']
         assert len(res['relations']) == 50
         assert isinstance(res['relations'], list)
-        assert dt < 10
+        assert dt < 15
         assert all('english' in rel for rel in res['relations'])
         assert all('cur_count' in rel for rel in res['relations'])
         assert all(rel['hashes'] is not None for rel in res['relations'])

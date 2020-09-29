@@ -341,7 +341,7 @@ class ApiCall:
                                 elsevier_redactions += 1
                 elif result.result_type != 'hashes' and self.fmt == 'json-js':
                     # Stringify lists of hashes.
-                    if 'hashes' in entry:
+                    if 'hashes' in entry and entry['hashes'] is not None:
                         entry['hashes'] = [str(h) for h in entry['hashes']]
                     elif 'hash' in entry:
                         entry['hash'] = str(entry['hash'])

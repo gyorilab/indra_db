@@ -382,6 +382,7 @@ class AgentSQL(AgentJsonSQL):
         super(AgentSQL, self).__init__(*args, **kwargs)
         self._limit = None
         self._offset = None
+        self._return_hashes = False
 
     def limit(self, limit):
         self._limit = limit
@@ -398,10 +399,10 @@ class AgentSQL(AgentJsonSQL):
             names_sq.c.agent_count,
             func.sum(names_sq.c.ev_count).label('ev_count'),
             func.array_agg(names_sq.c.src_json).label('src_jsons'),
-            (func.jsonb_object(
+            func.jsonb_object(
                 func.array_agg(names_sq.c.mk_hash.cast(String)),
                 func.array_agg(names_sq.c.type_num.cast(String))
-             ) if with_hashes else null()).label('hashes')
+            ).label('hashes')
         ).group_by(
             names_sq.c.agent_json,
             names_sq.c.agent_count
@@ -410,6 +411,7 @@ class AgentSQL(AgentJsonSQL):
         self.agg_q = ro.session.query(sq.c.agent_json, sq.c.agent_count,
                                       sq.c.ev_count, sq.c.src_jsons,
                                       sq.c.hashes)
+        self._return_hashes = with_hashes
         return [desc(sq.c.ev_count), sq.c.agent_json]
 
     def _get_next(self, more_offset=0):
@@ -461,8 +463,11 @@ class AgentSQL(AgentJsonSQL):
 
                 # Add this entry to the results.
                 results[key] = {'id': key, 'source_counts': dict(source_counts),
-                                'agents': _make_agent_dict(ag_json),
-                                'hashes': my_hashes.hashes}
+                                'agents': _make_agent_dict(ag_json)}
+                if self._return_hashes:
+                    results[key]['hashes'] = my_hashes.hashes
+                else:
+                    results[key]['hashes'] = None
                 ev_totals[key] = sum(source_counts.values())
 
                 # Sanity check. Only a coding error could cause this to fail.

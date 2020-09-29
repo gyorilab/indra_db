@@ -638,6 +638,70 @@ class TestDbApi(unittest.TestCase):
         drill_down(res['relations'][1], 'relations')
         print(resp)
 
+    def __simple_time_test(self, *args, **kwargs):
+        resp, dt, size = \
+            self.__time_query(*args, **kwargs)
+        assert resp.status_code == 200, f"Query failed: {resp.data.decode()}"
+        assert dt < 30, "Query would have timed out."
+        if dt > 15:
+            logger.warning(f"Query took a long time: {dt} seconds.")
+
+    def test_IL6_html_with_creds(self):
+        """Test the timing of a search for IL-6 with auth, "signed in"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=IL-6@TEXT&format=html',
+                                with_auth=True)
+
+    def test_IL6_html_no_creds(self):
+        """Test the timing of a search for IL-6 without auth, "signed out"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=IL-6@TEXT&format=html',
+                                with_auth=False)
+
+    def test_IL6_agents_with_creds(self):
+        """Test the timing of a query for agents with text=IL-6, "signed in"."""
+        query = HasAgent('IL-6', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=True)
+
+    def test_IL6_agents_no_creds(self):
+        """Test timing of a query for agents with text=IL-6, "signed out"."""
+        query = HasAgent('IL-6', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=False)
+
+    def test_ROS_html_with_creds(self):
+        """Test the timing of a search for ROS with auth, "signed in"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=ROS@TEXT&format=html',
+                                with_auth=True)
+
+    def test_ROS_html_no_creds(self):
+        """Test the timing of a search for ROS without auth, "signed out"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=ROS@TEXT&format=html',
+                                with_auth=False)
+
+    def test_ROS_agents_with_creds(self):
+        """Test the timing of a query for agents with text=ROS, "signed in"."""
+        query = HasAgent('ROS', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=True)
+
+    def test_ROS_agents_no_creds(self):
+        """Test timing of a query for agents with text=ROS, "signed out"."""
+        query = HasAgent('ROS', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=False)
+
 
 class WebApp:
     """Mock the behavior of the "app" but on the real service."""

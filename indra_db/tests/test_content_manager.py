@@ -12,7 +12,8 @@ from indra_db.managers.reading_manager import BulkLocalReadingManager
 
 from indra_db.managers.content_manager import Pubmed, PmcOA, Manuscripts,\
     Elsevier
-from indra_db.tests.util import get_temp_db, get_test_ftp_url
+from indra_db.tests.util import get_temp_db, get_test_ftp_url,\
+    assert_contents_equal
 
 try:
     get_temp_db()
@@ -24,15 +25,6 @@ except Exception as e:
 # =============================================================================
 # The following are some helpful functions for the rest of the tests.
 # =============================================================================
-def assert_contents_equal(list1, list2, msg=None):
-    "Check that the contenst of two lists are the same, regardless of order."
-    res = set(list1) == set(list2)
-    err_msg = "Contents of lists do not match:\n%s\n%s\n" % (list1, list2)
-    if msg is not None:
-        err_msg += msg
-    assert res, err_msg
-
-
 def capitalize_list_of_tpls(l):
     return [tuple([i.upper() if isinstance(i, str) else i for i in e])
             for e in l]

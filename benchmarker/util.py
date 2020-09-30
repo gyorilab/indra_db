@@ -116,12 +116,17 @@ def benchmark(loc, base_name=None, num_runs=1):
         cls = getattr(test_module, class_name)
         obj = cls()
         test_methods = [m for m, _ in getmembers(obj, ismethod)
-                        if m.lower().startswith('test')]
+                        if m.lower().startswith('test')
+                        or m.lower() == 'run_test']
         for method_name in test_methods:
             obj.setUp()
             test = getattr(obj, method_name)
-            results[f'{mod_name}.{class_name}.{method_name}'] = \
-                run_test(method_name, test, num_runs)
+            if method_name == 'run_test' and len(test_methods) == 1:
+                results[f'{mod_name}.{class_name}'] = \
+                    run_test(class_name, test, num_runs)
+            else:
+                results[f'{mod_name}.{class_name}.{method_name}'] = \
+                    run_test(method_name, test, num_runs)
             obj.tearDown()
 
     return results

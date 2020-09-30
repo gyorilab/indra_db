@@ -54,6 +54,11 @@ def render_my_template(template, title, **kwargs):
     kwargs['title'] = TITLE + ': ' + title
     if not TESTING['status']:
         kwargs['identity'] = get_jwt_identity()
+
+    # Set nav elements as inactive by default.
+    for nav_element in ['search', 'old_search']:
+        key = f'{nav_element}_active'
+        kwargs[key] = kwargs.pop(key, False)
     return env.get_template(template).render(**kwargs)
 
 
@@ -152,7 +157,7 @@ def serve_stages(stage):
 
 @dep_route('/statements', methods=['GET'])
 @jwt_nontest_optional
-def get_statements_query_format():
+def old_search():
     # Create a template object from the template file, load once
     url_base = request.url_root
     if DEPLOYMENT is not None:

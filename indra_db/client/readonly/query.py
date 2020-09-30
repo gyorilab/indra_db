@@ -3,7 +3,7 @@ __all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
            'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter',
-           'AgentJsonExpander', 'FromAgentJson']
+           'AgentJsonExpander', 'FromAgentJson', 'EmptyQuery']
 
 import json
 import logging

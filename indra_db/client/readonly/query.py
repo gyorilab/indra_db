@@ -2877,9 +2877,16 @@ class _QueryEvidenceFilter:
     def join_table(self, ro, query, tables_joined=None):
         if self.table_name == 'raw_stmt_src':
             ret = query.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
-        elif self.table_name == 'raw_stmt_mesh':
-            ret = query.outerjoin(ro.RawStmtMesh,
-                                  ro.RawStmtMesh.sid == ro.FastRawPaLink.id)
+        elif self.table_name == 'raw_stmt_mesh_terms':
+            ret = query.outerjoin(
+                ro.RawStmtMeshTerms,
+                ro.RawStmtMeshTerms.sid == ro.FastRawPaLink.id
+            )
+        elif self.table_name == 'raw_stmt_mesh_concepts':
+            ret = query.outerjoin(
+                ro.RawStmtMeshConcepts,
+                ro.RawStmtMeshConcepts.sid == ro.FastRawPaLink.id
+            )
         elif self.table_name == 'reading_ref_link':
             ret = query.outerjoin(
                 ro.ReadingRefLink,

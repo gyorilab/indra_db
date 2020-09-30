@@ -277,7 +277,7 @@ def expand_meta_row():
 
 @dep_route('/query/<result_type>', methods=['GET', 'POST'])
 def get_statements_by_query_json(result_type):
-    return FallbackQueryApiCall().run(result_type)
+    return FallbackQueryApiCall(env).run(result_type)
 
 
 @dep_route('/curation', methods=['GET'])

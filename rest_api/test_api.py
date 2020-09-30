@@ -19,11 +19,11 @@ from indra_db.client.readonly.query import QueryResult
 from indra_db.client import HasAgent, HasType, StatementQueryResult
 
 from rest_api.util import get_source
-from rest_api.config import MAX_STMTS, REDACT_MESSAGE
+from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TESTING
 
 logger = logging.getLogger('db_api_unit_tests')
 try:
-    from rest_api.api import app, TESTING
+    from rest_api.api import app
 except Exception as e:
     logger.warning(f"Could not load app: {e}")
     app = None

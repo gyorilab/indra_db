@@ -113,6 +113,8 @@ class ApiCall:
             res = self.get_db_query().get_hashes(**params)
         else:
             raise ValueError(f"Invalid result type: {result_type}")
+        logger.info(f"Got results from query after "
+                    f"{sec_since(self.start_time)} seconds.")
         self.process_entries(res)
         logger.info(f"Returning for query with params: {params}")
         return self.produce_response(res)
@@ -252,8 +254,8 @@ class ApiCall:
             logger.info(f"Redacted {elsevier_redactions} pieces of elsevier "
                         f"evidence.")
 
-        logger.info("Finished  for %s after %s seconds."
-                    % (self.__class__.__name__, sec_since(self.start_time)))
+        logger.info(f"Process entries for {self.__class__.__name__} after "
+                    f"{sec_since(self.start_time)} seconds.")
         return
 
 

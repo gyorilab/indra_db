@@ -457,7 +457,7 @@ class StatementApiCall(ApiCall):
         return db_query
 
     def _evidence_query_from_web_query(self, db_query=None):
-        filter_ev = self._pop('filter_ev', False, bool)
+        filter_ev = self._pop('filter_ev', True, bool)
         ev_filter = EvidenceFilter()
 
         # Unpack paper ids, if present:

@@ -47,6 +47,7 @@ HERE = path.abspath(path.dirname(__file__))
 # Instantiate a jinja2 env.
 env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
                                        indra_loader]))
+env.globals.update(url_for=url_for)
 
 
 def render_my_template(template, title, **kwargs):

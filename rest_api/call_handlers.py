@@ -458,6 +458,8 @@ class StatementApiCall(ApiCall):
 
     def _evidence_query_from_web_query(self, db_query=None):
         filter_ev = self._pop('filter_ev', True, bool)
+        logger.info(f"Evidence {'will' if filter_ev else 'will not'} be "
+                    f"filtered.")
         ev_filter = EvidenceFilter()
 
         # Unpack paper ids, if present:

@@ -47,46 +47,44 @@
             padding-right: 0;
         }
     </style>
-    <div class="navbar navbar-expand-md fixed-top bg-light">
-        <img src="https://bigmech.s3.amazonaws.com/indra-db/indralab_bare_logo.png"
-             width="30em">
-        <a class="navbar-brand" href="#" style="padding-left: 0.5em;">INDRA Database</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse"
-                data-target="#navbarCollapse" aria-controls="navbarCollapse"
-                aria-expanded="navbarCollapse" aria-label="Toggle navigation">
-          <span class="navbar-toggler-icon"></span>
+    <button class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarCollapse" aria-controls="navbarCollapse"
+            aria-expanded="navbarCollapse" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarCollapse">
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item {% if search_active %}acitve{% endif %}">
+          <a class="nav-link" href="{{ url_for('search') }}">Search</a>
+        </li>
+        <li class="nav-item {% if old_search_active %}active{% endif %}">
+          <a class="nav-link" href="{{ url_for('old_search') }}">(Old Search)</a>
+        </li>
+      </ul>
+      <div class="col text-right no-horiz-pad">
+        <span id="user-loginout-msg">
+            {% if identity %}
+              Welcome {{ identity['email'] }}!
+            {% endif %}
+        </span>
+        <button class="btn btn-primary"
+                onclick="return {% if identity %}trigger_logout(){% else %}trigger_login(){% endif %};"
+                id="loginout-button">
+          {% if identity %}
+            Logout
+          {%  else %}
+            Login
+          {% endif %}
         </button>
-        <div class="collapse navbar-collapse" id="navbarCollapse">
-          <ul class="navbar-nav mr-auto">
-            <li class="nav-item {% if search_active %}acitve{% endif %}">
-              <a class="nav-link" href="{{ url_for('search') }}">Search</a>
-            </li>
-            <li class="nav-item {% if old_search_active %}active{% endif %}">
-              <a class="nav-link" href="{{ url_for('old_search') }}">(Old Search)</a>
-            </li>
-          </ul>
-          <div class="col text-right no-horiz-pad">
-            <span id="user-loginout-msg">
-                {% if identity %}
-                  Welcome {{ identity['email'] }}!
-                {% endif %}
-            </span>
-            <button class="btn btn-primary"
-                    onclick="return {% if identity %}trigger_logout(){% else %}trigger_login(){% endif %};"
-                    id="loginout-button">
-              {% if identity %}
-                Logout
-              {%  else %}
-                Login
-              {% endif %}
-            </button>
-          </div>
-
-        </div>
+      </div>
     </div>
 {%- endmacro %}
 
-{% block header %}
+{% block title %}
+  <a class="navbar-brand" href="#" style="padding-left: 0.5em;">INDRA Database</a>
+{% endblock %}
+
+{% block navbar %}
     {{ nav_header(identity) }}
 {% endblock %}
 

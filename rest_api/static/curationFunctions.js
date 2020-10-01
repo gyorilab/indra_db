@@ -119,15 +119,15 @@ function submitButtonClick(clickEvent) {
         latestSubmission['stmt_hash'] = stmt_hash;
     }
     let testing = false; // Set to true to test the curation endpoint of the API
-    let ajx_response = submitCuration(cur_dict, stmt_hash, statusBox, icon, testing);
-    console.log("ajax response from submission: ");
-    console.log(ajx_response);
+    let response = submitCuration(cur_dict, stmt_hash, statusBox, icon, testing);
+    console.log("Response from submission: ");
+    console.log(response);
     return false;
 }
 
 
 // Submit curation
-function submitCuration(curation_dict, hash, statusBox, icon, test) {
+async function submitCuration(curation_dict, hash, statusBox, icon, test) {
 
     let _url = CURATION_ADDR + hash;
 
@@ -138,56 +138,53 @@ function submitCuration(curation_dict, hash, statusBox, icon, test) {
     // console.log("api key: " + api_key)
     console.log("url: " + _url);
 
-    return $.ajax({
-        url: _url,
-        type: "POST",
-        dataType: "json",
-        contentType: "application/json",
-        data: JSON.stringify(curation_dict),
-        complete: function (xhr, statusText) {
-            latestSubmission['submit_status'] = xhr.status;
-            switch (xhr.status) {
-                case 200:
-                    statusBox.textContent = "Curation submitted successfully!";
-                    icon.style = "color: #00FF00"; // Brightest green
-                    break;
-                case 400:
-                    statusBox.textContent = xhr.status + ": Bad Curation Data";
-                    icon.style = "color: #FF0000"; // Super red
-                    break;
-                case 401:
-                    console.log("Authentication failure, trying again.");
-                    login(
-                        (type, data) => {
-                            submitCuration(curation_dict, hash, statusBox, icon, test)
-                        },
-                        (type, data) => {
-                            submitCuration(curation_dict, hash, statusBox, icon, test)
-                        }
-                        );
-                    break;
-                case 404:
-                    statusBox.textContent = xhr.status + ": Bad Link";
-                    icon.style = "color: #FF0000";
-                    break;
-                case 500:
-                    statusBox.textContent = xhr.status + ": Internal Server Error";
-                    icon.style = "color: #FF0000";
-                    break;
-                case 504:
-                    statusBox.textContent = xhr.status + ": Server Timeout";
-                    icon.style = "color: #58D3F7"; // Icy blue
-                    break;
-                default:
-                    console.log("Uncaught submission error: check ajax response");
-                    console.log("xhr: ");
-                    console.log(xhr);
-                    statusBox.textContent = "Uncaught submission error; Code " + xhr.status;
-                    icon.style = "color: #FF8000"; // Warning orange
-                    break;
-            }
-        }
-    });
+    const resp = await fetch(_url, {
+        method: 'POST',
+        body: JSON.stringify(curation_dict),
+        headers: {'Content-Type': 'application/json'}
+    })
+    latestSubmission['submit_status'] = resp.status;
+    switch (resp.status) {
+        case 200:
+            statusBox.textContent = "Curation submitted successfully!";
+            icon.style = "color: #00FF00"; // Brightest green
+            break;
+        case 400:
+            statusBox.textContent = xhr.status + ": Bad Curation Data";
+            icon.style = "color: #FF0000"; // Super red
+            break;
+        case 401:
+            console.log("Authentication failure, trying again.");
+            login(
+              (type, data) => {
+                  submitCuration(curation_dict, hash, statusBox, icon, test)
+              },
+              (type, data) => {
+                  submitCuration(curation_dict, hash, statusBox, icon, test)
+              }
+            );
+            break;
+        case 404:
+            statusBox.textContent = resp.status + ": Bad Link";
+            icon.style = "color: #FF0000";
+            break;
+        case 500:
+            statusBox.textContent = resp.status + ": Internal Server Error";
+            icon.style = "color: #FF0000";
+            break;
+        case 504:
+            statusBox.textContent = resp.status + ": Server Timeout";
+            icon.style = "color: #58D3F7"; // Icy blue
+            break;
+        default:
+            console.log("Uncaught submission error: check response");
+            console.log("resp:\n", resp);
+            statusBox.textContent = "Uncaught submission error; Code " + resp.status;
+            icon.style = "color: #FF8000"; // Warning orange
+            break;
+    }
+
+    return resp;
 }
 // Creates the dropdown div with the following structure
 // <div class="dropdown" 

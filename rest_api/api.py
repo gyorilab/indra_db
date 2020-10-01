@@ -8,9 +8,10 @@ from collections import defaultdict
 
 from flask_cors import CORS
 from flask_compress import Compress
+from flask import url_for as base_url_for
 from jinja2 import Environment, ChoiceLoader
 from flask_jwt_extended import get_jwt_identity
-from flask import Flask, request, abort, Response, redirect, jsonify, url_for
+from flask import Flask, request, abort, Response, redirect, jsonify
 
 from indra.statements import get_all_descendants, Statement
 from indra.assemblers.html.assembler import loader as indra_loader,\
@@ -50,6 +51,17 @@ env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
 env.globals.update(url_for=url_for)
 
 
+def url_for(*args, **kwargs):
+    res = base_url_for(*args, **kwargs)
+    if DEPLOYMENT is not None:
+        pass
+    return res
+
+
+# Here we can add functions to the jinja2 env.
+env.globals.update(url_for=url_for)
+
+
 def render_my_template(template, title, **kwargs):
     kwargs['title'] = TITLE + ': ' + title
     if not TESTING['status']:
@@ -62,7 +74,6 @@ def render_my_template(template, title, **kwargs):
     return env.get_template(template).render(**kwargs)
 
 
-# Handle deployment names gracefully.
 def dep_route(url, **kwargs):
     if DEPLOYMENT is not None:
         url = f'/{DEPLOYMENT}{url}'

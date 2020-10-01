@@ -48,13 +48,16 @@ HERE = path.abspath(path.dirname(__file__))
 # Instantiate a jinja2 env.
 env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
                                        indra_loader]))
-env.globals.update(url_for=url_for)
 
 
 def url_for(*args, **kwargs):
     res = base_url_for(*args, **kwargs)
     if DEPLOYMENT is not None:
-        pass
+        logger.info('URL_FOR input:', args, kwargs)
+        if not res.startswith(f'/{DEPLOYMENT}'):
+            logger.info('pre:', res)
+            res = f'/{DEPLOYMENT}' + res
+        logger.info('final:', res)
     return res
 
 
@@ -74,6 +77,7 @@ def render_my_template(template, title, **kwargs):
     return env.get_template(template).render(**kwargs)
 
 
+# Handle deployment names gracefully.
 def dep_route(url, **kwargs):
     if DEPLOYMENT is not None:
         url = f'/{DEPLOYMENT}{url}'

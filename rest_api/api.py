@@ -31,7 +31,23 @@ from rest_api.util import sec_since, get_s3_client, gilda_ground, \
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
-app = Flask(__name__)
+
+class MyFlask(Flask):
+    def route(self, url, *args, **kwargs):
+        if DEPLOYMENT is not None:
+            url = f'/{DEPLOYMENT}{url}'
+        flask_dec = super(MyFlask, self).route(url, **kwargs)
+        return flask_dec
+
+
+static_url_path = None
+if DEPLOYMENT is not None:
+    static_url_path = f'/{DEPLOYMENT}/static'
+    auth.url_prefix = f'/{DEPLOYMENT}'
+
+
+app = MyFlask(__name__, static_url_path=static_url_path)
+
 
 app.register_blueprint(auth)
 app.config['DEBUG'] = True
@@ -77,31 +93,24 @@ def render_my_template(template, title, **kwargs):
     return env.get_template(template).render(**kwargs)
 
 
-# Handle deployment names gracefully.
-def dep_route(url, **kwargs):
-    if DEPLOYMENT is not None:
-        url = f'/{DEPLOYMENT}{url}'
-    flask_dec = app.route(url, **kwargs)
-    return flask_dec
-
 # ==========================
 # Here begins the API proper
 # ==========================
 
 
-@dep_route('/', methods=['GET'])
+@app.route('/', methods=['GET'])
 def iamalive():
     return redirect(url_for('search'), code=302)
 
 
-@dep_route('/ground', methods=['GET'])
+@app.route('/ground', methods=['GET'])
 def ground():
     ag = request.args['agent']
     res_json = gilda_ground(ag)
     return jsonify(res_json)
 
 
-@dep_route('/search', methods=['GET'])
+@app.route('/search', methods=['GET'])
 def search():
     stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
@@ -110,7 +119,7 @@ def search():
                               stmt_types_json=json.dumps(sorted(list(stmt_types))))
 
 
-@dep_route('/data-vis/<path:file_path>')
+@app.route('/data-vis/<path:file_path>')
 def serve_data_vis(file_path):
     full_path = path.join(HERE, 'data-vis/dist', file_path)
     logger.info('data-vis: ' + full_path)
@@ -128,12 +137,12 @@ def serve_data_vis(file_path):
                         content_type=ct)
 
 
-@dep_route('/monitor')
+@app.route('/monitor')
 def get_data_explorer():
     return render_my_template('daily_data.html', 'Monitor')
 
 
-@dep_route('/monitor/data/runtime')
+@app.route('/monitor/data/runtime')
 def serve_runtime():
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
@@ -143,7 +152,7 @@ def serve_runtime():
     return jsonify(json.loads(res['Body'].read()))
 
 
-@dep_route('/monitor/data/liststages')
+@app.route('/monitor/data/liststages')
 def list_stages():
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
@@ -159,7 +168,7 @@ def list_stages():
     return jsonify(ret)
 
 
-@dep_route('/monitor/data/<stage>')
+@app.route('/monitor/data/<stage>')
 def serve_stages(stage):
     from indra_db.util.data_gatherer import S3_DATA_LOC
 
@@ -170,7 +179,7 @@ def serve_stages(stage):
     return jsonify(json.loads(res['Body'].read()))
 
 
-@dep_route('/statements', methods=['GET'])
+@app.route('/statements', methods=['GET'])
 @jwt_nontest_optional
 def old_search():
     # Create a template object from the template file, load once
@@ -182,8 +191,8 @@ def old_search():
                               endpoint=url_base)
 
 
-@dep_route('/<result_type>/<path:method>', methods=['GET', 'POST'])
-@dep_route('/metadata/<result_type>/<path:method>', methods=['GET', 'POST'])
+@app.route('/<result_type>/<path:method>', methods=['GET', 'POST'])
+@app.route('/metadata/<result_type>/<path:method>', methods=['GET', 'POST'])
 def get_statements(result_type, method):
     """Get some statements constrained by query."""
 
@@ -206,7 +215,7 @@ def get_statements(result_type, method):
     return call.run(result_type=result_type)
 
 
-@dep_route('/expand', methods=['POST'])
+@app.route('/expand', methods=['POST'])
 def expand_meta_row():
     start_time = datetime.now()
 
@@ -295,17 +304,17 @@ def expand_meta_row():
     return resp
 
 
-@dep_route('/query/<result_type>', methods=['GET', 'POST'])
+@app.route('/query/<result_type>', methods=['GET', 'POST'])
 def get_statements_by_query_json(result_type):
     return FallbackQueryApiCall(env).run(result_type)
 
 
-@dep_route('/curation', methods=['GET'])
+@app.route('/curation', methods=['GET'])
 def describe_curation():
     return redirect('/statements', code=302)
 
 
-@dep_route('/curation/submit/<hash_val>', methods=['POST'])
+@app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_nontest_optional
 def submit_curation_endpoint(hash_val, **kwargs):
     user, roles = resolve_auth(dict(request.args))
@@ -343,7 +352,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
     return jsonify(res)
 
 
-@dep_route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
+@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
 def list_curations(stmt_hash, src_hash):
     curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
     curation_json = [cur.to_json() for cur in curations]

@@ -2068,7 +2068,11 @@ class FromMeshIds(_TextRefCore):
                 def get_clause(ro):
                     return get_col(ro).notin_(self._mesh_nums)
 
-        return EvidenceFilter.from_filter('raw_stmt_mesh_terms', get_clause)
+        if self._mesh_type == 'D':
+            return EvidenceFilter.from_filter('raw_stmt_mesh_terms', get_clause)
+        else:
+            return EvidenceFilter.from_filter('raw_stmt_mesh_concepts',
+                                              get_clause)
 
 
 class IntrusiveQuery(Query):

@@ -53,11 +53,11 @@ env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
 def url_for(*args, **kwargs):
     res = base_url_for(*args, **kwargs)
     if DEPLOYMENT is not None:
-        logger.info('URL_FOR input:', args, kwargs)
+        logger.info(f'URL_FOR input: {args}, {kwargs}')
         if not res.startswith(f'/{DEPLOYMENT}'):
-            logger.info('pre:', res)
+            logger.info(f'pre: {res}')
             res = f'/{DEPLOYMENT}' + res
-        logger.info('final:', res)
+        logger.info(f'final: {res}')
     return res
 
 

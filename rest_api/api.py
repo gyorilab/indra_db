@@ -111,6 +111,7 @@ def ground():
 
 
 @app.route('/search', methods=['GET'])
+@jwt_nontest_optional
 def search():
     stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
     stmt_types -= {'Influence', 'Event', 'Unresolved'}

@@ -266,6 +266,9 @@ class StatementApiCall(ApiCall):
             {m for m in self._pop('mesh_ids', '').split(',') if m}
         self.web_query['paper_ids'] = \
             {i for i in self._pop('paper_ids', '').split(',') if i}
+        self.filter_ev = self._pop('filter_ev', True, bool)
+        logger.info(f"Evidence {'will' if self.filter_ev else 'will not'} be "
+                    f"filtered.")
         self.agent_dict = {}
         self.agent_set = set()
         return
@@ -459,9 +462,6 @@ class StatementApiCall(ApiCall):
         return db_query
 
     def _evidence_query_from_web_query(self, db_query=None):
-        filter_ev = self._pop('filter_ev', True, bool)
-        logger.info(f"Evidence {'will' if filter_ev else 'will not'} be "
-                    f"filtered.")
         ev_filter = EvidenceFilter()
 
         # Unpack paper ids, if present:
@@ -483,7 +483,7 @@ class StatementApiCall(ApiCall):
             paper_q = FromPapers(id_tpls)
             if db_query is not None:
                 db_query &= paper_q
-            if filter_ev:
+            if self.filter_ev:
                 ev_filter &= paper_q.ev_filter()
 
         # Unpack mesh ids.
@@ -492,7 +492,7 @@ class StatementApiCall(ApiCall):
             mesh_q = FromMeshIds([process_mesh_term(m) for m in mesh_ids])
             if db_query is not None:
                 db_query &= mesh_q
-            if filter_ev:
+            if self.filter_ev:
                 ev_filter &= mesh_q.ev_filter()
 
         # Assign ev filter to class scope
@@ -627,6 +627,8 @@ class FromQueryJsonApiCall(StatementApiCall):
         query_json = request.json['query']
         try:
             q = Query.from_json(query_json)
+            if self.filter_ev:
+                self.ev_filter = q.ev_filter()
         except (KeyError, ValueError):
             abort(Response("Invalid JSON.", 400))
         _check_query(q)

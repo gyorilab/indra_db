@@ -14,9 +14,10 @@ from unittest.case import SkipTest
 from indra import get_config
 from indra.databases import hgnc_client
 from indra.statements import stmts_from_json
+from indra_db import get_db
 
 from indra_db.client.readonly.query import QueryResult
-from indra_db.client import HasAgent, HasType, StatementQueryResult
+from indra_db.client import HasAgent, HasType, StatementQueryResult, FromMeshIds
 
 from rest_api.util import get_source
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TESTING
@@ -701,6 +702,74 @@ class TestDbApi(unittest.TestCase):
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=False)
+
+    def test_mesh_concept_ev_limit(self):
+        """Test a specific bug in which evidence was duplicated.
+
+        When querying for mesh concepts, with an evidence limit, the evidence
+        was repeated numerous times.
+        """
+        db = get_db('primary')
+        q = HasAgent('ACE2') & FromMeshIds(['C000657245'])
+        resp, dt, size = self.__time_query('post', 'statements/from_query_json',
+                                           'limit=50&ev_limit=6',
+                                           query=q.to_json(), with_auth=True)
+        assert resp.status_code == 200, f"Query failed: {resp.data.decode()}"
+        assert dt < 30, "Query would have timed out."
+        if dt > 15:
+            logger.warning(f"Query took a long time: {dt} seconds.")
+
+        resp_json = json.loads(resp.data)
+        pmids = set()
+        for h, data in resp_json['results'].items():
+            ev_list = data['evidence']
+            assert len(ev_list) <= 6, "Evidence limit exceeded."
+            ev_tuples = {(ev.get('text'), ev.get('source_hash'),
+                          ev.get('source_api'), str(ev.get('text_refs')))
+                         for ev in ev_list}
+            assert len(ev_tuples) == len(ev_list), "Evidence is not unique."
+            for ev in ev_list:
+                found_pmid = False
+                if 'pmid' in ev:
+                    pmids.add(ev['pmid'])
+                    found_pmid = True
+
+                if 'text_refs' in ev:
+                    tr_dict = ev['text_refs']
+                    if 'TRID' in tr_dict:
+                        tr = db.select_one(db.TextRef,
+                                           db.TextRef.id == tr_dict['TRID'])
+                        pmids.add(tr.pmid)
+                        found_pmid = True
+                    if 'PMID' in tr_dict:
+                        pmids.add(tr_dict['PMID'])
+                        found_pmid = True
+                    if 'DOI' in tr_dict:
+                        tr_list = db.select_all(
+                            db.TextRef,
+                            db.TextRef.doi_in([tr_dict['DOI']])
+                        )
+                        pmids |= {tr.pmid for tr in tr_list if tr.pmid}
+                        found_pmid = True
+
+                assert found_pmid,\
+                    "How could this have been mapped to mesh?"
+        pmids = {int(pmid) for pmid in pmids if pmid is not None}
+
+        mesh_pmids = {n for n, in db.select_all(
+            db.MeshRefAnnotations.pmid_num,
+            db.MeshRefAnnotations.pmid_num.in_(pmids),
+            db.MeshRefAnnotations.mesh_num == 657245,
+            db.MeshRefAnnotations.is_concept.is_(True)
+        )}
+        mesh_pmids |= {n for n, in db.select_all(
+            db.MtiRefAnnotationsTest.pmid_num,
+            db.MtiRefAnnotationsTest.pmid_num.in_(pmids),
+            db.MtiRefAnnotationsTest.mesh_num == 657245,
+            db.MtiRefAnnotationsTest.is_concept.is_(True)
+        )}
+
+        assert pmids == mesh_pmids, "Not all pmids mapped ot mesh term."
 
 
 class WebApp:

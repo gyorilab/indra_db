@@ -312,11 +312,13 @@ class StatementApiCall(ApiCall):
                 title = TITLE + ': ' + 'Results'
                 ev_totals = res_json.pop('evidence_totals')
                 stmts = stmts_from_json(stmts_json.values())
+                db_rest_url = request.url_root[:-1] \
+                    + self._env.globals['url_for']('iamalive')[:-1]
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,
                                   ev_counts=ev_totals, title=title,
                                   source_counts=result.source_counts,
-                                  db_rest_url=request.url_root[:-1])
+                                  db_rest_url=db_rest_url)
                 idbr_template = \
                     self._env.get_template('idbr_statements_view.html')
                 if not TESTING['status']:

@@ -117,6 +117,7 @@ def search():
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
     return render_my_template('search.html', 'Search',
                               source_colors=SOURCE_COLORS,
+                              search_active=True,
                               stmt_types_json=json.dumps(sorted(list(stmt_types))))
 
 
@@ -189,6 +190,7 @@ def old_search():
         url_base = f'{url_base}{DEPLOYMENT}/'
     return render_my_template('search_statements.html', 'Search',
                               message="Welcome! Try asking a question.",
+                              old_search_active=True,
                               endpoint=url_base)
 
 

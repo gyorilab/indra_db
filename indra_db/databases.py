@@ -1182,7 +1182,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
                 setattr(self, tbl.__name__, tbl)
         self.__non_source_cols = None
 
-    def get_source_names(self):
+    def get_source_names(self) -> set:
         """Get a list of the source names as they appear in SourceMeta cols."""
         all_cols = set(self.get_column_names(self.SourceMeta))
         return all_cols - self.__non_source_cols

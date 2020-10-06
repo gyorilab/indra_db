@@ -14,10 +14,11 @@ from flask_jwt_extended import get_jwt_identity
 from flask import Flask, request, abort, Response, redirect, jsonify
 
 from indra.statements import get_all_descendants, Statement
-from indra.assemblers.html.assembler import loader as indra_loader,\
-    SOURCE_COLORS
+from indra.assemblers.html.assembler import loader as indra_loader, \
+    make_source_colors
 
 from indra_db.exceptions import BadHashError
+from indra_db.client import get_source_info
 from indra_db.client.principal.curation import *
 from indra_db.client.readonly import AgentJsonExpander
 
@@ -115,8 +116,18 @@ def ground():
 def search():
     stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
+    sources_info = get_source_info()
+    databases = []
+    readers = []
+    for src_id, src_info in sources_info.items():
+        if src_info['type'] == 'databases':
+            databases.append(src_id)
+        else:
+            readers.append(src_id)
+    source_colors = make_source_colors(databases, readers)
     return render_my_template('search.html', 'Search',
-                              source_colors=SOURCE_COLORS,
+                              source_colors=source_colors,
+                              sources_info=sources_info,
                               search_active=True,
                               stmt_types_json=json.dumps(sorted(list(stmt_types))))
 

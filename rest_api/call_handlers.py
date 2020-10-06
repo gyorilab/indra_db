@@ -23,8 +23,8 @@ from indra_db.client.principal.curation import *
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
     jwt_nontest_optional
 from rest_api.util import LogTracker, sec_since, get_source, process_agent, \
-    process_mesh_term, DbAPIError, iter_free_agents, _make_english_from_meta
-
+    process_mesh_term, DbAPIError, iter_free_agents, _make_english_from_meta, \
+    get_html_source_info
 
 logger = logging.getLogger('call_handlers')
 
@@ -310,9 +310,10 @@ class StatementApiCall(ApiCall):
             res_json['statements_removed'] = 0
             res_json['evidence_returned'] = result.returned_evidence
 
+            # Build the HTML if HTML, else just tweak the JSON.
             stmts_json = result.results
             if self.fmt == 'html':
-                title = TITLE + ': ' + 'Results'
+                title = TITLE
                 ev_totals = res_json.pop('evidence_totals')
                 stmts = stmts_from_json(stmts_json.values())
                 db_rest_url = request.url_root[:-1] \
@@ -328,8 +329,11 @@ class StatementApiCall(ApiCall):
                     identity = self.user.identity() if self.user else None
                 else:
                     identity = None
-                resp_content = html_assembler.make_model(idbr_template,
-                                                         identity=identity)
+                source_info, source_colors = get_html_source_info()
+                resp_content = html_assembler.make_model(
+                    idbr_template, identity=identity, sourc_info=source_info,
+                    source_colors=source_colors
+                )
                 if self.tracker.get_messages():
                     level_stats = ['%d %ss' % (n, lvl.lower())
                                    for lvl, n

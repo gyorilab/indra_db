@@ -18,7 +18,6 @@ from indra.assemblers.html.assembler import loader as indra_loader, \
     make_source_colors
 
 from indra_db.exceptions import BadHashError
-from indra_db.client import get_source_info
 from indra_db.client.principal.curation import *
 from indra_db.client.readonly import AgentJsonExpander
 
@@ -27,7 +26,7 @@ from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from rest_api.config import *
 from rest_api.call_handlers import *
 from rest_api.util import sec_since, get_s3_client, gilda_ground, \
-    _make_english_from_meta
+    _make_english_from_meta, get_html_source_info
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
@@ -116,18 +115,10 @@ def ground():
 def search():
     stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
-    sources_info = get_source_info()
-    databases = []
-    readers = []
-    for src_id, src_info in sources_info.items():
-        if src_info['type'] == 'databases':
-            databases.append(src_id)
-        else:
-            readers.append(src_id)
-    source_colors = make_source_colors(databases, readers)
+    source_info, source_colors = get_html_source_info()
     return render_my_template('search.html', 'Search',
                               source_colors=source_colors,
-                              sources_info=sources_info,
+                              source_info=source_info,
                               search_active=True,
                               stmt_types_json=json.dumps(sorted(list(stmt_types))))
 
@@ -199,10 +190,11 @@ def old_search():
     url_base = request.url_root
     if DEPLOYMENT is not None:
         url_base = f'{url_base}{DEPLOYMENT}/'
+    source_info, source_colors = get_html_source_info()
     return render_my_template('search_statements.html', 'Search',
                               message="Welcome! Try asking a question.",
-                              old_search_active=True,
-                              endpoint=url_base)
+                              old_search_active=True, source_info=source_info,
+                              source_colors=source_colors, endpoint=url_base)
 
 
 @app.route('/<result_type>/<path:method>', methods=['GET', 'POST'])

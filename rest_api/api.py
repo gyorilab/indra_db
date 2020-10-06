@@ -14,8 +14,7 @@ from flask_jwt_extended import get_jwt_identity
 from flask import Flask, request, abort, Response, redirect, jsonify
 
 from indra.statements import get_all_descendants, Statement
-from indra.assemblers.html.assembler import loader as indra_loader, \
-    make_source_colors
+from indra.assemblers.html.assembler import loader as indra_loader
 
 from indra_db.exceptions import BadHashError
 from indra_db.client.principal.curation import *

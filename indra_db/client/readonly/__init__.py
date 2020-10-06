@@ -2,7 +2,7 @@ from .util import *
 from .query import *
 
 
-def get_source_info():
+def get_ro_source_info():
     from indra.config import KNOWLEDGE_SOURCE_INFO
     from indra_db import get_ro
     ro = get_ro('primary')
@@ -11,23 +11,17 @@ def get_source_info():
     sources = {}
     for src_id in ro_srcs:
         src_info = {'id': src_id}
+        lookup_id = src_id
         if src_id == 'vhn':
-            indra_src_info = KNOWLEDGE_SOURCE_INFO['virhostnet']
+            lookup_id = 'virhostnet'
         elif src_id == 'bel_lc':
-            indra_src_info = KNOWLEDGE_SOURCE_INFO['bel']
+            lookup_id = 'bel'
         elif src_id == 'pe':
-            indra_src_info = KNOWLEDGE_SOURCE_INFO['phosphoelm']
+            lookup_id = 'phosphoelm'
         elif src_id == 'psp':
-            indra_src_info = {
-                'name': 'Phosphosite Plus',
-                'link': 'https://www.phosphosite.org/homeAction.action',
-                'type': 'database',
-                'domain': 'biology'
-            }
-        else:
-            indra_src_info = KNOWLEDGE_SOURCE_INFO[src_id]
+            lookup_id = 'phosphosite'
 
-        src_info.update(indra_src_info)
+        src_info.update(KNOWLEDGE_SOURCE_INFO[lookup_id])
 
         if src_id == 'eidos':
             src_info['domain'] = 'biology'

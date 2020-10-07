@@ -1,8 +1,9 @@
 __all__ = ['get_stmts_with_agent_text_like', 'get_text_content_from_stmt_ids']
 
 from sqlalchemy import text
-from functools import lru_cache
 from collections import defaultdict
+from cachetools.keys import hashkey
+from cachetools import cached, LRUCache
 
 from .constructors import get_db
 from .helpers import unpack, _get_trids
@@ -361,98 +362,114 @@ def _get_text_content(content_identifiers, db=None):
             for trid, source, format, text_type, content in res}
 
 
-def get_text_content_from_text_refs(text_refs, db=None, use_cache=True):
-    """Get text_content from an evidence object's text_refs attribute
+class TextContentSessionHandler(object):
+    """Allows querying of text content from text_refs
 
+    Doesn't directly expose the db.
 
     Parameters
     ----------
-    text_refs : dict of str: str
-        text_refs dictionary as contained in an evidence object
-        The dictionary should be keyed on id_types. The valid keys
-        are 'PMID', 'PMCID', 'DOI', 'PII', 'URL', 'MANUSCRIPT_ID'.
-
     db : Optional[:py:class:`DatabaseManager`]
         User has the option to pass in a database manager. If None
         the primary database is used. Default: None
-
-    use_cache : Optional[bool]
-        Whether or not to use cached results. Only relevant when
-        querying the primary database. Will not work if primary
-        database is passed in with keyword argument. Only if
-        keyword db argument is absent or set to None.
-        Default: True
-
-    Returns
-    -------
-    text : str
-        fulltext corresponding to the text_refs if it exists in the
-        database, otherwise the abstract. Returns None if no content
-        exists for the text_refs in the database
     """
-    primary = False
-    if db is None:
-        db = get_db('primary')
-        primary = True
-    if primary and use_cache:
-        frozen_text_refs = frozenset(text_refs.items())
-        result = _get_text_content_from_text_refs_cached(frozen_text_refs)
-    else:
-        text_ref_id = _get_text_ref_id_from_text_refs(text_refs, db)
+    def __init__(self, db=None):
+        default = False
+        if db is None:
+            db = get_db('primary')
+            default = True
+        self.__db = db
+        self.default = default
+
+    def close(self):
+        self.__db.session.rollback()
+        self.__db.session.close()
+
+    def get_text_content_from_text_refs(self, text_refs, use_cache=True):
+        """Get text_content from an evidence object's text_refs attribute
+
+
+        Parameters
+        ----------
+        text_refs : dict of str: str
+            text_refs dictionary as contained in an evidence object
+            The dictionary should be keyed on id_types. The valid keys
+            are 'PMID', 'PMCID', 'DOI', 'PII', 'URL', 'MANUSCRIPT_ID'.
+
+
+
+        use_cache : Optional[bool]
+            Whether or not to use cached results. Only relevant when
+            querying the primary database. Will not work if primary
+            database is passed in with keyword argument. Only if
+            keyword db argument is absent or set to None.
+            Default: True
+
+        Returns
+        -------
+        text : str
+            fulltext corresponding to the text_refs if it exists in the
+            database, otherwise the abstract. Returns None if no content
+            exists for the text_refs in the database
+        """
+        if self.default and use_cache:
+            frozen_text_refs = frozenset(text_refs.items())
+            result = self.\
+                _get_text_content_from_text_refs_cached(frozen_text_refs)
+        else:
+            text_ref_id = self._get_text_ref_id_from_text_refs(text_refs)
+            if text_ref_id is None:
+                result = None
+            else:
+                result = self._get_text_content_from_trid(text_ref_id)
+        return result
+
+    @cached(cache=LRUCache(maxsize=10000),
+            key=lambda self, frozen_text_refs: hashkey(frozen_text_refs))
+    def _get_text_content_from_text_refs_cached(self, frozen_text_refs):
+        text_refs = dict(frozen_text_refs)
+        text_ref_id = self._get_text_ref_id_from_text_refs(text_refs)
         if text_ref_id is None:
             result = None
         else:
-            result = _get_text_content_from_trid(text_ref_id, db)
-    return result
+            result = self._get_text_content_from_trid(text_ref_id)
+        return result
 
+    def _get_text_ref_id_from_text_refs(self, text_refs):
+        # In some cases the TRID is already there so we can just
+        # return it
+        if 'TRID' in text_refs:
+            return text_refs['TRID']
+        text_ref_id = None
+        for id_type in ['pmid', 'pmcid', 'doi',
+                        'pii', 'url', 'manuscript_id']:
+            try:
+                id_val = text_refs[id_type.upper()]
+                trids = _get_trids(self.__db, id_val, id_type)
+                if trids:
+                    text_ref_id = trids[0]
+                    break
+            except KeyError:
+                pass
+        return text_ref_id
 
-@lru_cache(10000)
-def _get_text_content_from_text_refs_cached(frozen_text_refs):
-    db = get_db('primary')
-    text_refs = dict(frozen_text_refs)
-    text_ref_id = _get_text_ref_id_from_text_refs(text_refs, db)
-    if text_ref_id is None:
-        result = None
-    else:
-        result = _get_text_content_from_trid(text_ref_id, db)
-    return result
-
-
-def _get_text_ref_id_from_text_refs(text_refs, db):
-    # In some cases the TRID is already there so we can just
-    # return it
-    if 'TRID' in text_refs:
-        return text_refs['TRID']
-    text_ref_id = None
-    for id_type in ['pmid', 'pmcid', 'doi',
-                    'pii', 'url', 'manuscript_id']:
-        try:
-            id_val = text_refs[id_type.upper()]
-            trids = _get_trids(db, id_val, id_type)
-            if trids:
-                text_ref_id = trids[0]
-                break
-        except KeyError:
-            pass
-    return text_ref_id
-
-
-def _get_text_content_from_trid(text_ref_id, db):
-    texts = db.select_all([db.TextContent.content,
-                           db.TextContent.text_type],
-                          db.TextContent.text_ref_id == text_ref_id)
-    contents = defaultdict(list)
-    for content, text_type in texts:
-        contents[text_type].append(content)
-    # Look at text types in order of priority
-    for text_type in ('fulltext', 'abstract', 'title'):
-        # There are cases when we get a list of results for the same
-        # content type with some that are None and some actual content,
-        # so we iterate to find a non-empty content to return
-        for content in contents.get(text_type, []):
-            if content:
-                return unpack(content)
-    return None
+    def _get_text_content_from_trid(self, text_ref_id):
+        texts = self.__db.select_all([self.__db.TextContent.content,
+                                      self.__db.TextContent.text_type],
+                                     self.__db.TextContent.text_ref_id ==
+                                     text_ref_id)
+        contents = defaultdict(list)
+        for content, text_type in texts:
+            contents[text_type].append(content)
+        # Look at text types in order of priority
+        for text_type in ('fulltext', 'abstract', 'title'):
+            # There are cases when we get a list of results for the same
+            # content type with some that are None and some actual content,
+            # so we iterate to find a non-empty content to return
+            for content in contents.get(text_type, []):
+                if content:
+                    return unpack(content)
+        return None
 
 
 def _extract_db_refs(stmt_json):

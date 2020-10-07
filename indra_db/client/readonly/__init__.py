@@ -3,7 +3,7 @@ from .query import *
 
 
 def get_ro_source_info():
-    from indra.config import KNOWLEDGE_SOURCE_INFO
+    from indra.sources import SOURCE_INFO
     from indra_db import get_ro
     ro = get_ro('primary')
 
@@ -21,7 +21,7 @@ def get_ro_source_info():
         elif src_id == 'psp':
             lookup_id = 'phosphosite'
 
-        src_info.update(KNOWLEDGE_SOURCE_INFO[lookup_id])
+        src_info.update(SOURCE_INFO[lookup_id])
 
         if src_id == 'eidos':
             src_info['domain'] = 'biology'

@@ -363,10 +363,15 @@ def _get_text_content(content_identifiers, db=None):
 
 
 class TextContentSessionHandler(object):
-    """
+    """Allows querying of text content from text_refs
+
+    Doesn't directly expose the db.
+
+    Parameters
+    ----------
     db : Optional[:py:class:`DatabaseManager`]
-    User has the option to pass in a database manager. If None
-    the primary database is used. Default: None
+        User has the option to pass in a database manager. If None
+        the primary database is used. Default: None
     """
     def __init__(self, db=None):
         default = False

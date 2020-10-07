@@ -7,7 +7,7 @@ from indra_db.tests.util import get_temp_db
 from indra_db.util.content_scripts import (get_stmts_with_agent_text_like,
                                            get_stmts_with_agent_text_in,
                                            get_text_content_from_stmt_ids,
-                                           get_text_content_from_text_refs)
+                                           TextContentSessionHandler)
 
 
 @attr('nonpublic')
@@ -89,9 +89,10 @@ def test_get_text_content_from_text_refs():
                  ' contains a schematic diagram of the apparatus of our'
                  ' experiment.')
     db = _get_prepped_db()
-    text = get_text_content_from_text_refs({'PMID': '000000'}, db=db)
+    tc = TextContentSessionHandler(db=db)
+    text = tc.get_text_content_from_text_refs({'PMID': '000000'}, db=db)
     assert text == fulltext0
-    text = get_text_content_from_text_refs({'PMID': '777777'}, db=db)
+    text = tc.get_text_content_from_text_refs({'PMID': '777777'}, db=db)
     assert text == fulltext1
 
 

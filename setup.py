@@ -10,7 +10,7 @@ def main():
           packages=find_packages(),
           install_requires=['indra', 'boto3', 'sqlalchemy', 'psycopg2-binary',
                             'pgcopy', 'matplotlib', 'flask', 'nltk',
-                            'reportlab'],
+                            'reportlab', 'cachetools'],
           extras_require={'test': ['nose', 'coverage', 'python-coveralls',
                                    'nose-timer']},
           )

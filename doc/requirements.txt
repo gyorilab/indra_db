@@ -6,5 +6,6 @@ matplotlib
 future
 requests
 m2r
+cachetools
 git+https://github.com/sorgerlab/indra.git
 

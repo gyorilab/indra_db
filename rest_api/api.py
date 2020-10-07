@@ -89,6 +89,8 @@ def render_my_template(template, title, **kwargs):
     for nav_element in ['search', 'old_search']:
         key = f'{nav_element}_active'
         kwargs[key] = kwargs.pop(key, False)
+
+    kwargs['simple'] = False
     return env.get_template(template).render(**kwargs)
 
 

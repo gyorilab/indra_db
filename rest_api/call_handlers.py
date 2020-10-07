@@ -332,7 +332,7 @@ class StatementApiCall(ApiCall):
                 source_info, source_colors = get_html_source_info()
                 resp_content = html_assembler.make_model(
                     idbr_template, identity=identity, source_info=source_info,
-                    source_colors=source_colors
+                    source_colors=source_colors, simple=False
                 )
                 if self.tracker.get_messages():
                     level_stats = ['%d %ss' % (n, lvl.lower())

@@ -1,11 +1,18 @@
+import json
 import logging
 from io import StringIO
 from datetime import datetime
+
+from indra_db.client.readonly.query import gilda_ground
 
 logger = logging.getLogger('db rest api - util')
 
 
 class DbAPIError(Exception):
+    pass
+
+
+class NoGroundingFound(DbAPIError):
     pass
 
 
@@ -40,22 +47,28 @@ def process_agent(agent_param):
         ns = 'NAME'
 
     logger.info("Resolved %s to ag=%s, ns=%s" % (agent_param, ag, ns))
-    if ns == 'AUTO':
-        res = gilda_ground(ag)
-        ns = res[0]['term']['db']
-        ag = res[0]['term']['id']
-        logger.info("Auto-mapped grounding with gilda to ag=%s, ns=%s with "
-                    "score=%s out of %d options"
-                    % (ag, ns, res[0]['score'], len(res)))
-
     return ag, ns
 
 
-def gilda_ground(agent_text):
-    import requests
-    res = requests.post('http://grounding.indra.bio/ground',
-                        json={'text': agent_text})
-    return res.json()
+def process_mesh_term(mesh_term):
+    """Use gilda to translate a mesh term into a MESH ID if possible."""
+    if mesh_term is None:
+        return mesh_term
+
+    # Check to see if this is a mesh ID.
+    if any(mesh_term.startswith(c) for c in ['D', 'C']) \
+            and mesh_term[1:].isdigit():
+        return mesh_term
+
+    # Try to ground the term.
+    results = gilda_ground(mesh_term)
+    for res in results:
+        if res['term']['db'] == 'MESH':
+            logger.info(f"Auto-mapped {mesh_term} to {res['term']['id']} "
+                        f"({res['term']['entry_name']}) using Gilda.")
+            return res['term']['id']
+    raise NoGroundingFound(f"Could not find MESH id for {mesh_term} among "
+                           f"gilda results:\n{json.dumps(results, indent=2)}")
 
 
 def get_source(ev_json):

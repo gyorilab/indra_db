@@ -27,7 +27,7 @@ def _build_test_set():
     stypes = ['Phosphorylation', 'Activation', 'Inhibition', 'Complex']
     sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc11', 'db'),
                ('signor', 'db')]
-    mesh_ids = ['D000225', 'D002352', 'D015536']
+    mesh_ids = ['D000225', 'D002352', 'D015536', 'D00123413', 'D0000334']
 
     mesh_combos = []
     for num_mesh in range(0, 3):
@@ -92,7 +92,6 @@ def _build_test_set():
     mesh_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
                       'activity', 'is_active', 'agent_count')
     for stype, refs, activity, is_active in stmts:
-
         # Extract agents, and make a Statement.
         StmtClass = get_statement_by_name(stype)
         if stype == 'ActiveForm':
@@ -334,7 +333,7 @@ def test_has_type():
 
 def test_from_mesh():
     ro = get_db('primary')
-    q = FromMeshId('D001943')
+    q = FromMeshIds(['D001943'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
     mm_entries = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num],
                                ro.MeshMeta.mk_hash.in_(set(res.results.keys())))
@@ -356,13 +355,30 @@ def test_query_set_behavior():
     c = Counter()
 
     def dq(query):
+        # Test string creation and JSON dump and load
+        assert str(query), "No string formed."
+        q_json = query.to_json()
+        json_str = json.dumps(q_json)
+        assert json_str, "No JSON created (this is a really weird error)."
+        rjq = Query.from_json(q_json)
+        assert rjq == query, "Re-formed query does not == the original."
+        assert rjq is not query, "Somehow re-composed query IS original query."
+
+        rjq = Query.from_json(json.loads(json_str))
+        assert rjq == query, "Re-formed query from re-formed JSON != original."
+        assert rjq is not query, \
+            "Somehow thoroughly reconstituted query IS original query."
+
+        # Test actually running the query
         res = query.get_hashes(db)
         return res.results
 
     queries = [
         HasAgent('TP53', role='SUBJECT'),
         HasAgent('ERK', namespace='FPLX', role='OBJECT'),
-        FromMeshId('D015536'),
+        FromMeshIds(['D015536']),
+        FromMeshIds(['D002352', 'D015536']),
+        FromMeshIds(['D0000334']),
         HasHash(lookup_hashes[:-3]),
         HasHash(lookup_hashes[-1:]),
         HasHash(lookup_hashes[-4:-1]),
@@ -386,6 +402,8 @@ def test_query_set_behavior():
     unfound = []
 
     def try_query(q, compair=None, md=None):
+
+        # Test query logical consistency
         result = None
         try:
             result = dq(q)
@@ -402,6 +420,7 @@ def test_query_set_behavior():
             c.up(False)
             return
 
+        # Test negative query logical consistency
         negative_result = None
         nq = None
         try:
@@ -591,7 +610,7 @@ def test_evidence_filtering_has_readings():
 def test_evidence_filtering_mesh():
     ro = get_db('primary')
     q1 = HasAgent('TP53')
-    q2 = FromMeshId('D001943')
+    q2 = FromMeshIds(['D001943'])
     query = q1 & q2
     res = query.get_statements(ro, limit=2, ev_limit=None,
                                evidence_filter=q2.ev_filter())
@@ -610,7 +629,7 @@ def test_evidence_filtering_pairs():
     q1 = HasAgent('TP53')
     q_list = [~HasOnlySource('medscan'), HasOnlySource('reach'),
               ~HasSources(['reach', 'sparser']), HasSources(['pc11', 'signor']),
-              HasDatabases(), ~HasReadings(), FromMeshId('D001943')]
+              HasDatabases(), ~HasReadings(), FromMeshIds(['D001943'])]
     for q2, q3 in combinations(q_list, 2):
         query = q1 | q2 | q3
         ev_filter = q2.ev_filter() & q3.ev_filter()
@@ -624,7 +643,7 @@ def test_evidence_filtering_trios():
     ro = get_db('primary')
     q1 = HasAgent('TP53')
     q_list = [~HasOnlySource('medscan'), HasSources(['reach', 'sparser']),
-              HasDatabases(), HasReadings(), FromMeshId('D001943')]
+              HasDatabases(), HasReadings(), FromMeshIds(['D001943'])]
     for q2, q3, q4 in combinations(q_list, 3):
         query = q1 | q2 | q3 | q4
         ev_filter = q2.ev_filter() & q3.ev_filter() & q4.ev_filter()

@@ -3,6 +3,7 @@ __all__ = ['texttypes', 'formats', 'DatabaseManager', 'IndraDbException',
            'PrincipalDatabaseManager', 'ReadonlyDatabaseManager']
 
 import re
+import json
 import random
 import logging
 from io import BytesIO
@@ -180,7 +181,7 @@ class DatabaseManager(object):
 
     Example
     -------
-    If you wish to acces the primary database and find the the metadata for a
+    If you wish to access the primary database and find the the metadata for a
     particular pmid, 1234567:
 
     >> from indra.db import get_db
@@ -198,6 +199,15 @@ class DatabaseManager(object):
         self.session = None
         self.Base = declarative_base()
         self.label = label
+        ping_engine = create_engine(self.url,
+                                    connect_args={'connect_timeout': 1})
+        self.available = True
+        try:
+            ping_engine.execute('SELECT 1 AS ping;')
+        except Exception as err:
+            logger.warning(f"Database {repr(self.url)} is not available: {err}")
+            self.available = False
+            return
         self.engine = create_engine(self.url)
         self._conn = None
         return
@@ -213,6 +223,8 @@ class DatabaseManager(object):
             self.__foreign_key_graph = None
 
     def __del__(self, *args, **kwargs):
+        if not self.available:
+            return
         try:
             self.grab_session()
             self.session.rollback()
@@ -311,6 +323,8 @@ class DatabaseManager(object):
 
     def grab_session(self):
         "Get an active session with the database."
+        if not self.available:
+            return
         if self.session is None or not self.session.is_active:
             logger.debug('Attempting to get session...')
             DBSession = sessionmaker(bind=self.engine)
@@ -561,8 +575,8 @@ class DatabaseManager(object):
         data_bts = []
         n_cols = len(cols)
         for entry in data:
-            # Make sure that the number of columns matches the number of columns in
-            # the data.
+            # Make sure that the number of columns matches the number of columns
+            # in the data.
             if n_cols != len(entry):
                 raise ValueError("Number of columns does not match number of "
                                  "columns in data.")
@@ -572,6 +586,8 @@ class DatabaseManager(object):
             for element in entry:
                 if isinstance(element, str):
                     new_entry.append(element.encode('utf8'))
+                if isinstance(element, dict):
+                    new_entry.append(json.dumps(element).encode('utf-8'))
                 elif (isinstance(element, bytes)
                       or element is None
                       or isinstance(element, Number)
@@ -975,6 +991,8 @@ class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
+        if not self.available:
+            return
 
         self.tables = principal_schema.get_schema(self.Base)
         self.readonly = readonly_schema.get_schema(self.Base)
@@ -1111,6 +1129,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
+        if not self.available:
+            return
 
         self.tables = readonly_schema.get_schema(self.Base)
         for tbl in self.tables.values():

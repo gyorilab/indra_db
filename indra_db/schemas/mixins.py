@@ -6,6 +6,10 @@ from sqlalchemy.exc import NoSuchTableError
 logger = logging.getLogger(__name__)
 
 
+class DbIndexError(Exception):
+    pass
+
+
 class IndraDBTable(object):
     _indices = []
     _skip_disp = []
@@ -14,21 +18,30 @@ class IndraDBTable(object):
 
     @classmethod
     def create_index(cls, db, index, commit=True):
-        inp_data = {'idx_name': index.name,
-                    'full_name': cls.full_name(force_schema=True),
-                    'idx_def': index.definition}
-        sql = ("CREATE INDEX {idx_name} ON {full_name} "
-               "USING {idx_def} TABLESPACE pg_default;".format(**inp_data))
+        full_name = cls.full_name(force_schema=True)
+        sql = (f"CREATE INDEX {index.name} ON {full_name} "
+               f"USING {index.definition} TABLESPACE pg_default;")
         if commit:
             try:
                 cls.execute(db, sql)
             except DuplicateTable:
                 logger.info("%s exists, skipping." % index.name)
+
+            if index.cluster:
+                cluster_sql = f"CLUSTER {full_name} USING {index.name};"
+                cls.execute(db, cluster_sql)
         return sql
 
     @classmethod
     def build_indices(cls, db):
+        found_a_clustered = False
         for index in cls._indices:
+            if index.cluster:
+                if not found_a_clustered:
+                    found_a_clustered = True
+                else:
+                    raise DbIndexError("Only one index may be clustered "
+                                       "at a time.")
             logger.info("Building index: %s" % index.name)
             cls.create_index(db, index)
 
@@ -171,7 +184,8 @@ class NamespaceLookup(ReadonlyTable):
     @classmethod
     def get_definition(cls):
         return ("SELECT db_id, ag_id, role_num, ag_num, type_num, "
-                "       mk_hash, ev_count, activity, is_active, agent_count\n"
+                "       mk_hash, ev_count, activity, is_active, agent_count,\n"
+                "       is_complex_dup\n"
                 "FROM readonly.pa_meta\n"
                 "WHERE db_name = '%s'" % cls.__dbname__)
 

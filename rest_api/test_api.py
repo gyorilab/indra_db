@@ -1,6 +1,7 @@
 import pickle
 import unittest
 import json
+from collections import defaultdict
 from os import path
 import sys
 
@@ -12,8 +13,10 @@ from warnings import warn
 from indra import get_config
 from indra.statements import stmts_from_json
 from indra.databases import hgnc_client
+from indra_db.client import HasAgent, HasType
+from indra_db.client.readonly.query import QueryResult, StatementQueryResult
 
-from .api import app, MAX_STATEMENTS, get_source, REDACT_MESSAGE
+from .api import app, MAX_STMTS, get_source, REDACT_MESSAGE
 
 
 HERE = path.dirname(path.abspath(__file__))
@@ -77,8 +80,7 @@ class DbApiTestCase(unittest.TestCase):
                              headers={'content-type': 'application/json'})
         else:
             resp = meth_func(url)
-        t_delta = datetime.now() - start_time
-        dt = t_delta.seconds + t_delta.microseconds/1e6
+        dt = (datetime.now() - start_time).total_seconds()
         print(dt)
         size = int(resp.headers['Content-Length'])
         raw_size = sys.getsizeof(resp.data)
@@ -238,7 +240,7 @@ class DbApiTestCase(unittest.TestCase):
                                                   check_stmts=False,
                                                   time_goal=20)
         resp2 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
-                                                  offset=MAX_STATEMENTS,
+                                                  offset=MAX_STMTS,
                                                   check_stmts=False,
                                                   time_goal=20)
         return
@@ -344,7 +346,7 @@ class DbApiTestCase(unittest.TestCase):
     def test_statements_by_hashes_large_query(self):
         with open(path.join(HERE, 'sample_hashes.pkl'), 'rb') as f:
             hashes = pickle.load(f)
-        hash_sample = hashes[:MAX_STATEMENTS]
+        hash_sample = hashes[:MAX_STMTS]
 
         # Run the test.
         resp, dt, size = self.__time_query('post', 'statements/from_hashes',
@@ -429,11 +431,7 @@ class DbApiTestCase(unittest.TestCase):
             raise SkipTest("No redactable (>200 char) Elsevier content "
                            "occurred.")
 
-        key = get_config('INDRA_DB_REST_API_KEY')
-        if key is None:
-            return  # Can't test the behavior with an API key.
-
-        key_param = 'api_key=%s' % key
+        key_param = 'api_key=TESTKEY'
         if base_qstr:
             new_qstr = '&'.join(base_qstr.replace('?', '').split('&')
                                 + [key_param])
@@ -479,6 +477,120 @@ class DbApiTestCase(unittest.TestCase):
     def test_interaction_query(self):
         self.__time_query('get', 'metadata/relations/from_agents',
                           'agent0=mek%40AUTO&limit=50&with_cur_counts=true')
+
+    def test_simple_json_query(self):
+        query = (HasAgent('MEK', namespace='NAME')
+                 & HasAgent('ERK', namespace='NAME')
+                 & HasType(['Phosphorylation']))
+        limit = 50
+        ev_limit = 5
+        qr1 = query.get_statements(limit=50, ev_limit=5)
+        qj = query.to_json()
+        qjs = json.dumps(qj)
+        resp, dt, size = \
+            self.__time_query('get', 'query/statements',
+                              f'json={qjs}&limit={limit}&ev_limit={ev_limit}')
+        qr2 = QueryResult.from_json(json.loads(resp.data))
+        assert isinstance(qr2, StatementQueryResult)
+
+        # Check that we got the same statements.
+        assert qr1.results.keys() == qr2.results.keys()
+
+        # Make sure elsevier and medscan were filtered out
+        for s1, s2 in zip(qr1.statements(), qr2.statements()):
+            if any(ev.source_api == 'medscan' for ev in s1.evidence):
+                assert len(s1.evidence) > len(s2.evidence),\
+                    'Medscan result not filtered out.'
+                continue  # TODO: Figure out how to test elsevier in this case.
+            else:
+                assert len(s1.evidence) == len(s2.evidence), \
+                    "Evidence counts don't match."
+
+            for ev1, ev2 in zip(s1.evidence, s2.evidence):
+                if ev1.text_refs['SOURCE'] == 'elsevier':
+                    if len(ev1.text) > 200:
+                        assert ev2.text.endswith(REDACT_MESSAGE),\
+                            "Elsevier text not truncated."
+                        assert len(ev2.text) == (200 + len(REDACT_MESSAGE)), \
+                            "Elsevier text not truncated."
+                    else:
+                        assert len(ev1.text) == len(ev2.text),\
+                            "Evidence text lengths don't match."
+
+    def test_drill_down(self):
+        def drill_down(relation, result_type):
+            query_strs = ['with_cur_counts=true']
+            query_data = {'agent_json': relation['agents'],
+                          'hashes': relation['hashes']}
+            if result_type == 'statements':
+                query_data['type'] = relation['type']
+                query_strs.extend(['ev_limit=10', 'format=json-js',
+                                   'filter_ev=true', 'with_english=true'])
+                endpoint = 'statements/from_agent_json'
+            else:
+                endpoint = 'expand'
+            resp, dt, size = self.__time_query('post', endpoint,
+                                               '&'.join(query_strs),
+                                               **query_data)
+            assert dt < 10
+            res = resp.json
+            if result_type == 'relations':
+                rels = res['relations']
+            elif result_type == 'statements':
+                rels = res['statements'].values()
+            assert all('english' in rel for rel in rels)
+            if result_type == 'relations':
+                assert all('cur_count' in rel for rel in rels)
+                assert all(rel['hashes'] is not None for rel in rels)
+                assert all(rel['agents'] == relation['agents']
+                           for rel in res['relations'])
+                num_complexes = sum(rel['type'] == 'Complex'
+                                    for rel in res['relations'])
+                assert num_complexes <= 1
+            elif result_type == 'statements':
+                assert 'num_curations' in res
+                assert all('evidence' in rel for rel in rels)
+            src_cnt = defaultdict(lambda: 0)
+            for rel in rels:
+                if result_type == 'relations':
+                    this_src_counts = rel['source_counts']
+                else:
+                    this_src_counts = res['source_counts'][rel['matches_hash']]
+                for src, cnt in this_src_counts.items():
+                    src_cnt[src] += cnt
+            src_cnt = dict(src_cnt)
+            rel_src_cnt = relation['source_counts']
+            rel_set = {s for s, c in rel_src_cnt.items() if c > 0}
+            sum_set = {s for s, c in src_cnt.items() if c > 0}
+            assert rel_set == sum_set, f'Set mismatch: {rel_set} vs. {sum_set}'
+            assert all(src_cnt[src] == rel_src_cnt[src] for src in rel_set), \
+                '\n'.join(f"{s}: parent={rel_src_cnt[s]}, child sum={src_cnt[s]}"
+                          if rel_src_cnt[s] != src_cnt[s] else f'{s}: ok'
+                          for s in rel_set)
+            if result_type == 'relations':
+                for rel in rels:
+                    drill_down(rel, 'statements')
+
+        url_base = "agents/from_agents"
+        resp, dt, size = self.__time_query('get', url_base,
+                                           (f"agent=MEK&limit=50"
+                                            f"&with_cur_counts=true"
+                                            f"&with_english=true"
+                                            f"&with_hashes=true"))
+        res = resp.json
+        assert len(res['relations']) == 50
+        assert isinstance(res['relations'], list)
+        assert dt < 10
+        assert all('english' in rel for rel in res['relations'])
+        assert all('cur_count' in rel for rel in res['relations'])
+        assert all(rel['hashes'] is not None for rel in res['relations'])
+
+        assert res['relations'][0]['id'] == 'Agents(None, MEK)'
+        drill_down(res['relations'][0], 'relations')
+        assert res['relations'][1]['id'] == 'Agents(MEK, ERK)'
+        assert res['relations'][1]['agents'] == {'0': 'MEK', '1': 'ERK'}
+        drill_down(res['relations'][1], 'relations')
+        print(resp)
 
 
 if __name__ == '__main__':

@@ -27,14 +27,16 @@ def _build_test_set():
     stypes = ['Phosphorylation', 'Activation', 'Inhibition', 'Complex']
     sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc11', 'db'),
                ('signor', 'db')]
-    mesh_ids = ['D000225', 'D002352', 'D015536', 'D00123413', 'D0000334']
+    mesh_term_ids = ['D000225', 'D002352', 'D015536', 'D00123413', 'D0000334']
+    mesh_concept_ids = ['C0001243', 'C005758']
+    all_mesh_ids = mesh_term_ids + mesh_concept_ids
 
     mesh_combos = []
     for num_mesh in range(0, 3):
         if num_mesh == 1:
-            mesh_groups = [[mid] for mid in mesh_ids]
+            mesh_groups = [[mid] for mid in all_mesh_ids]
         else:
-            mesh_groups = combinations(mesh_ids, num_mesh)
+            mesh_groups = combinations(all_mesh_ids, num_mesh)
 
         mesh_combos.extend(list(mesh_groups))
     random.shuffle(mesh_combos)
@@ -88,9 +90,13 @@ def _build_test_set():
                         'agent_count', 'num_srcs', 'src_json', 'only_src',
                         'has_rd', 'has_db')
 
-    mesh_meta_rows = []
-    mesh_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
-                      'activity', 'is_active', 'agent_count')
+    mesh_term_meta_rows = []
+    mesh_term_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
+                           'activity', 'is_active', 'agent_count')
+
+    mesh_concept_meta_rows = []
+    mesh_concept_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
+                              'activity', 'is_active', 'agent_count')
     for stype, refs, activity, is_active in stmts:
         # Extract agents, and make a Statement.
         StmtClass = get_statement_by_name(stype)
@@ -122,9 +128,16 @@ def _build_test_set():
 
         # Add mesh rows
         for mesh_id in source_dict['mesh_ids']:
-            mesh_meta_rows.append((stmt.get_hash(), ev_count, int(mesh_id[1:]),
-                                   ro_type_map.get_int(stype), activity,
-                                   is_active, len(refs)))
+            if mesh_id[0] == 'D':
+                mesh_term_meta_rows.append(
+                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                     ro_type_map.get_int(stype), activity, is_active, len(refs))
+                )
+            else:
+                mesh_concept_meta_rows.append(
+                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                     ro_type_map.get_int(stype), activity, is_active, len(refs))
+                )
 
         # Generate agent rows.
         ref_rows, _, _ = extract_agent_data(stmt, stmt.get_hash())
@@ -144,11 +157,13 @@ def _build_test_set():
     db = get_temp_db(clear=True)
     src_meta_cols = [{'name': col} for col, _ in sources]
     db.SourceMeta.load_cols(db.engine, src_meta_cols)
-    for tbl in [db.SourceMeta, db.MeshMeta, db.NameMeta, db.TextMeta,
-                db.OtherMeta]:
+    for tbl in [db.SourceMeta, db.MeshTermMeta, db.MeshConceptMeta, db.NameMeta,
+                db.TextMeta, db.OtherMeta]:
         tbl.__table__.create(db.engine)
     db.copy('readonly.source_meta', source_meta_rows, source_meta_cols)
-    db.copy('readonly.mesh_meta', mesh_meta_rows, mesh_meta_cols)
+    db.copy('readonly.mesh_term_meta', mesh_term_meta_rows, mesh_term_meta_cols)
+    db.copy('readonly.mesh_concept_meta', mesh_concept_meta_rows,
+            mesh_concept_meta_cols)
     db.copy('readonly.name_meta', name_meta_rows, name_meta_cols)
     db.copy('readonly.text_meta', text_meta_rows, text_meta_cols)
     db.copy('readonly.other_meta', other_meta_rows, other_meta_cols)
@@ -335,13 +350,35 @@ def test_from_mesh():
     ro = get_db('primary')
     q = FromMeshIds(['D001943'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
-    mm_entries = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num],
-                               ro.MeshMeta.mk_hash.in_(set(res.results.keys())))
+    mm_entries = ro.select_all([ro.MeshTermMeta.mk_hash, ro.MeshTermMeta.mesh_num],
+                               ro.MeshTermMeta.mk_hash.in_(set(res.results.keys())))
     mm_dict = defaultdict(list)
     for h, mn in mm_entries:
         mm_dict[h].append(mn)
 
     assert all(1943 in mn_list for mn_list in mm_dict.values())
+
+
+def test_is_inverse_of_for_intersections():
+    q = FromMeshIds(['D001943']) & HasAgent('MEK')
+    nq = ~q
+    assert q.is_inverse_of(nq)
+    assert nq.is_inverse_of(q)
+
+    q2 = FromMeshIds(['D001943']) | ~HasAgent('MEK')
+    assert not q.is_inverse_of(q2)
+    assert not q2.is_inverse_of(q)
+
+
+def test_is_inverse_of_for_unions():
+    q = HasHash([1, 2, 3]) | HasDatabases()
+    nq = ~q
+    assert q.is_inverse_of(nq)
+    assert nq.is_inverse_of(q)
+
+    q2 = HasHash([1, 2, 3]) & ~HasDatabases()
+    assert not q.is_inverse_of(q2)
+    assert not q2.is_inverse_of(q)
 
 
 def test_query_set_behavior():
@@ -378,7 +415,7 @@ def test_query_set_behavior():
         HasAgent('ERK', namespace='FPLX', role='OBJECT'),
         FromMeshIds(['D015536']),
         FromMeshIds(['D002352', 'D015536']),
-        FromMeshIds(['D0000334']),
+        FromMeshIds(['D0000334', 'C0001243']),
         HasHash(lookup_hashes[:-3]),
         HasHash(lookup_hashes[-1:]),
         HasHash(lookup_hashes[-4:-1]),
@@ -399,9 +436,12 @@ def test_query_set_behavior():
 
     failures = []
     results = []
+    n_runs = 0
     unfound = []
+    collecting_results = True
 
     def try_query(q, compair=None, md=None):
+        nonlocal n_runs
 
         # Test query logical consistency
         result = None
@@ -411,12 +451,16 @@ def test_query_set_behavior():
                 assert result == compair, 'Result mismatch.'
             if not q.empty and not result:
                 unfound.append(q)
-            results.append((result, q))
+            if collecting_results:
+                results.append((result, q))
+            n_runs += 1
             c.up(True)
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
                              'compair': compair, 'md': md})
-            results.append((result, q))
+            if collecting_results:
+                results.append((result, q))
+            n_runs += 1
             c.up(False)
             return
 
@@ -430,10 +474,16 @@ def test_query_set_behavior():
             negative_result = dq(nq)
             assert negative_result == (all_hashes - result), \
                 'Negative result mismatch.'
+            assert nq.is_inverse_of(q), "Inverse comparison failed! (nq vs. q)"
+            assert q.is_inverse_of(nq), "Inverse comparison failed! (q vs. nq)"
+            assert q.empty == nq.full, "q.empty != nq.full."
+            assert q.full == nq.empty, "q.full != nq.empty."
 
             if not nq.empty and not negative_result:
                 unfound.append(nq)
-            results.append((negative_result, nq))
+            if collecting_results:
+                results.append((negative_result, nq))
+            n_runs += 1
             c.up(True)
         except Exception as e:
             if md is not None:
@@ -441,8 +491,10 @@ def test_query_set_behavior():
             else:
                 neg_md = 'not (' + str(q) + ')'
             failures.append({'query': nq, 'error': e, 'result': negative_result,
-                             'compair': all_hashes - result, 'md': neg_md})
-            results.append((negative_result, nq))
+                             'compare': all_hashes - result, 'md': neg_md})
+            if collecting_results:
+                results.append((negative_result, nq))
+            n_runs += 1
             c.up(False)
             return
 
@@ -452,6 +504,7 @@ def test_query_set_behavior():
     for q in queries:
         try_query(q)
     original_results = [res for res in results if res[1] is not None]
+    collecting_results = False
 
     c.mark("Testing pairs...")
     for (r1, q1), (r2, q2) in permutations(original_results, 2):
@@ -465,11 +518,11 @@ def test_query_set_behavior():
 
     c.mark("Testing mixed triples...")
     for (r1, q1), (r2, q2), (r3, q3) in permutations(original_results, 3):
-        try_query(q1 & q2 | q3, r1 & r2 | r3, md=f'({q1} and {q2}) or {q3}')
-        try_query(q1 | q2 & q3, r1 | r2 & r3, md=f'({q1} or {q2}) and {q3}')
+        try_query((q1 & q2) | q3, (r1 & r2) | r3, md=f'({q1} and {q2}) or {q3}')
+        try_query((q1 | q2) & q3, (r1 | r2) & r3, md=f'({q1} or {q2}) and {q3}')
 
     c.mark('Done!')
-    print(f"Ran {len(results)} checks...")
+    print(f"Ran {n_runs} checks...")
 
     print(f"UNFOUND:")
     for q in unfound[:10]:
@@ -500,9 +553,9 @@ def test_query_set_behavior():
                 print(f'...overall {len(examples)} errors...')
             print()
 
-    assert not failures, f"{len(failures)}/{len(results)} checks failed."
+    assert not failures, f"{len(failures)}/{n_runs} checks failed."
 
-    return results, failures
+    return
 
 
 def test_get_interactions():

@@ -127,6 +127,10 @@ class ReadonlyTable(IndraDBTable):
     # which entries were inserted. They were inserted all at once.
     _default_insert_order_by = NotImplemented
 
+    # Some tables may mark themselves as "temp", meaning they are not intended
+    # to live beyond the readonly build process.
+    _temp = False
+
     @classmethod
     def create(cls, db, commit=True):
         sql = cls.__create_table_fmt__ \
@@ -139,6 +143,10 @@ class ReadonlyTable(IndraDBTable):
     @classmethod
     def get_definition(cls):
         return cls.__definition__
+
+    @classmethod
+    def definition(cls, db):
+        return cls.get_definition()
 
 
 class SpecialColumnTable(ReadonlyTable):

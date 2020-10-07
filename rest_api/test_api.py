@@ -1,29 +1,41 @@
-import pickle
-import unittest
-import json
-from collections import defaultdict
-from os import path
 import sys
-
-from itertools import combinations
+import json
+import pickle
+import logging
+from os import path
+from collections import defaultdict
 from datetime import datetime
-from unittest import SkipTest
-from warnings import warn
+from itertools import combinations
+
+import unittest
+import requests
+from unittest.case import SkipTest
 
 from indra import get_config
-from indra.statements import stmts_from_json
 from indra.databases import hgnc_client
-from indra_db.client import HasAgent, HasType
-from indra_db.client.readonly.query import QueryResult, StatementQueryResult
+from indra.statements import stmts_from_json
+from indra_db import get_db
 
-from .api import app, MAX_STMTS, get_source, REDACT_MESSAGE
+from indra_db.client.readonly.query import QueryResult
+from indra_db.client import HasAgent, HasType, StatementQueryResult, FromMeshIds
 
+from rest_api.util import get_source
+from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TESTING
+
+logger = logging.getLogger('db_api_unit_tests')
+try:
+    from rest_api.api import app
+except Exception as e:
+    logger.warning(f"Could not load app: {e}")
+    app = None
+    TESTING = {'status': False}
 
 HERE = path.dirname(path.abspath(__file__))
 
 TIMEGOAL = 1
 TIMELIMIT = 30
 SIZELIMIT = 4e7
+TESTING['status'] = True
 
 
 def _check_stmt_agents(resp, agents):
@@ -40,40 +52,64 @@ def _check_stmt_agents(resp, agents):
                 assert db_id in db_ids
 
 
-class TimeWarning(Warning):
-    pass
+# Change this flag to choose to test a remote deployment.
+TEST_DEPLOYMENT = False
 
 
-class DbApiTestCase(unittest.TestCase):
-
+class TestDbApi(unittest.TestCase):
     def setUp(self):
-        app.testing = True
-        self.app = app.test_client()
+        if TEST_DEPLOYMENT:
+            url = get_config('INDRA_DB_REST_URL', failure_ok=False)
+            print("URL:", url)
+            self.app = WebApp(url)
+        else:
+            app.testing = True
+            self.app = app.test_client()
 
-    def tearDown(self):
-        pass
-
-    def __check_time(self, dt, time_goal=TIMEGOAL):
+    @staticmethod
+    def __check_time(dt, time_goal=TIMEGOAL):
         print(dt)
         assert dt <= TIMELIMIT, \
             ("Query took %f seconds. Must be less than %f seconds."
              % (dt, TIMELIMIT))
         if dt >= time_goal:
-            warn("Query took %f seconds, goal is less than %f seconds."
-                 % (dt, time_goal), TimeWarning)
+            logger.warning("Query took %f seconds, goal is less than %f seconds."
+                           % (dt, time_goal))
         return
 
     def __time_get_query(self, end_point, query_str):
         return self.__time_query('get', end_point, query_str)
 
+    @staticmethod
+    def _get_api_key():
+        if TEST_DEPLOYMENT:
+            api_key = get_config('INDRA_DB_REST_API_KEY', failure_ok=True)
+            if api_key is None:
+                raise unittest.SkipTest(
+                    "No API KEY available. Cannot test auth.")
+            return api_key
+        else:
+            return 'TESTKEY'
+
+    def _add_auth(self, url):
+        api_key = self._get_api_key()
+        if '?' not in url:
+            url += '?'
+        else:
+            url += '&'
+        url += f'api_key={api_key}'
+        return url
+
     def __time_query(self, method, end_point, query_str=None, url_fmt='/%s?%s',
-                     **data):
+                     with_auth=False, **data):
         print(end_point)
         start_time = datetime.now()
         if query_str is not None:
             url = url_fmt % (end_point, query_str)
         else:
             url = end_point
+        if with_auth:
+            url = self._add_auth(url)
         meth_func = getattr(self.app, method)
         if data:
             resp = meth_func(url, data=json.dumps(data),
@@ -239,10 +275,20 @@ class DbApiTestCase(unittest.TestCase):
         resp1 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
                                                   check_stmts=False,
                                                   time_goal=20)
+        j1 = json.loads(resp1.data)
+        hashes1 = set(j1['statements'].keys())
+        ev_counts1 = j1['evidence_totals']
         resp2 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
                                                   offset=MAX_STMTS,
                                                   check_stmts=False,
                                                   time_goal=20)
+        j2 = json.loads(resp2.data)
+        hashes2 = set(j2['statements'].keys())
+        assert not hashes2 & hashes1
+
+        ev_counts2 = j2['evidence_totals']
+        assert max(ev_counts2.values()) <= min(ev_counts1.values())
+
         return
 
     def test_query_with_hgnc_ns(self):
@@ -430,14 +476,8 @@ class DbApiTestCase(unittest.TestCase):
         if elsevier_long_found == 0:
             raise SkipTest("No redactable (>200 char) Elsevier content "
                            "occurred.")
-
-        key_param = 'api_key=TESTKEY'
-        if base_qstr:
-            new_qstr = '&'.join(base_qstr.replace('?', '').split('&')
-                                + [key_param])
-        else:
-            new_qstr = key_param
-        resp, dt, size = self.__time_query(method, endpoint, new_qstr, **data)
+        resp, dt, size = self.__time_query(method, endpoint, base_qstr,
+                                           with_auth=True, **data)
         resp_dict = json.loads(resp.data)
         stmt_dict_intact = resp_dict['statements']
         assert stmt_dict_intact.keys() == stmt_dict_redact.keys(), \
@@ -507,7 +547,7 @@ class DbApiTestCase(unittest.TestCase):
                     "Evidence counts don't match."
 
             for ev1, ev2 in zip(s1.evidence, s2.evidence):
-                if ev1.text_refs['SOURCE'] == 'elsevier':
+                if ev1.text_refs.get('SOURCE') == 'elsevier':
                     if len(ev1.text) > 200:
                         assert ev2.text.endswith(REDACT_MESSAGE),\
                             "Elsevier text not truncated."
@@ -533,7 +573,7 @@ class DbApiTestCase(unittest.TestCase):
                                                '&'.join(query_strs),
                                                **query_data)
             assert dt < 10
-            res = resp.json
+            res = json.loads(resp.data)
             if result_type == 'relations':
                 rels = res['relations']
             elif result_type == 'statements':
@@ -550,37 +590,44 @@ class DbApiTestCase(unittest.TestCase):
             elif result_type == 'statements':
                 assert 'num_curations' in res
                 assert all('evidence' in rel for rel in rels)
-            src_cnt = defaultdict(lambda: 0)
+            sum_src_cnt = defaultdict(lambda: 0)
             for rel in rels:
                 if result_type == 'relations':
                     this_src_counts = rel['source_counts']
                 else:
                     this_src_counts = res['source_counts'][rel['matches_hash']]
                 for src, cnt in this_src_counts.items():
-                    src_cnt[src] += cnt
-            src_cnt = dict(src_cnt)
-            rel_src_cnt = relation['source_counts']
-            rel_set = {s for s, c in rel_src_cnt.items() if c > 0}
-            sum_set = {s for s, c in src_cnt.items() if c > 0}
-            assert rel_set == sum_set, f'Set mismatch: {rel_set} vs. {sum_set}'
-            assert all(src_cnt[src] == rel_src_cnt[src] for src in rel_set), \
-                '\n'.join(f"{s}: parent={rel_src_cnt[s]}, child sum={src_cnt[s]}"
-                          if rel_src_cnt[s] != src_cnt[s] else f'{s}: ok'
-                          for s in rel_set)
+                    sum_src_cnt[src] += cnt
+            sum_src_cnt = dict(sum_src_cnt)
+            parent_src_cnt = relation['source_counts']
+            parent_set = {s for s, c in parent_src_cnt.items() if c > 0}
+            sum_set = {s for s, c in sum_src_cnt.items() if c > 0}
+            assert parent_set == sum_set, \
+                f'Set mismatch: {parent_set} vs. {sum_set}'
+            all_match = all(sum_src_cnt[src] == parent_src_cnt[src]
+                            for src in parent_set)
+            assert all_match, \
+                '\n'.join((f"{s}: parent={parent_src_cnt[s]}, "
+                           f"child sum={sum_src_cnt[s]}")
+                          if parent_src_cnt[s] != sum_src_cnt[s] else f'{s}: ok'
+                          for s in parent_set)
             if result_type == 'relations':
                 for rel in rels:
                     drill_down(rel, 'statements')
 
-        url_base = "agents/from_agents"
-        resp, dt, size = self.__time_query('get', url_base,
-                                           (f"agent=MEK&limit=50"
-                                            f"&with_cur_counts=true"
-                                            f"&with_english=true"
-                                            f"&with_hashes=true"))
-        res = resp.json
+        url_base = "agents/from_query_json"
+        query = HasAgent('MEK')
+        query_str = ("limit=50&with_cur_counts=true&with_english=true"
+                     "&with_hashes=true")
+        complexes_covered = []
+        resp, dt, size = self.__time_query('post', url_base, query_str,
+                                           query=query.to_json(),
+                                           complexes_covered=complexes_covered)
+        res = json.loads(resp.data)
+        complexes_covered = res['complexes_covered']
         assert len(res['relations']) == 50
         assert isinstance(res['relations'], list)
-        assert dt < 10
+        assert dt < 15
         assert all('english' in rel for rel in res['relations'])
         assert all('cur_count' in rel for rel in res['relations'])
         assert all(rel['hashes'] is not None for rel in res['relations'])
@@ -592,6 +639,175 @@ class DbApiTestCase(unittest.TestCase):
         drill_down(res['relations'][1], 'relations')
         print(resp)
 
+    def __simple_time_test(self, *args, **kwargs):
+        resp, dt, size = \
+            self.__time_query(*args, **kwargs)
+        assert resp.status_code == 200, f"Query failed: {resp.data.decode()}"
+        assert dt < 30, "Query would have timed out."
+        if dt > 15:
+            logger.warning(f"Query took a long time: {dt} seconds.")
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_IL6_html_with_creds(self):
+        """Test the timing of a search for IL-6 with auth, "signed in"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=IL-6@TEXT&format=html',
+                                with_auth=True)
+
+    def test_IL6_html_no_creds(self):
+        """Test the timing of a search for IL-6 without auth, "signed out"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=IL-6@TEXT&format=html',
+                                with_auth=False)
+
+    def test_IL6_agents_with_creds(self):
+        """Test the timing of a query for agents with text=IL-6, "signed in"."""
+        query = HasAgent('IL-6', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=True)
+
+    def test_IL6_agents_no_creds(self):
+        """Test timing of a query for agents with text=IL-6, "signed out"."""
+        query = HasAgent('IL-6', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=False)
+
+    def test_ROS_html_with_creds(self):
+        """Test the timing of a search for ROS with auth, "signed in"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=ROS@TEXT&format=html',
+                                with_auth=True)
+
+    def test_ROS_html_no_creds(self):
+        """Test the timing of a search for ROS without auth, "signed out"."""
+        self.__simple_time_test('get', 'statements/from_agents',
+                                'agent=ROS@TEXT&format=html',
+                                with_auth=False)
+
+    def test_ROS_agents_with_creds(self):
+        """Test the timing of a query for agents with text=ROS, "signed in"."""
+        query = HasAgent('ROS', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=True)
+
+    def test_ROS_agents_no_creds(self):
+        """Test timing of a query for agents with text=ROS, "signed out"."""
+        query = HasAgent('ROS', 'TEXT')
+        self.__simple_time_test('post', 'agents/from_query_json',
+                                'format=json-js&with_english=true',
+                                query=query.to_json(),
+                                with_auth=False)
+
+    def test_mesh_concept_ev_limit(self):
+        """Test a specific bug in which evidence was duplicated.
+
+        When querying for mesh concepts, with an evidence limit, the evidence
+        was repeated numerous times.
+        """
+        db = get_db('primary')
+        q = HasAgent('ACE2') & FromMeshIds(['C000657245'])
+        resp, dt, size = self.__time_query('post', 'statements/from_query_json',
+                                           'limit=50&ev_limit=6',
+                                           query=q.to_json(), with_auth=True)
+        assert resp.status_code == 200, f"Query failed: {resp.data.decode()}"
+        assert dt < 30, "Query would have timed out."
+        if dt > 15:
+            logger.warning(f"Query took a long time: {dt} seconds.")
+
+        resp_json = json.loads(resp.data)
+        pmids = set()
+        for h, data in resp_json['results'].items():
+            ev_list = data['evidence']
+            assert len(ev_list) <= 6, "Evidence limit exceeded."
+            ev_tuples = {(ev.get('text'), ev.get('source_hash'),
+                          ev.get('source_api'), str(ev.get('text_refs')))
+                         for ev in ev_list}
+            assert len(ev_tuples) == len(ev_list), "Evidence is not unique."
+            for ev in ev_list:
+                found_pmid = False
+                if 'pmid' in ev:
+                    pmids.add(ev['pmid'])
+                    found_pmid = True
+
+                if 'text_refs' in ev:
+                    tr_dict = ev['text_refs']
+                    if 'TRID' in tr_dict:
+                        tr = db.select_one(db.TextRef,
+                                           db.TextRef.id == tr_dict['TRID'])
+                        pmids.add(tr.pmid)
+                        found_pmid = True
+                    if 'PMID' in tr_dict:
+                        pmids.add(tr_dict['PMID'])
+                        found_pmid = True
+                    if 'DOI' in tr_dict:
+                        tr_list = db.select_all(
+                            db.TextRef,
+                            db.TextRef.doi_in([tr_dict['DOI']])
+                        )
+                        pmids |= {tr.pmid for tr in tr_list if tr.pmid}
+                        found_pmid = True
+
+                assert found_pmid,\
+                    "How could this have been mapped to mesh?"
+        pmids = {int(pmid) for pmid in pmids if pmid is not None}
+
+        mesh_pmids = {n for n, in db.select_all(
+            db.MeshRefAnnotations.pmid_num,
+            db.MeshRefAnnotations.pmid_num.in_(pmids),
+            db.MeshRefAnnotations.mesh_num == 657245,
+            db.MeshRefAnnotations.is_concept.is_(True)
+        )}
+        mesh_pmids |= {n for n, in db.select_all(
+            db.MtiRefAnnotationsTest.pmid_num,
+            db.MtiRefAnnotationsTest.pmid_num.in_(pmids),
+            db.MtiRefAnnotationsTest.mesh_num == 657245,
+            db.MtiRefAnnotationsTest.is_concept.is_(True)
+        )}
+
+        assert pmids == mesh_pmids, "Not all pmids mapped ot mesh term."
+
+
+class WebApp:
+    """Mock the behavior of the "app" but on the real service."""
+    def __init__(self, url):
+        self.base_url = url
+        if self.base_url.endswith('/'):
+            self.base_url = self.base_url[:-1]
+
+    def __process_url(self, url):
+        if not url.startswith('/'):
+            url = '/' + url
+        return self.base_url + url
+
+    def get(self, url):
+        full_url = self.__process_url(url)
+        raw_resp = requests.get(full_url)
+        return WebResponse(raw_resp)
+
+    def post(self, url, data, headers):
+        full_url = self.__process_url(url)
+        raw_resp = requests.post(full_url, data=data, headers=headers)
+        return WebResponse(raw_resp)
+
+
+class WebResponse:
+    """Imitate the response from the "app", but from real request responses."""
+    def __init__(self, resp):
+        self._resp = resp
+        self.data = resp.content
+
+    def __getattribute__(self, item):
+        """When in doubt, try to just get the item from the actual resp.
+
+        This should work much of the time because the results from the "app" are
+        intended to imitate and actual response.
+        """
+        try:
+            return super(WebResponse, self).__getattribute__(item)
+        except AttributeError:
+            return getattr(self._resp, item)

@@ -3,6 +3,10 @@ import logging
 from io import StringIO
 from datetime import datetime
 
+from indra.assemblers.html.assembler import _format_stmt_text, \
+    make_source_colors
+from indra_db.client import stmt_from_interaction, get_ro_source_info
+
 from indra_db.client.readonly.query import gilda_ground
 
 logger = logging.getLogger('db rest api - util')
@@ -81,6 +85,19 @@ def get_source(ev_json):
     return src.lower()
 
 
+def get_html_source_info():
+    source_info = get_ro_source_info()
+    databases = []
+    readers = []
+    for src_id, src_info in source_info.items():
+        if src_info['type'] == 'database':
+            databases.append(src_id)
+        else:
+            readers.append(src_id)
+    source_colors = make_source_colors(databases, readers)
+    return source_info, source_colors
+
+
 def sec_since(t):
     return (datetime.now() - t).total_seconds()
 
@@ -114,3 +131,37 @@ class LogTracker(object):
                 ret[level] = 0
             ret[level] += 1
         return ret
+
+
+def iter_free_agents(query_dict):
+    agent_keys = {k for k in query_dict.keys() if k.startswith('agent')}
+    for k in agent_keys:
+        entry = query_dict.pop(k)
+        if isinstance(entry, list):
+            for agent in entry:
+                yield agent
+        else:
+            yield entry
+
+
+def _make_english_from_meta(agent_json, stmt_type=None):
+    if stmt_type is None:
+        if len(agent_json) == 0:
+            eng = ''
+        else:
+            ag_list = list(agent_json.values())
+            eng = f'<b>{ag_list[0]}</b>'
+            if len(agent_json) > 1:
+                eng += ' affects ' + f'<b>{ag_list[1]}</b>'
+                if len(agent_json) > 3:
+                    eng += ', ' \
+                           + ', '.join(f'<b>{ag}</b>'
+                                       for ag in ag_list[2:-1])
+                if len(agent_json) > 2:
+                    eng += ', and ' + f'<b>{ag_list[-1]}</b>'
+            else:
+                eng += ' is modified'
+    else:
+        eng = _format_stmt_text(stmt_from_interaction({'agents': agent_json,
+                                                       'type': stmt_type}))
+    return eng

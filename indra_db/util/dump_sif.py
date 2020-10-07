@@ -40,7 +40,7 @@ def upload_pickle_to_s3(obj, s3_path):
                 % (s3_path.key.split('/')[-1], s3_path.bucket))
     s3 = get_s3_client(unsigned=False)
     try:
-        s3.put_object(Body=pickle.dumps(obj=obj), **s3_path.kw())
+        s3_path.upload(s3, pickle.dumps(obj))
         logger.info('Finished dumping file to s3')
     except Exception as e:
         logger.error('Failed to upload to s3')
@@ -68,16 +68,23 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
         if not ro:
             ro = get_ro('primary')
         logger.info("Querying the database for statement metadata...")
-        results = []
+        results = {}
         for ns in ns_list:
             logger.info("Querying for {ns}".format(ns=ns))
-            res = ro.select_all([ro.PaMeta.mk_hash, ro.PaMeta.db_name,
-                                 ro.PaMeta.db_id, ro.PaMeta.ag_num,
-                                 ro.PaMeta.ev_count, ro.PaMeta.type_num],
-                                ro.PaMeta.db_name.like(ns))
-            results.extend(res)
+            filters = []
+            if ns == 'NAME':
+                tbl = ro.NameMeta
+            elif ns == 'TEXT':
+                tbl = ro.TextMeta
+            else:
+                tbl = ro.OtherMeta
+                filters.append(tbl.db_name.like(ns))
+            res = ro.select_all([tbl.mk_hash, tbl.db_id, tbl.ag_num,
+                                 tbl.ev_count, tbl.type_num], *filters)
+            results[ns] = res
         results = {(h, dbn, dbi, ag_num, ev_cnt, ro_type_map.get_str(tn))
-                   for h, dbn, dbi, ag_num, ev_cnt, tn in results}
+                   for dbn, value_list in results.items()
+                   for h, dbi, ag_num, ev_cnt, tn in value_list}
         if pkl_filename:
             if isinstance(pkl_filename, S3Path):
                 upload_pickle_to_s3(results, pkl_filename)
@@ -318,7 +325,7 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
                     s3 = get_s3_client(unsigned=False)
                     csv_buf = StringIO()
                     type_counts.to_csv(csv_buf)
-                    s3.put_object(Body=csv_buf.getvalue(), **csv_file.kw())
+                    csv_file.upload(s3, csv_buf)
                     logger.info('Uploaded CSV file to s3')
                 except Exception as second_e:
                     logger.error('Failed to upload csv file with fallback '

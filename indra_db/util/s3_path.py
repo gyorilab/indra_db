@@ -1,5 +1,6 @@
 import re
 from os import path
+from io import BytesIO
 
 
 class S3Path(object):
@@ -43,6 +44,12 @@ class S3Path(object):
         if not self.key:
             raise ValueError("Cannot get key-less s3 path.")
         return s3.get_object(**self.kw())
+
+    def upload(self, s3, body):
+        if not self.key:
+            raise ValueError("Cannot 'upload' to a key-less s3 path.")
+        bytes_io = BytesIO(body)
+        return s3.upload_fileobj(bytes_io, **self.kw())
 
     def put(self, s3, body):
         if not self.key:

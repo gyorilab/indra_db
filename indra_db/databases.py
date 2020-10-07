@@ -27,7 +27,7 @@ from indra.util import batch_iter
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
-from indra_db.schemas.readonly_schema import CREATE_ORDER, CREATE_UNORDERED
+from indra_db.schemas.readonly_schema import CREATE_ORDER
 
 
 try:
@@ -231,96 +231,6 @@ class DatabaseManager(object):
         except:
             print("Failed to execute rollback of database upon deletion.")
 
-    def create_tables(self, tbl_list=None):
-        "Create the tables for INDRA database."
-        ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
-                          'reading', 'db_info', 'raw_statements', 'raw_agents',
-                          'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
-                          'pa_mods', 'pa_muts', 'raw_unique_links',
-                          'support_links']
-        if tbl_list is None:
-            tbl_list = list(self.tables.keys())
-
-        tbl_name_list = []
-        for tbl in tbl_list:
-            if isinstance(tbl, str):
-                tbl_name_list.append(tbl)
-            else:
-                tbl_name_list.append(tbl.__tablename__)
-        # These tables must be created in this order.
-        for tbl_name in ordered_tables:
-            if tbl_name in tbl_name_list:
-                tbl_name_list.remove(tbl_name)
-                logger.debug("Creating %s..." % tbl_name)
-                if not self.tables[tbl_name].__table__.exists(self.engine):
-                    self.tables[tbl_name].__table__.create(bind=self.engine)
-                    logger.debug("Table created.")
-                else:
-                    logger.debug("Table already existed.")
-        # The rest can be started any time.
-        for tbl_name in tbl_name_list:
-            logger.debug("Creating %s..." % tbl_name)
-            self.tables[tbl_name].__table__.create(bind=self.engine)
-            logger.debug("Table created.")
-        return
-
-    def drop_tables(self, tbl_list=None, force=False):
-        """Drop the tables for INDRA database given in tbl_list.
-
-        If tbl_list is None, all tables will be dropped. Note that if `force`
-        is False, a warning prompt will be raised to asking for confirmation,
-        as this action will remove all data from that table.
-        """
-        if tbl_list is not None:
-            tbl_objs = []
-            for tbl in tbl_list:
-                if isinstance(tbl, str):
-                    tbl_objs.append(self.tables[tbl])
-                else:
-                    tbl_objs.append(tbl)
-        if not force:
-            # Build the message
-            if tbl_list is None:
-                msg = ("Do you really want to clear the %s database? [y/N]: "
-                       % self.label)
-            else:
-                msg = "You are going to clear the following tables:\n"
-                msg += str([tbl.__tablename__ for tbl in tbl_objs]) + '\n'
-                msg += ("Do you really want to clear these tables from %s? "
-                        "[y/N]: " % self.label)
-            # Check to make sure.
-            resp = input(msg)
-            if resp != 'y' and resp != 'yes':
-                logger.info('Aborting clear.')
-                return False
-        if tbl_list is None:
-            logger.info("Removing all tables...")
-            self.Base.metadata.drop_all(self.engine)
-            logger.debug("All tables removed.")
-        else:
-            for tbl in tbl_list:
-                logger.info("Removing %s..." % tbl.__tablename__)
-                if tbl.__table__.exists(self.engine):
-                    tbl.__table__.drop(self.engine)
-                    logger.debug("Table removed.")
-                else:
-                    logger.debug("Table doesn't exist.")
-        return True
-
-    def _clear(self, tbl_list=None, force=False):
-        "Brutal clearing of all tables in tbl_list, or all tables."
-        # This is intended for testing purposes, not general use.
-        # Use with care.
-        self.grab_session()
-        logger.debug("Rolling back before clear...")
-        self.session.rollback()
-        logger.debug("Rolled back.")
-        if self.drop_tables(tbl_list, force=force):
-            self.create_tables(tbl_list)
-            return True
-        else:
-            return False
-
     def grab_session(self):
         "Get an active session with the database."
         if not self.available:
@@ -334,16 +244,23 @@ class DatabaseManager(object):
                 raise IndraDbException("Failed to grab session.")
 
     def get_tables(self):
-        "Get a list of available tables."
+        """Get a list of available tables."""
         return [tbl_name for tbl_name in self.tables.keys()]
 
     def show_tables(self):
-        "Print a list of all the available tables."
+        """Print a list of all the available tables."""
         print(self.get_tables())
 
-    def get_active_tables(self):
-        "Get the tables currently active in the database."
-        return inspect(self.engine).get_table_names()
+    def get_active_tables(self, schema=None):
+        """Get the tables currently active in the database.
+
+        Parameters
+        ----------
+        schema : None or st
+            The name of the schema whose tables you wish to see. The default is
+            public.
+        """
+        return inspect(self.engine).get_table_names(schema=schema)
 
     def get_schemas(self):
         """Return the list of schema names currently in the database."""
@@ -586,7 +503,7 @@ class DatabaseManager(object):
             for element in entry:
                 if isinstance(element, str):
                     new_entry.append(element.encode('utf8'))
-                if isinstance(element, dict):
+                elif isinstance(element, dict):
                     new_entry.append(json.dumps(element).encode('utf-8'))
                 elif (isinstance(element, bytes)
                       or element is None
@@ -595,7 +512,7 @@ class DatabaseManager(object):
                     new_entry.append(element)
                 else:
                     raise IndraDbException(
-                        "Don't know what to do with element of type %s."
+                        "Don't know what to do with element of type %s. "
                         "Should be str, bytes, datetime, None, or a "
                         "number." % type(element)
                     )
@@ -999,7 +916,7 @@ class PrincipalDatabaseManager(DatabaseManager):
 
         for tbl in (t for d in [self.tables, self.readonly]
                     for t in d.values()):
-            if tbl.__name__ == 'PaStmtSrc':
+            if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl
             elif tbl.__name__ == 'SourceMeta':
                 self.__SourceMeta = tbl
@@ -1010,7 +927,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         return
 
     def __getattribute__(self, item):
-        if item == 'PaStmtSrc':
+        if item == '_PaStmtSrc':
             self.__PaStmtSrc.load_cols(self.engine)
             return self.__PaStmtSrc
         elif item == 'SourceMeta':
@@ -1018,18 +935,16 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def generate_readonly(self, ro_list=None, allow_continue=True):
+    def generate_readonly(self, allow_continue=True):
         """Manage the materialized views.
 
         Parameters
         ----------
-        ro_list : list or None
-            Default None. A list of readonly table names or None. If None,
-            all defined readonly tables will be build.
         allow_continue : bool
             If True (default), continue to build the schema if it already
             exists. If False, give up if the schema already exists.
         """
+        # Optionally create the schema.
         if 'readonly' in self.get_schemas():
             if allow_continue:
                 logger.warning("Schema already exists. State could be "
@@ -1042,22 +957,55 @@ class PrincipalDatabaseManager(DatabaseManager):
             logger.info("Creating the schema.")
             self.create_schema('readonly')
 
-        # Create each of the readonly view tables (in order, where necessary).
-        def iter_names():
-            for i, view in enumerate(CREATE_ORDER):
-                yield str(i), view
-            for view in CREATE_UNORDERED:
-                yield '-', view
+        # Create function to quickly check if a table will be used further down
+        # the line.
+        def table_is_used(tbl, other_tables):
+            if not tbl._temp:
+                return True
+            for other_idx, tbl_name in enumerate(other_tables):
+                if tbl_name in self.get_active_tables(schema='readonly'):
+                    continue
+                other_tbl = self.readonly[tbl_name]
+                if not table_is_used(other_tbl, other_tables[other_idx+1:]):
+                    continue
+                if tbl.full_name() in other_tbl.definition(self):
+                    return True
+            return False
 
-        for i, ro_name in iter_names():
-            if ro_list is not None and ro_name not in ro_list:
+        # Perform some sanity checks (this would fail only due to developer
+        # errors.)
+        assert len(set(CREATE_ORDER)) == len(CREATE_ORDER),\
+            "Elements in CREATE_ORDERED are NOT unique."
+        assert set(CREATE_ORDER) == set(self.readonly.keys()),\
+            "Not all readonly tables included in CREATE_ORDER."
+
+        # Build the tables.
+        for i, ro_name in enumerate(CREATE_ORDER):
+            # Check to see if the table has already been build (skip if so).
+            if ro_name in self.get_active_tables(schema='readonly'):
+                logger.info(f"[{i}] Build of {ro_name} done, continuing...")
                 continue
 
+            # Get table object, and check to see that if it is temp it is used.
             ro_tbl = self.readonly[ro_name]
+            if not table_is_used(ro_tbl, CREATE_ORDER[i+1:]):
+                logger.info(f"[{i}] {ro_name} is marked as a temp table "
+                            f"but is not used in future tables. Skipping.")
+                continue
 
-            logger.info('[%s] Creating %s readonly table...' % (i, ro_name))
+            # Build the table and its indices.
+            logger.info(f"[{i}] Creating {ro_name} readonly table...")
             ro_tbl.create(self)
             ro_tbl.build_indices(self)
+
+            # Drop any temp tables that will not be used further down the line.
+            to_drop = []
+            for existing_tbl in self.get_active_tables(schema='readonly'):
+                if not table_is_used(self.readonly[existing_tbl],
+                                     CREATE_ORDER[i+1:]):
+                    to_drop.append(existing_tbl)
+            self.drop_tables(to_drop, force=True)
+
         return
 
     def dump_readonly(self, dump_file=None):
@@ -1070,6 +1018,98 @@ class PrincipalDatabaseManager(DatabaseManager):
             dump_loc = get_s3_dump()
             dump_file = dump_loc.get_element_path('readonly-%s.dump' % now_str)
         return self.pg_dump(dump_file, schema='readonly')
+
+    def create_tables(self, tbl_list=None):
+        "Create the tables for INDRA database."
+        ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
+                          'reading', 'db_info', 'raw_statements', 'raw_agents',
+                          'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
+                          'pa_mods', 'pa_muts', 'raw_unique_links',
+                          'support_links']
+        if tbl_list is None:
+            tbl_list = list(self.tables.keys())
+
+        tbl_name_list = []
+        for tbl in tbl_list:
+            if isinstance(tbl, str):
+                tbl_name_list.append(tbl)
+            else:
+                tbl_name_list.append(tbl.__tablename__)
+        # These tables must be created in this order.
+        for tbl_name in ordered_tables:
+            if tbl_name in tbl_name_list:
+                tbl_name_list.remove(tbl_name)
+                logger.debug("Creating %s..." % tbl_name)
+                if not self.tables[tbl_name].__table__.exists(self.engine):
+                    self.tables[tbl_name].__table__.create(bind=self.engine)
+                    logger.debug("Table created.")
+                else:
+                    logger.debug("Table already existed.")
+        # The rest can be started any time.
+        for tbl_name in tbl_name_list:
+            logger.debug("Creating %s..." % tbl_name)
+            self.tables[tbl_name].__table__.create(bind=self.engine)
+            logger.debug("Table created.")
+        return
+
+    def drop_tables(self, tbl_list=None, force=False):
+        """Drop the tables for INDRA database given in tbl_list.
+
+        If tbl_list is None, all tables will be dropped. Note that if `force`
+        is False, a warning prompt will be raised to asking for confirmation,
+        as this action will remove all data from that table.
+        """
+        if tbl_list is not None:
+            for i, tbl in enumerate(tbl_list[:]):
+                if isinstance(tbl, str):
+                    if tbl in self.tables:
+                        tbl_list[i] = self.tables[tbl]
+                    elif tbl in self.readonly:
+                        tbl_list[i] = self.readonly[tbl]
+                    else:
+                        raise ValueError(f"Did not recognize table name: {tbl}")
+        if not force:
+            # Build the message
+            if tbl_list is None:
+                msg = ("Do you really want to clear the %s database? [y/N]: "
+                       % self.label)
+            else:
+                msg = "You are going to clear the following tables:\n"
+                msg += str([tbl.__tablename__ for tbl in tbl_list]) + '\n'
+                msg += ("Do you really want to clear these tables from %s? "
+                        "[y/N]: " % self.label)
+            # Check to make sure.
+            resp = input(msg)
+            if resp != 'y' and resp != 'yes':
+                logger.info('Aborting clear.')
+                return False
+        if tbl_list is None:
+            logger.info("Removing all tables...")
+            self.Base.metadata.drop_all(self.engine)
+            logger.debug("All tables removed.")
+        else:
+            for tbl in tbl_list:
+                logger.info("Removing %s..." % tbl.__tablename__)
+                if tbl.__table__.exists(self.engine):
+                    tbl.__table__.drop(self.engine)
+                    logger.debug("Table removed.")
+                else:
+                    logger.debug("Table doesn't exist.")
+        return True
+
+    def _clear(self, tbl_list=None, force=False):
+        "Brutal clearing of all tables in tbl_list, or all tables."
+        # This is intended for testing purposes, not general use.
+        # Use with care.
+        self.grab_session()
+        logger.debug("Rolling back before clear...")
+        self.session.rollback()
+        logger.debug("Rolled back.")
+        if self.drop_tables(tbl_list, force=force):
+            self.create_tables(tbl_list)
+            return True
+        else:
+            return False
 
     @staticmethod
     def get_latest_dump_file():
@@ -1134,21 +1174,41 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
         self.tables = readonly_schema.get_schema(self.Base)
         for tbl in self.tables.values():
-            if tbl.__name__ == 'PaStmtSrc':
+            if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl
             elif tbl.__name__ == 'SourceMeta':
                 self.__SourceMeta = tbl
             else:
                 setattr(self, tbl.__name__, tbl)
+        self.__non_source_cols = None
+
+    def get_source_names(self) -> set:
+        """Get a list of the source names as they appear in SourceMeta cols."""
+        all_cols = set(self.get_column_names(self.SourceMeta))
+        return all_cols - self.__non_source_cols
 
     def __getattribute__(self, item):
-        if item == 'PaStmtSrc':
+        if item == '_PaStmtSrc':
             self.__PaStmtSrc.load_cols(self.engine)
             return self.__PaStmtSrc
         elif item == 'SourceMeta':
+            if self.__non_source_cols is None:
+                self.__non_source_cols = \
+                    set(self.get_column_names(self.__SourceMeta))
             self.__SourceMeta.load_cols(self.engine)
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
+
+    def get_active_tables(self, schema='readonly'):
+        """Get the tables currently active in the database.
+
+        Parameters
+        ----------
+        schema : None or st
+            The name of the schema whose tables you wish to see. The default is
+            readonly.
+        """
+        return super(ReadonlyDatabaseManager, self).get_active_tables(schema)
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""

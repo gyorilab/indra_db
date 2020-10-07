@@ -1,4 +1,3 @@
-import re
 import json
 import boto3
 import pickle
@@ -167,9 +166,9 @@ class Belief(Dumper):
 
     def dump(self, continuing=False):
         db = get_db(self.db_label)
-        belief_dict = get_belief(db)
+        belief_dict = get_belief(db, partition=False)
         s3 = boto3.client('s3')
-        s3.put_object(Body=json.dumps(belief_dict), **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, json.dumps(belief_dict))
 
 
 class SourceCount(Dumper):
@@ -197,7 +196,7 @@ class FullPaJson(Dumper):
         query_res = ro.session.query(ro.FastRawPaLink.pa_json.distinct())
         json_list = [json.loads(js[0]) for js in query_res.all()]
         s3 = boto3.client('s3')
-        s3.put_object(Body=json.dumps(json_list), **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, json.dumps(json_list))
 
 
 class FullPaStmts(Dumper):
@@ -217,7 +216,7 @@ class FullPaStmts(Dumper):
         stmt_list = stmts_from_json([json.loads(js[0]) for js in
                                      query_res.all()])
         s3 = boto3.client('s3')
-        s3.put_object(Body=pickle.dumps(stmt_list), **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, pickle.dumps(stmt_list))
 
 
 class Readonly(Dumper):
@@ -241,16 +240,25 @@ class StatementHashMeshId(Dumper):
     name = 'mti_mesh_ids'
     fmi = 'pkl'
 
+    def __init__(self, db_label='primary', use_principal=False, **kwargs):
+        self.use_principal = use_principal
+        super(StatementHashMeshId, self).__init__(db_label, **kwargs)
+
     def dump(self, continuing=False):
         if self.use_principal:
             ro = get_db(self.db_label)
         else:
             ro = get_ro(self.db_label)
 
-        q = ro.select_all([ro.MeshMeta.mk_hash, ro.MeshMeta.mesh_num])
+        mesh_term_tuples = ro.select_all([ro.MeshTermMeta.mk_hash,
+                                          ro.MeshTermMeta.mesh_num])
+        mesh_concept_tuples = ro.select_all([ro.MeshConceptMeta.mk_hash,
+                                             ro.MeshConceptMeta.mesh_num])
+        mesh_data = {'terms': mesh_term_tuples,
+                     'concepts': mesh_concept_tuples}
 
         s3 = boto3.client('s3')
-        s3.put_object(Body=pickle.dumps(q.all()), **self.get_s3_path().kw())
+        self.get_s3_path().upload(s3, pickle.dumps(mesh_data))
 
 
 def load_readonly_dump(db_label, ro_label, dump_file):
@@ -356,11 +364,12 @@ def main():
         starter = Start()
         starter.dump(continuing=args.allow_continue)
 
-        ro_dumper = Readonly.from_list(starter.manifest)
-        if not args.allow_continue or not ro_dumper:
+        dump_file = Readonly.from_list(starter.manifest)
+        if not args.allow_continue or not dump_file:
             logger.info("Generating readonly schema (est. a long time)")
             ro_dumper = Readonly(date_stamp=starter.date_stamp)
             ro_dumper.dump(continuing=args.allow_continue)
+            dump_file = ro_dumper.get_s3_path()
         else:
             logger.info("Readonly dump exists, skipping.")
 
@@ -382,8 +391,9 @@ def main():
         if not args.allow_continue \
                 or not StatementHashMeshId.from_list(starter.manifest):
             logger.info("Dumping hash-mesh tuples.")
-            StatementHashMeshId(date_stamp=starter.date_stamp)\
-                .dump(continuing=args.continuing)
+            StatementHashMeshId(use_principal=True,
+                                date_stamp=starter.date_stamp)\
+                .dump(continuing=args.allow_continue)
 
         if not args.allow_continue or not Belief.from_list(starter.manifest):
             logger.info("Dumping belief.")
@@ -400,15 +410,15 @@ def main():
         s3 = boto3.client('s3')
         for dump in sorted(dumps, reverse=True):
             manifest = dump.list_objects(s3)
-            ro_dumper = Readonly.from_list(manifest)
-            if ro_dumper is not None:
-                # ro_dumper will be the file we want, leave it assigned.
+            dump_file = Readonly.from_list(manifest)
+            if dump_file is not None:
+                # dump_file will be the file we want, leave it assigned.
                 break
         else:
             raise Exception("Could not find any suitable readonly dumps.")
-    dump_file = ro_dumper.get_s3_path()
 
     if not args.dump_only:
+        print(dump_file)
         load_readonly_dump(args.database, args.readonly, dump_file)
 
     if not args.load_only:

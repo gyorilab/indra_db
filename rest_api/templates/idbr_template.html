@@ -1,7 +1,7 @@
 {% extends "indra/template.html" %}
 {% from "auth_macros.html" import login_overlay %}
 
-{% macro login_header(header, identity) -%}
+{% macro nav_header(identity) -%}
     <script>
         function handle_success(type, resp_data) {
             const user_msg = document.querySelector('#user-loginout-msg');
@@ -47,35 +47,55 @@
             padding-right: 0;
         }
     </style>
-    <div class="row align-center">
-        <div class="col-auto no-horiz-pad">
-            {{ header }}
-        </div>
-        <div class="col text-right no-horiz-pad">
-            <span id="user-loginout-msg">
-                {% if identity %}
-                    Welcome {{ identity['email'] }}!
-                {% endif %}
-            </span>
-            <button class="btn btn-primary"
-                    onclick="return {% if identity %}trigger_logout(){% else %}trigger_login(){% endif %};"
-                    id="loginout-button">
-                {% if identity %}
-                    Logout
-                {%  else %}
-                    Login
-                {% endif %}
-            </button>
-        </div>
+    <button class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarCollapse" aria-controls="navbarCollapse"
+            aria-expanded="navbarCollapse" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarCollapse">
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item {% if search_active %}acitve{% endif %}">
+          <a class="nav-link" href="{{ url_for('search') }}"
+             target="_blank">
+            Search
+          </a>
+        </li>
+        <li class="nav-item {% if old_search_active %}active{% endif %}">
+          <a class="nav-link" href="{{ url_for('old_search') }}"
+             target="_blank">
+            (Old Search)
+          </a>
+        </li>
+      </ul>
+      <div class="col text-right no-horiz-pad">
+        <span id="user-loginout-msg">
+            {% if identity %}
+              Welcome {{ identity['email'] }}!
+            {% endif %}
+        </span>
+        <button class="btn btn-primary"
+                onclick="return {% if identity %}trigger_logout(){% else %}trigger_login(){% endif %};"
+                id="loginout-button">
+          {% if identity %}
+            Logout
+          {%  else %}
+            Login
+          {% endif %}
+        </button>
+      </div>
     </div>
 {%- endmacro %}
 
-{% block header %}
-    {{ login_header(super(), identity) }}
+{% block title %}
+  <a class="navbar-brand" href="#" style="padding-left: 0.5em;">INDRA Database</a>
+{% endblock %}
+
+{% block navbar %}
+    {{ nav_header(identity) }}
 {% endblock %}
 
 {% block header_desc %}
-    {% include "idbr_description.html" %}
+  <p>{% include "idbr_description.html" %}</p>
 {% endblock %}
 
 {% block body %}
@@ -84,5 +104,5 @@
 {% endblock %}
 
 {% block additional_footer %}
-    {% include "idbr_footer.html" %}
+  <p>{% include "idbr_footer.html" %}</p>
 {% endblock %}

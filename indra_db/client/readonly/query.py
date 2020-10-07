@@ -3,12 +3,13 @@ __all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
            'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
            'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
            'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter',
-           'AgentJsonExpander', 'FromAgentJson']
+           'AgentJsonExpander', 'FromAgentJson', 'EmptyQuery']
 
 import json
 import logging
 import requests
 from itertools import combinations
+from typing import Union as TypeUnion, Optional, Iterable as TypeIterable
 from collections import OrderedDict, Iterable, defaultdict
 from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
     String, union, intersect
@@ -31,7 +32,7 @@ class QueryResult(object):
 
     Parameters
     ----------
-    results : dict
+    results : Iterable
         The results of the query keyed by unique IDs (mk_hash for PA Statements,
         IDs for Raw Statements, etc.)
     limit : int
@@ -45,7 +46,7 @@ class QueryResult(object):
 
     Attributes
     ----------
-    results : dict
+    results : Iterable
         The results of the query keyed by unique IDs (mk_hash for PA Statements,
         IDs for Raw Statements, etc.)
     limit : int
@@ -57,8 +58,9 @@ class QueryResult(object):
     query_json : dict
         A description of the query that was used.
     """
-    def __init__(self, results, limit: int, offset: int, offset_comp: int,
-                 evidence_totals: dict, query_json: dict, result_type: str):
+    def __init__(self, results: TypeIterable, limit: int, offset: int,
+                 offset_comp: int, evidence_totals: dict, query_json: dict,
+                 result_type: str):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
                              "and not a string.")
@@ -76,7 +78,9 @@ class QueryResult(object):
         self.query_json = query_json
 
     @classmethod
-    def from_json(cls, json_dict):
+    def from_json(cls, json_dict) \
+            -> TypeUnion['QueryResult', 'StatementQueryResult',
+                         'AgentQueryResult']:
         # Build a StatementQueryResult or AgentQueryResult if appropriate
         if json_dict['result_type'] == 'statements':
             return StatementQueryResult.from_json(json_dict)
@@ -164,6 +168,7 @@ class StatementQueryResult(QueryResult):
     def from_json(cls, json_dict):
         json_dict = json_dict.copy()
         result_type = json_dict.pop('result_type')
+        json_dict.pop('offset_comp', None)
         if result_type != 'statements':
             raise ValueError(f'Invalid result type {result_type} for this '
                              f'result class {cls}')
@@ -223,7 +228,7 @@ class AgentJsonSQL:
                                   ro.AgentInteractions.ev_count,
                                   ro.AgentInteractions.activity,
                                   ro.AgentInteractions.is_active,
-                                  ro.AgentInteractions.src_json)
+                                  ro.AgentInteractions.src_json).distinct()
         self.agg_q = None
         if not with_complex_dups:
             self.filter(ro.AgentInteractions.is_complex_dup.isnot(True))
@@ -266,7 +271,7 @@ class InteractionSQL(AgentJsonSQL):
 
     def run(self):
         logger.debug(f"Executing query (interaction):\n{self.q}")
-        names = self.q.all()
+        names = self.agg_q.all()
         results = {}
         ev_totals = {}
         for h, ag_json, type_num, n_ag, n_ev, act, is_act, src_json in names:
@@ -377,6 +382,7 @@ class AgentSQL(AgentJsonSQL):
         super(AgentSQL, self).__init__(*args, **kwargs)
         self._limit = None
         self._offset = None
+        self._return_hashes = False
 
     def limit(self, limit):
         self._limit = limit
@@ -393,10 +399,10 @@ class AgentSQL(AgentJsonSQL):
             names_sq.c.agent_count,
             func.sum(names_sq.c.ev_count).label('ev_count'),
             func.array_agg(names_sq.c.src_json).label('src_jsons'),
-            (func.jsonb_object(
+            func.jsonb_object(
                 func.array_agg(names_sq.c.mk_hash.cast(String)),
                 func.array_agg(names_sq.c.type_num.cast(String))
-             ) if with_hashes else null()).label('hashes')
+            ).label('hashes')
         ).group_by(
             names_sq.c.agent_json,
             names_sq.c.agent_count
@@ -405,6 +411,7 @@ class AgentSQL(AgentJsonSQL):
         self.agg_q = ro.session.query(sq.c.agent_json, sq.c.agent_count,
                                       sq.c.ev_count, sq.c.src_jsons,
                                       sq.c.hashes)
+        self._return_hashes = with_hashes
         return [desc(sq.c.ev_count), sq.c.agent_json]
 
     def _get_next(self, more_offset=0):
@@ -445,8 +452,8 @@ class AgentSQL(AgentJsonSQL):
                                   for n in range(max(n_ag, int(max(ag_json))+1))]
                 key = 'Agents(' + ', '.join(str(ag) for ag in ordered_agents) + ')'
                 if key in results:
-                    logger.warning("Something went weird processing results for "
-                                   "agents.")
+                    logger.warning("Something went weird processing results "
+                                   "for agents.")
 
                 # Aggregate the source counts.
                 source_counts = defaultdict(lambda: 0)
@@ -456,8 +463,11 @@ class AgentSQL(AgentJsonSQL):
 
                 # Add this entry to the results.
                 results[key] = {'id': key, 'source_counts': dict(source_counts),
-                                'agents': _make_agent_dict(ag_json),
-                                'hashes': my_hashes.hashes}
+                                'agents': _make_agent_dict(ag_json)}
+                if self._return_hashes:
+                    results[key]['hashes'] = my_hashes.hashes
+                else:
+                    results[key]['hashes'] = None
                 ev_totals[key] = sum(source_counts.values())
 
                 # Sanity check. Only a coding error could cause this to fail.
@@ -485,6 +495,7 @@ class Query(object):
         self.empty = empty
         self.full = full
         self._inverted = False
+        self._print_only = False
 
     def __repr__(self) -> str:
         args = self._get_constraint_json()
@@ -539,6 +550,13 @@ class Query(object):
         """
         return self.__invert__()
 
+    def set_print_only(self, print_only):
+        """Choose to only print the SQL and not execute it.
+
+        This is very useful for debugging the SQL queries that are generated.
+        """
+        self._print_only = print_only
+
     def _rest_get(self, result_type, limit=None, offset=None, best_first=True,
                   **other_params):
         """Retrieve results from the remote API."""
@@ -557,7 +575,7 @@ class Query(object):
 
     def get_statements(self, ro=None, limit=None, offset=None, best_first=True,
                        ev_limit=None, evidence_filter=None) \
-            -> StatementQueryResult:
+            -> Optional[StatementQueryResult]:
         """Get the statements that satisfy this query.
 
         Parameters
@@ -646,7 +664,7 @@ class Query(object):
                     json_content_al.c.ev_count, json_content_al.c.raw_json,
                     json_content_al.c.pa_json]
 
-            # Join up with other tables to pull metadata.
+        # Join up with other tables to pull metadata.
         stmts_q = (stmts_q
                    .outerjoin(ro.ReadingRefLink,
                               ro.ReadingRefLink.rid == json_content_al.c.rid))
@@ -656,11 +674,15 @@ class Query(object):
 
         cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
 
-        # Execute the query.
+        # Put it all together.
         selection = select(cols).select_from(stmts_q)
+        if self._print_only:
+            print(selection)
+            return
 
         logger.debug(f"Executing query (get_statements):\n{selection}")
 
+        # Execute the query.
         proxy = ro.session.connection().execute(selection)
         res = proxy.fetchall()
         if res:
@@ -673,13 +695,13 @@ class Query(object):
         ev_totals = OrderedDict()
         source_counts = OrderedDict()
         returned_evidence = 0
-        src_list = ro.get_column_names(ro.PaStmtSrc)[1:]
+        src_set = ro.get_source_names()
         for row in res:
             # Unpack the row
             row_gen = iter(row)
 
             mk_hash = next(row_gen)
-            src_dict = dict.fromkeys(src_list, 0)
+            src_dict = dict.fromkeys(src_set, 0)
             src_dict.update(next(row_gen))
             ev_count = next(row_gen)
             raw_json_bts = next(row_gen)
@@ -743,7 +765,7 @@ class Query(object):
                                     self.to_json())
 
     def get_hashes(self, ro=None, limit=None, offset=None, best_first=True) \
-            -> QueryResult:
+            -> Optional[QueryResult]:
         """Get the hashes of statements that satisfy this query.
 
         Parameters
@@ -786,6 +808,10 @@ class Query(object):
         mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
                                          best_first)
 
+        if self._print_only:
+            print(mk_hashes_q)
+            return
+
         # Make the query, and package the results.
         logger.debug(f"Executing query (get_hashes):\n{mk_hashes_q}")
         result = mk_hashes_q.all()
@@ -796,7 +822,7 @@ class Query(object):
                            'hashes')
 
     def get_interactions(self, ro=None, limit=None, offset=None,
-                         best_first=True) -> QueryResult:
+                         best_first=True) -> Optional[QueryResult]:
         """Get the simple interaction information from the Statements metadata.
 
        Each entry in the result corresponds to a single preassembled Statement,
@@ -820,6 +846,9 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
+            if self._print_only:
+                print("Query is empty, no SQL run.")
+                return
             return QueryResult({}, limit, offset, 0, {}, self.to_json(),
                                'interactions')
 
@@ -827,14 +856,16 @@ class Query(object):
             return self._rest_get('interactions', limit, offset, best_first)
 
         il = InteractionSQL(ro)
-        results, ev_totals, off_comp = \
-            self._run_meta_sql(il, ro, limit, offset, best_first)
+        result_tuple = self._run_meta_sql(il, ro, limit, offset, best_first)
+        if result_tuple is None:
+            return
+        results, ev_totals, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_totals,
                            self.to_json(), il.meta_type)
 
     def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
                       with_hashes=False) \
-            -> QueryResult:
+            -> Optional[QueryResult]:
         """Get the agent and type information from the Statements metadata.
 
          Each entry in the result corresponds to a relation, meaning an
@@ -869,15 +900,18 @@ class Query(object):
                                   with_hashes=with_hashes)
 
         r_sql = RelationSQL(ro)
-        results, ev_totals, off_comp = \
-            self._run_meta_sql(r_sql, ro, limit, offset, best_first,
-                               with_hashes)
+        result_tuple = self._run_meta_sql(r_sql, ro, limit, offset, best_first,
+                                          with_hashes)
+        if result_tuple is None:
+            return None
+
+        results, ev_totals, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_totals,
                            self.to_json(), r_sql.meta_type)
 
     def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
                    with_hashes=False, complexes_covered=None) \
-            -> QueryResult:
+            -> Optional[QueryResult]:
         """Get the agent pairs from the Statements metadata.
 
          Each entry is simply a pair (or more) of Agents involved in an
@@ -885,13 +919,13 @@ class Query(object):
 
         Parameters
         ----------
-        ro : DatabaseManager
+        ro : Optional[DatabaseManager]
             A database manager handle that has valid Readonly tables built.
-        limit : int
+        limit : Optional[int]
             Control the maximum number of results returned. As a rule, unless
             you are quite sure the query will result in a small number of
             matches, you should limit the query.
-        offset : int
+        offset : Optional[int]
             Get results starting from the value of offset. This along with limit
             allows you to page through results.
         best_first : bool
@@ -899,6 +933,9 @@ class Query(object):
         with_hashes : bool
             Default is False. If True, retrieve all the hashes that fit within
             each agent pair grouping.
+        complexes_covered : Optional[set]
+            The set of hashes for complexes that you have already seen and would
+            like skipped.
         """
         if ro is None:
             ro = get_ro('primary')
@@ -914,9 +951,12 @@ class Query(object):
 
         ag_sql = AgentSQL(ro, with_complex_dups=True,
                           complexes_covered=complexes_covered)
-        results, ev_totals, off_comp = \
-            self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
+        result_tuple = self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
                                with_hashes)
+        if result_tuple is None:
+            return
+
+        results, ev_totals, off_comp = result_tuple
         return AgentQueryResult(results, limit, offset, off_comp,
                                 ag_sql.complexes_covered, ev_totals,
                                 self.to_json())
@@ -930,6 +970,9 @@ class Query(object):
             kwargs['with_hashes'] = with_hashes
         order_param = ms.agg(ro, **kwargs)
         ms = self._apply_limits(ms, order_param, limit, offset, best_first)
+        if self._print_only:
+            print(ms.agg_q)
+            return
         return ms.run()
 
     @staticmethod
@@ -1128,9 +1171,12 @@ class Query(object):
         """Check if a query is the exact opposite of another."""
         if not isinstance(other, self.__class__):
             return False
-        if not self._get_constraint_json() == other._get_constraint_json():
+        if self._get_constraint_json() != other._get_constraint_json():
             return False
         return self._inverted != other._inverted
+
+    def ev_filter(self):
+        return None
 
 
 class EmptyQuery:
@@ -1298,55 +1344,23 @@ class SourceIntersection(Query):
 
         # Look through all the queries, picking out special cases and grouping
         # the rest by class.
-        add_hashes = None
-        rem_hashes = set()
         class_groups = defaultdict(list)
         for sq in source_queries:
-            if isinstance(sq, HasHash):
-                # Collect all hashes to include and those to exclude.
-                if not sq._inverted:
-                    # This is a part of an intersection, so intersection is
-                    # appropriate.
-                    if add_hashes is None:
-                        add_hashes = set(sq.stmt_hashes)
-                    else:
-                        add_hashes &= set(sq.stmt_hashes)
-                else:
-                    # This follows form De Morgan's Law
-                    rem_hashes |= set(sq.stmt_hashes)
-            else:
-                # We will need to check other class groups for inversion, so
-                # group them now for efficiency.
-                class_groups[sq.__class__].append(sq)
+            # We will need to check other class groups for inversion, so
+            # group them now for efficiency.
+            class_groups[sq.__class__].append(sq)
 
         # Start building up the true set of queries.
         filtered_queries = set()
 
-        # Add the hash queries.
-        if add_hashes and rem_hashes and add_hashes == rem_hashes:
-            # In this special case I am empty, and to make sure my inversion
-            # works smoothly, I keep these two queries around so the Union can
-            # successfully work out the logic without special communication
-            # being necessary.
-            empty = True
-            filtered_queries |= {HasHash(add_hashes),
-                                 ~HasHash(rem_hashes)}
-        else:
-            # Check for added hashes and add a positive and an inverted hash
-            # query for the net positive and net negative hashes.
-            if add_hashes is not None:
-                if not add_hashes:
-                    empty = True
-                filtered_queries.add(HasHash(add_hashes - rem_hashes))
-                rem_hashes -= add_hashes
-
-            if rem_hashes:
-                filtered_queries.add(~HasHash(rem_hashes))
-
         # Now add in all the other queries, removing those that cancel out.
-        for q_list in class_groups.values():
+        for query_class, q_list in class_groups.items():
             if len(q_list) == 1:
                 filtered_queries.add(q_list[0])
+            elif query_class == HasHash:
+                res_set, is_empty = _consolidate_queries(q_list)
+                filtered_queries |= res_set
+                empty |= is_empty
             else:
                 filtered_queries |= set(q_list)
                 if not empty:
@@ -1368,6 +1382,15 @@ class SourceIntersection(Query):
 
     def __invert__(self):
         return Union([~q for q in self.source_queries])
+
+    def is_inverse_of(self, other):
+        """Check if this query is the inverse of another."""
+        # The inverse of a SourceIntersection must be a Union.
+        if not isinstance(other, Union):
+            return False
+
+        # Now we can just use the Union's implementation!
+        return other.is_inverse_of(self)
 
     def _do_and(self, other):
         # This is the complement of _do_and in SourceQuery, together ensuring
@@ -1613,11 +1636,17 @@ class HasHash(SourceQuery):
         return self.__class__(self.stmt_hashes)
 
     def __str__(self):
-        inv = 'do not ' if self._inverted else ''
-        return f"{inv}have hash {_join_list(self.stmt_hashes)}"
+        if self.stmt_hashes:
+            inv = 'do not ' if self._inverted else ''
+            return f"{inv}have hash {_join_list(self.stmt_hashes)}"
+        else:
+            if not self._inverted:
+                return "have no hash"
+            else:
+                return "have any hash"
 
     def _get_constraint_json(self) -> dict:
-        return {'stmt_hashes': list(self.stmt_hashes)}
+        return {'stmt_hashes': sorted(list(self.stmt_hashes))}
 
     def _get_empty(self):
         return self.__class__([])
@@ -1795,10 +1824,13 @@ class _TextRefCore(Query):
     def _copy(self):
         raise NotImplementedError()
 
+    def _can_merge_with(self, other):
+        return isinstance(other, self.__class__) \
+               and self._inverted == other._inverted
+
     def _do_or(self, other) -> Query:
         cls = self.__class__
-        if isinstance(other, cls) and not self._inverted \
-                and not other._inverted:
+        if self._can_merge_with(other) and not self._inverted:
             my_list = getattr(self, self.list_name)
             thr_list = getattr(other, self.list_name)
             return cls(list(set(my_list) | set(thr_list)))
@@ -1809,8 +1841,7 @@ class _TextRefCore(Query):
 
     def _do_and(self, other) -> Query:
         cls = self.__class__
-        if isinstance(other, self.__class__) and self._inverted \
-                and other._inverted:
+        if self._can_merge_with(other) and self._inverted:
             my_list = getattr(self, self.list_name)
             thr_list = getattr(other, self.list_name)
             return ~cls(list(set(my_list) | set(thr_list)))
@@ -1909,40 +1940,84 @@ class FromMeshIds(_TextRefCore):
     Parameters
     ----------
     mesh_ids : list
-        A canonical MeSH ID, of the "D" variety, e.g. "D000135".
+        A canonical MeSH ID, of the "C" or "D" variety, e.g. "D000135".
+
+    Attributes
+    ----------
+    mesh_ids : tuple
+        The mesh IDs.
+    _mesh_type : str
+        "C" or "D" indicating which types of IDs are held in this object.
     """
     list_name = 'mesh_ids'
 
-    def __init__(self, mesh_ids: list):
+    @classmethod
+    def __make(cls, mesh_ids):
+        new_obj = super(FromMeshIds, cls).__new__(cls)
+        new_obj.__init__(mesh_ids)
+        return new_obj
+
+    def __new__(cls, mesh_ids: list):
+        # Validate the IDs and break them into groups (as appropriate)
+        id_groups = defaultdict(set)
         for mesh_id in mesh_ids:
-            if not mesh_id.startswith('D') and not mesh_id[1:].isdigit():
+            if len(mesh_id) == 0 or mesh_id[0] not in ['C', 'D'] \
+                    or not mesh_id[1:].isdigit():
                 raise ValueError("Invalid MeSH ID: %s. Must begin with 'D' and "
                                  "the rest must be a number." % mesh_id)
+            id_groups[mesh_id[0]].add(mesh_id)
+
+        # If there is just one kind, return a normal __new__ response. Otherwise
+        # return a union of two classes.
+        if len(id_groups) <= 1:
+            return super(FromMeshIds, cls).__new__(cls)
+        else:
+            c_obj = cls.__make(id_groups['C'])
+            d_obj = cls.__make(id_groups['D'])
+            return Union([c_obj, d_obj])
+
+    def __init__(self, mesh_ids):
         self.mesh_ids = tuple(set(mesh_ids))
-        self.mesh_nums = tuple([int(mesh_id[1:]) for mesh_id in self.mesh_ids])
+        self._mesh_nums = []
+        self._mesh_concept_nums = []
+        self._mesh_type = None
+        for mesh_id in self.mesh_ids:
+            if self._mesh_type is None:
+                self._mesh_type = mesh_id[0]
+            else:
+                assert mesh_id[0] == self._mesh_type
+            self._mesh_nums.append(int(mesh_id[1:]))
         super(FromMeshIds, self).__init__(len(mesh_ids) == 0)
 
     def __str__(self):
         inv = 'not ' if self._inverted else ''
         return f"are {inv}from papers with MeSH ID {_join_list(self.mesh_ids)}"
 
+    def _can_merge_with(self, other):
+        return super(FromMeshIds, self)._can_merge_with(other) \
+               and self._mesh_type == other._mesh_type
+
     def _copy(self):
         return self.__class__(self.mesh_ids)
 
     def _get_constraint_json(self) -> dict:
         return {'mesh_ids': list(self.mesh_ids),
-                '_mesh_nums': list(self.mesh_nums)}
+                '_mesh_nums': list(self._mesh_nums),
+                '_mesh_type': self._mesh_type}
 
     def _get_table(self, ro):
-        return ro.MeshMeta
+        if self._mesh_type == "D":
+            return ro.MeshTermMeta
+        else:
+            return ro.MeshConceptMeta
 
     def _get_hash_query(self, ro, inject_queries=None):
         meta = self._get_table(ro)
         qry = self._base_query(ro)
-        if len(self.mesh_nums) == 1:
-            qry = qry.filter(meta.mesh_num == self.mesh_nums[0])
+        if len(self._mesh_nums) == 1:
+            qry = qry.filter(meta.mesh_num == self._mesh_nums[0])
         else:
-            qry = qry.filter(meta.mesh_num.in_(self.mesh_nums))
+            qry = qry.filter(meta.mesh_num.in_(self._mesh_nums))
 
         if not self._inverted:
             if inject_queries:
@@ -1967,23 +2042,37 @@ class FromMeshIds(_TextRefCore):
         return qry
 
     def ev_filter(self):
-        if not self._inverted:
-            if len(self.mesh_nums) == 1:
-                def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num == self.mesh_nums[0]
-            else:
-                def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.in_(self.mesh_nums)
+        """Get an evidence filter to enforce mesh constraints at ev level."""
+        # Make sure we get the correct table, depending on mesh ID type.
+        if self._mesh_type == 'D':
+            def get_col(ro):
+                return ro.RawStmtMeshTerms.mesh_num
         else:
-            if len(self.mesh_nums) == 1:
+            def get_col(ro):
+                return ro.RawStmtMeshConcepts.mesh_num
+
+        # Make the evidence clause function depending on whether it is inverted
+        # and optimized for the 1-member case.
+        if not self._inverted:
+            if len(self._mesh_nums) == 1:
                 def get_clause(ro):
-                    return (ro.RawStmtMesh.mesh_num
-                            .is_distinct_from(self.mesh_nums[0]))
+                    return get_col(ro) == self._mesh_nums[0]
             else:
                 def get_clause(ro):
-                    return ro.RawStmtMesh.mesh_num.notin_(self.mesh_nums)
+                    return get_col(ro).in_(self._mesh_nums)
+        else:
+            if len(self._mesh_nums) == 1:
+                def get_clause(ro):
+                    return get_col(ro).is_distinct_from(self._mesh_nums[0])
+            else:
+                def get_clause(ro):
+                    return get_col(ro).notin_(self._mesh_nums)
 
-        return EvidenceFilter.from_filter('raw_stmt_mesh', get_clause)
+        if self._mesh_type == 'D':
+            return EvidenceFilter.from_filter('raw_stmt_mesh_terms', get_clause)
+        else:
+            return EvidenceFilter.from_filter('raw_stmt_mesh_concepts',
+                                              get_clause)
 
 
 class IntrusiveQuery(Query):
@@ -2020,7 +2109,7 @@ class IntrusiveQuery(Query):
                                  super(IntrusiveQuery, self)._do_or)
 
     def _get_constraint_json(self) -> dict:
-        return {self.list_name: list(self._get_list())}
+        return {self.list_name: sorted(list(self._get_list()))}
 
     @classmethod
     def _from_constraint_json(cls, constraint_json):
@@ -2265,6 +2354,67 @@ class MergeQuery(Query):
             self._injected_queries = None
         return qry
 
+    def _iter_ev_filters(self):
+        """Iter over the evidence filters of sub-queries, skipping Nones."""
+        for q in self.queries:
+            ev_filter = q.ev_filter()
+            if ev_filter is None:
+                continue
+            yield ev_filter
+
+
+class _QueryCollector:
+    """An object used with Intersections to optimally merge queries.
+
+    This handles the dividing of intrusive queries into their various types and
+    polarities, and merges those that are compatible.
+    """
+    def __init__(self, queries=None):
+        self.positives = {}
+        self.negatives = {}
+        if queries is not None:
+            for query in queries:
+                self.add(query)
+
+    def add(self, query):
+        """Add another query to the list."""
+        name = query.name
+        if not query._inverted:
+            if name not in self.positives:
+                self.positives[name] = query
+            else:
+                self.positives[name] &= query
+        else:
+            if name not in self.negatives:
+                self.negatives[name] = query
+            else:
+                self.negatives[name] &= query
+
+    def has_queries(self):
+        return self.positives or self.negatives
+
+    def cancellations(self):
+        return [pq.is_inverse_of(self.negatives[pn])
+                for pn, pq in self.positives.items() if pn in self.negatives]
+
+    def all_cancel(self):
+        return all(self.cancellations())
+
+    def any_cancel(self):
+        return any(self.cancellations())
+
+    def list(self, name=None):
+        return [q for d in [self.positives, self.negatives]
+                for q in d.values() if name is None or q.name == name]
+
+    def copy(self):
+        new_collector = self.__class__()
+        new_collector.positives = {name: query.copy()
+                                   for name, query in self.positives.items()}
+        new_collector.negatives = {name: query.copy()
+                                   for name, query in self.negatives.items()}
+        return new_collector
+
 
 class Intersection(MergeQuery):
     """The Intersection of multiple queries.
@@ -2280,11 +2430,11 @@ class Intersection(MergeQuery):
         # Look for groups of queries that can be merged otherwise, and gather
         # up the type queries for special handling. Also, check to see if any
         # queries are empty, in which case the net query is necessarily empty.
-        mergeable_query_types = [SourceIntersection, SourceQuery, FromPapers]
-        mergeable_groups = {C: [] for C in mergeable_query_types}
+        mergeable_query_types = [SourceIntersection, HasHash, FromPapers]
+        mergeable_groups = defaultdict(list)
         query_groups = defaultdict(list)
         filtered_queries = set()
-        self._in_queries = {'pos': {}, 'neg': {}}
+        self._my_intrusive_queries = _QueryCollector()
         empty = False
         all_full = True
         for query in query_list:
@@ -2296,53 +2446,30 @@ class Intersection(MergeQuery):
                 # If this is any kind of source query, add it to a list to be
                 # merged with its own kind.
                 if isinstance(query, C):
-                    mergeable_groups[C].append(query)
+                    mergeable_groups[query.__class__].append(query)
                     break
             else:
                 if isinstance(query, IntrusiveQuery):
                     # Extract the intrusive (type, agent number, evidence
                     # number) queries, and merge them together as much as
                     # possible.
-                    name = query.name
-                    if not query._inverted:
-                        if name not in self._in_queries['pos']:
-                            self._in_queries['pos'][name] = query
-                        else:
-                            self._in_queries['pos'][name] &= query
-                    else:
-                        if name not in self._in_queries['neg']:
-                            self._in_queries['neg'][name] = query
-                        else:
-                            self._in_queries['neg'][name] &= query
+                    self._my_intrusive_queries.add(query)
+
+                    # Intrusive queries are also mergable.
+                    mergeable_groups[query.__class__].append(query)
                 else:
+                    # Nothing really to do here. Just throw them on in.
                     query_groups[query.__class__].append(query)
-                filtered_queries.add(query)
+                    filtered_queries.add(query)
 
         # Add mergeable queries into the final set.
         for queries in mergeable_groups.values():
-            if len(queries) == 1:
-                filtered_queries.add(queries[0])
-            elif len(queries) > 1:
-                # Merge the queries based on their inversion.
-                pos_query = None
-                neg_query = None
-                for q in queries:
-                    if not q._inverted:
-                        if pos_query is None:
-                            pos_query = q
-                        else:
-                            pos_query &= q
-                    else:
-                        if neg_query is None:
-                            neg_query = q
-                        else:
-                            neg_query &= q
-
-                # Add the merged query to the final set.
-                for query in [neg_query, pos_query]:
-                    if query is not None:
-                        filtered_queries.add(query)
-                        query_groups[query.__class__].append(query)
+            if len(queries) == 0:
+                continue
+            res_set, is_empty = _consolidate_queries(queries)
+            filtered_queries |= res_set
+            query_groups[queries[0].__class__].extend(res_set)
+            empty |= is_empty
 
         # Look for exact contradictions (any one of which makes this empty).
         # Also make sure there is no empty-inducing interaction between my
@@ -2364,16 +2491,15 @@ class Intersection(MergeQuery):
                 # this query empty. Furthermore, trying to apply that Union
                 # would result in an empty query and errors and headaches. And
                 # late nights debugging code.
-                if cls == Union and any(d for d in self._in_queries.values()):
+                if cls == Union and self._my_intrusive_queries.has_queries():
                     for q in q_list:
                         all_empty = True
                         for sub_q in q.queries:
                             if not isinstance(sub_q, IntrusiveQuery):
                                 all_empty = False
                                 break
-                            compare_ins = [q for d in self._in_queries.values()
-                                           for q in d.values()
-                                           if q.name == sub_q.name]
+                            compare_ins = \
+                                self._my_intrusive_queries.list(sub_q.name)
                             if not compare_ins:
                                 all_empty = False
                                 break
@@ -2386,9 +2512,11 @@ class Intersection(MergeQuery):
                         empty = all_empty
 
         # Check to see if the types overlap
-        empty |= any(pq.is_inverse_of(self._in_queries['neg'][pn])
-                     for pn, pq in self._in_queries['pos'].items()
-                     if pn in self._in_queries['neg'])
+        empty |= self._my_intrusive_queries.any_cancel()
+
+        # Check if any of the resulting queries so far is a logical query of
+        # everything.
+        empty |= any(q.empty for q in filtered_queries)
 
         super(Intersection, self).__init__(filtered_queries, empty, all_full)
 
@@ -2401,33 +2529,164 @@ class Intersection(MergeQuery):
         return intersect(*queries)
 
     def _get_table(self, ro):
+        # If we already did the work, just return the result.
         if self._mk_hashes_al is not None:
             return self._mk_hashes_al
 
+        # collect all the intrusive queries.
+        intrusive_queries = self._my_intrusive_queries.copy()
         if self._injected_queries is not None:
-            raise ValueError("Type queries should not be applied to "
-                             "Intersection, but handled as an intersected "
-                             "query.")
+            for q in self._injected_queries:
+                intrusive_queries.add(q)
+        intrusive_list = intrusive_queries.list()
+        if not intrusive_list:
+            intrusive_list = None
 
-        in_queries = [q for d in self._in_queries.values() for q in d.values()]
-        if not in_queries:
-            in_queries = None
-        queries = [q.build_hash_query(ro, in_queries) for q in self.queries
-                   if not q.full and not isinstance(q, IntrusiveQuery)]
-        if not queries:
-            if in_queries:
-                queries = [q.build_hash_query(ro) for q in in_queries]
-                self._mk_hashes_al = self._merge(*queries).alias(self.name)
+        # Build the sub queries.
+        chosen_queries = [q for q in self.queries
+                          if not q.full and not isinstance(q, IntrusiveQuery)]
+        if not chosen_queries:
+            # Handle the special case that all queries are intrusive.
+            if intrusive_list:
+                sql_queries = [q.build_hash_query(ro) for q in intrusive_list]
+                self._mk_hashes_al = self._merge(*sql_queries).alias(self.name)
             else:
                 # There should never be two type queries of the same inversion,
                 # they could simply have been merged together.
                 raise RuntimeError("Malformed Intersection occurred.")
-        elif len(queries) == 1:
-            self._mk_hashes_al = queries[0].subquery().alias(self.name)
+        elif len(chosen_queries) == 1:
+            self._mk_hashes_al = (chosen_queries[0]
+                                  .build_hash_query(ro, intrusive_list)
+                                  .subquery()
+                                  .alias(self.name))
         else:
-            self._mk_hashes_al = self._merge(*queries).alias(self.name)
+            # Sort the queries into positive and negative.
+            pos = []
+            neg = []
+            for query in chosen_queries:
+                if not query._inverted:
+                    pos.append(query)
+                else:
+                    neg.append(query)
+
+            # If we have both kinds, do something special. We will except the
+            # positive sense of the negative (inverted) queries, which in
+            # general will mean more smaller queries are run (think of "not MEK"
+            # verses jsut looking for "MEK").
+            if pos and neg:
+                # Build a subquery out of the positive query or queries.
+                if len(pos) == 1:
+                    pos_sql = pos[0].build_hash_query(ro, intrusive_list)
+                else:
+                    pos_tbl = self._merge(
+                        *[q.build_hash_query(ro, intrusive_list) for q in pos]
+                    ).alias('pos')
+                    pos_sql = ro.session.query(
+                        pos_tbl.c.mk_hash.label('mk_hash'),
+                        pos_tbl.c.ev_count.label('ev_count')
+                    )
+
+                # Build a subquery out of the negative query or queries,
+                # re-inverting them into their positive sense, which generally
+                # results in a smaller set of hashes than the negative sense.
+                if len(neg) == 1:
+                    neg_sql = (neg[0].invert()
+                               .build_hash_query(ro, intrusive_list))
+                else:
+                    neg_tbl = union(
+                        *[q.invert().build_hash_query(ro, intrusive_list)
+                          for q in neg]
+                    ).alias('neg')
+                    neg_sql = ro.session.query(
+                        neg_tbl.c.mk_hash.label('mk_hash'),
+                        neg_tbl.c.ev_count.label('ev_count')
+                    )
+
+                # Take the positive except the negative as our "table".
+                self._mk_hashes_al = except_(pos_sql, neg_sql).alias(self.name)
+            else:
+                sql_queries = [q.build_hash_query(ro, intrusive_list)
+                               for q in chosen_queries]
+                self._mk_hashes_al = self._merge(*sql_queries).alias(self.name)
 
         return self._mk_hashes_al
+
+    def ev_filter(self):
+        """Get an evidence filter composed of the "and" of sub-query filters."""
+        ev_filter = None
+        for sub_ev_filter in self._iter_ev_filters():
+            if ev_filter is None:
+                ev_filter = sub_ev_filter
+            else:
+                ev_filter &= sub_ev_filter
+        return ev_filter
+
+    def is_inverse_of(self, other):
+        """Check if this query is the inverse of another."""
+        # The inverse of an Intersection must be a Union.
+        if not isinstance(other, Union):
+            return False
+
+        # Now we can just use the Union's implementation!
+        return other.is_inverse_of(self)
+
+
+def _consolidate_queries(queries):
+    """Consolidate list-type queries of the same class."""
+    # Check for simple 0 and 1 member cases.
+    if len(queries) == 0:
+        return {}, None
+    elif len(queries) == 1:
+        return {queries[0]}, queries[0].empty
+
+    # Make sure all the elements are the same class.
+    if not all(isinstance(q, queries[0].__class__) for q in queries):
+        assert False
+
+    # Merge the queries.
+    resulting_queries = set()
+    empty = False
+    pos_query = None
+    neg_query = None
+    for query in queries:
+        if not query._inverted:
+            if pos_query is None:
+                pos_query = query
+            else:
+                pos_query &= query
+        else:
+            if neg_query is None:
+                neg_query = query
+            else:
+                neg_query &= query
+
+    # Add the hash queries.
+    if pos_query and neg_query and pos_query.is_inverse_of(neg_query):
+        # In this special case I am empty.
+        empty = True
+        resulting_queries.add(pos_query.__class__([]))
+    elif isinstance(pos_query, HasHash):
+        pos_hashes = None if pos_query is None else set(pos_query.stmt_hashes)
+        neg_hashes = set() if neg_query is None else set(neg_query.stmt_hashes)
+
+        # Check for added hashes and add a positive and an inverted hash
+        # query for the net positive and net negative hashes.
+        if pos_hashes is not None:
+            if not pos_hashes:
+                empty = True
+
+            resulting_queries.add(HasHash(pos_hashes - neg_hashes))
+            neg_hashes -= pos_hashes
+
+        if neg_hashes:
+            resulting_queries.add(~HasHash(neg_hashes))
+    else:
+        if pos_query is not None:
+            resulting_queries.add(pos_query)
+        if neg_query is not None:
+            resulting_queries.add(neg_query)
+
+    return resulting_queries, empty
 
 
 class Union(MergeQuery):
@@ -2447,7 +2706,8 @@ class Union(MergeQuery):
         other_queries = set()
         query_groups = defaultdict(list)
         mergeable_types = (HasHash, FromPapers, IntrusiveQuery)
-        merge_grps = defaultdict(lambda: {True: [], False: []})
+        merge_grps = defaultdict(list)
+        intrusive_queries = []
         full = False
         all_empty = True
         for query in query_list:
@@ -2455,22 +2715,23 @@ class Union(MergeQuery):
                 all_empty = False
 
             if any(isinstance(query, t) for t in mergeable_types):
-                merge_grps[query.__class__][query._inverted].append(query)
+                merge_grps[query.__class__].append(query)
             else:
                 other_queries.add(query)
                 query_groups[query.__class__].append(query)
 
-        # Merge up the hash queries.
-        for grp in (g for d in merge_grps.values() for g in d.values()):
-            if len(grp) == 1:
-                other_queries.add(grp[0])
-            elif len(grp) > 1:
-                query = grp[0]
-                for other_query in grp[1:]:
-                    query |= other_query
-                if query.full:
-                    full = True
-                other_queries.add(query)
+                if isinstance(query, IntrusiveQuery):
+                    intrusive_queries.append(query)
+
+        # Merge up the mergeable queries.
+        for grp in merge_grps.values():
+            neg_res_set, is_empty = _consolidate_queries([~q for q in grp])
+            res_set = {~q for q in neg_res_set}
+            other_queries |= res_set
+            full |= is_empty
+            intrusive_queries.extend([q for q in res_set
+                                      if isinstance(q, IntrusiveQuery)])
+            query_groups[grp[0].__class__].extend(res_set)
 
         # Check if any of the resulting queries so far is a logical query of
         # everything.
@@ -2480,11 +2741,39 @@ class Union(MergeQuery):
         # the query groups for inverse pairs, any one of which would mean we
         # contain everything.
         if not full:
-            for q_list in query_groups.values():
+            for cls, q_list in query_groups.items():
+                # Check for exact contradictions.
                 if len(q_list) > 1:
                     for q1, q2 in combinations(q_list, 2):
                         if q1.is_inverse_of(q2):
                             full = True
+
+                # Special care is needed to make sure my intrusive queries
+                # don't identically include the universe for everything in my
+                # Intersections. Specifically, if the Intersection has only
+                # intrusive queries, and the union of every one each of the
+                # classes of intrusive query "cancels" with counterparts in my
+                # set of intrusive queries, then the result is a full query,
+                # making this query full.
+                if cls == Intersection and intrusive_queries:
+                    for q in q_list:
+                        all_full = True
+                        for sub_q in q.queries:
+                            if not isinstance(sub_q, IntrusiveQuery):
+                                all_full = False
+                                continue
+                            compare_ins = [q for q in intrusive_queries
+                                           if q.name == sub_q.name]
+                            if not compare_ins:
+                                all_full = False
+                                break
+                            for in_q in compare_ins:
+                                if not (sub_q | in_q).full:
+                                    all_full = False
+                                    break
+                            if not all_full:
+                                break
+                        full |= all_full
 
         super(Union, self).__init__(other_queries, all_empty, full)
 
@@ -2534,13 +2823,54 @@ class Union(MergeQuery):
                 mkhq = q.build_hash_query(ro, in_queries)
                 mk_hashes_q_list.append(mkhq)
 
-            if len(mk_hashes_q_list) == 1:
+            if len(mk_hashes_q_list) == 0:
+                raise ApiError("List of sub-queries came up with zero elements.")
+            elif len(mk_hashes_q_list) == 1:
                 self._mk_hashes_al = (mk_hashes_q_list[0].subquery()
                                                          .alias(self.name))
             else:
                 self._mk_hashes_al = (self._merge(*mk_hashes_q_list)
                                           .alias(self.name))
         return self._mk_hashes_al
+
+    def ev_filter(self):
+        """Get an evidence filter composed of the "or" of sub-query filters."""
+        ev_filter = None
+        for sub_ev_filter in self._iter_ev_filters():
+            if ev_filter is None:
+                ev_filter = sub_ev_filter
+            else:
+                ev_filter |= sub_ev_filter
+        return ev_filter
+
+    def is_inverse_of(self, other):
+        """Check if this query is the inverse of another."""
+        # The inverse of a Union must be a type of Intersection.
+        if isinstance(other, Intersection):
+            intersection_queries = list(other.queries[:])
+        elif isinstance(other, SourceIntersection):
+            intersection_queries = list(other.source_queries[:])
+        else:
+            return False
+
+        # A simple all-by-all comparison, O(n^2), should be fine for the small
+        # O(10) number of queries.
+        for query in self.queries:
+            for intersection_query in intersection_queries:
+                if query.is_inverse_of(intersection_query):
+                    # This query has an inverse.
+                    break
+            else:
+                # This query has no inverse. Therefore they cannot all have
+                # inverses.
+                return False
+
+            # Remove this query from future considerations.
+            intersection_queries.remove(intersection_query)
+
+        # If there are any union queries leftover, these cannot be perfect
+        # opposites.
+        return len(intersection_queries) == 0
 
 
 class _QueryEvidenceFilter:
@@ -2551,9 +2881,16 @@ class _QueryEvidenceFilter:
     def join_table(self, ro, query, tables_joined=None):
         if self.table_name == 'raw_stmt_src':
             ret = query.filter(ro.RawStmtSrc.sid == ro.FastRawPaLink.id)
-        elif self.table_name == 'raw_stmt_mesh':
-            ret = query.outerjoin(ro.RawStmtMesh,
-                                  ro.RawStmtMesh.sid == ro.FastRawPaLink.id)
+        elif self.table_name == 'raw_stmt_mesh_terms':
+            ret = query.outerjoin(
+                ro.RawStmtMeshTerms,
+                ro.RawStmtMeshTerms.sid == ro.FastRawPaLink.id
+            )
+        elif self.table_name == 'raw_stmt_mesh_concepts':
+            ret = query.outerjoin(
+                ro.RawStmtMeshConcepts,
+                ro.RawStmtMeshConcepts.sid == ro.FastRawPaLink.id
+            )
         elif self.table_name == 'reading_ref_link':
             ret = query.outerjoin(
                 ro.ReadingRefLink,

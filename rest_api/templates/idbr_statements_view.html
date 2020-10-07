@@ -1,6 +1,6 @@
 {% extends "indra/statements_view.html" %}
 {% from "auth_macros.html" import login_overlay %}
-{% from "idbr_template.html" import login_header %}
+{% from "idbr_template.html" import nav_header %}
 
 {% block scripts %}
     {{ super() }}
@@ -12,8 +12,8 @@
 
 {% endblock %}
 
-{% block header %}
-    {{ login_header(super(), identity) }}
+{% block navbar %}
+    {{ nav_header(identity) }}
 {% endblock %}
 
 {% block header_desc %}{% include "idbr_description.html" %}{{ super() }}{% endblock %}

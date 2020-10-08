@@ -151,13 +151,17 @@ class Sif(Dumper):
         self.use_principal = use_principal
         super(Sif, self).__init__(db_label, **kwargs)
 
-    def dump(self, continuing=False):
+    def dump(self, continuing=False, include_src_counts=True):
         if self.use_principal:
             ro = get_db(self.db_label)
         else:
             ro = get_ro(self.db_label)
         s3_path = self.get_s3_path()
-        dump_sif(s3_path, ro=ro)
+        if include_src_counts:
+            srcc = SourceCount()
+            dump_sif(s3_path, src_count_file=srcc.get_s3_path(), ro=ro)
+        else:
+            dump_sif(s3_path, ro=ro)
 
 
 class Belief(Dumper):

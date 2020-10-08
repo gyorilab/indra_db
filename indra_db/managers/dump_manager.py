@@ -175,9 +175,16 @@ class SourceCount(Dumper):
     name = 'source_count'
     fmt = 'pkl'
 
+    def __init__(self, db_label='primary', use_principal=True, **kwargs):
+        self.use_principal = use_principal
+        super(SourceCount, self).__init__(db_label, **kwargs)
+
     def dump(self, continuing=False):
-        db = get_db(self.db_label)
-        get_source_counts(self.get_s3_path(), db)
+        if self.use_principal:
+            ro = get_db(self.db_label)
+        else:
+            ro = get_ro(self.db_label)
+        get_source_counts(self.get_s3_path(), ro)
 
 
 class FullPaJson(Dumper):

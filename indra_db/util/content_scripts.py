@@ -4,6 +4,7 @@ from sqlalchemy import text
 from collections import defaultdict
 from cachetools.keys import hashkey
 from cachetools import cached, LRUCache
+from sqlalchemy.exc import SQLAlchemyError
 
 from .constructors import get_db
 from .helpers import unpack, _get_trids
@@ -381,6 +382,9 @@ class TextContentSessionHandler(object):
         self.__db = db
         self.default = default
 
+    def __del__(self):
+        self.close()
+
     def close(self):
         self.__db.session.rollback()
         self.__db.session.close()
@@ -454,10 +458,13 @@ class TextContentSessionHandler(object):
         return text_ref_id
 
     def _get_text_content_from_trid(self, text_ref_id):
-        texts = self.__db.select_all([self.__db.TextContent.content,
-                                      self.__db.TextContent.text_type],
-                                     self.__db.TextContent.text_ref_id ==
-                                     text_ref_id)
+        try:
+            texts = self.__db.select_all([self.__db.TextContent.content,
+                                          self.__db.TextContent.text_type],
+                                         self.__db.TextContent.text_ref_id ==
+                                         text_ref_id)
+        except SQLAlchemyError as e:
+            self.__db.session.rollback()
         contents = defaultdict(list)
         for content, text_type in texts:
             contents[text_type].append(content)

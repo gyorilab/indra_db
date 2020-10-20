@@ -6,6 +6,7 @@ import re
 import json
 import random
 import logging
+import string
 from io import BytesIO
 from numbers import Number
 from functools import wraps
@@ -24,6 +25,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
+from indra_db.config import CONFIG, DB_STR_FMT
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
@@ -194,6 +196,10 @@ class DatabaseManager(object):
     For more sophisticated examples, several use cases can be found in
     `indra.tests.test_db`.
     """
+    _instance_type = NotImplemented
+    _instance_name_fmt = NotImplemented
+    _db_name = NotImplemented
+
     def __init__(self, url, label=None):
         self.url = make_url(url)
         self.session = None
@@ -231,8 +237,51 @@ class DatabaseManager(object):
         except:
             print("Failed to execute rollback of database upon deletion.")
 
+    @classmethod
+    def create_instance(cls, instance_name, size, tag_dict=None):
+        """Allocate the resources on RDS for a database, and return handle."""
+        # Load boto3 locally to avoid unnecessary dependencies.
+        import boto3
+        rds = boto3.client('rds')
+
+        # Convert tags to boto3's goofy format.
+        tags = ([{'Key': k, 'Value': v} for k, v in tag_dict.items()]
+                if tag_dict else [])
+
+        # Create a new password.
+        pw_chars = random.choices(string.ascii_letters + string.digits, k=24)
+        password = ''.join(pw_chars)
+
+        # Load the rds general config settings.
+        rds_config = CONFIG['aws-rds-settings']
+
+        # Create the database.
+        response = rds.create_db_instance(
+            DBInstanceIdentifier=(cls._instance_name_fmt
+                                     .format(name=instance_name)),
+            DBName=cls._db_name,
+            AllocatedStorage=size,
+            DBInstanceClass=cls._instance_type,
+            Engine='postgres',
+            MasterUsername=rds_config['master_user'],
+            MasterUserPassword=password,
+            VpcSecurityGroupIds=[rds_config['security_group']],
+            AvailabilityZone=rds_config['availability_zone'],
+            DBSubnetGroupName='default',
+            Tags=tags,
+            DeletionProtection=True
+        )
+
+        # Use the given info to return a handle to the new database.
+        endpoint = response['DBInstance']['Endpoint']
+        url_str = DB_STR_FMT.format(prefix='postgres',
+                                    username=rds_config['master_user'],
+                                    password=password, host=endpoint['Address'],
+                                    port=response['Port'], name=cls._db_name)
+        return cls(url_str)
+
     def grab_session(self):
-        "Get an active session with the database."
+        """Get an active session with the database."""
         if not self.available:
             return
         if self.session is None or not self.session.is_active:
@@ -906,6 +955,12 @@ class DatabaseManager(object):
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
+
+    # Note that these are NOT guaranteed to apply to older deployed instances.
+    _instance_type = 'db.m5.large'
+    _instance_name_fmt = 'indradb-{name}'
+    _db_name = 'indradb_principal'
+
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
         if not self.available:
@@ -1166,6 +1221,9 @@ class S3DumpTimeAmbiguityError(Exception):
 
 class ReadonlyDatabaseManager(DatabaseManager):
     """This class represents the readonly database."""
+    _instance_type = 'db.m4.xlarge'
+    _instance_name_fmt = 'indradb-readonly-{name}'
+    _db_name = 'indradb_readonly'
 
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)

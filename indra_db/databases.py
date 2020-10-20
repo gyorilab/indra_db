@@ -280,6 +280,30 @@ class DatabaseManager(object):
                                     port=response['Port'], name=cls._db_name)
         return cls(url_str)
 
+    def get_config_string(self):
+        """Print a config entry for this handle.
+
+        This is useful after using `create_instance`.
+        """
+        data = {
+            'dialect': self.url.drivername,
+            'driver': None,
+            'username': self.url.username,
+            'password': self.url.password_original,
+            'host': self.url.host,
+            'port': self.url.port,
+            'name': self.url.database
+        }
+        return '\n'.join(f'{key} = {value}' if value else f'{key} ='
+                         for key, value in data.items())
+
+    def get_env_string(self):
+        """Generate the string for an environment variable.
+
+        This is useful after using `create_instance`.
+        """
+        return str(self.url)
+
     def grab_session(self):
         """Get an active session with the database."""
         if not self.available:
@@ -1239,6 +1263,11 @@ class ReadonlyDatabaseManager(DatabaseManager):
             else:
                 setattr(self, tbl.__name__, tbl)
         self.__non_source_cols = None
+
+    def get_config_string(self):
+        res = super(ReadonlyDatabaseManager, self).get_config_string()
+        res = 'role = readonly\n' + res
+        return res
 
     def get_source_names(self) -> set:
         """Get a list of the source names as they appear in SourceMeta cols."""

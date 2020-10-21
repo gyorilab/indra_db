@@ -53,7 +53,7 @@ def get_reader_output(db, ref_id, ref_type='tcid', reader=None,
     reading_dict = defaultdict(lambda: defaultdict(lambda: []))
     for tcid, reader, result in res:
         unpacked_result = None
-        if len(result) == 0:
+        if not result:
             logger.warning("Got reading result with zero content.")
         else:
             unpacked_result = unpack(result)

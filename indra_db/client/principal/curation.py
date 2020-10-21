@@ -114,15 +114,15 @@ def get_grounding_curations(db=None):
     groundings = {}
     for cur in curs:
         # If there is no curation given, we skip it
-        if not cur.text:
+        if not cur['text']:
             continue
         # We now try to match the standard pattern for grounding curation
-        cur_text = cur.text.strip()
+        cur_text = cur['text'].strip()
         match = re.match('^\[(.*)\] -> ([^ ]+)$', cur_text)
         # We log any instances of curations that don't match the pattern
         if not match:
             logger.info('"%s" by %s does not match the grounding curation '
-                        'pattern.' % (cur_text, cur.curator))
+                        'pattern.' % (cur_text, cur['curator']))
             continue
         txt, dbid_str = match.groups()
         # We now get a dict of curated mappings to return

@@ -180,8 +180,8 @@ def get_instance_attribute(attribute, instance_identifier):
             if attribute in desc:
                 return desc[attribute]
 
-            if attribute.lower() in desc:
-                return desc[attribute.lower()]
+            if attribute.capitalize() in desc:
+                return desc[attribute.capitalize()]
 
             inst_attr = f'DBInstance{attribute.capitalize()}'
             if inst_attr in desc:

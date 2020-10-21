@@ -11,7 +11,7 @@ import pickle
 import logging
 import tempfile
 from collections import defaultdict
-
+from indra.statements.validate import assert_valid_statement
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 
@@ -28,6 +28,10 @@ class KnowledgebaseManager(object):
         """Upload the content for this dataset into the database."""
         dbid = self._check_reference(db)
         stmts = self._get_statements()
+        # Raise any validity issues with statements as exceptions here
+        # to avoid uploading invalid content.
+        for stmt in stmts:
+            assert_valid_statement(stmt)
         insert_db_stmts(db, stmts, dbid)
         return
 

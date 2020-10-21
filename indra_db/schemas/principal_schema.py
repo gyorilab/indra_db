@@ -600,7 +600,8 @@ def get_schema(Base):
         def to_json(self):
             return {attr: getattr(self, attr)
                     for attr in ['id', 'pa_hash', 'source_hash', 'tag', 'text',
-                                 'date', 'curator', 'source']}
+                                 'date', 'curator', 'source', 'pa_json',
+                                 'ev_json']}
 
     table_dict[Curation.__tablename__] = Curation
 

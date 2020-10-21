@@ -594,6 +594,8 @@ def get_schema(Base):
         source = Column(String)
         ip = Column(INET)
         date = Column(DateTime, default=func.now())
+        pa_json = Column(JSONB)
+        ev_json = Column(JSONB)
 
         def to_json(self):
             return {attr: getattr(self, attr)

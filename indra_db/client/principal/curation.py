@@ -13,8 +13,9 @@ from indra_db.exceptions import BadHashError
 logger = logging.getLogger(__name__)
 
 
-def submit_curation(hash_val, tag, curator, ip, text=None,
-                    ev_hash=None, source='direct_client', db=None):
+def submit_curation(hash_val, tag, curator, ip, text=None, ev_hash=None,
+                    source='direct_client', stmt_json=None, ev_json=None,
+                    db=None):
     """Submit a curation for a given preassembled or raw extraction.
 
     Parameters
@@ -36,6 +37,10 @@ def submit_curation(hash_val, tag, curator, ip, text=None,
         The name of the access point through which the curation was performed.
         The default is 'direct_client', meaning this function was used
         directly. Any higher-level application should identify itself here.
+    stmt_json : Optional[dict]
+        The JSON of a preassembled or raw statement that was curated.
+    ev_json : Optional[dict]
+        The JSON of the evidence that was curated.
     db : DatabaseManager
         A database manager object used to access the database.
     """
@@ -43,7 +48,8 @@ def submit_curation(hash_val, tag, curator, ip, text=None,
         db = get_db('primary')
 
     inp = {'tag': tag, 'text': text, 'curator': curator, 'ip': ip,
-           'source': source, 'pa_hash': hash_val, 'source_hash': ev_hash}
+           'source': source, 'pa_hash': hash_val, 'source_hash': ev_hash,
+           'pa_json': stmt_json, 'ev_json': ev_json}
 
     logger.info("Adding curation: %s" % str(inp))
 

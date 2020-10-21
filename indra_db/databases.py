@@ -11,6 +11,7 @@ from io import BytesIO
 from numbers import Number
 from functools import wraps
 from datetime import datetime
+from time import sleep
 
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
@@ -158,6 +159,42 @@ class IndraTableError(IndraDbException):
         super(IndraTableError, self).__init__(self, msg)
 
 
+class RdsInstanceNotFoundError(IndraDbException):
+    def __init__(self, instance_identifier):
+        msg = f"No instance with name \"{instance_identifier}\" found on RDS."
+        super(RdsInstanceNotFoundError, self).__init__(msg)
+
+
+def get_instance_attribute(attribute, instance_identifier):
+    """Get the current status of a database."""
+    # Get descriptions for all instances (apparently you can't get just one).
+    import boto3
+    rds = boto3.client('rds')
+    resp = rds.describe_db_instances()
+
+    # If we find the one they're looking for, return the status.
+    for desc in resp['DBInstances']:
+        if desc['DBInstanceIdentifier'] == instance_identifier:
+
+            # Try to match some common patterns for attribute labels.
+            if attribute in desc:
+                return desc[attribute]
+
+            if attribute.lower() in desc:
+                return desc[attribute.lower()]
+
+            inst_attr = f'DBInstance{attribute.capitalize()}'
+            if inst_attr in desc:
+                return desc[inst_attr]
+
+            # Give explosively up if the above fail.
+            raise ValueError(f"Invalid attribute: {attribute}. Did you mean "
+                             f"one of these: {list(desc.keys())}?")
+
+    # Otherwise, fail.
+    raise RdsInstanceNotFoundError(instance_identifier)
+
+
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -256,9 +293,11 @@ class DatabaseManager(object):
         rds_config = CONFIG['aws-rds-settings']
 
         # Create the database.
-        response = rds.create_db_instance(
-            DBInstanceIdentifier=(cls._instance_name_fmt
-                                     .format(name=instance_name.lower())),
+        inp_identifier = cls._instance_name_fmt.format(
+            name=instance_name.lower()
+        )
+        resp = rds.create_db_instance(
+            DBInstanceIdentifier=inp_identifier,
             DBName=cls._db_name,
             AllocatedStorage=size,
             DBInstanceClass=cls._instance_type,
@@ -272,12 +311,21 @@ class DatabaseManager(object):
             DeletionProtection=True
         )
 
+        # Perform a basic sanity check.
+        assert resp['DBInstance']['DBInstanceIdentifier'] == inp_identifier, \
+            f"Bad response from creating RDS instance {inp_identifier}:\n{resp}"
+
+        # Wait for the database to be created.
+        logger.info("Waiting for database to be created...")
+        while get_instance_attribute('status', inp_identifier) == 'creating':
+            sleep(5)
+
         # Use the given info to return a handle to the new database.
-        endpoint = response['DBInstance']['Endpoint']
+        endpoint = get_instance_attribute('endpoint', inp_identifier)
         url_str = DB_STR_FMT.format(prefix='postgres',
                                     username=rds_config['master_user'],
                                     password=password, host=endpoint['Address'],
-                                    port=response['Port'], name=cls._db_name)
+                                    port=resp['Port'], name=cls._db_name)
         return cls(url_str)
 
     def get_config_string(self):

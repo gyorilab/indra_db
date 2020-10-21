@@ -297,7 +297,7 @@ def expand_meta_row():
     if w_cur_counts:
         curations = get_curations(pa_hash=set(entry_hash_lookup.keys()))
         for cur in curations:
-            for entry in entry_hash_lookup[cur.pa_hash]:
+            for entry in entry_hash_lookup[cur['pa_hash']]:
                 entry['cur_count'] += 1
 
     res_json = result.json()
@@ -362,8 +362,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
 @app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
 def list_curations(stmt_hash, src_hash):
     curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
-    curation_json = [cur.to_json() for cur in curations]
-    return jsonify(curation_json)
+    return jsonify(curations)
 
 
 def main():

@@ -1245,7 +1245,7 @@ class S3DumpTimeAmbiguityError(Exception):
 
 class ReadonlyDatabaseManager(DatabaseManager):
     """This class represents the readonly database."""
-    _instance_type = 'db.m4.xlarge'
+    _instance_type = 'db.m5.xlarge'
     _instance_name_fmt = 'indradb-readonly-{name}'
     _db_name = 'indradb_readonly'
 

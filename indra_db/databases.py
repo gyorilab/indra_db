@@ -290,7 +290,7 @@ class DatabaseManager(object):
         password = ''.join(pw_chars)
 
         # Load the rds general config settings.
-        rds_config = CONFIG['aws-rds-settings']
+        rds_config = CONFIG['rds-settings']
 
         # Create the database.
         inp_identifier = cls._instance_name_fmt.format(

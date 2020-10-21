@@ -91,7 +91,7 @@ def get_curations(db=None, **params):
         else:
             constraints.append(getattr(cur, key) == val)
 
-    return db.select_all(cur, *constraints)
+    return [c.to_json() for c in db.select_all(cur, *constraints)]
 
 
 def get_grounding_curations(db=None):

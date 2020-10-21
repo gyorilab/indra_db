@@ -258,7 +258,7 @@ class DatabaseManager(object):
         # Create the database.
         response = rds.create_db_instance(
             DBInstanceIdentifier=(cls._instance_name_fmt
-                                     .format(name=instance_name)),
+                                     .format(name=instance_name.lower())),
             DBName=cls._db_name,
             AllocatedStorage=size,
             DBInstanceClass=cls._instance_type,

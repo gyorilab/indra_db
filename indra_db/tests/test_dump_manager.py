@@ -6,7 +6,6 @@ from indra_db.managers import dump_manager as dm
 from indra_db.util import S3Path
 
 
-@moto.mock_s3
 def _build_s3_test_dump(structure):
     """Build an s3 dump for testing.
 
@@ -68,3 +67,19 @@ def test_list_dumps():
 
     unfinished_dumps = dm.list_dumps(started=True, ended=False)
     check_list(unfinished_dumps, ['2020-01-01'])
+
+
+@moto.mock_s3
+def test_get_latest():
+    """Test the function used to get the latest version of a dump file."""
+    _build_s3_test_dump({
+        '2019-12-01': ['start', 'readonly', 'sif', 'end'],
+        '2020-01-01': ['start', 'readonly'],
+        '2020-02-01': ['start', 'sif', 'end']
+    })
+
+    ro_dump = dm.get_latest_dump_s3_path('readonly')
+    assert '2020-01-01' in ro_dump.key, ro_dump.key
+
+    sif_dump = dm.get_latest_dump_s3_path('sif')
+    assert '2020-02-01' in sif_dump.key, sif_dump.key

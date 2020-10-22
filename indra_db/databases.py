@@ -26,7 +26,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
-from indra_db.config import CONFIG, DB_STR_FMT
+from indra_db.config import CONFIG, build_db_url
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
@@ -322,10 +322,10 @@ class DatabaseManager(object):
 
         # Use the given info to return a handle to the new database.
         endpoint = get_instance_attribute('endpoint', inp_identifier)
-        url_str = DB_STR_FMT.format(prefix='postgres',
-                                    username=rds_config['master_user'],
-                                    password=password, host=endpoint['Address'],
-                                    port=resp['Port'], name=cls._db_name)
+        url_str = build_db_url(dialect='postgres', host=endpoint['Address'],
+                               port=endpoint['Port'], password=password,
+                               name=cls._db_name,
+                               username=rds_config['master_user'])
         return cls(url_str)
 
     def get_config_string(self):

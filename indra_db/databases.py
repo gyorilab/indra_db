@@ -6,10 +6,12 @@ import re
 import json
 import random
 import logging
+import string
 from io import BytesIO
 from numbers import Number
 from functools import wraps
 from datetime import datetime
+from time import sleep
 
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
@@ -24,6 +26,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
+from indra_db.config import CONFIG, build_db_url
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
@@ -156,6 +159,42 @@ class IndraTableError(IndraDbException):
         super(IndraTableError, self).__init__(self, msg)
 
 
+class RdsInstanceNotFoundError(IndraDbException):
+    def __init__(self, instance_identifier):
+        msg = f"No instance with name \"{instance_identifier}\" found on RDS."
+        super(RdsInstanceNotFoundError, self).__init__(msg)
+
+
+def get_instance_attribute(attribute, instance_identifier):
+    """Get the current status of a database."""
+    # Get descriptions for all instances (apparently you can't get just one).
+    import boto3
+    rds = boto3.client('rds')
+    resp = rds.describe_db_instances()
+
+    # If we find the one they're looking for, return the status.
+    for desc in resp['DBInstances']:
+        if desc['DBInstanceIdentifier'] == instance_identifier:
+
+            # Try to match some common patterns for attribute labels.
+            if attribute in desc:
+                return desc[attribute]
+
+            if attribute.capitalize() in desc:
+                return desc[attribute.capitalize()]
+
+            inst_attr = f'DBInstance{attribute.capitalize()}'
+            if inst_attr in desc:
+                return desc[inst_attr]
+
+            # Give explosively up if the above fail.
+            raise ValueError(f"Invalid attribute: {attribute}. Did you mean "
+                             f"one of these: {list(desc.keys())}?")
+
+    # Otherwise, fail.
+    raise RdsInstanceNotFoundError(instance_identifier)
+
+
 class DatabaseManager(object):
     """An object used to access INDRA's database.
 
@@ -194,6 +233,10 @@ class DatabaseManager(object):
     For more sophisticated examples, several use cases can be found in
     `indra.tests.test_db`.
     """
+    _instance_type = NotImplemented
+    _instance_name_fmt = NotImplemented
+    _db_name = NotImplemented
+
     def __init__(self, url, label=None):
         self.url = make_url(url)
         self.session = None
@@ -231,8 +274,86 @@ class DatabaseManager(object):
         except:
             print("Failed to execute rollback of database upon deletion.")
 
+    @classmethod
+    def create_instance(cls, instance_name, size, tag_dict=None):
+        """Allocate the resources on RDS for a database, and return handle."""
+        # Load boto3 locally to avoid unnecessary dependencies.
+        import boto3
+        rds = boto3.client('rds')
+
+        # Convert tags to boto3's goofy format.
+        tags = ([{'Key': k, 'Value': v} for k, v in tag_dict.items()]
+                if tag_dict else [])
+
+        # Create a new password.
+        pw_chars = random.choices(string.ascii_letters + string.digits, k=24)
+        password = ''.join(pw_chars)
+
+        # Load the rds general config settings.
+        rds_config = CONFIG['rds-settings']
+
+        # Create the database.
+        inp_identifier = cls._instance_name_fmt.format(
+            name=instance_name.lower()
+        )
+        resp = rds.create_db_instance(
+            DBInstanceIdentifier=inp_identifier,
+            DBName=cls._db_name,
+            AllocatedStorage=size,
+            DBInstanceClass=cls._instance_type,
+            Engine='postgres',
+            MasterUsername=rds_config['master_user'],
+            MasterUserPassword=password,
+            VpcSecurityGroupIds=[rds_config['security_group']],
+            AvailabilityZone=rds_config['availability_zone'],
+            DBSubnetGroupName='default',
+            Tags=tags,
+            DeletionProtection=True
+        )
+
+        # Perform a basic sanity check.
+        assert resp['DBInstance']['DBInstanceIdentifier'] == inp_identifier, \
+            f"Bad response from creating RDS instance {inp_identifier}:\n{resp}"
+
+        # Wait for the database to be created.
+        logger.info("Waiting for database to be created...")
+        while get_instance_attribute('status', inp_identifier) == 'creating':
+            sleep(5)
+
+        # Use the given info to return a handle to the new database.
+        endpoint = get_instance_attribute('endpoint', inp_identifier)
+        url_str = build_db_url(dialect='postgres', host=endpoint['Address'],
+                               port=endpoint['Port'], password=password,
+                               name=cls._db_name,
+                               username=rds_config['master_user'])
+        return cls(url_str)
+
+    def get_config_string(self):
+        """Print a config entry for this handle.
+
+        This is useful after using `create_instance`.
+        """
+        data = {
+            'dialect': self.url.drivername,
+            'driver': None,
+            'username': self.url.username,
+            'password': self.url.password_original,
+            'host': self.url.host,
+            'port': self.url.port,
+            'name': self.url.database
+        }
+        return '\n'.join(f'{key} = {value}' if value else f'{key} ='
+                         for key, value in data.items())
+
+    def get_env_string(self):
+        """Generate the string for an environment variable.
+
+        This is useful after using `create_instance`.
+        """
+        return str(self.url)
+
     def grab_session(self):
-        "Get an active session with the database."
+        """Get an active session with the database."""
         if not self.available:
             return
         if self.session is None or not self.session.is_active:
@@ -906,6 +1027,12 @@ class DatabaseManager(object):
 
 class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
+
+    # Note that these are NOT guaranteed to apply to older deployed instances.
+    _instance_type = 'db.m5.large'
+    _instance_name_fmt = 'indradb-{name}'
+    _db_name = 'indradb_principal'
+
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
         if not self.available:
@@ -1166,6 +1293,9 @@ class S3DumpTimeAmbiguityError(Exception):
 
 class ReadonlyDatabaseManager(DatabaseManager):
     """This class represents the readonly database."""
+    _instance_type = 'db.m5.xlarge'
+    _instance_name_fmt = 'indradb-readonly-{name}'
+    _db_name = 'indradb_readonly'
 
     def __init__(self, host, label=None):
         super(self.__class__, self).__init__(host, label)
@@ -1181,6 +1311,11 @@ class ReadonlyDatabaseManager(DatabaseManager):
             else:
                 setattr(self, tbl.__name__, tbl)
         self.__non_source_cols = None
+
+    def get_config_string(self):
+        res = super(ReadonlyDatabaseManager, self).get_config_string()
+        res = 'role = readonly\n' + res
+        return res
 
     def get_source_names(self) -> set:
         """Get a list of the source names as they appear in SourceMeta cols."""

@@ -22,9 +22,6 @@ aws_role = CONFIG['lambda']['role']
 aws_lambda_function = CONFIG['lambda']['function']
 
 
-dump_names = ['sif', 'belief']
-
-
 def list_dumps():
     s3_base = get_s3_dump()
     s3 = boto3.client('s3')

@@ -123,6 +123,10 @@ class Dumper(object):
     def dump(self, continuing=False):
         raise NotImplementedError()
 
+    def shallow_mock_dump(self, *args, **kwargs):
+        s3 = boto3.client('s3')
+        self.get_s3_path().upload(s3, b'')
+
 
 class Start(Dumper):
     name = 'start'

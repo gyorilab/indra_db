@@ -1238,58 +1238,6 @@ class PrincipalDatabaseManager(DatabaseManager):
         else:
             return False
 
-    @staticmethod
-    def get_latest_dump_file():
-        import boto3
-        from indra.util.aws import iter_s3_keys
-        from indra_db.config import get_s3_dump
-
-        s3 = boto3.client('s3')
-        s3_path = get_s3_dump()
-
-        logger.debug("Looking for the latest dump file on s3 to %s." % s3_path)
-
-        # Get the most recent file from s3.
-        max_date_str = None
-        max_lm_date = None
-        latest_key = None
-        for key, lm_date in iter_s3_keys(s3, with_dt=True, **s3_path.kw()):
-
-            # Get the date string from the name, ignoring non-standard files.
-            suffix = key.split('/')[-1]
-            m = re.match('readonly-(\S+).dump', suffix)
-            if m is None:
-                logger.debug("{key} is not a standard key, will not be "
-                             "considered.".format(key=key))
-                continue
-            date_str, = m.groups()
-
-            # Compare the the current maxes. If the date_str and the last
-            # -modified date don't agree, raise an error.
-            if not max_lm_date \
-                    or date_str > max_date_str and lm_date > max_lm_date:
-                max_date_str = date_str
-                max_lm_date = lm_date
-                latest_key = key
-            elif max_lm_date \
-                    and (date_str > max_date_str or lm_date > max_lm_date):
-                raise S3DumpTimeAmbiguityError(key, date_str > max_date_str,
-                                               lm_date > max_lm_date)
-        logger.debug("Latest dump file from %s was found to be %s."
-                     % (s3_path, latest_key))
-
-        return S3Path(s3_path.bucket, latest_key)
-
-
-class S3DumpTimeAmbiguityError(Exception):
-    def __init__(self, key, is_latest_str, is_last_modified):
-        msg = ('%s is ' % key) + ('' if is_latest_str else 'not ') \
-              + 'the largest date string but is ' \
-              + ('' if is_last_modified else 'not ')\
-              + 'the latest time stamp.'
-        super().__init__(msg)
-        return
-
 
 class ReadonlyDatabaseManager(DatabaseManager):
     """This class represents the readonly database."""

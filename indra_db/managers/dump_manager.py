@@ -1,4 +1,6 @@
+import re
 import json
+
 import boto3
 import pickle
 import logging
@@ -6,9 +8,9 @@ from datetime import datetime
 from argparse import ArgumentParser
 
 from indra.statements.io import stmts_from_json
+from indra.util.aws import iter_s3_keys
 from indra_db.belief import get_belief
-from indra_db.config import CONFIG
-from indra_db.config import get_s3_dump
+from indra_db.config import CONFIG, get_s3_dump
 from indra_db.util import get_db, get_ro, S3Path
 from indra_db.util.aws import get_role_kwargs
 from indra_db.util.dump_sif import dump_sif, get_source_counts
@@ -22,12 +24,35 @@ aws_role = CONFIG['lambda']['role']
 aws_lambda_function = CONFIG['lambda']['function']
 
 
-def list_dumps():
+def list_dumps(started=None, ended=None):
+    """List all dumps, optionally filtered by their status.
+
+    Parameters
+    ----------
+    started : Optional[bool]
+        If True, find dumps that have started. If False, find dumps that have
+        NOT been started. If None, do not filter by start status.
+    ended : Optional[bool]
+        The same as `started`, but checking whether the dump is ended or not.
+    """
+    # Get all the dump "directories".
     s3_base = get_s3_dump()
     s3 = boto3.client('s3')
     res = s3.list_objects_v2(Delimiter='/', **s3_base.kw(prefix=True))
-    return [S3Path.from_key_parts(s3_base.bucket, d['Prefix'])
-            for d in res['CommonPrefixes']]
+    dumps = [S3Path.from_key_parts(s3_base.bucket, d['Prefix'])
+             for d in res['CommonPrefixes']]
+
+    # Filter to those that have "started"
+    if started is not None:
+        dumps = [s3p for s3p in dumps
+                 if s3p.contains_key(s3, Start.file_name()) == started]
+
+    # Filter to those that have "ended"
+    if ended is not None:
+        dumps = [s3p for s3p in dumps
+                 if s3p.contains_key(s3, End.file_name()) == ended]
+
+    return dumps
 
 
 class Dumper(object):
@@ -47,10 +72,13 @@ class Dumper(object):
             self.s3_dump_path = self._gen_s3_name()
         return self.s3_dump_path
 
+    @classmethod
+    def file_name(cls):
+        return '%s.%s' % (cls.name, cls.fmt)
+
     def _gen_s3_name(self):
         s3_base = get_s3_dump()
-        s3_path = s3_base.get_element_path(self.date_stamp,
-                                           '%s.%s' % (self.name, self.fmt))
+        s3_path = s3_base.get_element_path(self.date_stamp, self.file_name())
         return s3_path
 
     @classmethod
@@ -439,4 +467,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 from argparse import ArgumentParser
 
+from indra.statements import get_all_descendants
 from indra.statements.io import stmts_from_json
 from indra.util.aws import iter_s3_keys
 from indra_db.belief import get_belief
@@ -44,13 +45,13 @@ def list_dumps(started=None, ended=None):
 
     # Filter to those that have "started"
     if started is not None:
-        dumps = [s3p for s3p in dumps
-                 if s3p.contains_key(s3, Start.file_name()) == started]
+        dumps = [p for p in dumps
+                 if p.get_element_path(Start.file_name()).exists(s3) == started]
 
     # Filter to those that have "ended"
     if ended is not None:
-        dumps = [s3p for s3p in dumps
-                 if s3p.contains_key(s3, End.file_name()) == ended]
+        dumps = [p for p in dumps
+                 if p.get_element_path(End.file_name()).exists(s3) == ended]
 
     return dumps
 
@@ -339,6 +340,9 @@ class ReadonlyTransferEnv(object):
             logger.warning("An error %s occurred. Assuming the database is "
                            "not usable, and not transfering the service back "
                            "to Readonly." % exc_type)
+
+
+dumpers = {dumper.name: dumper for dumper in get_all_descendants(Dumper)}
 
 
 def parse_args():

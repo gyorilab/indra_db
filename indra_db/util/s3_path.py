@@ -61,10 +61,6 @@ class S3Path(object):
         return [self.__class__(self.bucket, e['Key'])
                 for e in raw_res['Contents']]
 
-    def contains_key(self, s3, key):
-        contents = self.list_objects(s3)
-        return any(s3p.key.endswith(key) for s3p in contents)
-
     def list_prefixes(self, s3):
         raw_res = s3.list_objects_v2(Delimiter='/', **self.kw(prefix=True))
         return [self.__class__(self.bucket, e['Prefix'])

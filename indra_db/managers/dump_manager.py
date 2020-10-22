@@ -56,6 +56,26 @@ def list_dumps(started=None, ended=None):
     return dumps
 
 
+def get_latest_dump_s3_path(dumper_name):
+    """Get the latest version of a dump file by the given name.
+
+    `dumper_name` is indexed using the standardized `name` class attribute of
+    the dumper object.
+    """
+    # Get all the dumps that were properly started.
+    s3 = boto3.client('s3')
+    all_dumps = list_dumps(started=True)
+
+    # Going in reverse order (implicitly by timestamp) and look for the file.
+    for s3_path in sorted(all_dumps, reverse=True):
+        sought_path = s3_path.get_element_path(dumpers[dumper_name].file_name())
+        if sought_path.exists(s3):
+            return sought_path
+
+    # If none is found, return None.
+    return None
+
+
 class Dumper(object):
     name = NotImplemented
     fmt = NotImplemented

@@ -16,7 +16,6 @@ DEFAULT_DB_CONFIG_PATH = path.join(FILE_PATH, 'resources/default_db_config.ini')
 DB_CONFIG_DIR = path.expanduser('~/.config/indra')
 DB_CONFIG_PATH = path.join(DB_CONFIG_DIR, 'db_config.ini')
 
-DB_STR_FMT = "{prefix}://{username}{password}{host}{port}/{name}"
 PRINCIPAL_ENV_PREFIX = 'INDRADB'
 READONLY_ENV_PREFIX = 'INDRARO'
 S3_DUMP_ENV_VAR = 'INDRA_DB_S3_PREFIX'
@@ -53,6 +52,24 @@ if not path.exists(DB_CONFIG_PATH) and CONFIG_EXISTS:
 CONFIG = None
 
 
+def build_db_url(**kwargs):
+    fmt = "{prefix}://{username}{password}{host}{port}/{name}"
+
+    # Extract all the database connection data
+    if kwargs['host']:
+        kwargs['host'] = '@' + kwargs['host']
+    kwargs['prefix'] = kwargs.get('dialect', kwargs.get('prefix'))
+    if kwargs.get('driver') and kwargs.get('prefix'):
+        kwargs['prefix'] += kwargs['driver']
+    if kwargs.get('port'):
+        kwargs['port'] = ':' + str(kwargs['port'])
+    if kwargs.get('password'):
+        kwargs['password'] = ':' + kwargs['password']
+
+    # Get the role of the database
+    return fmt.format(**kwargs)
+
+
 def _get_urls_from_env(prefix):
     return {k[len(prefix):].lower(): v
             for k, v in environ.items()
@@ -71,19 +88,7 @@ def _load_config():
             CONFIG[section[4:]] = def_dict
             continue
 
-        # Extract all the database connection data
-        if def_dict['host']:
-            def_dict['host'] = '@' + def_dict['host']
-        def_dict['prefix'] = def_dict['dialect']
-        if def_dict['driver']:
-            def_dict['prefix'] += def_dict['driver']
-        if def_dict['port']:
-            def_dict['port'] = ':' + def_dict['port']
-        if def_dict['password']:
-            def_dict['password'] = ':' + def_dict['password']
-
-        # Get the role of the database
-        url = DB_STR_FMT.format(**def_dict)
+        url = build_db_url(**def_dict)
         if def_dict.get('role') == 'readonly':
             # Include the entry both with and without the -ro. This is only
             # needed when sometimes a readonly database has the same name

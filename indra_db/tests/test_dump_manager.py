@@ -43,7 +43,7 @@ def test_list_dumps():
     """Test the dump listing feature."""
     _build_s3_test_dump({
         '2020-01-01': ['start'],         # a dump that is unfinished.
-        '2020-02-01': ['start', 'end'],  # a dump the finished.
+        '2020-02-01': ['start', 'end'],  # a dump that is finished.
         '2020-03-01': ['sif']            # something strange but possible.
     })
 

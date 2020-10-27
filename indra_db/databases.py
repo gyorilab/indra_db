@@ -1062,11 +1062,13 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def generate_readonly(self, allow_continue=True):
+    def generate_readonly(self, belief_dict, allow_continue=True):
         """Manage the materialized views.
 
         Parameters
         ----------
+        belief_dict : dict
+            The dictionary, keyed by hash, of belief calculated for Statements.
         allow_continue : bool
             If True (default), continue to build the schema if it already
             exists. If False, give up if the schema already exists.
@@ -1105,6 +1107,12 @@ class PrincipalDatabaseManager(DatabaseManager):
             "Elements in CREATE_ORDERED are NOT unique."
         assert set(CREATE_ORDER) == set(self.readonly.keys()),\
             "Not all readonly tables included in CREATE_ORDER."
+
+        # Dump the belief dict into the database.
+        self.Belief.__table__.create(bind=self.engine)
+        self.copy(self.Belief.full_name(),
+                  [(h, n) for h, n in belief_dict.items()],
+                  ('mk_hash', 'belief'))
 
         # Build the tables.
         for i, ro_name in enumerate(CREATE_ORDER):

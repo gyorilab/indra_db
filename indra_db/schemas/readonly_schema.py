@@ -4,11 +4,12 @@ import logging
 
 from sqlalchemy import Column, Integer, String, BigInteger, Boolean,\
     SmallInteger
-from sqlalchemy.dialects.postgresql import BYTEA, JSON, JSONB
+from sqlalchemy.dialects.postgresql import BYTEA, JSON, JSONB, REAL
 
 from indra.statements import get_all_descendants, Statement
 
-from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable
+from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable, \
+    IndraDBTable
 from .indexes import *
 
 
@@ -133,6 +134,14 @@ def get_schema(Base):
         The base class for database tables
     """
     ro_tables = {}
+
+    class Belief(Base, IndraDBTable):
+        __tablename__ = 'belief'
+        __table_args__ = {'schema': 'readonly'}
+        _indices = [BtreeIndex('belief_mk_hash_idx', 'mk_hash')]
+        mk_hash = Column(BigInteger, primary_key=True)
+        belief = Column(REAL)
+    ro_tables[Belief.__tablename__] = Belief
 
     class EvidenceCounts(Base, ReadonlyTable):
         __tablename__ = 'evidence_counts'

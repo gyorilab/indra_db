@@ -282,12 +282,16 @@ class Readonly(Dumper):
     name = 'readonly'
     fmt = 'dump'
 
-    def dump(self, continuing=False):
+    def dump(self, belief_dump, continuing=False):
         principal_db = get_db(self.db_label)
 
         logger.info("%s - Generating readonly schema (est. a long time)"
                     % datetime.now())
-        principal_db.generate_readonly(allow_continue=continuing)
+        import boto3
+        s3 = boto3.client('s3')
+        belief_data = belief_dump.get(s3)
+        belief_dict = json.loads(belief_data['Body'].read())
+        principal_db.generate_readonly(belief_dict, allow_continue=continuing)
 
         logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
                     % datetime.now())
@@ -426,11 +430,22 @@ def main():
         starter = Start()
         starter.dump(continuing=args.allow_continue)
 
+        belief_dump = Belief.from_list(starter.manifest)
+        if not args.allow_continue or not Belief.from_list(starter.manifest):
+            logger.info("Dumping belief.")
+            belief_dumper = Belief(date_stamp=starter.date_stamp)
+            belief_dumper.dump(continuing=args.allow_continue)
+            belief_dump = belief_dumper.get_s3_path()
+        else:
+
+            logger.info("Belief dump exists, skipping.")
+
         dump_file = Readonly.from_list(starter.manifest)
         if not args.allow_continue or not dump_file:
             logger.info("Generating readonly schema (est. a long time)")
             ro_dumper = Readonly(date_stamp=starter.date_stamp)
-            ro_dumper.dump(continuing=args.allow_continue)
+            ro_dumper.dump(belief_dump=belief_dump,
+                           continuing=args.allow_continue)
             dump_file = ro_dumper.get_s3_path()
         else:
             logger.info("Readonly dump exists, skipping.")
@@ -456,13 +471,6 @@ def main():
             StatementHashMeshId(use_principal=True,
                                 date_stamp=starter.date_stamp)\
                 .dump(continuing=args.allow_continue)
-
-        if not args.allow_continue or not Belief.from_list(starter.manifest):
-            logger.info("Dumping belief.")
-            Belief(date_stamp=starter.date_stamp)\
-                .dump(continuing=args.allow_continue)
-        else:
-            logger.info("Belief dump exists, skipping.")
 
         End(date_stamp=starter.date_stamp).dump(continuing=args.allow_continue)
     else:

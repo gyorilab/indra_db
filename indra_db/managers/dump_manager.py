@@ -1,4 +1,3 @@
-import re
 import json
 
 import boto3
@@ -9,7 +8,6 @@ from argparse import ArgumentParser
 
 from indra.statements import get_all_descendants
 from indra.statements.io import stmts_from_json
-from indra.util.aws import iter_s3_keys
 from indra_db.belief import get_belief
 from indra_db.config import CONFIG, get_s3_dump
 from indra_db.util import get_db, get_ro, S3Path

@@ -1,4 +1,5 @@
 import logging
+from termcolor import colored
 from psycopg2.errors import DuplicateTable
 from sqlalchemy import inspect, Column, BigInteger
 from sqlalchemy.exc import NoSuchTableError
@@ -24,11 +25,15 @@ class IndraDBTableMetaClass(type):
         super(IndraDBTableMetaClass, cls).__init__(*args, **kwargs)
 
     def __str__(cls):
-        cols = ', '.join([attr_name
-                          for attr_name, attr_val in cls.__dict__.items()
-                          if isinstance(attr_val, Column)
-                          or isinstance(attr_val, InstrumentedAttribute)])
-        return f"{cls.full_name(force_schema=True)}({cols})"
+        col_names = [colored(attr_name, 'magenta')
+                     for attr_name, attr_val in cls.__dict__.items()
+                     if isinstance(attr_val, Column)
+                     or isinstance(attr_val, InstrumentedAttribute)]
+        cols = '\n  '
+        cols += ', '.join(col_names)
+        cols += '\n'
+        full_name = colored(cls.full_name(force_schema=True), attrs=['bold'])
+        return f"{full_name}({cols})"
 
 
 class IndraDBTable(metaclass=IndraDBTableMetaClass):

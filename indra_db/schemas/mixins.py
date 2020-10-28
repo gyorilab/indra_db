@@ -2,6 +2,7 @@ import logging
 from psycopg2.errors import DuplicateTable
 from sqlalchemy import inspect, Column, BigInteger
 from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,21 @@ class DbIndexError(Exception):
     pass
 
 
-class IndraDBTable(object):
+class IndraDBTableMetaClass(type):
+    """This serves as a meta class for all tables, allowing `str` to be useful.
+
+    In particular, this makes it so that the string gives a representation of
+    the SQL table, including columns.
+    """
+    def __str__(cls):
+        cols = ', '.join([attr_name
+                          for attr_name, attr_val in cls.__dict__.items()
+                          if isinstance(attr_val, Column)
+                          or isinstance(attr_val, InstrumentedAttribute)])
+        return f"{cls.__name__}({cols})"
+
+
+class IndraDBTable(metaclass=IndraDBTableMetaClass):
     _indices = []
     _skip_disp = []
     _always_disp = ['id']

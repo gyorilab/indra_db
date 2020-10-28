@@ -27,6 +27,7 @@ from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
 from indra_db.config import CONFIG, build_db_url
+from indra_db.schemas.mixins import IndraDBTableMetaClass
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
@@ -240,19 +241,28 @@ class DatabaseManager(object):
     def __init__(self, url, label=None):
         self.url = make_url(url)
         self.session = None
-        self.Base = declarative_base()
         self.label = label
-        ping_engine = create_engine(self.url,
-                                    connect_args={'connect_timeout': 1})
+        self._conn = None
+
+        # To stringify table classes, we must merge the two meta classes.
+        class BaseMeta(DeclarativeMeta, IndraDBTableMetaClass):
+            pass
+        self.Base = declarative_base(metaclass=BaseMeta)
+
+        # Check to see if the database if available.
         self.available = True
         try:
-            ping_engine.execute('SELECT 1 AS ping;')
+            create_engine(
+                self.url,
+                connect_args={'connect_timeout': 1}
+            ).execute('SELECT 1 AS ping;')
         except Exception as err:
             logger.warning(f"Database {repr(self.url)} is not available: {err}")
             self.available = False
             return
+
+        # Create the engine (connection manager).
         self.engine = create_engine(self.url)
-        self._conn = None
         return
 
     def _init_foreign_key_map(self, foreign_key_map):

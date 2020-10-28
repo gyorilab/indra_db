@@ -17,12 +17,18 @@ class IndraDBTableMetaClass(type):
     In particular, this makes it so that the string gives a representation of
     the SQL table, including columns.
     """
+    def __init__(cls, *args, **kwargs):
+        assert hasattr(cls, 'full_name'), \
+            ("Class using metaclass IndraDBTableMetaClass missing critical "
+             "class method: `full_name`")
+        super(IndraDBTableMetaClass, cls).__init__(*args, **kwargs)
+
     def __str__(cls):
         cols = ', '.join([attr_name
                           for attr_name, attr_val in cls.__dict__.items()
                           if isinstance(attr_val, Column)
                           or isinstance(attr_val, InstrumentedAttribute)])
-        return f"{cls.__name__}({cols})"
+        return f"{cls.full_name()}({cols})"
 
 
 class IndraDBTable(metaclass=IndraDBTableMetaClass):

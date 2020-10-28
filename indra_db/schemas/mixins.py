@@ -28,7 +28,7 @@ class IndraDBTableMetaClass(type):
                           for attr_name, attr_val in cls.__dict__.items()
                           if isinstance(attr_val, Column)
                           or isinstance(attr_val, InstrumentedAttribute)])
-        return f"{cls.full_name()}({cols})"
+        return f"{cls.full_name(force_schema=True)}({cols})"
 
 
 class IndraDBTable(metaclass=IndraDBTableMetaClass):

@@ -1111,7 +1111,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         # Dump the belief dict into the database.
         self.Belief.__table__.create(bind=self.engine)
         self.copy(self.Belief.full_name(),
-                  [(h, n) for h, n in belief_dict.items()],
+                  [(int(h), n) for h, n in belief_dict.items()],
                   ('mk_hash', 'belief'))
 
         # Build the tables.

@@ -380,20 +380,24 @@ class DatabaseManager(object):
 
     def show_tables(self, active_only=False, schema=None):
         """Print a list of all the available tables."""
+        def print_table(table_name):
+            if tbl_name in self.tables:
+                print(self.tables[table_name])
+
         if not active_only:
             for tbl_name in self.get_tables():
                 tbl = self.tables[tbl_name]
                 if schema is None \
                    or tbl.get_schema(default='public') == schema:
-                    print(self.tables[tbl_name])
+                    print_table(tbl_name)
         else:
             if schema is None:
                 for active_schema in self.get_schemas():
                     for tbl_name in self.get_active_tables(active_schema):
-                        print(self.tables[tbl_name])
+                        print_table(tbl_name)
             else:
                 for tbl_name in self.get_active_tables(schema):
-                    print(self.tables[tbl_name])
+                    print_table(tbl_name)
 
     def get_active_tables(self, schema=None):
         """Get the tables currently active in the database.

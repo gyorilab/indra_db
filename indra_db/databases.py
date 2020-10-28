@@ -1048,11 +1048,12 @@ class PrincipalDatabaseManager(DatabaseManager):
         if not self.available:
             return
 
-        self.tables = principal_schema.get_schema(self.Base)
+        self.public = principal_schema.get_schema(self.Base)
         self.readonly = readonly_schema.get_schema(self.Base)
+        self.tables = {k: v for d in [self.public, self.readonly]
+                       for k, v in d.items()}
 
-        for tbl in (t for d in [self.tables, self.readonly]
-                    for t in d.values()):
+        for tbl in self.tables.values():
             if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl
             elif tbl.__name__ == 'SourceMeta':
@@ -1165,14 +1166,14 @@ class PrincipalDatabaseManager(DatabaseManager):
         return self.pg_dump(dump_file, schema='readonly')
 
     def create_tables(self, tbl_list=None):
-        "Create the tables for INDRA database."
+        """Create the public tables for INDRA database."""
         ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
                           'reading', 'db_info', 'raw_statements', 'raw_agents',
                           'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
                           'pa_mods', 'pa_muts', 'raw_unique_links',
                           'support_links']
         if tbl_list is None:
-            tbl_list = list(self.tables.keys())
+            tbl_list = list(self.public.keys())
 
         tbl_name_list = []
         for tbl in tbl_list:
@@ -1180,20 +1181,22 @@ class PrincipalDatabaseManager(DatabaseManager):
                 tbl_name_list.append(tbl)
             else:
                 tbl_name_list.append(tbl.__tablename__)
+
         # These tables must be created in this order.
         for tbl_name in ordered_tables:
             if tbl_name in tbl_name_list:
                 tbl_name_list.remove(tbl_name)
                 logger.debug("Creating %s..." % tbl_name)
-                if not self.tables[tbl_name].__table__.exists(self.engine):
-                    self.tables[tbl_name].__table__.create(bind=self.engine)
+                if not self.public[tbl_name].__table__.exists(self.engine):
+                    self.public[tbl_name].__table__.create(bind=self.engine)
                     logger.debug("Table created.")
                 else:
                     logger.debug("Table already existed.")
+
         # The rest can be started any time.
         for tbl_name in tbl_name_list:
             logger.debug("Creating %s..." % tbl_name)
-            self.tables[tbl_name].__table__.create(bind=self.engine)
+            self.public[tbl_name].__table__.create(bind=self.engine)
             logger.debug("Table created.")
         return
 
@@ -1209,8 +1212,6 @@ class PrincipalDatabaseManager(DatabaseManager):
                 if isinstance(tbl, str):
                     if tbl in self.tables:
                         tbl_list[i] = self.tables[tbl]
-                    elif tbl in self.readonly:
-                        tbl_list[i] = self.readonly[tbl]
                     else:
                         raise ValueError(f"Did not recognize table name: {tbl}")
         if not force:
@@ -1243,7 +1244,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         return True
 
     def _clear(self, tbl_list=None, force=False):
-        "Brutal clearing of all tables in tbl_list, or all tables."
+        """Brutal clearing of all tables in tbl_list, or all public."""
         # This is intended for testing purposes, not general use.
         # Use with care.
         self.grab_session()

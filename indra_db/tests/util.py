@@ -1,3 +1,4 @@
+import json
 import random
 import pickle
 import logging
@@ -9,6 +10,7 @@ import indra_db.util as dbu
 from indra_db.config import get_s3_dump
 from indra_db.databases import PrincipalDatabaseManager, \
     ReadonlyDatabaseManager
+from indra_db.util import insert_raw_agents
 
 logger = logging.getLogger(__name__)
 
@@ -314,4 +316,36 @@ def get_filled_ro(num_stmts):
     return ro
 
 
+def insert_test_stmts(db, stmts_dict):
+    """Insert raw statements from readings into the database.
 
+    `stmts_dict` must be of the form {<source_type>: {<source_id>: [stmts]}}
+    where `source_type` is "reading" or "databases", and source_id would be a
+    reading ID or a db_info_id, respectively.
+    """
+    batch_id = db.make_copy_batch_id()
+
+    stmt_data = []
+    cols = ('uuid', 'mk_hash', 'db_info_id', 'reading_id',
+            'type', 'json', 'batch_id')
+
+    all_stmts = []
+    for category, stmts in stmts_dict.items():
+        for src_id, stmt_list in stmts.items():
+            for stmt in stmt_list:
+                stmt_info = {
+                    'uuid': stmt.uuid,
+                    'mk_hash': stmt.get_hash(refresh=True),
+                    'type': stmt.__class__.__name__,
+                    'json': json.dumps(stmt.to_json()).encode('utf-8'),
+                    'batch_id': batch_id
+                }
+                if category == 'reading':
+                    stmt_info['reading_id'] = src_id
+                else:
+                    stmt_info['db_info_id'] = src_id
+                stmt_data.append(tuple(stmt_info[col] for col in cols))
+                all_stmts.append(stmt)
+
+    db.copy('raw_statements', stmt_data, cols)
+    insert_raw_agents(db, batch_id, all_stmts)

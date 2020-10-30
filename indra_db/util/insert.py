@@ -230,12 +230,11 @@ def extract_agent_data(stmt, stmt_id):
     return ref_data, mod_data, mut_data
 
 
-def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
-                    lazy=False):
+def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None):
     """Insert statement, their database, and any affiliated agents.
 
     Note that this method is for uploading statements that came from a
-    database to our databse, not for inserting any statements to the database.
+    database to our database, not for inserting any statements to the database.
 
     Parameters
     ----------

@@ -1,9 +1,12 @@
 import boto3
 import moto
 
+from indra.statements import Phosphorylation, Agent, Activation, Inhibition, \
+    Complex, Evidence, Conversion
 from indra_db.config import get_s3_dump
 from indra_db.managers import dump_manager as dm
-from indra_db.util import S3Path
+from indra_db.tests.util import get_temp_db, get_temp_ro, insert_test_stmts
+from indra_db.util import S3Path, insert_db_stmts, insert_raw_agents
 
 
 def _build_s3_test_dump(structure):
@@ -83,3 +86,140 @@ def test_get_latest():
 
     sif_dump = dm.get_latest_dump_s3_path('sif')
     assert '2020-02-01' in sif_dump.key, sif_dump.key
+
+
+@moto.mock_s3
+def test_dump_build():
+    """Test the dump pipeline.
+
+    Method
+    ------
+    CREATE CONTEXT:
+    - Create a local principal database with a small amount of content.
+      Aim for representation of stmt motifs and sources.
+    - Create a local readonly database.
+    - Create a fake bucket (moto)
+
+    RUN THE DUMP
+
+    CHECK THE RESULTS
+    """
+    db = get_temp_db(clear=True)
+
+    db.copy('text_ref', [        # trid
+        ('1', 1, 'PMC1', 1),     # 1
+        ('2', 2, 'PMC2', 2),     # 2
+        ('3', 3, None, None),    # 3
+        (None, None, 'PMC4', 4)  # 4
+    ], ('pmid', 'pmid_num', 'pmcid', 'pmcid_num'))
+
+    db.copy('mesh_ref_annotations', [
+        (1, 11, False),
+        (1, 13, False),
+        (1, 12, True),
+        (2, 12, True),
+        (3, 13, False),
+        (3, 33, True)
+    ], ('pmid_num', 'mesh_num', 'is_concept'))
+
+    db.copy('text_content', [              # tcid
+        (1, 'pubmed', 'txt', 'abstract'),  # 1
+        (1, 'pmc', 'xml', 'fulltext'),     # 2
+        (2, 'pubmed', 'txt', 'title'),     # 3
+        (3, 'pubmed', 'txt', 'abstract'),  # 4
+        (3, 'pmc', 'xml', 'fulltext'),     # 5
+        (4, 'pmc', 'xml', 'fulltext')      # 6
+    ], ('text_ref_id', 'source', 'format', 'text_type'))
+
+    db.copy('reading', [(tcid, rdr, 1, 'bogus', 'emtpy') for tcid, rdr in [
+        # 1             2             3
+        (1, 'reach'), (1, 'eidos'), (1, 'isi'),
+
+        # 4
+        (2, 'reach'),
+
+        # 5             6            7
+        (3, 'reach'), (3, 'eidos'), (3, 'trips'),
+
+        # 8
+        (4, 'reach'),
+
+        # 9
+        (5, 'reach'),
+
+        # 10
+        (6, 'reach')
+    ]], ('text_content_id', 'reader', 'batch_id', 'reader_version', 'format'))
+
+    db.copy('db_info', [
+        ('signor', 'signor', 'Signor'),       # 1
+        ('pc', 'biopax', 'Pathway Commons'),  # 2
+        ('medscan', 'medscan', 'MedScan')     # 3
+    ], ('db_name', 'source_api', 'db_full_name'))
+
+    raw_stmts = {
+        'reading': {
+            2: [
+                Inhibition(
+                    Agent('Fever', db_refs={'TEXT': 'fever', 'MESH': 'D005334'}),
+                    Agent('Cough', db_refs={'TEXT': 'cough', 'MESH': 'D003371'}),
+                    evidence=Evidence(text="We found fever inhibits cough.")
+                )
+            ],
+            4: [
+                Phosphorylation(
+                    Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'mek'}),
+                    Agent('ERK', db_refs={'FPLX': 'MEK', 'TEXT': 'erk'}),
+                    evidence=Evidence(text="mek phosphorylates erk, so say I.")
+                ),
+                Activation(
+                    Agent('MAP2K1', db_refs={'HGNC': '6840', 'TEXT': 'MEK1'}),
+                    Agent('MAPK1', db_refs={'HGNC': '6871', 'TEXT': 'ERK1'}),
+                    evidence=Evidence(text="MEK1 activates ERK1, or os I'm told.")
+                ),
+                Activation(
+                    Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'ERK'}),
+                    Agent('JNK', db_refs={'FPLX': 'JNK', 'TEXT': 'JNK'}),
+                    evidence=Evidence(text="ERK activates JNK, maybe.")
+                ),
+                Complex([
+                    Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'MAP2K'}),
+                    Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'MAPK'}),
+                    Agent('RAF', db_refs={'FPLX': 'RAF', 'TEXT': 'RAF'})
+                ], evidence=Evidence(text="MAP2K, MAPK, and RAF form a complex."))
+            ],
+            7: [
+                Activation(
+                    Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'ERK'}),
+                    Agent('JNK', db_refs={'FPLX': 'JNK', 'TEXT': 'JNK'}),
+                    evidence=Evidence(text='ERK activates JNK, maybe.')
+                )
+            ],
+            8: [
+                Complex([
+                    Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'mek'}),
+                    Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'erk'})
+                ], evidence=Evidence(text="...in the mek-erk complex."))
+            ],
+        },
+        'databases': {
+            2: [
+                Conversion(
+                    Agent('FRK', db_refs={'HGNC': '3955'}),
+                    [Agent('ATP', db_refs={'MESH': 'D000255'})],
+                    [Agent('hydron', db_refs={'CHEBI': 'CHEBI:15378'})]
+                )
+            ],
+            3: [
+                Phosphorylation(
+                    Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'MEK'}),
+                    Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'ERK'}),
+                    evidence=Evidence(text="...MEK phosphorylates ERK medscan.")
+                )
+            ]
+        }
+    }
+    insert_test_stmts(db, raw_stmts)
+
+
+    ro = get_temp_ro(clear=True)

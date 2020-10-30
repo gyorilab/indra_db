@@ -9,6 +9,8 @@ def main():
           description='INDRA Database',
           long_description='INDRA Database',
           url='https://github.com/indralab/indra_db',
+          author='Patrick Greene',
+          author_email='patrick_greene@hms.harvard.edu',
           packages=packages,
           include_package_data=True,
           install_requires=['indra', 'boto3', 'sqlalchemy', 'psycopg2-binary',

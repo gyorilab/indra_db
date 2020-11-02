@@ -19,7 +19,8 @@ def main(project_name):
 
     need_to_update = []
     for stmt_type, last_update in last_updates.items():
-        res = db.select_one(db.RawStatments, db.RawStatements.type == stmt_type,
+        res = db.select_one(db.RawStatements,
+                            db.RawStatements.type == stmt_type,
                             db.RawStatements.create_date > last_update)
         if res:
             need_to_update.append(stmt_type)

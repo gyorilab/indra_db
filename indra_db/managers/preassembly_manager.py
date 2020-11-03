@@ -27,7 +27,7 @@ def main(project_name):
 
     basename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
     ps = PreassemblySubmitter(basename, 'update', project_name=project_name)
-    ps.run(need_to_update, 100000, True, stagger=600, poll_intervale=120)
+    ps.run(need_to_update, 100000, True, stagger=600, poll_interval=120)
 
 
 def get_parser():

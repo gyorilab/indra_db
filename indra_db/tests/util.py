@@ -47,7 +47,7 @@ def get_temp_ro(clear=False):
     """Get a manager for a Readonly Database."""
     ro = ReadonlyDatabaseManager('postgresql://postgres:@localhost/indradb_ro_test')
     if clear:
-        ro._clear(force=True)
+        ro.drop_schema('readonly', cascade=True)
     ro.grab_session()
     ro.session.rollback()
     return ro

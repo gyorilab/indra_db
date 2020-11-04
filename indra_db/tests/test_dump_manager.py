@@ -1,3 +1,5 @@
+import pickle
+
 import boto3
 import moto
 
@@ -6,6 +8,8 @@ from indra.statements import Phosphorylation, Agent, Activation, Inhibition, \
 from indra_db.config import get_s3_dump
 from indra_db.databases import reader_versions
 from indra_db.managers import dump_manager as dm
+from indra_db.managers.dump_manager import dump
+from indra_db.preassembly.preassemble_db import DbPreassembler
 from indra_db.tests.util import get_temp_db, get_temp_ro, insert_test_stmts
 from indra_db.util import S3Path, insert_db_stmts, insert_raw_agents
 from indra_db.util.data_gatherer import S3_DATA_LOC
@@ -96,6 +100,17 @@ def test_list_dumps_empty():
     _build_s3_test_dump({})
     assert dm.list_dumps() == []
 
+
+def _get_preassembler():
+    s3 = boto3.client('s3')
+    test_ontology_path = S3Path(bucket='bigmech',
+                                key='travis/bio_ontology/1.4/mock_ontology.pkl')
+    test_ontology = pickle.loads(test_ontology_path.get(s3)['Body'].read())
+    print("Loaded test ontology.")
+    return DbPreassembler(yes_all=True, ontology=test_ontology)
+
+
+prass = _get_preassembler()
 
 
 @moto.mock_s3
@@ -239,5 +254,6 @@ def test_dump_build():
     }
     insert_test_stmts(db, raw_stmts)
 
+    prass.create_corpus(db)
 
     ro = get_temp_ro(clear=True)

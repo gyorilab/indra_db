@@ -142,6 +142,7 @@ def get_schema(Base):
         __tablename__ = 'belief'
         __table_args__ = {'schema': 'readonly'}
         _indices = [BtreeIndex('belief_mk_hash_idx', 'mk_hash')]
+        _temp = False
         mk_hash = Column(BigInteger, primary_key=True)
         belief = Column(REAL)
     ro_tables[Belief.__tablename__] = Belief

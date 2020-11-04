@@ -38,6 +38,8 @@ def list_dumps(started=None, ended=None):
     s3_base = get_s3_dump()
     s3 = boto3.client('s3')
     res = s3.list_objects_v2(Delimiter='/', **s3_base.kw(prefix=True))
+    if res['KeyCount'] == 0:
+        return []
     dumps = [S3Path.from_key_parts(s3_base.bucket, d['Prefix'])
              for d in res['CommonPrefixes']]
 

@@ -471,7 +471,7 @@ def get_schema(Base):
             '       readonly.evidence_counts.ev_count, readonly.belief.belief,\n'
             '       activity, is_active, agent_count, false AS is_complex_dup\n'
             'FROM pa_agents, pa_statements, readonly.pa_agent_counts, type_map,'
-            '  role_map, readonly.evidence_counts'
+            '  role_map, readonly.belief, readonly.evidence_counts'
             '  LEFT JOIN pa_activity'
             '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
             'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
@@ -509,8 +509,7 @@ def get_schema(Base):
                     f'SELECT db_name, db_id, ag_id,\n '
                     f'  generate_series(-1, 1, 2) AS role_num,\n'
                     f'  generate_series(0, 1) AS ag_num,\n'
-                    f'  type_num, mk_hash, ev_count,\n'
-                    f'  readonly.pa_meta.belief, activity,\n'
+                    f'  type_num, mk_hash, ev_count, belief, activity,\n'
                     f'  is_active, agent_count, true AS is_complex_dup\n'
                     f'FROM readonly.pa_meta\n'
                     f'WHERE type_num = {ro_type_map.get_int("Complex")}\n')

@@ -221,7 +221,7 @@ class DbPreassembler:
 
     def _get_support_mark(self, continuing):
         if self.s3_cache is None:
-            return
+            return -1
 
         if not continuing:
             return -1

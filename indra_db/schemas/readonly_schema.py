@@ -508,7 +508,8 @@ def get_schema(Base):
                     f'SELECT db_name, db_id, ag_id,\n '
                     f'  generate_series(-1, 1, 2) AS role_num,\n'
                     f'  generate_series(0, 1) AS ag_num,\n'
-                    f'  type_num, mk_hash, ev_count, belief, activity,\n'
+                    f'  type_num, mk_hash, ev_count,\n'
+                    f'  readonly.pa_meta.belief, activity,\n'
                     f'  is_active, agent_count, true AS is_complex_dup\n'
                     f'FROM readonly.pa_meta\n'
                     f'WHERE type_num = {ro_type_map.get_int("Complex")}\n')

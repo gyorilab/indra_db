@@ -113,10 +113,16 @@ class Dumper(object):
                     db = kwargs['db']
                 else:
                     raise ValueError("No database specified.")
-            elif db_opt == 'principal' and 'db' not in kwargs:
-                db = get_db('primary')
-            elif db_opt == 'readonly' and 'ro' not in kwargs:
-                db = get_ro('primary')
+            elif db_opt == 'principal':
+                if 'db' not in kwargs:
+                    db = get_db('primary')
+                else:
+                    db = kwargs['db']
+            elif db_opt == 'readonly':
+                if 'ro' not in kwargs:
+                    db = get_ro('primary')
+                else:
+                    db = kwargs['ro']
 
         self.db = db
 

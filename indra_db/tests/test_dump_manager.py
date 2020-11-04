@@ -7,6 +7,7 @@ from indra_db.config import get_s3_dump
 from indra_db.managers import dump_manager as dm
 from indra_db.tests.util import get_temp_db, get_temp_ro, insert_test_stmts
 from indra_db.util import S3Path, insert_db_stmts, insert_raw_agents
+from indra_db.util.data_gatherer import S3_DATA_LOC
 
 
 def _build_s3_test_dump(structure):
@@ -112,6 +113,13 @@ def test_dump_build():
 
     CHECK THE RESULTS
     """
+    # Create the dump locale.
+    s3 = boto3.client('s3')
+    dump_head = get_s3_dump()
+    s3.create_bucket(Bucket=dump_head.bucket)
+    assert dump_head.bucket == S3_DATA_LOC['bucket']
+
+    # Create the principal database.
     db = get_temp_db(clear=True)
 
     db.copy('text_ref', [        # trid

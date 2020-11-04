@@ -38,6 +38,7 @@ def get_temp_db(clear=False):
     db = PrincipalDatabaseManager('postgresql://postgres:@localhost/indradb_test')
     if clear:
         db._clear(force=True)
+        db.drop_schema('readonly', cascade=True)
     db.grab_session()
     db.session.rollback()
     return db

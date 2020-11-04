@@ -1133,8 +1133,12 @@ class PrincipalDatabaseManager(DatabaseManager):
         # errors.)
         assert len(set(CREATE_ORDER)) == len(CREATE_ORDER),\
             "Elements in CREATE_ORDERED are NOT unique."
-        assert set(CREATE_ORDER) == set(self.readonly.keys()),\
-            "Not all readonly tables included in CREATE_ORDER."
+        to_create = set(CREATE_ORDER)
+        in_ro = set(self.readonly.keys())
+        assert to_create == in_ro,\
+            f"Not all readonly tables included in CREATE_ORDER:\n" \
+            f"extra in create_order={to_create-in_ro}\n" \
+            f"extra in tables={in_ro-to_create}."
 
         # Dump the belief dict into the database.
         self.Belief.__table__.create(bind=self.engine)

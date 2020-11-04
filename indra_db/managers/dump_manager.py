@@ -267,7 +267,7 @@ class Belief(Dumper):
     def dump(self, continuing=False):
         belief_dict = get_belief(self.db, partition=False)
         s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, json.dumps(belief_dict))
+        self.get_s3_path().upload(s3, json.dumps(belief_dict).encode('utf-8'))
 
 
 class SourceCount(Dumper):
@@ -296,7 +296,7 @@ class FullPaJson(Dumper):
         query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
         json_list = [json.loads(js[0]) for js in query_res.all()]
         s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, json.dumps(json_list))
+        self.get_s3_path().upload(s3, json.dumps(json_list).encode('utf-8'))
 
 
 class FullPaStmts(Dumper):

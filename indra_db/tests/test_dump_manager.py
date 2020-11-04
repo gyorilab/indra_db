@@ -4,6 +4,7 @@ import moto
 from indra.statements import Phosphorylation, Agent, Activation, Inhibition, \
     Complex, Evidence, Conversion
 from indra_db.config import get_s3_dump
+from indra_db.databases import reader_versions
 from indra_db.managers import dump_manager as dm
 from indra_db.tests.util import get_temp_db, get_temp_ro, insert_test_stmts
 from indra_db.util import S3Path, insert_db_stmts, insert_raw_agents
@@ -147,7 +148,8 @@ def test_dump_build():
         (4, 'pmc', 'xml', 'fulltext')      # 6
     ], ('text_ref_id', 'source', 'format', 'text_type'))
 
-    db.copy('reading', [(tcid, rdr, 1, 'bogus', 'emtpy') for tcid, rdr in [
+    db.copy('reading', [(tcid, rdr, 1, reader_versions[rdr][-1], 'emtpy')
+                        for tcid, rdr in [
         # 1             2             3
         (1, 'reach'), (1, 'eidos'), (1, 'isi'),
 

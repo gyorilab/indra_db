@@ -326,9 +326,7 @@ class StatementHashMeshId(Dumper):
         self.get_s3_path().upload(s3, pickle.dumps(mesh_data))
 
 
-def load_readonly_dump(db_label, ro_label, dump_file):
-    principal_db = get_db(db_label)
-    readonly_db = get_ro(ro_label)
+def load_readonly_dump(principal_db, readonly_db, dump_file):
     logger.info("Using dump_file = \"%s\"." % dump_file)
     logger.info("%s - Beginning upload of content (est. ~30 minutes)"
                 % datetime.now())
@@ -371,6 +369,84 @@ class ReadonlyTransferEnv(object):
 
 
 dumpers = {dumper.name: dumper for dumper in get_all_descendants(Dumper)}
+
+
+def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
+         load_only=False, dump_only=False):
+    if delete_existing and 'readonly' in principal_db.get_schemas():
+        principal_db.drop_schema('readonly')
+
+    if not load_only:
+        starter = Start()
+        starter.dump(continuing=allow_continue)
+
+        belief_dump = Belief.from_list(starter.manifest)
+        if not allow_continue or not Belief.from_list(starter.manifest):
+            logger.info("Dumping belief.")
+            belief_dumper = Belief(date_stamp=starter.date_stamp)
+            belief_dumper.dump(continuing=allow_continue)
+            belief_dump = belief_dumper.get_s3_path()
+        else:
+
+            logger.info("Belief dump exists, skipping.")
+
+        dump_file = Readonly.from_list(starter.manifest)
+        if not allow_continue or not dump_file:
+            logger.info("Generating readonly schema (est. a long time)")
+            ro_dumper = Readonly(date_stamp=starter.date_stamp)
+            ro_dumper.dump(belief_dump=belief_dump,
+                           continuing=allow_continue)
+            dump_file = ro_dumper.get_s3_path()
+        else:
+            logger.info("Readonly dump exists, skipping.")
+
+        if not allow_continue or not Sif.from_list(starter.manifest):
+            logger.info("Dumping sif from the readonly schema on principal.")
+            Sif(use_principal=True, date_stamp=starter.date_stamp)\
+                .dump(continuing=allow_continue)
+        else:
+            logger.info("Sif dump exists, skipping.")
+
+        if not allow_continue \
+                or not FullPaStmts.from_list(starter.manifest):
+            logger.info("Dumping all PA Statements as a pickle.")
+            FullPaStmts(date_stamp=starter.date_stamp)\
+                .dump(continuing=allow_continue)
+        else:
+            logger.info("Statement dump exists, skipping.")
+
+        if not allow_continue \
+                or not StatementHashMeshId.from_list(starter.manifest):
+            logger.info("Dumping hash-mesh tuples.")
+            StatementHashMeshId(use_principal=True,
+                                date_stamp=starter.date_stamp)\
+                .dump(continuing=allow_continue)
+
+        End(date_stamp=starter.date_stamp).dump(continuing=allow_continue)
+    else:
+        dumps = list_dumps()
+
+        # Find the most recent dump that has a readonly.
+        s3 = boto3.client('s3')
+        for dump in sorted(dumps, reverse=True):
+            manifest = dump.list_objects(s3)
+            dump_file = Readonly.from_list(manifest)
+            if dump_file is not None:
+                # dump_file will be the file we want, leave it assigned.
+                break
+        else:
+            raise Exception("Could not find any suitable readonly dumps.")
+
+    if not dump_only:
+        print(dump_file)
+        load_readonly_dump(principal_db, readonly_db, dump_file)
+
+    if not load_only:
+        # This database no longer needs this schema (this only executes if
+        # the check_call does not error).
+        principal_db.session.close()
+        principal_db.grab_session()
+        principal_db.drop_schema('readonly')
 
 
 def parse_args():
@@ -422,84 +498,7 @@ def parse_args():
     return args
 
 
-def main():
-    args = parse_args()
-    principal_db = get_db(args.database)
-    if args.delete_existing and 'readonly' in principal_db.get_schemas():
-        principal_db.drop_schema('readonly')
-
-    if not args.load_only:
-        starter = Start()
-        starter.dump(continuing=args.allow_continue)
-
-        belief_dump = Belief.from_list(starter.manifest)
-        if not args.allow_continue or not Belief.from_list(starter.manifest):
-            logger.info("Dumping belief.")
-            belief_dumper = Belief(date_stamp=starter.date_stamp)
-            belief_dumper.dump(continuing=args.allow_continue)
-            belief_dump = belief_dumper.get_s3_path()
-        else:
-
-            logger.info("Belief dump exists, skipping.")
-
-        dump_file = Readonly.from_list(starter.manifest)
-        if not args.allow_continue or not dump_file:
-            logger.info("Generating readonly schema (est. a long time)")
-            ro_dumper = Readonly(date_stamp=starter.date_stamp)
-            ro_dumper.dump(belief_dump=belief_dump,
-                           continuing=args.allow_continue)
-            dump_file = ro_dumper.get_s3_path()
-        else:
-            logger.info("Readonly dump exists, skipping.")
-
-        if not args.allow_continue or not Sif.from_list(starter.manifest):
-            logger.info("Dumping sif from the readonly schema on principal.")
-            Sif(use_principal=True, date_stamp=starter.date_stamp)\
-                .dump(continuing=args.allow_continue)
-        else:
-            logger.info("Sif dump exists, skipping.")
-
-        if not args.allow_continue \
-                or not FullPaStmts.from_list(starter.manifest):
-            logger.info("Dumping all PA Statements as a pickle.")
-            FullPaStmts(date_stamp=starter.date_stamp)\
-                .dump(continuing=args.allow_continue)
-        else:
-            logger.info("Statement dump exists, skipping.")
-
-        if not args.allow_continue \
-                or not StatementHashMeshId.from_list(starter.manifest):
-            logger.info("Dumping hash-mesh tuples.")
-            StatementHashMeshId(use_principal=True,
-                                date_stamp=starter.date_stamp)\
-                .dump(continuing=args.allow_continue)
-
-        End(date_stamp=starter.date_stamp).dump(continuing=args.allow_continue)
-    else:
-        dumps = list_dumps()
-
-        # Find the most recent dump that has a readonly.
-        s3 = boto3.client('s3')
-        for dump in sorted(dumps, reverse=True):
-            manifest = dump.list_objects(s3)
-            dump_file = Readonly.from_list(manifest)
-            if dump_file is not None:
-                # dump_file will be the file we want, leave it assigned.
-                break
-        else:
-            raise Exception("Could not find any suitable readonly dumps.")
-
-    if not args.dump_only:
-        print(dump_file)
-        load_readonly_dump(args.database, args.readonly, dump_file)
-
-    if not args.load_only:
-        # This database no longer needs this schema (this only executes if
-        # the check_call does not error).
-        principal_db.session.close()
-        principal_db.grab_session()
-        principal_db.drop_schema('readonly')
-
-
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    dump(get_db(args.database), get_ro(args.readonly), args.delet_existing,
+         args.allow_continue, args.load_only, args.dump_only)

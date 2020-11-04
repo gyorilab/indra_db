@@ -11,7 +11,7 @@ from indra_db.managers import dump_manager as dm
 from indra_db.managers.dump_manager import dump
 from indra_db.preassembly.preassemble_db import DbPreassembler
 from indra_db.tests.util import get_temp_db, get_temp_ro, insert_test_stmts
-from indra_db.util import S3Path, insert_db_stmts, insert_raw_agents
+from indra_db.util import S3Path
 from indra_db.util.data_gatherer import S3_DATA_LOC
 
 
@@ -257,3 +257,4 @@ def test_dump_build():
     prass.create_corpus(db)
 
     ro = get_temp_ro(clear=True)
+    dump(db, ro)

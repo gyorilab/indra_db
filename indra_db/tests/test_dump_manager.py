@@ -89,6 +89,14 @@ def test_get_latest():
 
 
 @moto.mock_s3
+def test_list_dumps_empty():
+    """Test list_dumps when there are no dumps."""
+    _build_s3_test_dump({})
+    assert dm.list_dumps() == []
+
+
+
+@moto.mock_s3
 def test_dump_build():
     """Test the dump pipeline.
 

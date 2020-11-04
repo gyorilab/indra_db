@@ -1134,7 +1134,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         assert len(set(CREATE_ORDER)) == len(CREATE_ORDER),\
             "Elements in CREATE_ORDERED are NOT unique."
         to_create = set(CREATE_ORDER)
-        in_ro = set(self.readonly.keys())
+        in_ro = set(self.readonly.keys()) - {'belief'}  # belief is pre-loaded
         assert to_create == in_ro,\
             f"Not all readonly tables included in CREATE_ORDER:\n" \
             f"extra in create_order={to_create-in_ro}\n" \

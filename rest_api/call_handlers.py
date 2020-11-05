@@ -284,13 +284,13 @@ class StatementApiCall(ApiCall):
         cur_counts = {}
         for curation in curations:
             # Update the overall counts.
-            if curation.pa_hash not in cur_counts:
-                cur_counts[curation.pa_hash] = 0
-            cur_counts[curation.pa_hash] += 1
+            if curation['pa_hash'] not in cur_counts:
+                cur_counts[curation['pa_hash']] = 0
+            cur_counts[curation['pa_hash']] += 1
 
             # Work these counts into the evidence dict structure.
-            for ev_json in result.results[curation.pa_hash]['evidence']:
-                if str(ev_json['source_hash']) == str(curation.source_hash):
+            for ev_json in result.results[curation['pa_hash']]['evidence']:
+                if str(ev_json['source_hash']) == str(curation['source_hash']):
                     ev_json['num_curations'] = \
                         ev_json.get('num_curations', 0) + 1
                     break
@@ -372,7 +372,7 @@ class StatementApiCall(ApiCall):
                             rel['hashes'] = None
                 curations = get_curations(pa_hash=set(rel_hash_lookup.keys()))
                 for cur in curations:
-                    for rel in rel_hash_lookup[cur.pa_hash]:
+                    for rel in rel_hash_lookup[cur['pa_hash']]:
                         rel['cur_count'] += 1
 
             logger.info("Returning with %s results after %.2f seconds."

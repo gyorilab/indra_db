@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from indra.statements import get_all_descendants
 from indra.statements.io import stmts_from_json
 from indra_db.belief import get_belief
-from indra_db.config import CONFIG, get_s3_dump
+from indra_db.config import CONFIG, get_s3_dump, record_in_test
 from indra_db.util import get_db, get_ro, S3Path
 from indra_db.util.aws import get_role_kwargs
 from indra_db.util.dump_sif import dump_sif, get_source_counts
@@ -380,6 +380,7 @@ class ReadonlyTransferEnv(object):
         self.principal = db
         self.readonly = ro
 
+    @record_in_test
     def _set_lambda_env(self, env_dict):
         lambda_client = get_lambda_client()
         lambda_client.update_function_configuration(
@@ -468,7 +469,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
             raise Exception("Could not find any suitable readonly dumps.")
 
     if not dump_only:
-        print(dump_file)
+        print("Dump file:", dump_file)
         load_readonly_dump(principal_db, readonly_db, dump_file)
 
     if not load_only:

@@ -27,6 +27,7 @@ def main(project_name):
 
     basename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
     ps = PreassemblySubmitter(basename, 'update', project_name=project_name)
+    ps.set_max_jobs(4)
     ps.run(need_to_update, 100000, True, stagger=600, poll_interval=120)
 
 

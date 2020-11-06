@@ -308,3 +308,12 @@ def test_dump_build():
     bdict = {h: b for h, b in ro.select_all([ro.SourceMeta.mk_hash,
                                              ro.SourceMeta.belief])}
     assert all(1 >= b > 0 for b in bdict.values())
+
+    # Check to make sure lambda was diverted correctly.
+    call_records = get_test_call_records()
+    assert len(call_records) == 2
+    assert all(rec.func_name == '_set_lambda_env' for rec in call_records)
+    assert all(isinstance(rec.args[1], dict) for rec in call_records)
+    assert 'INDRAROOVERRIDE' in call_records[0].args[1]
+    assert call_records[0].args[1]['INDRAROOVERRIDE'] == str(db.url)
+    assert not call_records[1].args[1]

@@ -84,47 +84,7 @@ class Dumper(object):
 
     def __init__(self, date_stamp=None, **kwargs):
         # Get a database handle, if needed.
-        db = None
-        if self.db_required:
-
-            # If a database is required, the type must be specified.
-            assert len(self.db_options), \
-                "If db is required, db_options are too."
-
-            # If there is only one available type, the type is obvious,
-            # otherwise it takes some work to figure out.
-            if len(self.db_options) == 1:
-                db_opt = self.db_options[0]
-            else:
-                if 'use_principal' in kwargs:
-                    if kwargs['use_principal']:
-                        db_opt = 'principal'
-                    else:
-                        db_opt = 'readonly'
-                else:
-                    db_opt = None
-
-            # Get the database handle depending on the type, checking for
-            # user overrides.
-            if db_opt is None:
-                if 'ro' in kwargs:
-                    db = kwargs['ro']
-                elif 'db' in kwargs:
-                    db = kwargs['db']
-                else:
-                    raise ValueError("No database specified.")
-            elif db_opt == 'principal':
-                if 'db' not in kwargs:
-                    db = get_db('primary')
-                else:
-                    db = kwargs['db']
-            elif db_opt == 'readonly':
-                if 'ro' not in kwargs:
-                    db = get_ro('primary')
-                else:
-                    db = kwargs['ro']
-
-        self.db = db
+        self.db = self._choose_db(**kwargs)
 
         # Get the date stamp.
         self.s3_dump_path = None
@@ -132,6 +92,50 @@ class Dumper(object):
             self.date_stamp = datetime.now().strftime('%Y-%m-%d')
         else:
             self.date_stamp = date_stamp
+
+    @classmethod
+    def _choose_db(cls, **kwargs):
+        # If we don't need a database handle, just keep on walking.
+        if not cls.db_required:
+            return None
+
+        # If a database is required, the type must be specified.
+        assert len(cls.db_options), \
+            "If db is required, db_options are too."
+
+        # If a handle was given, use it, regardless of other inputs, if it
+        # is at all permissible.
+        if 'ro' in kwargs and 'db' in kwargs:
+            raise ValueError("Only one database handle may be defined at"
+                             "a time.")
+        if 'ro' in kwargs:
+            if 'readonly' in cls.db_options:
+                return kwargs['ro']
+            else:
+                raise ValueError("Cannot use readonly database, but ro "
+                                 "handle was given.")
+        elif 'db' in kwargs:
+            if 'principal' in cls.db_options:
+                return kwargs['db']
+            else:
+                raise ValueError("Cannot use principal database, but db "
+                                 "handle was given.")
+
+        # Otherwise, read or guess the database type, and make a new instance.
+        if len(cls.db_options) == 1:
+            db_opt = cls.db_options[0]
+        else:
+            if 'use_principal' in kwargs:
+                if kwargs['use_principal']:
+                    db_opt = 'principal'
+                else:
+                    db_opt = 'readonly'
+            else:
+                raise ValueError("No database specified.")
+        if db_opt == 'principal':
+            return get_db('primary')
+        else:  # if db_opt == 'readonly'
+            return get_ro('primary')
 
     def get_s3_path(self):
         if self.s3_dump_path is None:

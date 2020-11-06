@@ -5,7 +5,8 @@ import moto
 
 from indra.statements import Phosphorylation, Agent, Activation, Inhibition, \
     Complex, Evidence, Conversion
-from indra_db.config import get_s3_dump, run_in_db_test_mode, is_db_testing
+from indra_db.config import get_s3_dump, run_in_test_mode, is_db_testing, \
+    get_test_call_records
 from indra_db.databases import reader_versions
 from indra_db.managers import dump_manager as dm
 from indra_db.managers.dump_manager import dump
@@ -114,7 +115,9 @@ prass = _get_preassembler()
 
 
 @moto.mock_s3
-@run_in_db_test_mode
+@moto.mock_sts
+@moto.mock_lambda
+@run_in_test_mode
 def test_dump_build():
     """Test the dump pipeline.
 

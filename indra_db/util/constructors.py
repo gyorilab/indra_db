@@ -5,7 +5,7 @@ import logging
 from indra_db.databases import PrincipalDatabaseManager, \
     ReadonlyDatabaseManager
 from indra_db.exceptions import IndraDbException
-from indra_db.config import get_databases, get_readonly_databases, is_db_testing
+from indra_db.config import get_databases, get_readonly_databases, nope_in_test
 
 logger = logging.getLogger('util-constructors')
 
@@ -13,6 +13,7 @@ logger = logging.getLogger('util-constructors')
 __PRIMARY_DB = None
 
 
+@nope_in_test
 def get_primary_db(force_new=False):
     """Get a DatabaseManager instance for the primary database host.
 
@@ -66,21 +67,13 @@ def get_primary_db(force_new=False):
     return __PRIMARY_DB
 
 
-class WontDoIt(Exception):
-    pass
-
-
+@nope_in_test
 def get_db(db_label):
     """Get a db instance base on it's name in the config or env.
 
     If the label does not exist or the database labeled can't be reached, None
     is returned.
     """
-    # If we are running certain tests, we want to make sure the real database
-    # is not used for any reason.
-    if is_db_testing():
-        raise WontDoIt(f"Cannot instantiate {db_label} database during test.")
-
     # Instantiate a database handle
     defaults = get_databases()
     if db_label not in defaults:
@@ -95,18 +88,13 @@ def get_db(db_label):
     return db
 
 
+@nope_in_test
 def get_ro(ro_label):
     """Get a readonly database instance, based on its name.
 
     If the label does not exist or the database labeled can't be reached, None
     is returned.
     """
-    # If we are running certain tests, we want to make sure the real database
-    # is not used for any reason.
-    if is_db_testing():
-        raise WontDoIt(f"Cannot instantiate {ro_label} readonly database "
-                       f"during test.")
-
     # Instantiate a readonly database.
     defaults = get_readonly_databases()
     if ro_label == 'primary' and 'override' in defaults:

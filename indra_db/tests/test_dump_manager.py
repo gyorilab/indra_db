@@ -260,7 +260,51 @@ def test_dump_build():
     }
     insert_test_stmts(db, raw_stmts)
 
+    # Run preassembly.
     prass.create_corpus(db)
 
+    # Do the dump proceedure.
     ro = get_temp_ro(clear=True)
     dump(db, ro)
+
+    # Check that the s3 dump exists.
+    all_dumps = dm.list_dumps()
+    assert len(all_dumps) == 1
+
+    # Check to make sure all the dump files are present.
+    dump_path = all_dumps[0]
+    file_list = dump_path.list_objects(s3)
+    assert dm.Start.from_list(file_list)
+    assert dm.Readonly.from_list(file_list)
+    assert dm.Belief.from_list(file_list)
+    assert dm.Sif.from_list(file_list)
+    assert dm.StatementHashMeshId.from_list(file_list)
+    assert dm.FullPaStmts.from_list(file_list)
+    assert dm.End.from_list(file_list)
+
+    # Check what tables are active in the readonly database.
+    active_tables = ro.get_active_tables()
+    for tbl in ro.get_tables():
+        if ro.tables[tbl]._temp:
+            # If it was temp, it should be gone.
+            assert tbl not in active_tables
+        else:
+            # Otherwise, it should be there.
+            assert tbl in active_tables
+
+    # Check that the principal db has no more ro schema.
+    assert 'readonly' not in db.get_schemas()
+
+    # Check contents of the readonly database.
+    assert len(ro.select_all(ro.FastRawPaLink)) \
+           == len(db.select_all(db.RawUniqueLinks))
+
+    # Check that a query basically works.
+    from indra_db.client.readonly import HasAgent
+    res = HasAgent('MEK').get_statements(ro)
+    assert len(res.statements()) == 2, len(res.statements())
+
+    # Check that belief is represented in the table.
+    bdict = {h: b for h, b in ro.select_all([ro.SourceMeta.mk_hash,
+                                             ro.SourceMeta.belief])}
+    assert all(1 >= b > 0 for b in bdict.values())

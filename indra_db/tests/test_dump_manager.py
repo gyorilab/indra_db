@@ -5,13 +5,12 @@ import moto
 
 from indra.statements import Phosphorylation, Agent, Activation, Inhibition, \
     Complex, Evidence, Conversion
-from indra_db.config import get_s3_dump, run_in_test_mode, is_db_testing, \
-    get_test_call_records
+from indra_db import config
 from indra_db.databases import reader_versions
 from indra_db.managers import dump_manager as dm
 from indra_db.managers.dump_manager import dump
 from indra_db.preassembly.preassemble_db import DbPreassembler
-from indra_db.tests.util import get_temp_db, get_temp_ro, insert_test_stmts
+from indra_db.tests.util import get_temp_db, get_temp_ro, simple_insert_stmts
 from indra_db.util import S3Path
 from indra_db.util.data_gatherer import S3_DATA_LOC
 
@@ -40,15 +39,22 @@ def _build_s3_test_dump(structure):
     definitions or `dumpers` global for details).
     """
     s3 = boto3.client('s3')
-    dump_head = get_s3_dump()
+    dump_head = config.get_s3_dump()
     s3.create_bucket(Bucket=dump_head.bucket)
     for date_stamp, contents in structure.items():
         for dump_name in contents:
             dumper_class = dm.dumpers[dump_name]
-            dumper_class(date_stamp=date_stamp).shallow_mock_dump()
+            kwargs = {}
+            if dumper_class.db_required:
+                if 'readonly' in dumper_class.db_options:
+                    kwargs['ro'] = None
+                else:
+                    kwargs['db'] = None
+            dumper_class(date_stamp=date_stamp, **kwargs).shallow_mock_dump()
 
 
 @moto.mock_s3
+@config.run_in_test_mode
 def test_list_dumps():
     """Test the dump listing feature."""
     _build_s3_test_dump({
@@ -57,7 +63,7 @@ def test_list_dumps():
         '2020-03-01': ['sif']            # something strange but possible.
     })
 
-    dump_head = get_s3_dump()
+    dump_head = config.get_s3_dump()
 
     def check_list(dumps, expected_timestamps):
         assert all(isinstance(s3p, S3Path) for s3p in dumps)
@@ -80,6 +86,7 @@ def test_list_dumps():
 
 
 @moto.mock_s3
+@config.run_in_test_mode
 def test_get_latest():
     """Test the function used to get the latest version of a dump file."""
     _build_s3_test_dump({
@@ -96,6 +103,7 @@ def test_get_latest():
 
 
 @moto.mock_s3
+@config.run_in_test_mode
 def test_list_dumps_empty():
     """Test list_dumps when there are no dumps."""
     _build_s3_test_dump({})
@@ -117,7 +125,7 @@ prass = _get_preassembler()
 @moto.mock_s3
 @moto.mock_sts
 @moto.mock_lambda
-@run_in_test_mode
+@config.run_in_test_mode
 def test_dump_build():
     """Test the dump pipeline.
 
@@ -133,11 +141,11 @@ def test_dump_build():
 
     CHECK THE RESULTS
     """
-    assert is_db_testing()
+    assert config.is_db_testing()
 
     # Create the dump locale.
     s3 = boto3.client('s3')
-    dump_head = get_s3_dump()
+    dump_head = config.get_s3_dump()
     s3.create_bucket(Bucket=dump_head.bucket)
     assert dump_head.bucket == S3_DATA_LOC['bucket']
 
@@ -258,7 +266,7 @@ def test_dump_build():
             ]
         }
     }
-    insert_test_stmts(db, raw_stmts)
+    simple_insert_stmts(db, raw_stmts)
 
     # Run preassembly.
     prass.create_corpus(db)
@@ -310,7 +318,7 @@ def test_dump_build():
     assert all(1 >= b > 0 for b in bdict.values())
 
     # Check to make sure lambda was diverted correctly.
-    call_records = get_test_call_records()
+    call_records = config.get_test_call_records()
     assert len(call_records) == 2
     assert all(rec.func_name == '_set_lambda_env' for rec in call_records)
     assert all(isinstance(rec.args[1], dict) for rec in call_records)

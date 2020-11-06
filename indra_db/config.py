@@ -185,8 +185,10 @@ def run_in_test_mode(func):
         TEST_RECORDS = []
         orig_value = CONFIG['testing']
         CONFIG['testing'] = True
-        ret = func(*args, **kwargs)
-        CONFIG['testing'] = orig_value
+        try:
+            ret = func(*args, **kwargs)
+        finally:
+            CONFIG['testing'] = orig_value
         return ret
     return wrap_func
 

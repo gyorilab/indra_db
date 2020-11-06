@@ -318,7 +318,7 @@ def get_filled_ro(num_stmts):
     return ro
 
 
-def insert_test_stmts(db, stmts_dict):
+def simple_insert_stmts(db, stmts_dict):
     """Insert raw statements from readings into the database.
 
     `stmts_dict` must be of the form {<source_type>: {<source_id>: [stmts]}}

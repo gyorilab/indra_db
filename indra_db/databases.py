@@ -26,7 +26,7 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
-from indra_db.config import CONFIG, build_db_url
+from indra_db.config import CONFIG, build_db_url, is_db_testing
 from indra_db.schemas.mixins import IndraDBTableMetaClass
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
@@ -993,8 +993,8 @@ class DatabaseManager(object):
                              "formatted string or S3Path object, not %s."
                              % type(dump_file))
 
-        from subprocess import check_call
         from os import environ
+        from subprocess import run, PIPE
 
         # Make sure the session is fresh and any previous session are done.
         self.session.close()
@@ -1008,9 +1008,17 @@ class DatabaseManager(object):
         # anything went wrong).
         option_list = [f'--{opt}' if isinstance(val, bool) and val
                        else f'--{opt}={val}' for opt, val in options.items()]
-        cmd = ' '.join(["pg_dump", *self._form_pg_args(), *option_list, '-Fc',
-                        '|', 'aws', 's3', 'cp', '-', dump_file.to_string()])
-        check_call(cmd, shell=True, env=my_env)
+        cmd = ["pg_dump", *self._form_pg_args(), *option_list, '-Fc']
+
+        # If we are testing the database, we
+        if not is_db_testing():
+            cmd += ['|', 'aws', 's3', 'cp', '-', dump_file.to_string()]
+            run(' '.join(cmd), shell=True, env=my_env, check=True)
+        else:
+            import boto3
+            res = run(' '.join(cmd), shell=True, env=my_env, stdout=PIPE,
+                      check=True)
+            dump_file.upload(boto3.client('s3'), res.stdout)
         return dump_file
 
     def vacuum(self, analyze=True):
@@ -1029,7 +1037,7 @@ class DatabaseManager(object):
                              "formatted string or S3Path object, not %s."
                              % type(dump_file))
 
-        from subprocess import run
+        from subprocess import run, PIPE
         from os import environ
 
         self.session.close()
@@ -1043,10 +1051,15 @@ class DatabaseManager(object):
         logger.info("Dumping into the database.")
         option_list = [f'--{opt}' if isinstance(val, bool) and val
                        else f'--{opt}={val}' for opt, val in options.items()]
-        run(' '.join(['aws', 's3', 'cp', dump_file.to_string(), '-', '|',
-                      'pg_restore', *self._form_pg_args(), *option_list,
-                      '--no-owner']),
-            env=my_env, shell=True, check=True)
+        cmd = ['pg_restore', *self._form_pg_args(), *option_list, '--no-owner']
+        if not is_db_testing():
+            cmd = ['aws', 's3', 'cp', dump_file.to_string(), '-', '|'] + cmd
+            run(' '.join(cmd), shell=True, env=my_env, check=True)
+        else:
+            import boto3
+            res = dump_file.get(boto3.client('s3'))
+            run(' '.join(cmd), shell=True, env=my_env, input=res['Body'].read(),
+                check=True)
         self.session.close()
         self.grab_session()
         return dump_file

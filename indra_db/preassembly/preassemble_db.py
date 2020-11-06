@@ -476,14 +476,17 @@ class DbPreassembler:
 
     def _get_new_stmt_ids(self, db):
         """Get all the uuids of statements not included in evidence."""
-        old_id_q = db.filter_query(
+        olds_q = db.filter_query(
             db.RawStatements.id,
             db.RawStatements.id == db.RawUniqueLinks.raw_stmt_id
         )
-        new_sid_q = db.filter_query(db.RawStatements.id).except_(old_id_q)
         if self.stmt_type is not None:
-            new_sid_q = new_sid_q.filter(db.RawStatements.type == self.stmt_type)
-        all_new_stmt_ids = {sid for sid, in new_sid_q.all()}
+            olds_q = olds_q.filter(db.RawStatements.type == self.stmt_type)
+        alls_q = db.filter_query(db.RawStatements.id)
+        if self.stmt_type is not None:
+            alls_q = alls_q.filter(db.RawStatements.type == self.stmt_type)
+        new_id_q = alls_q.except_(olds_q)
+        all_new_stmt_ids = {sid for sid, in new_id_q.all()}
         self._log("Found %d new statement ids." % len(all_new_stmt_ids))
         return all_new_stmt_ids
 

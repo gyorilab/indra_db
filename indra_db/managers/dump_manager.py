@@ -252,7 +252,7 @@ class Sif(Dumper):
     def dump(self, continuing=False, include_src_counts=True):
         s3_path = self.get_s3_path()
         if include_src_counts:
-            srcc = SourceCount()
+            srcc = SourceCount(ro=self.db)
             dump_sif(s3_path, src_count_file=srcc.get_s3_path(), ro=self.db)
         else:
             dump_sif(s3_path, ro=self.db)

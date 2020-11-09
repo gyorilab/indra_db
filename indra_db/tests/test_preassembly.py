@@ -358,7 +358,7 @@ def _check_statement_distillation(num_stmts):
 
 
 @needs_py3
-def _check_preassembly_with_database(num_stmts, batch_size, n_proc=1):
+def _check_preassembly_with_database(num_stmts, batch_size):
     db = get_pa_loaded_db(num_stmts)
 
     # Now test the set of preassembled (pa) statements from the database
@@ -372,7 +372,7 @@ def _check_preassembly_with_database(num_stmts, batch_size, n_proc=1):
 
     # Run the preassembly initialization.
     start = datetime.now()
-    pa_manager = pm.PreassemblyManager(batch_size=batch_size, n_proc=n_proc,
+    pa_manager = pm.PreassemblyManager(batch_size=batch_size,
                                        print_logs=True)
     pa_manager.create_corpus(db)
     end = datetime.now()
@@ -416,8 +416,8 @@ def _check_preassembly_with_database(num_stmts, batch_size, n_proc=1):
 
 
 @needs_py3
-def _check_db_pa_supplement(num_stmts, batch_size, split=0.8, n_proc=1):
-    pa_manager = pm.PreassemblyManager(batch_size=batch_size, n_proc=n_proc,
+def _check_db_pa_supplement(num_stmts, batch_size, split=0.8):
+    pa_manager = pm.PreassemblyManager(batch_size=batch_size,
                                        print_logs=True)
     db = get_pa_loaded_db(num_stmts, split=split, pam=pa_manager)
     opa_inp_stmts = _get_opa_input_stmts(db)
@@ -638,9 +638,9 @@ def test_db_incremental_preassembly_small():
 
 # @attr('nonpublic', 'slow')
 # def test_db_incremental_preassembly_very_large():
-#     _check_db_pa_supplement(100000, 20000, n_proc=2)
+#     _check_db_pa_supplement(100000, 20000)
 
 
 # @attr('nonpublic', 'slow')
 # def test_db_incremental_preassembly_1M():
-#     _check_db_pa_supplement(1000000, 200000, n_proc=6)
+#     _check_db_pa_supplement(1000000, 200000)

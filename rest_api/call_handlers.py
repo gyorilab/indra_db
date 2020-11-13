@@ -149,7 +149,7 @@ class ApiCall:
 
             # Note the query in the log, if one is running.
             if is_log_running():
-                note_in_log(query=self.db_query)
+                note_in_log(query=self.db_query.to_json())
 
         logger.info(f"Constructed query \"{self.db_query}\":\n"
                     f"{json.dumps(self.db_query.to_json(), indent=2)}")

@@ -61,17 +61,13 @@ class DbPreassembler:
 
     Parameters
     ----------
-    n_proc : int
-        Select the number of processes that will be used when performing
-        preassembly. Default is 1.
     batch_size : int
         Select the maximum number of statements you wish to be handled at a
         time. In general, a larger batch size will somewhat be faster, but
         require much more memory.
     """
-    def __init__(self, n_proc=None, batch_size=10000, s3_cache=None,
+    def __init__(self, batch_size=10000, s3_cache=None,
                  print_logs=False, stmt_type=None, yes_all=False):
-        self.n_proc = n_proc
         self.batch_size = batch_size
         if s3_cache is not None:
             # Make the cache specific to stmt type. This guards against
@@ -668,8 +664,7 @@ class DbPreassembler:
     @clockit
     def _get_support_links(self, unique_stmts, split_idx=None):
         """Find the links of refinement/support between statements."""
-        id_maps = self.pa._generate_id_maps(unique_stmts, poolsize=self.n_proc,
-                                            split_idx=split_idx)
+        id_maps = self.pa._generate_id_maps(unique_stmts, split_idx=split_idx)
         ret = set()
         for ix_pair in id_maps:
             if ix_pair[0] == ix_pair[1]:
@@ -733,13 +728,6 @@ def _make_parser():
         help='Continue uploading or updating, picking up where you left off.'
     )
     parser.add_argument(
-        '-n', '--num-procs',
-        type=int,
-        default=None,
-        help=('Select the number of processors to use during this operation. '
-              'Default is 1.')
-    )
-    parser.add_argument(
         '-b', '--batch',
         type=int,
         default=10000,
@@ -793,7 +781,7 @@ def _main():
     assert db is not None
     db.grab_session()
     s3_cache = S3Path.from_string(args.cache)
-    pa = DbPreassembler(args.num_procs, args.batch, s3_cache,
+    pa = DbPreassembler(args.batch, s3_cache,
                         stmt_type=args.stmt_type, yes_all=args.yes_all)
 
     desc = 'Continuing' if args.continuing else 'Beginning'

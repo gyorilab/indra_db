@@ -19,14 +19,16 @@ def main(project_name):
 
     need_to_update = []
     for stmt_type, last_update in last_updates.items():
-        res = db.select_one(db.RawStatments, db.RawStatements.type == stmt_type,
+        res = db.select_one(db.RawStatements,
+                            db.RawStatements.type == stmt_type,
                             db.RawStatements.create_date > last_update)
         if res:
             need_to_update.append(stmt_type)
 
     basename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
     ps = PreassemblySubmitter(basename, 'update', project_name=project_name)
-    ps.run(need_to_update, 100000, True, stagger=600, poll_intervale=120)
+    ps.set_max_jobs(4)
+    ps.run(need_to_update, 100000, True, stagger=600, poll_interval=120)
 
 
 def get_parser():

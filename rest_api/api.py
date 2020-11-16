@@ -19,8 +19,11 @@ from indra.assemblers.html.assembler import loader as indra_loader
 from indra_db.exceptions import BadHashError
 from indra_db.client.principal.curation import *
 from indra_db.client.readonly import AgentJsonExpander
+from indra_db.util.constructors import get_ro_host
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
+from indralab_auth_tools.log import note_in_log, set_log_service_name, \
+    user_log_endpoint
 
 from rest_api.config import *
 from rest_api.call_handlers import *
@@ -29,6 +32,8 @@ from rest_api.util import sec_since, get_s3_client, gilda_ground, \
 
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
+
+set_log_service_name(f"db-rest-api-{DEPLOYMENT}")
 
 
 class MyFlask(Flask):
@@ -113,6 +118,7 @@ def ground():
 
 @app.route('/search', methods=['GET'])
 @jwt_nontest_optional
+@user_log_endpoint
 def search():
     stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
@@ -186,6 +192,7 @@ def serve_stages(stage):
 
 @app.route('/statements', methods=['GET'])
 @jwt_nontest_optional
+@user_log_endpoint
 def old_search():
     # Create a template object from the template file, load once
     url_base = request.url_root
@@ -200,8 +207,11 @@ def old_search():
 
 @app.route('/<result_type>/<path:method>', methods=['GET', 'POST'])
 @app.route('/metadata/<result_type>/<path:method>', methods=['GET', 'POST'])
+@user_log_endpoint
 def get_statements(result_type, method):
     """Get some statements constrained by query."""
+    note_in_log(method=method, result_type=result_type)
+    note_in_log(db_host=get_ro_host('primary'))
 
     if method == 'from_agents' and request.method == 'GET':
         call = FromAgentsApiCall(env)
@@ -312,7 +322,9 @@ def expand_meta_row():
 
 
 @app.route('/query/<result_type>', methods=['GET', 'POST'])
+@user_log_endpoint
 def get_statements_by_query_json(result_type):
+    note_in_log(result_type=result_type)
     return FallbackQueryApiCall(env).run(result_type)
 
 

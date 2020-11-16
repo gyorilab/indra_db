@@ -19,6 +19,7 @@ from indra.assemblers.html.assembler import HtmlAssembler, _format_stmt_text, \
 
 from indra_db.client.readonly import *
 from indra_db.client.principal.curation import *
+from indralab_auth_tools.log import note_in_log, is_log_running
 
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
     jwt_nontest_optional
@@ -145,6 +146,10 @@ class ApiCall:
                 num_agents = (self.db_query.list_component_queries()
                               .count(HasAgent.__name__))
                 self.db_query &= HasNumAgents((num_agents,))
+
+            # Note the query in the log, if one is running.
+            if is_log_running():
+                note_in_log(query=self.db_query.to_json())
 
         logger.info(f"Constructed query \"{self.db_query}\":\n"
                     f"{json.dumps(self.db_query.to_json(), indent=2)}")

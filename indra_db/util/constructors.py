@@ -1,4 +1,4 @@
-__all__ = ['get_primary_db', 'get_db', 'get_ro']
+__all__ = ['get_primary_db', 'get_db', 'get_ro', 'get_ro_host']
 
 import logging
 
@@ -106,3 +106,11 @@ def get_ro(ro_label):
         return
     ro.grab_session()
     return ro
+
+
+def get_ro_host(ro_label):
+    """Get the host of the current readonly database."""
+    ro = get_ro(ro_label)
+    if not ro:
+        return None
+    return ro.url.host

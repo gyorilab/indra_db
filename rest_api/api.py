@@ -122,12 +122,18 @@ def ground():
 def search():
     stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
+    stmt_types_json = json.dumps(sorted(list(stmt_types)))
     source_info, source_colors = get_html_source_info()
-    return render_my_template('search.html', 'Search',
-                              source_colors=source_colors,
-                              source_info=source_info,
-                              search_active=True,
-                              stmt_types_json=json.dumps(sorted(list(stmt_types))))
+    if TESTING['status']:
+        vue_src = url_for("serve_indralab_vue", file='IndralabVue.umd.js')
+        vue_style = url_for("serve_indralab_vue", file='IndralabVue.css')
+    else:
+        vue_src = f'{VUE_ROOT}/IndralabVue.umd.js'
+        vue_style = f'{VUE_ROOT}/IndralabVue.css'
+    return render_my_template(
+        'search.html', 'Search', source_colors=source_colors,
+        source_info=source_info, search_active=True, vue_src=vue_src,
+        vue_style=vue_style, stmt_types_json=stmt_types_json)
 
 
 @app.route('/data-vis/<path:file_path>')
@@ -146,6 +152,26 @@ def serve_data_vis(file_path):
     with open(full_path, 'rb') as f:
         return Response(f.read(),
                         content_type=ct)
+
+
+if TESTING['status']:
+    assert path.exists(VUE_ROOT), "Cannot test API with Vue packages."
+
+    @app.route('/ilv/<path:file>')
+    def serve_indralab_vue(file):
+        full_path = path.join(HERE, VUE_ROOT, file)
+        if not path.exists(full_path):
+            return abort(404)
+        ext = full_path.split('.')[-1]
+        if ext == 'js':
+            ct = 'application/javascript'
+        elif ext == 'css':
+            ct = 'text/css'
+        else:
+            ct = None
+        with open(full_path, 'rb') as f:
+            return Response(f.read(),
+                            content_type=ct)
 
 
 @app.route('/monitor')

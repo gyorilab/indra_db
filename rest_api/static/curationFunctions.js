@@ -86,7 +86,7 @@ function submitButtonClick(clickEvent) {
     // source_hash == ev['source_hash'] == pmid_row.id; "evidence level"
     const source_hash = pmid_row.dataset.source_hash;
     // stmt_hash == hash == stmt_info['hash'] == table ID; "(pa-) statement level"
-    const stmt_hash = pmid_row.parentElement.dataset.stmt_hash;
+    const stmt_hash = pmid_row.parentElement.parentElement.dataset.stmt_hash;
 
     // CURATION DICT
     // example: curation_dict = {'tag': 'Reading', 'text': '"3200 A" is picked up as an agent.', 'curator': 'Klas', 'ev_hash': ev_hash};

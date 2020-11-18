@@ -75,6 +75,8 @@ class ApiCall:
         self.special = {}
         return
 
+    valid_result_types = ['statements', 'interactions', 'agents', 'hashes']
+
     def run(self, result_type):
 
         # Get the db query object.

@@ -236,6 +236,9 @@ def old_search():
 @user_log_endpoint
 def get_statements(result_type, method):
     """Get some statements constrained by query."""
+    if result_type not in ApiCall.valid_result_types:
+        return Response('Page not found.', 404)
+
     note_in_log(method=method, result_type=result_type)
     note_in_log(db_host=get_ro_host('primary'))
 

@@ -4,11 +4,12 @@ import logging
 
 from sqlalchemy import Column, Integer, String, BigInteger, Boolean,\
     SmallInteger
-from sqlalchemy.dialects.postgresql import BYTEA, JSON, JSONB
+from sqlalchemy.dialects.postgresql import BYTEA, JSON, JSONB, REAL
 
 from indra.statements import get_all_descendants, Statement
 
-from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable
+from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable, \
+    IndraDBTable
 from .indexes import *
 
 
@@ -101,6 +102,9 @@ def get_schema(Base):
     through sqlalchemy: instead they are generated and updated manually
     (or by other non-sqlalchemy scripts).
 
+    Before building these tables, the `belief` table must already have been
+    loaded into the readonly database.
+
     The following views must be built in this specific order (_temp_):
       1. raw_stmt_src
       2. fast_raw_pa_link
@@ -133,6 +137,15 @@ def get_schema(Base):
         The base class for database tables
     """
     ro_tables = {}
+
+    class Belief(Base, IndraDBTable):
+        __tablename__ = 'belief'
+        __table_args__ = {'schema': 'readonly'}
+        _indices = [BtreeIndex('belief_mk_hash_idx', 'mk_hash')]
+        _temp = False
+        mk_hash = Column(BigInteger, primary_key=True)
+        belief = Column(REAL)
+    ro_tables[Belief.__tablename__] = Belief
 
     class EvidenceCounts(Base, ReadonlyTable):
         __tablename__ = 'evidence_counts'
@@ -455,14 +468,15 @@ def get_schema(Base):
             'SELECT pa_agents.db_name, pa_agents.db_id,\n'
             '       pa_agents.id AS ag_id, role_num, pa_agents.ag_num,\n'
             '       type_num, pa_statements.mk_hash,\n'
-            '       readonly.evidence_counts.ev_count, activity, is_active,\n'
-            '       agent_count, false AS is_complex_dup\n'
+            '       readonly.evidence_counts.ev_count, readonly.belief.belief,\n'
+            '       activity, is_active, agent_count, false AS is_complex_dup\n'
             'FROM pa_agents, pa_statements, readonly.pa_agent_counts, type_map,'
-            '  role_map, readonly.evidence_counts'
+            '  role_map, readonly.belief, readonly.evidence_counts'
             '  LEFT JOIN pa_activity'
             '  ON readonly.evidence_counts.mk_hash = pa_activity.stmt_mk_hash\n'
             'WHERE pa_agents.stmt_mk_hash = pa_statements.mk_hash\n'
             '  AND pa_statements.mk_hash = readonly.evidence_counts.mk_hash\n'
+            '  AND pa_statements.mk_hash = readonly.belief.mk_hash\n'
             '  AND readonly.pa_agent_counts.mk_hash = pa_agents.stmt_mk_hash\n'
             '  AND pa_statements.type = type_map.type\n'
             '  AND pa_agents.role = role_map.role\n'
@@ -471,6 +485,19 @@ def get_schema(Base):
         _temp = True
         _indices = [StringIndex('pa_meta_db_name_idx', 'db_name'),
                     BtreeIndex('pa_meta_hash_idx', 'mk_hash')]
+        ag_id = Column(Integer, primary_key=True)
+        ag_num = Column(Integer)
+        db_name = Column(String)
+        db_id = Column(String)
+        role_num = Column(SmallInteger)
+        type_num = Column(SmallInteger)
+        mk_hash = Column(BigInteger, primary_key=True)
+        ev_count = Column(Integer)
+        belief = Column(REAL)
+        activity = Column(String)
+        is_active = Column(Boolean)
+        agent_count = Column(Integer)
+        is_complex_dup = Column(Boolean)
 
         @classmethod
         def create(cls, db, commit=True):
@@ -482,8 +509,8 @@ def get_schema(Base):
                     f'SELECT db_name, db_id, ag_id,\n '
                     f'  generate_series(-1, 1, 2) AS role_num,\n'
                     f'  generate_series(0, 1) AS ag_num,\n'
-                    f'  type_num, mk_hash, ev_count, activity, is_active,\n'
-                    f'  agent_count, true AS is_complex_dup\n'
+                    f'  type_num, mk_hash, ev_count, belief, activity,\n'
+                    f'  is_active, agent_count, true AS is_complex_dup\n'
                     f'FROM readonly.pa_meta\n'
                     f'WHERE type_num = {ro_type_map.get_int("Complex")}\n')
             if commit:
@@ -497,18 +524,6 @@ def get_schema(Base):
             with_clause += ro_role_map.get_with_clause() + '\n'
             return with_clause + cls.__definition__
 
-        ag_id = Column(Integer, primary_key=True)
-        ag_num = Column(Integer)
-        db_name = Column(String)
-        db_id = Column(String)
-        role_num = Column(SmallInteger)
-        type_num = Column(SmallInteger)
-        mk_hash = Column(BigInteger)
-        ev_count = Column(Integer)
-        activity = Column(String)
-        is_active = Column(Boolean)
-        agent_count = Column(Integer)
-        is_complex_dup = Column(Boolean)
     ro_tables[_PaMeta.__tablename__] = _PaMeta
 
     class SourceMeta(Base, SpecialColumnTable):
@@ -523,12 +538,13 @@ def get_schema(Base):
             '),'
             'meta AS ('
             '    SELECT distinct mk_hash, type_num, activity, is_active,\n'
-            '                    ev_count, agent_count'
+            '                    ev_count, belief, agent_count'
             '    FROM readonly.name_meta'
             '    WHERE NOT is_complex_dup'
             ')\n'
             'SELECT readonly.pa_stmt_src.*, \n'
             '       meta.ev_count, \n'
+            '       meta.belief, \n'
             '       meta.type_num, \n'
             '       meta.activity, \n'
             '       meta.is_active,\n'
@@ -574,6 +590,7 @@ def get_schema(Base):
 
         mk_hash = Column(BigInteger, primary_key=True)
         ev_count = Column(Integer)
+        belief = Column(REAL)
         num_srcs = Column(Integer)
         src_json = Column(JSON)
         only_src = Column(String)
@@ -615,6 +632,7 @@ def get_schema(Base):
         type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger)
         ev_count = Column(Integer)
+        belief = Column(REAL)
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
@@ -635,6 +653,7 @@ def get_schema(Base):
         type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger)
         ev_count = Column(Integer)
+        belief = Column(REAL)
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
@@ -644,8 +663,9 @@ def get_schema(Base):
         __tablename__ = 'other_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ("SELECT db_name, db_id, ag_id, role_num, ag_num,\n"
-                          "       type_num, mk_hash, ev_count, activity,\n"
-                          "       is_active, agent_count, is_complex_dup\n"
+                          "       type_num, mk_hash, ev_count, belief,\n"
+                          "       activity, is_active, agent_count,\n"
+                          "       is_complex_dup\n"
                           "FROM readonly.pa_meta\n"
                           "WHERE db_name NOT IN ('NAME', 'TEXT')")
         _indices = [StringIndex('other_meta_db_id_idx', 'db_id'),
@@ -661,6 +681,7 @@ def get_schema(Base):
         type_num = Column(SmallInteger)
         mk_hash = Column(BigInteger)
         ev_count = Column(Integer)
+        belief = Column(REAL)
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
@@ -671,8 +692,8 @@ def get_schema(Base):
         __tablename__ = 'mesh_term_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ("SELECT DISTINCT meta.mk_hash, meta.ev_count,\n"
-                          "       mesh_num, type_num, activity, is_active,\n"
-                          "       agent_count\n"
+                          "       meta.belief, mesh_num, type_num, activity,\n"
+                          "       is_active, agent_count\n"
                           "FROM readonly.raw_stmt_mesh_terms AS rsmt,\n"
                           "     readonly.source_meta AS meta,\n"
                           "     raw_unique_links AS link\n"
@@ -687,6 +708,7 @@ def get_schema(Base):
         mesh_num = Column(Integer, primary_key=True)
         tr_count = Column(Integer)
         ev_count = Column(Integer)
+        belief = Column(REAL)
         type_num = Column(SmallInteger)
         activity = Column(String)
         is_active = Column(Boolean)
@@ -697,8 +719,8 @@ def get_schema(Base):
         __tablename__ = 'mesh_concept_meta'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ("SELECT DISTINCT meta.mk_hash, meta.ev_count,\n"
-                          "       mesh_num, type_num, activity, is_active,\n"
-                          "       agent_count\n"
+                          "       meta.belief, mesh_num, type_num, activity,\n"
+                          "       is_active, agent_count\n"
                           "FROM readonly.raw_stmt_mesh_concepts AS rsmc,\n"
                           "     readonly.source_meta AS meta,\n"
                           "     raw_unique_links AS link\n"
@@ -712,6 +734,7 @@ def get_schema(Base):
         mesh_num = Column(Integer, primary_key=True)
         tr_count = Column(Integer)
         ev_count = Column(Integer)
+        belief = Column(REAL)
         type_num = Column(SmallInteger)
         activity = Column(String)
         is_active = Column(Boolean)
@@ -732,6 +755,7 @@ def get_schema(Base):
                           "  low_level_names.type_num AS type_num, \n"
                           "  low_level_names.agent_count AS agent_count, \n"
                           "  low_level_names.ev_count AS ev_count, \n"
+                          "  low_level_names.belief AS belief, \n"
                           "  low_level_names.activity AS activity, \n"
                           "  low_level_names.is_active AS is_active, \n"
                           "  CAST(\n"
@@ -747,6 +771,7 @@ def get_schema(Base):
                           "      readonly.name_meta.type_num AS type_num, \n"
                           "      readonly.name_meta.agent_count AS agent_count, \n"
                           "      readonly.name_meta.ev_count AS ev_count, \n"
+                          "      readonly.name_meta.belief AS belief, \n"
                           "      readonly.name_meta.activity AS activity, \n"
                           "      readonly.name_meta.is_active AS is_active, \n"
                           "      readonly.source_meta.src_json AS src_json \n"
@@ -763,6 +788,7 @@ def get_schema(Base):
                           "  low_level_names.type_num, \n"
                           "  low_level_names.agent_count, \n"
                           "  low_level_names.ev_count, \n"
+                          "  low_level_names.belief, \n"
                           "  low_level_names.activity, \n"
                           "  low_level_names.is_active, \n"
                           "  CAST(low_level_names.src_json AS JSONB)")
@@ -790,16 +816,17 @@ def get_schema(Base):
                                       for i, j in enumerate(pair)}
                     new_interactions.append(
                         (interaction.mk_hash, interaction.ev_count,
-                         interaction.type_num, 2, new_agent_json,
-                         interaction.src_json, True)
+                         interaction.belief, interaction.type_num, 2,
+                         new_agent_json, interaction.src_json, True)
                     )
             db.copy('readonly.agent_interactions', new_interactions,
-                    ('mk_hash', 'ev_count', 'type_num', 'agent_count',
+                    ('mk_hash', 'ev_count', 'belief', 'type_num', 'agent_count',
                      'agent_json', 'src_json', 'is_complex_dup'))
             return
 
         mk_hash = Column(BigInteger, primary_key=True)
         ev_count = Column(Integer)
+        belief = Column(REAL)
         type_num = Column(SmallInteger)
         activity = Column(String)
         is_active = Column(Boolean)

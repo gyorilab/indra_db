@@ -1,5 +1,6 @@
 import sys
 import logging
+from functools import wraps
 from os import path, mkdir, environ
 from shutil import copyfile
 
@@ -20,6 +21,7 @@ PRINCIPAL_ENV_PREFIX = 'INDRADB'
 READONLY_ENV_PREFIX = 'INDRARO'
 S3_DUMP_ENV_VAR = 'INDRA_DB_S3_PREFIX'
 LAMBDA_NAME_ENV_VAR = 'DB_SERVICE_LAMBDA_NAME'
+TESTING_ENV_VAR = 'INDRA_DB_TESTING'
 
 
 logger = logging.getLogger('db_config')
@@ -83,6 +85,11 @@ def _load_config():
         def_dict = {k: parser.get(section, k)
                     for k in parser.options(section)}
 
+        # Handle general parameters
+        if section == 'general':
+            CONFIG.update(def_dict)
+            continue
+
         # Handle the case for the s3 bucket spec.
         if section.startswith('aws-'):
             CONFIG[section[4:]] = def_dict
@@ -114,12 +121,23 @@ def _load_env_config():
         role, function = environ[LAMBDA_NAME_ENV_VAR].split(':')
         CONFIG['lambda'] = {'role': role, 'function': function}
 
+    if TESTING_ENV_VAR in environ:
+        env_is_testing = environ[TESTING_ENV_VAR].lower()
+        if env_is_testing == 'true':
+            CONFIG['testing'] = True
+        elif env_is_testing == 'false':
+            CONFIG['testing'] = False
+        else:
+            raise ValueError(f"Unknown option: {environ[TESTING_ENV_VAR]}, "
+                             f"should be \"true\" or \"false\"")
+
     return
 
 
 def _load(include_config=True):
     global CONFIG
-    CONFIG = {'databases': {}, 'readonly': {}, 's3_dump': {}}
+    CONFIG = {'databases': {}, 'readonly': {}, 's3_dump': {}, 'lambda': {},
+              'testing': False}
     if CONFIG_EXISTS and include_config:
         _load_config()
     _load_env_config()
@@ -151,3 +169,107 @@ def get_s3_dump(force_update=False, include_config=True):
 
 
 _load(True)
+
+
+# ====================
+# Testing config tools
+# ====================
+
+
+def run_in_test_mode(func):
+    """Run the wrapped function in testing mode."""
+    @wraps(func)
+    def wrap_func(*args, **kwargs):
+        global CONFIG
+        global TEST_RECORDS
+        TEST_RECORDS = []
+        orig_value = CONFIG['testing']
+        CONFIG['testing'] = True
+        try:
+            ret = func(*args, **kwargs)
+        finally:
+            CONFIG['testing'] = orig_value
+        return ret
+    return wrap_func
+
+
+def is_db_testing():
+    """Check whether we are in testing mode."""
+    return CONFIG['testing']
+
+
+class WontDoIt(Exception):
+    """Raised in testing mode when an off-limits function is called."""
+    pass
+
+
+def nope_in_test(func):
+    """Raise an error if the wrapped function is used in "test mode".
+
+    You can enter "test mode" by wrapping a function or method (usually a test)
+    with `run_in_test_mode`.
+    """
+    @wraps(func)
+    def wrap_func(*args, **kwargs):
+        if is_db_testing():
+            raise WontDoIt(f"Cannot run {func.__name__} during test.")
+        return func(*args, **kwargs)
+    return wrap_func
+
+
+TEST_RECORDS = None
+
+
+class TestFuncCallRecord:
+    """Info on a func wrapped with `record_in_test` and called during a test."""
+    def __init__(self, function, args, kwargs):
+        import inspect
+        from datetime import datetime
+
+        self.func_name = function.__name__
+        self._function = function
+        if inspect.ismethod(function) or hasattr(function, '__self__'):
+            self.meth_class = function.__self__.__class__.__name__
+        else:
+            self.meth_class = None
+
+        self.args = args
+        self.kwargs = kwargs
+        self.called_at = datetime.utcnow()
+
+    def __fullname(self):
+        if self.meth_class is not None:
+            return f"{self.meth_class}.{self.func_name}"
+        else:
+            return self.func_name
+
+    def __str__(self):
+        return f"{self.__fullname()}({', '.join(self.args)}, " \
+               f"{',  '.join(f'{k}={v}' for k, v in self.kwargs.items())})"
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.__fullname()} " \
+               f"at {self.called_at})"
+
+
+def record_in_test(func):
+    """Record the function call and args but do nothing during a test.
+
+    The resulting calls can be retrieved using `get_test_call_records`.
+    """
+    @wraps(func)
+    def wrap_func(*args, **kwargs):
+        if is_db_testing():
+            assert isinstance(TEST_RECORDS, list)
+            TEST_RECORDS.append(TestFuncCallRecord(func, args, kwargs))
+        else:
+            return func(*args, **kwargs)
+    return wrap_func
+
+
+def get_test_call_records():
+    """Get the records of functions avoided during a test."""
+    if TEST_RECORDS is None:
+        return
+    return TEST_RECORDS[:]
+

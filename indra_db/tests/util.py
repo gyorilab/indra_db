@@ -1,3 +1,4 @@
+import json
 import random
 import pickle
 import logging
@@ -6,9 +7,11 @@ from functools import wraps
 from os import path
 
 import indra_db.util as dbu
+from indra.util.get_version import get_version
 from indra_db.config import get_s3_dump
 from indra_db.databases import PrincipalDatabaseManager, \
     ReadonlyDatabaseManager
+from indra_db.util import insert_raw_agents
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,7 @@ def get_temp_db(clear=False):
     db = PrincipalDatabaseManager('postgresql://postgres:@localhost/indradb_test')
     if clear:
         db._clear(force=True)
+        db.drop_schema('readonly', cascade=True)
     db.grab_session()
     db.session.rollback()
     return db
@@ -44,7 +48,7 @@ def get_temp_ro(clear=False):
     """Get a manager for a Readonly Database."""
     ro = ReadonlyDatabaseManager('postgresql://postgres:@localhost/indradb_ro_test')
     if clear:
-        ro._clear(force=True)
+        ro.drop_schema('readonly', cascade=True)
     ro.grab_session()
     ro.session.rollback()
     return ro
@@ -314,4 +318,38 @@ def get_filled_ro(num_stmts):
     return ro
 
 
+def simple_insert_stmts(db, stmts_dict):
+    """Insert raw statements from readings into the database.
 
+    `stmts_dict` must be of the form {<source_type>: {<source_id>: [stmts]}}
+    where `source_type` is "reading" or "databases", and source_id would be a
+    reading ID or a db_info_id, respectively.
+    """
+    batch_id = db.make_copy_batch_id()
+
+    stmt_data = []
+    cols = ('uuid', 'mk_hash', 'db_info_id', 'reading_id',
+            'type', 'json', 'batch_id', 'source_hash', 'indra_version')
+
+    all_stmts = []
+    for category, stmts in stmts_dict.items():
+        for src_id, stmt_list in stmts.items():
+            for stmt in stmt_list:
+                stmt_info = {
+                    'uuid': stmt.uuid,
+                    'mk_hash': stmt.get_hash(refresh=True),
+                    'type': stmt.__class__.__name__,
+                    'json': json.dumps(stmt.to_json()).encode('utf-8'),
+                    'batch_id': batch_id,
+                    'source_hash': -1,
+                    'indra_version': get_version()
+                }
+                if category == 'reading':
+                    stmt_info['reading_id'] = src_id
+                else:
+                    stmt_info['db_info_id'] = src_id
+                stmt_data.append(tuple(stmt_info.get(col) for col in cols))
+                all_stmts.append(stmt)
+
+    db.copy('raw_statements', stmt_data, cols)
+    insert_raw_agents(db, batch_id, all_stmts)

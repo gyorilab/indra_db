@@ -26,7 +26,8 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.engine.url import make_url
 
 from indra.util import batch_iter
-from indra_db.config import CONFIG, build_db_url
+from indra_db.config import CONFIG, build_db_url, is_db_testing
+from indra_db.schemas.mixins import IndraDBTableMetaClass
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
 from indra_db.schemas import principal_schema, readonly_schema
@@ -240,19 +241,28 @@ class DatabaseManager(object):
     def __init__(self, url, label=None):
         self.url = make_url(url)
         self.session = None
-        self.Base = declarative_base()
         self.label = label
-        ping_engine = create_engine(self.url,
-                                    connect_args={'connect_timeout': 1})
+        self._conn = None
+
+        # To stringify table classes, we must merge the two meta classes.
+        class BaseMeta(DeclarativeMeta, IndraDBTableMetaClass):
+            pass
+        self.Base = declarative_base(metaclass=BaseMeta)
+
+        # Check to see if the database if available.
         self.available = True
         try:
-            ping_engine.execute('SELECT 1 AS ping;')
+            create_engine(
+                self.url,
+                connect_args={'connect_timeout': 1}
+            ).execute('SELECT 1 AS ping;')
         except Exception as err:
             logger.warning(f"Database {repr(self.url)} is not available: {err}")
             self.available = False
             return
+
+        # Create the engine (connection manager).
         self.engine = create_engine(self.url)
-        self._conn = None
         return
 
     def _init_foreign_key_map(self, foreign_key_map):
@@ -368,9 +378,26 @@ class DatabaseManager(object):
         """Get a list of available tables."""
         return [tbl_name for tbl_name in self.tables.keys()]
 
-    def show_tables(self):
+    def show_tables(self, active_only=False, schema=None):
         """Print a list of all the available tables."""
-        print(self.get_tables())
+        def print_table(table_name):
+            if tbl_name in self.tables:
+                print(self.tables[table_name])
+
+        if not active_only:
+            for tbl_name in self.get_tables():
+                tbl = self.tables[tbl_name]
+                if schema is None \
+                   or tbl.get_schema(default='public') == schema:
+                    print_table(tbl_name)
+        else:
+            if schema is None:
+                for active_schema in self.get_schemas():
+                    for tbl_name in self.get_active_tables(active_schema):
+                        print_table(tbl_name)
+            else:
+                for tbl_name in self.get_active_tables(schema):
+                    print_table(tbl_name)
 
     def get_active_tables(self, schema=None):
         """Get the tables currently active in the database.
@@ -966,8 +993,8 @@ class DatabaseManager(object):
                              "formatted string or S3Path object, not %s."
                              % type(dump_file))
 
-        from subprocess import check_call
         from os import environ
+        from subprocess import run, PIPE
 
         # Make sure the session is fresh and any previous session are done.
         self.session.close()
@@ -981,9 +1008,17 @@ class DatabaseManager(object):
         # anything went wrong).
         option_list = [f'--{opt}' if isinstance(val, bool) and val
                        else f'--{opt}={val}' for opt, val in options.items()]
-        cmd = ' '.join(["pg_dump", *self._form_pg_args(), *option_list, '-Fc',
-                        '|', 'aws', 's3', 'cp', '-', dump_file.to_string()])
-        check_call(cmd, shell=True, env=my_env)
+        cmd = ["pg_dump", *self._form_pg_args(), *option_list, '-Fc']
+
+        # If we are testing the database, we
+        if not is_db_testing():
+            cmd += ['|', 'aws', 's3', 'cp', '-', dump_file.to_string()]
+            run(' '.join(cmd), shell=True, env=my_env, check=True)
+        else:
+            import boto3
+            res = run(' '.join(cmd), shell=True, env=my_env, stdout=PIPE,
+                      check=True)
+            dump_file.upload(boto3.client('s3'), res.stdout)
         return dump_file
 
     def vacuum(self, analyze=True):
@@ -1002,7 +1037,7 @@ class DatabaseManager(object):
                              "formatted string or S3Path object, not %s."
                              % type(dump_file))
 
-        from subprocess import run
+        from subprocess import run, PIPE
         from os import environ
 
         self.session.close()
@@ -1016,10 +1051,15 @@ class DatabaseManager(object):
         logger.info("Dumping into the database.")
         option_list = [f'--{opt}' if isinstance(val, bool) and val
                        else f'--{opt}={val}' for opt, val in options.items()]
-        run(' '.join(['aws', 's3', 'cp', dump_file.to_string(), '-', '|',
-                      'pg_restore', *self._form_pg_args(), *option_list,
-                      '--no-owner']),
-            env=my_env, shell=True, check=True)
+        cmd = ['pg_restore', *self._form_pg_args(), *option_list, '--no-owner']
+        if not is_db_testing():
+            cmd = ['aws', 's3', 'cp', dump_file.to_string(), '-', '|'] + cmd
+            run(' '.join(cmd), shell=True, env=my_env, check=True)
+        else:
+            import boto3
+            res = dump_file.get(boto3.client('s3'))
+            run(' '.join(cmd), shell=True, env=my_env, input=res['Body'].read(),
+                check=True)
         self.session.close()
         self.grab_session()
         return dump_file
@@ -1038,11 +1078,12 @@ class PrincipalDatabaseManager(DatabaseManager):
         if not self.available:
             return
 
-        self.tables = principal_schema.get_schema(self.Base)
+        self.public = principal_schema.get_schema(self.Base)
         self.readonly = readonly_schema.get_schema(self.Base)
+        self.tables = {k: v for d in [self.public, self.readonly]
+                       for k, v in d.items()}
 
-        for tbl in (t for d in [self.tables, self.readonly]
-                    for t in d.values()):
+        for tbl in self.tables.values():
             if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl
             elif tbl.__name__ == 'SourceMeta':
@@ -1062,11 +1103,13 @@ class PrincipalDatabaseManager(DatabaseManager):
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
 
-    def generate_readonly(self, allow_continue=True):
+    def generate_readonly(self, belief_dict, allow_continue=True):
         """Manage the materialized views.
 
         Parameters
         ----------
+        belief_dict : dict
+            The dictionary, keyed by hash, of belief calculated for Statements.
         allow_continue : bool
             If True (default), continue to build the schema if it already
             exists. If False, give up if the schema already exists.
@@ -1103,8 +1146,18 @@ class PrincipalDatabaseManager(DatabaseManager):
         # errors.)
         assert len(set(CREATE_ORDER)) == len(CREATE_ORDER),\
             "Elements in CREATE_ORDERED are NOT unique."
-        assert set(CREATE_ORDER) == set(self.readonly.keys()),\
-            "Not all readonly tables included in CREATE_ORDER."
+        to_create = set(CREATE_ORDER)
+        in_ro = set(self.readonly.keys()) - {'belief'}  # belief is pre-loaded
+        assert to_create == in_ro,\
+            f"Not all readonly tables included in CREATE_ORDER:\n" \
+            f"extra in create_order={to_create-in_ro}\n" \
+            f"extra in tables={in_ro-to_create}."
+
+        # Dump the belief dict into the database.
+        self.Belief.__table__.create(bind=self.engine)
+        self.copy(self.Belief.full_name(),
+                  [(int(h), n) for h, n in belief_dict.items()],
+                  ('mk_hash', 'belief'))
 
         # Build the tables.
         for i, ro_name in enumerate(CREATE_ORDER):
@@ -1147,14 +1200,14 @@ class PrincipalDatabaseManager(DatabaseManager):
         return self.pg_dump(dump_file, schema='readonly')
 
     def create_tables(self, tbl_list=None):
-        "Create the tables for INDRA database."
+        """Create the public tables for INDRA database."""
         ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
                           'reading', 'db_info', 'raw_statements', 'raw_agents',
                           'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
                           'pa_mods', 'pa_muts', 'raw_unique_links',
                           'support_links']
         if tbl_list is None:
-            tbl_list = list(self.tables.keys())
+            tbl_list = list(self.public.keys())
 
         tbl_name_list = []
         for tbl in tbl_list:
@@ -1162,20 +1215,22 @@ class PrincipalDatabaseManager(DatabaseManager):
                 tbl_name_list.append(tbl)
             else:
                 tbl_name_list.append(tbl.__tablename__)
+
         # These tables must be created in this order.
         for tbl_name in ordered_tables:
             if tbl_name in tbl_name_list:
                 tbl_name_list.remove(tbl_name)
                 logger.debug("Creating %s..." % tbl_name)
-                if not self.tables[tbl_name].__table__.exists(self.engine):
-                    self.tables[tbl_name].__table__.create(bind=self.engine)
+                if not self.public[tbl_name].__table__.exists(self.engine):
+                    self.public[tbl_name].__table__.create(bind=self.engine)
                     logger.debug("Table created.")
                 else:
                     logger.debug("Table already existed.")
+
         # The rest can be started any time.
         for tbl_name in tbl_name_list:
             logger.debug("Creating %s..." % tbl_name)
-            self.tables[tbl_name].__table__.create(bind=self.engine)
+            self.public[tbl_name].__table__.create(bind=self.engine)
             logger.debug("Table created.")
         return
 
@@ -1191,8 +1246,6 @@ class PrincipalDatabaseManager(DatabaseManager):
                 if isinstance(tbl, str):
                     if tbl in self.tables:
                         tbl_list[i] = self.tables[tbl]
-                    elif tbl in self.readonly:
-                        tbl_list[i] = self.readonly[tbl]
                     else:
                         raise ValueError(f"Did not recognize table name: {tbl}")
         if not force:
@@ -1225,7 +1278,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         return True
 
     def _clear(self, tbl_list=None, force=False):
-        "Brutal clearing of all tables in tbl_list, or all tables."
+        """Brutal clearing of all tables in tbl_list, or all public."""
         # This is intended for testing purposes, not general use.
         # Use with care.
         self.grab_session()

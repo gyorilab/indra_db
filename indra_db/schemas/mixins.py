@@ -1,7 +1,9 @@
 import logging
+from termcolor import colored
 from psycopg2.errors import DuplicateTable
 from sqlalchemy import inspect, Column, BigInteger
 from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +12,31 @@ class DbIndexError(Exception):
     pass
 
 
-class IndraDBTable(object):
+class IndraDBTableMetaClass(type):
+    """This serves as a meta class for all tables, allowing `str` to be useful.
+
+    In particular, this makes it so that the string gives a representation of
+    the SQL table, including columns.
+    """
+    def __init__(cls, *args, **kwargs):
+        assert hasattr(cls, 'full_name'), \
+            ("Class using metaclass IndraDBTableMetaClass missing critical "
+             "class method: `full_name`")
+        super(IndraDBTableMetaClass, cls).__init__(*args, **kwargs)
+
+    def __str__(cls):
+        col_names = [colored(attr_name, 'magenta')
+                     for attr_name, attr_val in cls.__dict__.items()
+                     if isinstance(attr_val, Column)
+                     or isinstance(attr_val, InstrumentedAttribute)]
+        cols = '\n  '
+        cols += ', '.join(col_names)
+        cols += '\n'
+        full_name = colored(cls.full_name(force_schema=True), attrs=['bold'])
+        return f"{full_name}({cols})"
+
+
+class IndraDBTable(metaclass=IndraDBTableMetaClass):
     _indices = []
     _skip_disp = []
     _always_disp = ['id']
@@ -54,26 +80,27 @@ class IndraDBTable(object):
         return
 
     @classmethod
+    def get_schema(cls, default=None):
+        """Get the schema of this table."""
+        if not hasattr(cls, '__table_args__'):
+            return default
+
+        if isinstance(cls.__table_args__, dict):
+            return cls.__table_args__.get('schema')
+        elif isinstance(cls.__table_args__, tuple):
+            for arg in cls.__table_args__:
+                if isinstance(arg, dict) and 'schema' in arg.keys():
+                    return arg['schema']
+
+        return default
+
+    @classmethod
     def full_name(cls, force_schema=False):
         """Get the full name including the schema, if supplied."""
         name = cls.__tablename__
 
         # If we are definitely going to include the schema, default to public
-        if force_schema:
-            schema_name = 'public'
-        else:
-            schema_name = None
-
-        # Look for any information in the __table_args__ about the schema
-        if not hasattr(cls, '__table_args__'):
-            schema_name = None
-        elif isinstance(cls.__table_args__, dict):
-            schema_name = cls.__table_args__.get('schema')
-        elif isinstance(cls.__table_args__, tuple):
-            for arg in cls.__table_args__:
-                if isinstance(arg, dict) and 'schema' in arg.keys():
-                    schema_name = arg['schema']
-                    break
+        schema_name = cls.get_schema('public' if force_schema else None)
 
         # Prepend if we found something.
         if schema_name:
@@ -191,9 +218,9 @@ class NamespaceLookup(ReadonlyTable):
 
     @classmethod
     def get_definition(cls):
-        return ("SELECT db_id, ag_id, role_num, ag_num, type_num, "
-                "       mk_hash, ev_count, activity, is_active, agent_count,\n"
-                "       is_complex_dup\n"
+        return ("SELECT db_id, ag_id, role_num, ag_num, type_num,\n"
+                "       mk_hash, ev_count, belief, activity, is_active,\n"
+                "       agent_count, is_complex_dup\n"
                 "FROM readonly.pa_meta\n"
                 "WHERE db_name = '%s'" % cls.__dbname__)
 

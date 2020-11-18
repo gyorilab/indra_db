@@ -57,7 +57,7 @@ def insert_raw_agents(db, batch_id, stmts=None, verbose=False,
                 (batch_id,))
     if verbose:
         num_stmts = cur.rowcount
-        print("Loading:", end='', flush=True)
+        print("Loading raw agents:", end='', flush=True)
 
     i = 0
     res_list = cur.fetchmany(num_per_yield)
@@ -101,13 +101,15 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None, commit=True):
 
     if verbose:
         num_stmts = len(stmts)
+        if num_stmts <= 25:
+            verbose = False
 
     # Construct the agent records
     logger.info("Building data from agents for insert into pa_agents, "
                 "pa_mods, and pa_muts...")
 
     if verbose:
-        print("Loading:", end='', flush=True)
+        print("Loading pa agents:", end='', flush=True)
 
     ref_data = []
     mod_data = []
@@ -230,12 +232,11 @@ def extract_agent_data(stmt, stmt_id):
     return ref_data, mod_data, mut_data
 
 
-def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
-                    lazy=False):
+def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None):
     """Insert statement, their database, and any affiliated agents.
 
     Note that this method is for uploading statements that came from a
-    database to our databse, not for inserting any statements to the database.
+    database to our database, not for inserting any statements to the database.
 
     Parameters
     ----------
@@ -263,7 +264,7 @@ def insert_db_stmts(db, stmts, db_ref_id, verbose=False, batch_id=None,
     cols = ('uuid', 'mk_hash', 'source_hash', 'db_info_id', 'type', 'json',
             'indra_version', 'batch_id')
     if verbose:
-        print("Loading:", end='', flush=True)
+        print("Loading db statements:", end='', flush=True)
 
     for i, stmt in enumerate(stmts):
         assert len(stmt.evidence) == 1, \
@@ -326,7 +327,7 @@ def insert_pa_stmts(db, stmts, verbose=False, do_copy=True,
     cols = ('uuid', 'matches_key', 'mk_hash', 'type', 'json', 'indra_version')
     activity_rows = []
     if verbose:
-        print("Loading:", end='', flush=True)
+        print("Loading pa stmts:", end='', flush=True)
     for i, stmt in enumerate(stmts):
         stmt_rec = (
             stmt.uuid,

@@ -66,8 +66,8 @@ class DbPreassembler:
         time. In general, a larger batch size will somewhat be faster, but
         require much more memory.
     """
-    def __init__(self, batch_size=10000, s3_cache=None,
-                 print_logs=False, stmt_type=None, yes_all=False):
+    def __init__(self, batch_size=10000, s3_cache=None, print_logs=False,
+                 stmt_type=None, yes_all=False, ontology=None):
         self.batch_size = batch_size
         if s3_cache is not None:
             # Make the cache specific to stmt type. This guards against
@@ -94,9 +94,11 @@ class DbPreassembler:
                 logger.info(f"No prior jobs appear in the cache: {s3_cache}.")
         else:
             self.s3_cache = None
-        self.pa = Preassembler(bio_ontology)
-        bio_ontology.initialize()
-        bio_ontology._build_transitive_closure()
+        if ontology is None:
+            ontology = bio_ontology
+            ontology.initialize()
+            ontology._build_transitive_closure()
+        self.pa = Preassembler(ontology)
         self.__tag = 'Unpurposed'
         self.__print_logs = print_logs
         self.pickle_stashes = None
@@ -219,7 +221,7 @@ class DbPreassembler:
 
     def _get_support_mark(self, continuing):
         if self.s3_cache is None:
-            return
+            return -1
 
         if not continuing:
             return -1

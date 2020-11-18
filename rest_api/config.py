@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_optional
 
 TITLE = "The INDRA Database"
 DEPLOYMENT = environ.get('INDRA_DB_API_DEPLOYMENT')
-VUE_ROOT = environ.get('INDRA_DB_API_VUE')
+VUE_ROOT = environ.get('INDRA_DB_API_VUE_ROOT')
 MAX_STMTS = int(0.5e3)
 REDACT_MESSAGE = '[MISSING/INVALID CREDENTIALS: limited to 200 char for Elsevier]'
 

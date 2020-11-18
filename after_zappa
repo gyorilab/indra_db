@@ -10,7 +10,7 @@ from indra_db.util.aws import get_role_kwargs
 
 # Lambda CONFIG parameters
 aws_role = CONFIG['lambda']['role']
-aws_primary_function = CONFIG['lambda']['function']
+aws_primary_function = 'indra-db-api-ROOT'
 
 # Load the Zappa config file.
 ZAPPA_CONFIG = 'zappa_settings.json'

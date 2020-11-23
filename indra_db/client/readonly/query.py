@@ -39,8 +39,10 @@ class QueryResult(object):
         The limit that was applied to this query.
     offset_comp : int
         The next offset that would be appropriate if this is a paging query.
-    evidence_totals : dict
-        The total numbers of evidence for each element.
+    evidence_counts : dict
+        The count of evidence for each element.
+    belief_scores : dict
+        The belief score of each element.
     query_json : dict
         A description of the query that was used.
 
@@ -80,6 +82,10 @@ class QueryResult(object):
         else:
             self.next_offset = (0 if offset is None else offset) + offset_comp
         self.query_json = query_json
+
+    @classmethod
+    def empty(cls, empty_res, limit, offset, query_json, result_type):
+        return cls(empty_res, limit, offset, 0, {}, {}, query_json, result_type)
 
     @classmethod
     def from_json(cls, json_dict) \
@@ -184,6 +190,10 @@ class StatementQueryResult(QueryResult):
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
 
+    @classmethod
+    def empty(cls, limit: int, offset: int, query_json: dict):
+        return cls({}, limit, offset, {}, {}, 0, {}, query_json)
+
     def json(self) -> dict:
         """Get the JSON dump of the results."""
         json_dict = super(StatementQueryResult, self).json()
@@ -218,6 +228,10 @@ class AgentQueryResult(QueryResult):
                                                evidence_counts, belief_scores,
                                                query_json, 'agents')
         self.complexes_covered = complexes_covered
+
+    @classmethod
+    def empty(cls, limit, offset, query_json):
+        return cls({}, limit, offset, 0, set(), {}, {}, query_json)
 
     def json(self) -> dict:
         json_dict = super(AgentQueryResult, self).json()
@@ -636,8 +650,7 @@ class Query(object):
 
         # If the result is by definition empty, save ourselves time and work.
         if self.empty:
-            return StatementQueryResult({}, limit, offset, {}, 0, {},
-                                        self.to_json())
+            return StatementQueryResult.empty(limit, offset, self.to_json())
 
         # If the database isn't available, route through the web service.
         if ro is None:
@@ -821,8 +834,8 @@ class Query(object):
 
         # If the result is by definition empty, save time and effort.
         if self.empty:
-            return QueryResult(set(), limit, offset, 0, {}, self.to_json(),
-                               'hashes')
+            return QueryResult.empty(set(), limit, offset, self.to_json(),
+                                     'hashes')
 
         # If the database isn't directly available, route through the web API.
         if ro is None:
@@ -877,8 +890,8 @@ class Query(object):
             if self._print_only:
                 print("Query is empty, no SQL run.")
                 return
-            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
-                               'interactions')
+            return QueryResult.empty({}, limit, offset, self.to_json(),
+                                     'interactions')
 
         if ro is None:
             return self._rest_get('interactions', limit, offset, best_first)
@@ -920,8 +933,8 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
-                               'relations')
+            return QueryResult.empty({}, limit, offset, self.to_json(),
+                                     'relations')
 
         if ro is None:
             return self._rest_get('relations', limit, offset, best_first,
@@ -969,8 +982,7 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return AgentQueryResult({}, limit, offset, 0, set(), {},
-                                    self.to_json())
+            return AgentQueryResult.empty(limit, offset, self.to_json())
 
         if ro is None:
             return self._rest_get('agents', limit, offset, best_first,

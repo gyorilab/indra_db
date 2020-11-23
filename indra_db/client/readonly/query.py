@@ -53,20 +53,24 @@ class QueryResult(object):
         The limit that was applied to this query.
     next_offset : int
         The next offset that would be appropriate if this is a paging query.
-    evidence_totals : dict
-        The total numbers of evidence for each element.
+    evidence_counts : dict
+        The count of evidence for each element.
+    belief_scores : dict
+        The belief score of each element.
     query_json : dict
         A description of the query that was used.
     """
     def __init__(self, results: TypeIterable, limit: int, offset: int,
-                 offset_comp: int, evidence_totals: dict, query_json: dict,
-                 result_type: str):
+                 offset_comp: int, evidence_counts: dict, belief_scores: dict,
+                 query_json: dict, result_type: str):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
                              "and not a string.")
         self.results = results
-        self.evidence_totals = evidence_totals
-        self.total_evidence = sum(self.evidence_totals.values())
+        self.evidence_counts = evidence_counts
+        self.belief_scores = belief_scores
+        self.total_evidence = sum(self.evidence_counts.values())
+        self.max_belief = max(self.belief_scores.values())
         self.limit = limit
         self.offset = offset
         self.result_type = result_type
@@ -100,8 +104,10 @@ class QueryResult(object):
         # Convert result keys into integers, if appropriate
         if isinstance(nc.results, dict):
             if nc.result_type in ['statements', 'interactions']:
-                nc.evidence_totals = {int(k): v
-                                      for k, v in nc.evidence_totals.items()}
+                nc.evidence_counts = {int(k): v
+                                      for k, v in nc.evidence_counts.items()}
+                nc.belief_scores = {int(k): v
+                                    for k, v in nc.belief_scores.items()}
                 nc.results = {int(k): v for k, v in nc.results.items()}
 
         # Check calculated values.
@@ -125,7 +131,8 @@ class QueryResult(object):
         return {'results': json_results, 'limit': self.limit,
                 'offset': self.offset, 'next_offset': self.next_offset,
                 'query_json': self.query_json,
-                'evidence_totals': self.evidence_totals,
+                'evidence_counts': self.evidence_counts,
+                'belief_scores': self.belief_scores,
                 'total_evidence': self.total_evidence,
                 'result_type': self.result_type,
                 'offset_comp': self.offset_comp}
@@ -136,6 +143,25 @@ class StatementQueryResult(QueryResult):
 
     This class encapsulates the results of a search for statements in the
     database. This standardizes the results of such searches.
+
+    Parameters
+    ----------
+    results : dict
+        The results of the query.
+    limit : int
+        The content limit that was used in making the query.
+    offset : int
+        The offset that was used in making the query.
+    evidence_counts : dict
+        The count of evidence available for each element.
+    belief_scores : dict
+        The score for each element.
+    returned_evidence : int
+        The count of evidence that was returned in this query.
+    source_counts : dict
+        The counts of evidence from each source for each element.
+    query_json : dict
+        The JSON representation of the query that was used.
 
     Attributes
     ----------
@@ -148,11 +174,12 @@ class StatementQueryResult(QueryResult):
         A description of the query that was used.
     """
     def __init__(self, results: dict, limit: int, offset: int,
-                 evidence_totals: dict, returned_evidence: int,
-                 source_counts: dict, query_json: dict):
+                 evidence_counts: dict, belief_scores: dict,
+                 returned_evidence: int, source_counts: dict, query_json: dict):
         super(StatementQueryResult, self).__init__(results, limit,
                                                    offset, len(results),
-                                                   evidence_totals, query_json,
+                                                   evidence_counts,
+                                                   belief_scores, query_json,
                                                    'statements')
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
@@ -178,17 +205,18 @@ class StatementQueryResult(QueryResult):
 
     def statements(self) -> list:
         """Get a list of Statements from the results."""
+        assert isinstance(self.results, dict), "Results must be a dictionary."
         return stmts_from_json(list(self.results.values()))
 
 
 class AgentQueryResult(QueryResult):
     """The result of a query for agent JSONs."""
     def __init__(self, results: dict, limit: int, offset: int, num_rows: int,
-                 complexes_covered: set, evidence_totals: dict,
-                 query_json: dict):
+                 complexes_covered: set, evidence_counts: dict,
+                 belief_scores: dict, query_json: dict):
         super(AgentQueryResult, self).__init__(results, limit, offset, num_rows,
-                                               evidence_totals, query_json,
-                                               'agents')
+                                               evidence_counts, belief_scores,
+                                               query_json, 'agents')
         self.complexes_covered = complexes_covered
 
     def json(self) -> dict:

@@ -268,6 +268,7 @@ class AgentJsonSQL:
                                   ro.AgentInteractions.type_num,
                                   ro.AgentInteractions.agent_count,
                                   ro.AgentInteractions.ev_count,
+                                  ro.AgentInteractions.belief,
                                   ro.AgentInteractions.activity,
                                   ro.AgentInteractions.is_active,
                                   ro.AgentInteractions.src_json).distinct()
@@ -295,7 +296,7 @@ class AgentJsonSQL:
     def order_by(self, *args, **kwargs):
         return self._do_to_query('order_by', *args, **kwargs)
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         raise NotImplementedError
 
     def run(self):
@@ -305,18 +306,24 @@ class AgentJsonSQL:
 class InteractionSQL(AgentJsonSQL):
     meta_type = 'interactions'
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         self.agg_q = self.q
-        return [desc(ro.AgentInteractions.ev_count),
-                ro.AgentInteractions.type_num,
-                ro.AgentInteractions.agent_json]
+        if sort_by == 'ev_count':
+            return [desc(ro.AgentInteractions.ev_count),
+                    ro.AgentInteractions.type_num,
+                    ro.AgentInteractions.agent_json]
+        else:
+            return [desc(ro.AgentInteractions.belief),
+                    ro.AgentInteractions.type_num,
+                    ro.AgentInteractions.agent_json]
 
     def run(self):
         logger.debug(f"Executing query (interaction):\n{self.q}")
         names = self.agg_q.all()
         results = {}
         ev_totals = {}
-        for h, ag_json, type_num, n_ag, n_ev, act, is_act, src_json in names:
+        bel_maxes = {}
+        for h, ag_json, type_num, n_ag, n_ev, bel, act, is_act, src_json in names:
             results[h] = {
                 'hash': h,
                 'id': str(h),
@@ -327,20 +334,22 @@ class InteractionSQL(AgentJsonSQL):
                 'source_counts': src_json,
             }
             ev_totals[h] = sum(src_json.values())
+            bel_maxes[h] = max([bel, bel_maxes.get(h, 0)])
             assert ev_totals[h] == n_ev
-        return results, ev_totals, len(names)
+        return results, ev_totals, bel_maxes, len(names)
 
 
 class RelationSQL(AgentJsonSQL):
     meta_type = 'relations'
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         names_sq = self.q.subquery('names')
         rel_q = ro.session.query(
             names_sq.c.agent_json,
             names_sq.c.type_num,
             names_sq.c.agent_count,
             func.sum(names_sq.c.ev_count).label('ev_count'),
+            func.max(names_sq.c.belief).label('belief'),
             names_sq.c.activity,
             names_sq.c.is_active,
             func.array_agg(names_sq.c.src_json).label('src_jsons'),
@@ -357,16 +366,21 @@ class RelationSQL(AgentJsonSQL):
         sq = rel_q.subquery('relations')
         self.agg_q = ro.session.query(sq.c.agent_json, sq.c.type_num,
                                       sq.c.agent_count, sq.c.ev_count,
-                                      sq.c.activity, sq.c.is_active,
-                                      sq.c.src_jsons, sq.c.hashes)
-        return [desc(sq.c.ev_count), sq.c.type_num]
+                                      sq.c.belief, sq.c.activity,
+                                      sq.c.is_active, sq.c.src_jsons,
+                                      sq.c.hashes)
+        if sort_by == 'ev_count':
+            return [desc(sq.c.ev_count), sq.c.type_num]
+        else:
+            return [desc(sq.c.belief), sq.c.typ_num]
 
     def run(self):
         logger.debug(f"Executing query (get_relations):\n{self.q}")
         names = self.agg_q.all()
         results = {}
         ev_totals = {}
-        for ag_json, type_num, n_ag, n_ev, act, is_act, srcs, hashes in names:
+        bel_maxes = {}
+        for ag_json, type_num, n_ag, n_ev, bel, act, is_act, srcs, hashes in names:
             # Build the unique key for this relation.
             ordered_agents = [ag_json.get(str(n))
                               for n in range(max(n_ag, int(max(ag_json))+1))]
@@ -389,6 +403,7 @@ class RelationSQL(AgentJsonSQL):
                             'type': stmt_type, 'activity': act,
                             'is_active': is_act, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
+            bel_maxes[key] = max([bel_maxes.get(key, 0), bel])
 
             # Do a quick sanity check. If this fails, something went VERY wrong.
             assert ev_totals[key] == n_ev, "Evidence totals don't add up."
@@ -434,12 +449,13 @@ class AgentSQL(AgentJsonSQL):
         self._offset = offset
         return self
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         names_sq = self.q.subquery('names')
         agent_q = ro.session.query(
             names_sq.c.agent_json,
             names_sq.c.agent_count,
             func.sum(names_sq.c.ev_count).label('ev_count'),
+            func.max(names_sq.c.belief).label('belief'),
             func.array_agg(names_sq.c.src_json).label('src_jsons'),
             func.jsonb_object(
                 func.array_agg(names_sq.c.mk_hash.cast(String)),
@@ -451,10 +467,13 @@ class AgentSQL(AgentJsonSQL):
         )
         sq = agent_q.subquery('agents')
         self.agg_q = ro.session.query(sq.c.agent_json, sq.c.agent_count,
-                                      sq.c.ev_count, sq.c.src_jsons,
-                                      sq.c.hashes)
+                                      sq.c.ev_count, sq.c.belief,
+                                      sq.c.src_jsons, sq.c.hashes)
         self._return_hashes = with_hashes
-        return [desc(sq.c.ev_count), sq.c.agent_json]
+        if sort_by == 'ev_count':
+            return [desc(sq.c.ev_count), sq.c.agent_json]
+        else:
+            return [desc(sq.c.belief), sq.c.agent_json]
 
     def _get_next(self, more_offset=0):
         q = self.agg_q
@@ -474,12 +493,13 @@ class AgentSQL(AgentJsonSQL):
 
         results = {}
         ev_totals = {}
+        bel_maxes = {}
         if self.complexes_covered is None:
             self.complexes_covered = set()
         num_entries = 0
         num_rows = 0
         while True:
-            for ag_json, n_ag, n_ev, src_jsons, hashes in names:
+            for ag_json, n_ag, n_ev, bel, src_jsons, hashes in names:
                 num_rows += 1
 
                 # See if this row has anything new to offer.
@@ -511,6 +531,7 @@ class AgentSQL(AgentJsonSQL):
                 else:
                     results[key]['hashes'] = None
                 ev_totals[key] = sum(source_counts.values())
+                bel_maxes[key] = max([bel, bel_maxes.get(key, 0)])
 
                 # Sanity check. Only a coding error could cause this to fail.
                 assert n_ev == ev_totals[key], "Evidence counts don't add up."

@@ -89,7 +89,7 @@ def _load_config():
 
         # Handle general parameters
         if section == 'general':
-            if CONFIG.pop('testing') == 'true':
+            if CONFIG.pop('testing', None) == 'true':
                 CONFIG['testing'] = True
             else:
                 CONFIG['testing'] = False
@@ -184,6 +184,7 @@ def run_in_test_mode(func):
     @wraps(func)
     def wrap_func(*args, **kwargs):
         global CONFIG
+        assert isinstance(CONFIG, dict)
         global TEST_RECORDS
         TEST_RECORDS = []
         orig_value = CONFIG['testing']
@@ -198,7 +199,8 @@ def run_in_test_mode(func):
 
 def is_db_testing():
     """Check whether we are in testing mode."""
-    return CONFIG['testing']
+    assert isinstance(CONFIG, dict)
+    return CONFIG.get('testing', False)
 
 
 class WontDoIt(Exception):

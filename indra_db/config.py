@@ -89,7 +89,7 @@ def _load_config():
 
         # Handle general parameters
         if section == 'general':
-            if CONFIG.pop('testing', None) == 'true':
+            if def_dict.pop('testing', None) == 'true':
                 CONFIG['testing'] = True
             else:
                 CONFIG['testing'] = False

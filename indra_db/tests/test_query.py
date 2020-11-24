@@ -328,7 +328,7 @@ def test_num_evidence():
     ro = get_db('primary')
     q = HasNumEvidence(tuple(range(5, 10)))
     res = q.get_statements(ro, limit=5, ev_limit=8)
-    assert all(5 <= n < 10 for n in res.evidence_totals.values())
+    assert all(5 <= n < 10 for n in res.evidence_counts.values())
     stmts = res.statements()
     assert all(5 < len(s.evidence) <= 8 for s in stmts)
 
@@ -444,15 +444,15 @@ def test_query_set_behavior():
     unfound = []
     collecting_results = True
 
-    def try_query(q, compair=None, md=None):
+    def try_query(q, compare=None, md=None):
         nonlocal n_runs
 
         # Test query logical consistency
         result = None
         try:
             result = dq(q)
-            if compair is not None:
-                assert result == compair, 'Result mismatch.'
+            if compare is not None:
+                assert result == compare, 'Result mismatch.'
             if not q.empty and not result:
                 unfound.append(q)
             if collecting_results:
@@ -461,7 +461,7 @@ def test_query_set_behavior():
             c.up(True)
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
-                             'compair': compair, 'md': md})
+                             'compare': compare, 'md': md})
             if collecting_results:
                 results.append((result, q))
             n_runs += 1

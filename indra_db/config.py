@@ -79,6 +79,8 @@ def _get_urls_from_env(prefix):
 
 
 def _load_config():
+    global CONFIG
+    assert isinstance(CONFIG, dict)
     parser = ConfigParser()
     parser.read(DB_CONFIG_PATH)
     for section in parser.sections():
@@ -87,6 +89,10 @@ def _load_config():
 
         # Handle general parameters
         if section == 'general':
+            if def_dict.pop('testing', None) == 'true':
+                CONFIG['testing'] = True
+            else:
+                CONFIG['testing'] = False
             CONFIG.update(def_dict)
             continue
 
@@ -125,11 +131,8 @@ def _load_env_config():
         env_is_testing = environ[TESTING_ENV_VAR].lower()
         if env_is_testing == 'true':
             CONFIG['testing'] = True
-        elif env_is_testing == 'false':
-            CONFIG['testing'] = False
         else:
-            raise ValueError(f"Unknown option: {environ[TESTING_ENV_VAR]}, "
-                             f"should be \"true\" or \"false\"")
+            CONFIG['testing'] = False
 
     return
 
@@ -181,6 +184,7 @@ def run_in_test_mode(func):
     @wraps(func)
     def wrap_func(*args, **kwargs):
         global CONFIG
+        assert isinstance(CONFIG, dict)
         global TEST_RECORDS
         TEST_RECORDS = []
         orig_value = CONFIG['testing']
@@ -195,7 +199,8 @@ def run_in_test_mode(func):
 
 def is_db_testing():
     """Check whether we are in testing mode."""
-    return CONFIG['testing']
+    assert isinstance(CONFIG, dict)
+    return CONFIG.get('testing', False)
 
 
 class WontDoIt(Exception):

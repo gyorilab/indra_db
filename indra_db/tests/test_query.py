@@ -7,7 +7,7 @@ from indra.statements import Agent, get_statement_by_name, get_all_descendants
 from indra_db.client.readonly.query import QueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
     SOURCE_GROUPS
-from indra_db.util import extract_agent_data, get_ro, get_db
+from indra_db.util import extract_agent_data, get_db
 from indra_db.client.readonly.query import *
 
 from indra_db.tests.util import get_temp_db
@@ -73,30 +73,33 @@ def _build_test_set():
 
     name_meta_rows = []
     name_meta_cols = ('mk_hash', 'ag_num', 'db_id', 'role_num', 'type_num',
-                      'ev_count', 'activity', 'is_active', 'agent_count')
+                      'ev_count', 'belief', 'activity', 'is_active',
+                      'agent_count')
 
     text_meta_rows = []
     text_meta_cols = ('mk_hash', 'ag_num', 'db_id', 'role_num', 'type_num',
-                      'ev_count', 'activity', 'is_active', 'agent_count')
+                      'ev_count', 'belief', 'activity', 'is_active',
+                      'agent_count')
 
     other_meta_rows = []
     other_meta_cols = ('mk_hash', 'ag_num', 'db_name', 'db_id', 'role_num',
-                       'type_num', 'ev_count', 'activity', 'is_active',
-                       'agent_count')
+                       'type_num', 'ev_count', 'belief', 'activity',
+                       'is_active', 'agent_count')
 
     source_meta_rows = []
     source_meta_cols = ('mk_hash', 'reach', 'medscan', 'pc11', 'signor',
-                        'ev_count', 'type_num', 'activity', 'is_active',
-                        'agent_count', 'num_srcs', 'src_json', 'only_src',
-                        'has_rd', 'has_db')
+                        'ev_count', 'belief', 'type_num', 'activity',
+                        'is_active', 'agent_count', 'num_srcs', 'src_json',
+                        'only_src', 'has_rd', 'has_db')
 
     mesh_term_meta_rows = []
-    mesh_term_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
-                           'activity', 'is_active', 'agent_count')
+    mesh_term_meta_cols = ('mk_hash', 'ev_count', 'belief', 'mesh_num',
+                           'type_num', 'activity', 'is_active', 'agent_count')
 
     mesh_concept_meta_rows = []
-    mesh_concept_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
-                              'activity', 'is_active', 'agent_count')
+    mesh_concept_meta_cols = ('mk_hash', 'ev_count', 'belief', 'mesh_num',
+                              'type_num', 'activity', 'is_active',
+                              'agent_count')
     for stype, refs, activity, is_active in stmts:
         # Extract agents, and make a Statement.
         StmtClass = get_statement_by_name(stype)
@@ -117,11 +120,12 @@ def _build_test_set():
         # Connect with a source.
         source_dict = source_data[len(source_meta_rows) % len(source_data)]
         ev_count = sum(source_dict['sources'].values())
+        belief = random.random()
         src_row = (stmt.get_hash(),)
         for src_name in ['reach', 'medscan', 'pc11', 'signor']:
             src_row += (source_dict['sources'].get(src_name),)
-        src_row += (ev_count, ro_type_map.get_int(stype), activity, is_active,
-                    len(refs), len(source_dict['sources']),
+        src_row += (ev_count, belief, ro_type_map.get_int(stype), activity,
+                    is_active, len(refs), len(source_dict['sources']),
                     json.dumps(source_dict['sources']), source_dict['only_src'],
                     source_dict['has_rd'], source_dict['has_db'])
         source_meta_rows.append(src_row)
@@ -130,12 +134,12 @@ def _build_test_set():
         for mesh_id in source_dict['mesh_ids']:
             if mesh_id[0] == 'D':
                 mesh_term_meta_rows.append(
-                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                    (stmt.get_hash(), ev_count, belief, int(mesh_id[1:]),
                      ro_type_map.get_int(stype), activity, is_active, len(refs))
                 )
             else:
                 mesh_concept_meta_rows.append(
-                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                    (stmt.get_hash(), ev_count, belief, int(mesh_id[1:]),
                      ro_type_map.get_int(stype), activity, is_active, len(refs))
                 )
 
@@ -143,8 +147,8 @@ def _build_test_set():
         ref_rows, _, _ = extract_agent_data(stmt, stmt.get_hash())
         for row in ref_rows:
             row = row[:4] + (ro_role_map.get_int(row[4]),
-                             ro_type_map.get_int(stype),  ev_count, activity,
-                             is_active, len(refs))
+                             ro_type_map.get_int(stype),  ev_count, belief,
+                             activity, is_active, len(refs))
             if row[2] == 'NAME':
                 row = row[:2] + row[3:]
                 name_meta_rows.append(row)

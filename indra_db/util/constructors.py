@@ -68,7 +68,7 @@ def get_primary_db(force_new=False):
 
 
 @nope_in_test
-def get_db(db_label):
+def get_db(db_label, protected=False):
     """Get a db instance base on it's name in the config or env.
 
     If the label does not exist or the database labeled can't be reached, None
@@ -81,7 +81,7 @@ def get_db(db_label):
                      f"file or environment variables.")
         return
     db_url = defaults[db_label]
-    db = PrincipalDatabaseManager(db_url, label=db_label)
+    db = PrincipalDatabaseManager(db_url, label=db_label, protected=protected)
     if not db.available:
         return
     db.grab_session()
@@ -89,7 +89,7 @@ def get_db(db_label):
 
 
 @nope_in_test
-def get_ro(ro_label):
+def get_ro(ro_label, protected=True):
     """Get a readonly database instance, based on its name.
 
     If the label does not exist or the database labeled can't be reached, None
@@ -105,7 +105,7 @@ def get_ro(ro_label):
                      f"config file or environment variables.")
         return
     db_url = defaults[ro_label]
-    ro = ReadonlyDatabaseManager(db_url, label=ro_label)
+    ro = ReadonlyDatabaseManager(db_url, label=ro_label, protected=protected)
     if not ro.available:
         return
     ro.grab_session()

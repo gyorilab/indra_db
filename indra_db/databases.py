@@ -88,6 +88,8 @@ def _copy_method(get_null_return=lambda: None):
             if not CAN_COPY:
                 raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
                                    "available.")
+            if obj.is_protected():
+                raise RuntimeError("Attempt to copy while in protected mode!")
             if len(data) is 0:
                 return get_null_return()  # Nothing to do....
 
@@ -238,10 +240,11 @@ class DatabaseManager(object):
     _instance_name_fmt = NotImplemented
     _db_name = NotImplemented
 
-    def __init__(self, url, label=None):
+    def __init__(self, url, label=None, protected=False):
         self.url = make_url(url)
         self.session = None
         self.label = label
+        self.__protected = protected
         self._conn = None
 
         # To stringify table classes, we must merge the two meta classes.
@@ -274,6 +277,9 @@ class DatabaseManager(object):
             self.__foreign_key_graph = G
         else:
             self.__foreign_key_graph = None
+
+    def is_protected(self):
+        return self.__protected
 
     def __del__(self, *args, **kwargs):
         if not self.available:
@@ -368,11 +374,16 @@ class DatabaseManager(object):
             return
         if self.session is None or not self.session.is_active:
             logger.debug('Attempting to get session...')
-            DBSession = sessionmaker(bind=self.engine)
+            DBSession = sessionmaker(bind=self.engine,
+                                     autoflush=self.__protected,
+                                     autocommit=self.__protected)
             logger.debug('Got session.')
             self.session = DBSession()
             if self.session is None:
                 raise IndraDbException("Failed to grab session.")
+            if self.__protected:
+                self.session.flush = \
+                    lambda *a, **k: logger.error("Write not allowed!")
 
     def get_tables(self):
         """Get a list of available tables."""
@@ -422,12 +433,18 @@ class DatabaseManager(object):
 
     def create_schema(self, schema_name):
         """Create a schema with the given name."""
+        if self.__protected:
+            logger.error("Running in protected mode, writes not allowed!")
+            return
         with self.engine.connect() as con:
             con.execute('CREATE SCHEMA IF NOT EXISTS %s;' % schema_name)
         return
 
     def drop_schema(self, schema_name, cascade=True):
         """Drop a schema (rather forcefully by default)"""
+        if self.__protected:
+            logger.error("Running in protected mode, writes not allowed!")
+            return
         with self.engine.connect() as con:
             logger.info("Dropping schema %s." % schema_name)
             con.execute('DROP SCHEMA IF EXISTS %s %s;'
@@ -613,6 +630,9 @@ class DatabaseManager(object):
         return random.randint(-2**30, 2**30)
 
     def _prep_copy(self, tbl_name, data, cols):
+        if self.__protected:
+            logger.error("Manager is in protected mode, no writes allowed!")
+            return
 
         # If cols is not specified, use all the cols in the table, else check
         # to make sure the names are valid.
@@ -1022,6 +1042,9 @@ class DatabaseManager(object):
         return dump_file
 
     def vacuum(self, analyze=True):
+        if self.__protected:
+            logger.error("Vacuuming not allowed in protected mode.")
+            return
         conn = self.engine.raw_connection()
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = conn.cursor()
@@ -1073,8 +1096,8 @@ class PrincipalDatabaseManager(DatabaseManager):
     _instance_name_fmt = 'indradb-{name}'
     _db_name = 'indradb_principal'
 
-    def __init__(self, host, label=None):
-        super(self.__class__, self).__init__(host, label)
+    def __init__(self, host, label=None, protected=False):
+        super(self.__class__, self).__init__(host, label, protected)
         if not self.available:
             return
 
@@ -1114,6 +1137,10 @@ class PrincipalDatabaseManager(DatabaseManager):
             If True (default), continue to build the schema if it already
             exists. If False, give up if the schema already exists.
         """
+        if self.__protected:
+            logger.error("Cannot generate readonly in protected mode.")
+            return
+
         # Optionally create the schema.
         if 'readonly' in self.get_schemas():
             if allow_continue:
@@ -1201,6 +1228,9 @@ class PrincipalDatabaseManager(DatabaseManager):
 
     def create_tables(self, tbl_list=None):
         """Create the public tables for INDRA database."""
+        if self.__protected:
+            logger.error("Cannot create tables in protected mode.")
+            return
         ordered_tables = ['text_ref', 'mesh_ref_annotations', 'text_content',
                           'reading', 'db_info', 'raw_statements', 'raw_agents',
                           'raw_mods', 'raw_muts', 'pa_statements', 'pa_agents',
@@ -1241,6 +1271,10 @@ class PrincipalDatabaseManager(DatabaseManager):
         is False, a warning prompt will be raised to asking for confirmation,
         as this action will remove all data from that table.
         """
+        if self.__protected:
+            logger.error("Cannot drop tables in protected mode.")
+            return False
+
         if tbl_list is not None:
             for i, tbl in enumerate(tbl_list[:]):
                 if isinstance(tbl, str):
@@ -1298,8 +1332,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
     _instance_name_fmt = 'indradb-readonly-{name}'
     _db_name = 'indradb_readonly'
 
-    def __init__(self, host, label=None):
-        super(self.__class__, self).__init__(host, label)
+    def __init__(self, host, label=None, protected=True):
+        super(self.__class__, self).__init__(host, label, protected)
         if not self.available:
             return
 
@@ -1348,6 +1382,9 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
+        if self.__protected:
+            logger.error("Cannot load a dump while in protected mode.")
+            return
 
         # Make sure the database is clear.
         if 'readonly' in self.get_schemas():

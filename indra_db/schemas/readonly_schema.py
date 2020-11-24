@@ -286,7 +286,7 @@ def get_schema(Base):
             db.grab_session()
 
             # Make sure the necessary extension is installed.
-            with db.engine.connect() as conn:
+            with db.get_conn() as conn:
                 conn.execute('CREATE EXTENSION IF NOT EXISTS tablefunc;')
 
             logger.info("Discovering the possible sources...")

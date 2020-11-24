@@ -160,10 +160,10 @@ def _build_test_set():
 
     db = get_temp_db(clear=True)
     src_meta_cols = [{'name': col} for col, _ in sources]
-    db.SourceMeta.load_cols(db.engine, src_meta_cols)
+    db.load_source_meta_cols(src_meta_cols)
     for tbl in [db.SourceMeta, db.MeshTermMeta, db.MeshConceptMeta, db.NameMeta,
                 db.TextMeta, db.OtherMeta]:
-        tbl.__table__.create(db.engine)
+        db.create_table(tbl)
     db.copy('readonly.source_meta', source_meta_rows, source_meta_cols)
     db.copy('readonly.mesh_term_meta', mesh_term_meta_rows, mesh_term_meta_cols)
     db.copy('readonly.mesh_concept_meta', mesh_concept_meta_rows,

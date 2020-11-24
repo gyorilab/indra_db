@@ -265,7 +265,7 @@ class DatabaseManager(object):
             return
 
         # Create the engine (connection manager).
-        self.engine = create_engine(self.url)
+        self.__engine = create_engine(self.url)
         return
 
     def _init_foreign_key_map(self, foreign_key_map):
@@ -280,6 +280,18 @@ class DatabaseManager(object):
 
     def is_protected(self):
         return self.__protected
+
+    def get_raw_connection(self):
+        if self.__protected:
+            logger.error("Cannot get a raw connection if protected mode is on.")
+            return
+        return self.__engine.raw_connection()
+
+    def get_conn(self):
+        if self.__protected:
+            logger.error("Cannot get a direct connection in protected mode.")
+            return
+        return self.__engine.connect()
 
     def __del__(self, *args, **kwargs):
         if not self.available:
@@ -374,7 +386,7 @@ class DatabaseManager(object):
             return
         if self.session is None or not self.session.is_active:
             logger.debug('Attempting to get session...')
-            DBSession = sessionmaker(bind=self.engine,
+            DBSession = sessionmaker(bind=self.__engine,
                                      autoflush=self.__protected,
                                      autocommit=self.__protected)
             logger.debug('Got session.')
@@ -419,12 +431,12 @@ class DatabaseManager(object):
             The name of the schema whose tables you wish to see. The default is
             public.
         """
-        return inspect(self.engine).get_table_names(schema=schema)
+        return inspect(self.__engine).get_table_names(schema=schema)
 
     def get_schemas(self):
         """Return the list of schema names currently in the database."""
         res = []
-        with self.engine.connect() as con:
+        with self.__engine.connect() as con:
             raw_res = con.execute('SELECT schema_name '
                                   'FROM information_schema.schemata;')
             for r, in raw_res:
@@ -436,7 +448,7 @@ class DatabaseManager(object):
         if self.__protected:
             logger.error("Running in protected mode, writes not allowed!")
             return
-        with self.engine.connect() as con:
+        with self.__engine.connect() as con:
             con.execute('CREATE SCHEMA IF NOT EXISTS %s;' % schema_name)
         return
 
@@ -445,7 +457,7 @@ class DatabaseManager(object):
         if self.__protected:
             logger.error("Running in protected mode, writes not allowed!")
             return
-        with self.engine.connect() as con:
+        with self.__engine.connect() as con:
             logger.info("Dropping schema %s." % schema_name)
             con.execute('DROP SCHEMA IF EXISTS %s %s;'
                         % (schema_name, 'CASCADE' if cascade else ''))
@@ -616,7 +628,7 @@ class DatabaseManager(object):
         """Execute SQL queries in the context of a copy operation."""
         # Prep the connection.
         if self._conn is None:
-            self._conn = self.engine.raw_connection()
+            self._conn = self.__engine.raw_connection()
             self._conn.rollback()
         return self._conn.cursor()
 
@@ -688,7 +700,7 @@ class DatabaseManager(object):
 
         # Prep the connection.
         if self._conn is None:
-            self._conn = self.engine.raw_connection()
+            self._conn = self.__engine.raw_connection()
             self._conn.rollback()
 
         return cols, data_bts
@@ -1045,7 +1057,7 @@ class DatabaseManager(object):
         if self.__protected:
             logger.error("Vacuuming not allowed in protected mode.")
             return
-        conn = self.engine.raw_connection()
+        conn = self.__engine.raw_connection()
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = conn.cursor()
         cursor.execute('VACUUM' + (' ANALYZE;' if analyze else ''))
@@ -1119,12 +1131,18 @@ class PrincipalDatabaseManager(DatabaseManager):
 
     def __getattribute__(self, item):
         if item == '_PaStmtSrc':
-            self.__PaStmtSrc.load_cols(self.engine)
+            self.load_pa_stmt_src_cols()
             return self.__PaStmtSrc
         elif item == 'SourceMeta':
-            self.__SourceMeta.load_cols(self.engine)
+            self.load_source_meta_cols()
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
+
+    def load_pa_stmt_src_cols(self, cols=None):
+        self.__PaStmtSrc.load_cols(self.__engine, cols)
+
+    def load_source_meta_cols(self, cols=None):
+        self.__SourceMeta.load_cols(self.__engine, cols)
 
     def generate_readonly(self, belief_dict, allow_continue=True):
         """Manage the materialized views.
@@ -1181,7 +1199,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             f"extra in tables={in_ro-to_create}."
 
         # Dump the belief dict into the database.
-        self.Belief.__table__.create(bind=self.engine)
+        self.Belief.__table__.create(bind=self.__engine)
         self.copy(self.Belief.full_name(),
                   [(int(h), n) for h, n in belief_dict.items()],
                   ('mk_hash', 'belief'))
@@ -1226,6 +1244,9 @@ class PrincipalDatabaseManager(DatabaseManager):
             dump_file = dump_loc.get_element_path('readonly-%s.dump' % now_str)
         return self.pg_dump(dump_file, schema='readonly')
 
+    def create_table(self, table_obj):
+        table_obj.__table__.create(self.__engine)
+
     def create_tables(self, tbl_list=None):
         """Create the public tables for INDRA database."""
         if self.__protected:
@@ -1251,8 +1272,8 @@ class PrincipalDatabaseManager(DatabaseManager):
             if tbl_name in tbl_name_list:
                 tbl_name_list.remove(tbl_name)
                 logger.debug("Creating %s..." % tbl_name)
-                if not self.public[tbl_name].__table__.exists(self.engine):
-                    self.public[tbl_name].__table__.create(bind=self.engine)
+                if not self.public[tbl_name].__table__.exists(self.__engine):
+                    self.public[tbl_name].__table__.create(bind=self.__engine)
                     logger.debug("Table created.")
                 else:
                     logger.debug("Table already existed.")
@@ -1260,7 +1281,7 @@ class PrincipalDatabaseManager(DatabaseManager):
         # The rest can be started any time.
         for tbl_name in tbl_name_list:
             logger.debug("Creating %s..." % tbl_name)
-            self.public[tbl_name].__table__.create(bind=self.engine)
+            self.public[tbl_name].__table__.create(bind=self.__engine)
             logger.debug("Table created.")
         return
 
@@ -1299,13 +1320,13 @@ class PrincipalDatabaseManager(DatabaseManager):
                 return False
         if tbl_list is None:
             logger.info("Removing all tables...")
-            self.Base.metadata.drop_all(self.engine)
+            self.Base.metadata.drop_all(self.__engine)
             logger.debug("All tables removed.")
         else:
             for tbl in tbl_list:
                 logger.info("Removing %s..." % tbl.__tablename__)
-                if tbl.__table__.exists(self.engine):
-                    tbl.__table__.drop(self.engine)
+                if tbl.__table__.exists(self.__engine):
+                    tbl.__table__.drop(self.__engine)
                     logger.debug("Table removed.")
                 else:
                     logger.debug("Table doesn't exist.")
@@ -1359,13 +1380,13 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
     def __getattribute__(self, item):
         if item == '_PaStmtSrc':
-            self.__PaStmtSrc.load_cols(self.engine)
+            self.__PaStmtSrc.load_cols(self.__engine)
             return self.__PaStmtSrc
         elif item == 'SourceMeta':
             if self.__non_source_cols is None:
                 self.__non_source_cols = \
                     set(self.get_column_names(self.__SourceMeta))
-            self.__SourceMeta.load_cols(self.engine)
+            self.__SourceMeta.load_cols(self.__engine)
             return self.__SourceMeta
         return super(DatabaseManager, self).__getattribute__(item)
 

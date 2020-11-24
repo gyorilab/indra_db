@@ -288,7 +288,7 @@ def expand_meta_row():
 
     # Get the more detailed results.
     q = AgentJsonExpander(agent_json, stmt_type=stmt_type, hashes=hashes)
-    result = q.expand()
+    result = q.expand(sort_by='ev_count')
 
     # Filter out any medscan content, and construct english.
     entry_hash_lookup = defaultdict(list)

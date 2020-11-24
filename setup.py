@@ -15,7 +15,7 @@ def main():
           include_package_data=True,
           install_requires=['indra', 'boto3', 'sqlalchemy', 'psycopg2-binary',
                             'pgcopy', 'matplotlib', 'flask', 'nltk',
-                            'reportlab', 'cachetools'],
+                            'reportlab', 'cachetools', 'termcolor'],
           extras_require={'test': ['nose', 'coverage', 'python-coveralls',
                                    'nose-timer']},
           )

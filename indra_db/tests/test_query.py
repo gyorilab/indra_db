@@ -7,7 +7,7 @@ from indra.statements import Agent, get_statement_by_name, get_all_descendants
 from indra_db.client.readonly.query import QueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
     SOURCE_GROUPS
-from indra_db.util import extract_agent_data, get_db
+from indra_db.util import extract_agent_data, get_ro
 from indra_db.client.readonly.query import *
 
 from indra_db.tests.util import get_temp_db
@@ -212,7 +212,7 @@ class Counter:
 
 
 def test_has_sources():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasSources(['reach', 'sparser'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
     assert len(res.results) == 5
@@ -225,7 +225,7 @@ def test_has_sources():
 
 
 def test_has_only_source():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasOnlySource('signor')
     res = q.get_statements(ro, limit=5, ev_limit=8)
     res_json = res.json()
@@ -239,7 +239,7 @@ def test_has_only_source():
 
 
 def test_has_readings():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasReadings()
     res = q.get_statements(ro, limit=5, ev_limit=8)
     for sc in res.source_counts.values():
@@ -254,7 +254,7 @@ def test_has_readings():
 
 
 def test_has_databases():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasDatabases()
     res = q.get_statements(ro, limit=5, ev_limit=8)
     for sc in res.source_counts.values():
@@ -269,7 +269,7 @@ def test_has_databases():
 
 
 def test_has_hash():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     hashes = {h for h, in ro.session.query(ro.SourceMeta.mk_hash).limit(10)}
     q = HasHash(hashes)
     res = q.get_statements(ro, limit=5, ev_limit=8)
@@ -278,7 +278,7 @@ def test_has_hash():
 
 
 def test_has_agent():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasAgent('RAS')
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
@@ -301,7 +301,7 @@ def test_has_agent():
 
 
 def test_from_papers():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     pmid = '27014235'
     q = FromPapers([('pmid', pmid)])
     res = q.get_statements(ro, limit=5)
@@ -311,7 +311,7 @@ def test_from_papers():
 
 
 def test_has_num_agents():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasNumAgents((1, 2))
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
@@ -325,7 +325,7 @@ def test_has_num_agents():
 
 
 def test_num_evidence():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasNumEvidence(tuple(range(5, 10)))
     res = q.get_statements(ro, limit=5, ev_limit=8)
     assert all(5 <= n < 10 for n in res.evidence_counts.values())
@@ -334,7 +334,7 @@ def test_num_evidence():
 
 
 def test_has_type():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasType(['Phosphorylation', 'Activation'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
@@ -351,7 +351,7 @@ def test_has_type():
 
 
 def test_from_mesh():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = FromMeshIds(['D001943'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
     mm_entries = ro.select_all([ro.MeshTermMeta.mk_hash, ro.MeshTermMeta.mesh_num],
@@ -563,7 +563,7 @@ def test_query_set_behavior():
 
 
 def test_get_interactions():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53')
     res = query.get_interactions(ro, limit=10)
     assert isinstance(res, QueryResult)
@@ -574,7 +574,7 @@ def test_get_interactions():
 
 
 def test_get_relations():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53')
     res = query.get_relations(ro, limit=10)
     assert isinstance(res, QueryResult)
@@ -585,7 +585,7 @@ def test_get_relations():
 
 
 def test_get_agents():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53')
     res = query.get_agents(ro, limit=10)
     assert isinstance(res, QueryResult)
@@ -596,7 +596,7 @@ def test_get_agents():
 
 
 def test_evidence_filtering_has_only_source():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = ~HasOnlySource('medscan')
     query = q1 & q2
@@ -613,7 +613,7 @@ def test_evidence_filtering_has_only_source():
 
 
 def test_evidence_filtering_has_source():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = HasSources(['reach', 'sparser'])
     query = q1 & q2
@@ -630,7 +630,7 @@ def test_evidence_filtering_has_source():
 
 
 def test_evidence_filtering_has_database():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = HasDatabases()
     query = q1 & q2
@@ -647,7 +647,7 @@ def test_evidence_filtering_has_database():
 
 
 def test_evidence_filtering_has_readings():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = HasReadings()
     query = q1 & q2
@@ -665,7 +665,7 @@ def test_evidence_filtering_has_readings():
 
 
 def test_evidence_filtering_mesh():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = FromMeshIds(['D001943'])
     query = q1 & q2
@@ -682,7 +682,7 @@ def test_evidence_filtering_mesh():
 
 
 def test_evidence_filtering_pairs():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q_list = [~HasOnlySource('medscan'), HasOnlySource('reach'),
               ~HasSources(['reach', 'sparser']), HasSources(['pc11', 'signor']),
@@ -697,7 +697,7 @@ def test_evidence_filtering_pairs():
 
 
 def test_evidence_filtering_trios():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q_list = [~HasOnlySource('medscan'), HasSources(['reach', 'sparser']),
               HasDatabases(), HasReadings(), FromMeshIds(['D001943'])]
@@ -716,7 +716,7 @@ def test_evidence_filtering_trios():
 
 
 def test_evidence_count_is_none():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
     res = query.get_statements(ro, limit=2)
     assert isinstance(res, StatementQueryResult)
@@ -730,7 +730,7 @@ def test_evidence_count_is_none():
 
 
 def test_evidence_count_is_10():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
     res = query.get_statements(ro, limit=2, ev_limit=10)
     assert isinstance(res, StatementQueryResult)
@@ -742,7 +742,7 @@ def test_evidence_count_is_10():
 
 
 def test_evidence_count_is_0():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
     res = query.get_statements(ro, limit=2, ev_limit=0)
     assert isinstance(res, StatementQueryResult)
@@ -755,7 +755,7 @@ def test_evidence_count_is_0():
 
 
 def test_real_world_examples():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = (HasAgent('MEK', namespace='FPLX', role='SUBJECT')
              & HasAgent('ERK', namespace='FPLX', role='OBJECT')
              & HasType(['Phosphorylation'])

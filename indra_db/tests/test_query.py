@@ -3,7 +3,8 @@ import random
 from collections import defaultdict
 from itertools import combinations, permutations, product
 
-from indra.statements import Agent, get_statement_by_name, get_all_descendants
+from indra.statements import Agent, get_statement_by_name, get_all_descendants, \
+    Complex
 from indra_db.client.readonly.query import QueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
     SOURCE_GROUPS
@@ -25,7 +26,7 @@ def _build_test_set():
               {'NAME': 'MEK', 'FPLX': 'MEK'},
               {'NAME': 'Vemurafenib', 'CHEBI': 'CHEBI:63637'}]
     stypes = ['Phosphorylation', 'Activation', 'Inhibition', 'Complex']
-    sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc11', 'db'),
+    sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc', 'db'),
                ('signor', 'db')]
     mesh_term_ids = ['D000225', 'D002352', 'D015536', 'D00123413', 'D0000334']
     mesh_concept_ids = ['C0001243', 'C005758']
@@ -87,7 +88,7 @@ def _build_test_set():
                        'is_active', 'agent_count')
 
     source_meta_rows = []
-    source_meta_cols = ('mk_hash', 'reach', 'medscan', 'pc11', 'signor',
+    source_meta_cols = ('mk_hash', 'reach', 'medscan', 'pc', 'signor',
                         'ev_count', 'belief', 'type_num', 'activity',
                         'is_active', 'agent_count', 'num_srcs', 'src_json',
                         'only_src', 'has_rd', 'has_db')
@@ -122,7 +123,7 @@ def _build_test_set():
         ev_count = sum(source_dict['sources'].values())
         belief = random.random()
         src_row = (stmt.get_hash(),)
-        for src_name in ['reach', 'medscan', 'pc11', 'signor']:
+        for src_name in ['reach', 'medscan', 'pc', 'signor']:
             src_row += (source_dict['sources'].get(src_name),)
         src_row += (ev_count, belief, ro_type_map.get_int(stype), activity,
                     is_active, len(refs), len(source_dict['sources']),
@@ -160,6 +161,8 @@ def _build_test_set():
 
     db = get_temp_db(clear=True)
     src_meta_cols = [{'name': col} for col, _ in sources]
+    if 'readonly' not in db.get_schemas():
+        db.create_schema('readonly')
     db.load_source_meta_cols(src_meta_cols)
     for tbl in [db.SourceMeta, db.MeshTermMeta, db.MeshConceptMeta, db.NameMeta,
                 db.TextMeta, db.OtherMeta]:
@@ -289,6 +292,8 @@ def test_has_agent():
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
     assert all('MEK' == s.agent_list(deep_sorted=True)[0].db_refs['FPLX']
+               or (isinstance(s, Complex)
+                   and 'MEK' in {a.db_refs.get('FPLX') for a in s.agent_list()})
                for s in stmts)
 
     q = HasAgent('CHEBI:63637', namespace='CHEBI', agent_num=3)
@@ -423,7 +428,7 @@ def test_query_set_behavior():
         HasHash(lookup_hashes[:-3]),
         HasHash(lookup_hashes[-1:]),
         HasHash(lookup_hashes[-4:-1]),
-        HasOnlySource('pc11'),
+        HasOnlySource('pc'),
         HasOnlySource('medscan'),
         HasReadings(),
         HasDatabases(),
@@ -674,7 +679,7 @@ def test_evidence_filtering_mesh():
     assert isinstance(res, StatementQueryResult)
     stmts = res.statements()
     assert len(stmts) == 2
-    assert all(len(s.evidence) < res.evidence_totals[s.get_hash()]
+    assert all(len(s.evidence) < res.evidence_counts[s.get_hash()]
                for s in stmts)
     js = res.json()
     assert 'results' in js
@@ -685,7 +690,7 @@ def test_evidence_filtering_pairs():
     ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q_list = [~HasOnlySource('medscan'), HasOnlySource('reach'),
-              ~HasSources(['reach', 'sparser']), HasSources(['pc11', 'signor']),
+              ~HasSources(['reach', 'sparser']), HasSources(['pc', 'signor']),
               HasDatabases(), ~HasReadings(), FromMeshIds(['D001943'])]
     for q2, q3 in combinations(q_list, 2):
         query = q1 | q2 | q3
@@ -724,9 +729,9 @@ def test_evidence_count_is_none():
     assert len(stmts) == 2
     ev_list = stmts[0].evidence
     assert len(ev_list) > 10
-    assert all(len(s.evidence) == res.evidence_totals[s.get_hash()]
+    assert all(len(s.evidence) == res.evidence_counts[s.get_hash()]
                for s in stmts)
-    assert res.returned_evidence == sum(res.evidence_totals.values())
+    assert res.returned_evidence == sum(res.evidence_counts.values())
 
 
 def test_evidence_count_is_10():
@@ -738,7 +743,7 @@ def test_evidence_count_is_10():
     assert len(stmts) == 2
     assert all(len(s.evidence) <= 10 for s in stmts)
     assert res.returned_evidence == 20
-    assert sum(res.evidence_totals.values()) > 20
+    assert sum(res.evidence_counts.values()) > 20
 
 
 def test_evidence_count_is_0():
@@ -750,8 +755,8 @@ def test_evidence_count_is_0():
     assert len(stmts) == 2
     assert all(len(s.evidence) == 0 for s in stmts)
     assert res.returned_evidence == 0, res.returned_evidence
-    assert sum(res.evidence_totals.values()) > 20, \
-        sum(res.evidence_totals.values())
+    assert sum(res.evidence_counts.values()) > 20, \
+        sum(res.evidence_counts.values())
 
 
 def test_real_world_examples():

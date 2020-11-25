@@ -1018,6 +1018,10 @@ class DatabaseManager(object):
         dump_file : S3Path or str
             The location on s3 where the content should be dumped.
         """
+        if self.__protected:
+            logger.error("Cannot execute pg_dump in protected mode.")
+            return
+
         if isinstance(dump_file, str):
             dump_file = S3Path.from_string(dump_file)
         elif dump_file is not None and not isinstance(dump_file, S3Path):
@@ -1065,6 +1069,10 @@ class DatabaseManager(object):
 
     def pg_restore(self, dump_file, **options):
         """Load content into the database from a dump file on s3."""
+        if self.__protected:
+            logger.error("Cannot execute pg_restore in protected mode.")
+            return
+
         if isinstance(dump_file, str):
             dump_file = S3Path.from_string(dump_file)
         elif dump_file is not None and not isinstance(dump_file, S3Path):

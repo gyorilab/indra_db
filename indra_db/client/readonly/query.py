@@ -25,42 +25,6 @@ from indra_db.util import regularize_agent_id, get_ro
 logger = logging.getLogger(__name__)
 
 
-class TableWrapper:
-    available_sorts = {'ev_count': {'agg': func.sum},
-                       'belief': {'agg': func.max}}
-
-    def __init__(self, tbl):
-        self._tbl = tbl
-
-    def __getattribute__(self, item):
-        if hasattr(self._tbl, item):
-            return getattr(self._tbl, item)
-        else:
-            return super(TableWrapper, self).__getattribute__(item)
-
-    def sort_params(self) -> tuple:
-        return tuple(getattr(self._tbl, p) for p in self.available_sorts.keys())
-
-    def sql_json(self, agg=False):
-        """Get the SQL to return a JSONB dict of sort parameters.
-
-        Parameters
-        ----------
-        agg : bool
-            If True, the results will have their aggregate operation applied
-            (e.g. sum). Use this if the result is part of a group-by in which the
-            counts must be aggregated. Default is False.
-        """
-        if agg:
-            sort_param_dict = {p: d['agg'](getattr(self._tbl, p))
-                               for p, d in self.available_sorts.items()}
-        else:
-            sort_param_dict = {p: getattr(self._tbl, p)
-                               for p in self.available_sorts.keys()}
-        return func.jsonb_build_object(c for t in sort_param_dict.items()
-                                       for c in t)
-
-
 class QueryResult(object):
     """The generic result of a query.
 
@@ -108,7 +72,10 @@ class QueryResult(object):
         self.evidence_counts = evidence_counts
         self.belief_scores = belief_scores
         self.total_evidence = sum(self.evidence_counts.values())
-        self.max_belief = max(self.belief_scores.values())
+        if self.belief_scores:
+            self.max_belief = max(self.belief_scores.values())
+        else:
+            self.max_belief = None
         self.limit = limit
         self.offset = offset
         self.result_type = result_type
@@ -1995,7 +1962,7 @@ class FromPapers(_TextRefCore):
         return {'paper_list': self.paper_list}
 
     def _get_table(self, ro):
-        return ro.EvidenceCounts
+        return ro.SourceMeta
 
     def _get_conditions(self, ro):
         conditions = []
@@ -2033,7 +2000,7 @@ class FromPapers(_TextRefCore):
 
         # Map the reading metadata query to mk_hashes with statement counts.
         qry = (self._base_query(ro)
-               .filter(ro.EvidenceCounts.mk_hash == ro.FastRawPaLink.mk_hash,
+               .filter(ro.SourceMeta.mk_hash == ro.FastRawPaLink.mk_hash,
                        ro.FastRawPaLink.reading_id == sub_al.c.rid))
 
         if inject_queries is not None:

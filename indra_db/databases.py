@@ -1120,6 +1120,8 @@ class PrincipalDatabaseManager(DatabaseManager):
         super(self.__class__, self).__init__(host, label, protected)
         if not self.available:
             return
+        self.__protected = self._DatabaseManager__protected
+        self.__engine = self._DatabaseManager__engine
 
         self.public = principal_schema.get_schema(self.Base)
         self.readonly = readonly_schema.get_schema(self.Base)
@@ -1365,6 +1367,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
         super(self.__class__, self).__init__(host, label, protected)
         if not self.available:
             return
+        self.__protected = self._DatabaseManager__protected
+        self.__engine = self._DatabaseManager__engine
 
         self.tables = readonly_schema.get_schema(self.Base)
         for tbl in self.tables.values():

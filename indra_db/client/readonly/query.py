@@ -378,7 +378,7 @@ class RelationSQL(AgentJsonSQL):
         if sort_by == 'ev_count':
             return [desc(sq.c.ev_count), sq.c.type_num]
         else:
-            return [desc(sq.c.belief), sq.c.typ_num]
+            return [desc(sq.c.belief), sq.c.type_num]
 
     def run(self):
         logger.debug(f"Executing query (get_relations):\n{self.q}")

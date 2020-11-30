@@ -1061,7 +1061,7 @@ class Query(object):
         order_params = ms.agg(ro, **kwargs)
         ms = self._apply_limits(ms, order_params, limit, offset)
         if self._print_only:
-            print(ms.agg_q)
+            ms.print()
             return
         return ms.run()
 

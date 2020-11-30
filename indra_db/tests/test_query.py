@@ -813,6 +813,19 @@ def _check_belief_sorted_result(query):
     beliefs = list(res.belief_scores.values())
     assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
 
+    # Test AgentJsonExpander Second level.
+    first_res = next(iter(res.results.values()))
+    exp2 = AgentJsonExpander(first_res['agents'], stmt_type=first_res['type'],
+                             hashes=first_res['hashes'])
+    res = exp2.expand(ro, sort_by='belief')
+    assert len(res.belief_scores) == len(res.results.values())
+    assert all(e['agents'] == first_res['agents']
+               and e['type'] == first_res['type']
+               and e['hash'] in first_res['hashes']
+               for e in res.results.values())
+    beliefs = list(res.belief_scores.values())
+    assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+
 
 def test_belief_sorting_simple():
     query = HasAgent('MEK', namespace='NAME')

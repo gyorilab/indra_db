@@ -776,11 +776,39 @@ def test_real_world_examples():
     assert len(stmts)
 
 
-def test_belief_sorting_simple():
+def _check_belief_sorted_result(query):
     ro = get_ro('primary')
-    query = HasAgent('MEK', namespace='NAME')
+
+    # Test `get_statements`
     res = query.get_statements(ro, sort_by='belief', limit=50, ev_limit=3)
     stmts = res.statements()
+    assert len(res.belief_scores) == 50
     assert len(stmts) == 50
     assert all(len(s.evidence) <= 3 for s in stmts)
-    assert all(s1.belief >= s2.belief for s1, s2 in zip(stmts[:-1], stmts[1:]))
+    assert all(0 <= s2.belief <= s1.belief <= 1
+               for s1, s2 in zip(stmts[:-1], stmts[1:]))
+
+
+def test_belief_sorting_simple():
+    query = HasAgent('MEK', namespace='NAME')
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_source_search():
+    query = HasOnlySource('trips')
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_source_intersection():
+    query = HasReadings() & HasDatabases()
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_intersection():
+    query = HasAgent('MEK', namespace='NAME') - HasOnlySource('medscan')
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_union():
+    q = HasAgent('MEK', namespace='NAME') | HasAgent('MAP2K1', namespace='NAME')
+    _check_belief_sorted_result(q)

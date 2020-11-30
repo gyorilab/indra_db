@@ -774,3 +774,13 @@ def test_real_world_examples():
     res = query.get_statements(ro, limit=100, ev_limit=10)
     stmts = res.statements()
     assert len(stmts)
+
+
+def test_belief_sorting_simple():
+    ro = get_ro('primary')
+    query = HasAgent('MEK', namespace='NAME')
+    res = query.get_statements(ro, sort_by='belief', limit=50, ev_limit=3)
+    stmts = res.statements()
+    assert len(stmts) == 50
+    assert all(len(s.evidence) <= 3 for s in stmts)
+    assert all(s1.belief >= s2.belief for s1, s2 in zip(stmts[:-1], stmts[1:]))

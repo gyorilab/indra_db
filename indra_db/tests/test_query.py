@@ -788,6 +788,13 @@ def _check_belief_sorted_result(query):
     assert all(0 <= s2.belief <= s1.belief <= 1
                for s1, s2 in zip(stmts[:-1], stmts[1:]))
 
+    # Test `get_hashes`
+    res = query.get_hashes(ro, sort_by='belief', limit=500)
+    assert len(res.belief_scores) <= 500, len(res.belief_scores)
+    assert len(res.results) == len(res.belief_scores)
+    beliefs = list(res.belief_scores.values())
+    assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+
 
 def test_belief_sorting_simple():
     query = HasAgent('MEK', namespace='NAME')

@@ -905,7 +905,7 @@ class Query(object):
         for h, n_ev, belief in result:
             hashes.add(h)
             evidence_counts[h] = n_ev
-            belief_scores[h] = n_ev
+            belief_scores[h] = belief
 
         return QueryResult(hashes, limit, offset, len(result), evidence_counts,
                            belief_scores, self.to_json(), 'hashes')

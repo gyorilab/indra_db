@@ -305,6 +305,9 @@ class AgentJsonSQL:
     def run(self):
         raise NotImplementedError
 
+    def print(self):
+        print(self.agg_q)
+
 
 class InteractionSQL(AgentJsonSQL):
     meta_type = 'interactions'
@@ -478,7 +481,7 @@ class AgentSQL(AgentJsonSQL):
         else:
             return [desc(sq.c.belief), sq.c.agent_json]
 
-    def _get_next(self, more_offset=0):
+    def __get_next_query(self, more_offset=0):
         q = self.agg_q
         if self._offset or more_offset:
             net_offset = 0 if self._offset is None else self._offset
@@ -488,11 +491,11 @@ class AgentSQL(AgentJsonSQL):
         if self._limit is not None:
             q = q.limit(self._limit)
 
-        return q.all()
+        return q
 
     def run(self):
         logger.debug(f"Executing query (get_agents):\n{self.agg_q}")
-        names = self._get_next()
+        names = self.__get_next_query().all()
 
         results = {}
         ev_totals = {}
@@ -545,11 +548,14 @@ class AgentSQL(AgentJsonSQL):
             if self._limit is None or num_entries >= self._limit:
                 break
 
-            names = self._get_next(num_rows)
+            names = self.__get_next_query(num_rows).all()
             if not names:
                 break
 
         return results, ev_totals, bel_maxes, num_rows
+
+    def print(self):
+        print(self.__get_next_query())
 
 
 class Query(object):

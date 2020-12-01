@@ -105,7 +105,7 @@ class ApiCall:
 
         # Actually run the function
         params = dict(offset=self.offs, limit=self.limit,
-                      best_first=self.best_first)
+                      sort_by=self.sort_by)
         logger.info(f"Sending query with params: {params}")
         if result_type == 'statements':
             self.special['ev_limit'] = \

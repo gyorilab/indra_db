@@ -249,6 +249,28 @@ class TestDbApi(unittest.TestCase):
                 (0, 'HGNC', hgnc_client.get_hgnc_id('MAPK1'))])
         return
 
+    def test_belief_sort_in_agent_search(self):
+        """Test sorting by belief."""
+        resp = self.__check_good_statement_query(agent='MAPK1',
+                                                 sort_by='belief')
+        assert len(resp.json['belief_scores']) \
+               == len(resp.json['evidence_counts'])
+        beliefs = list(resp.json['belief_scores'].values())
+        assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+        ev_counts = list(resp.json['evidence_counts'].values())
+        assert not all(c1 >= c2 for c1, c2 in zip(ev_counts[:-1], ev_counts[1:]))
+
+    def test_explicit_ev_count_sort_agent_search(self):
+        """Test sorting by ev_count explicitly."""
+        resp = self.__check_good_statement_query(agent='MAPK1',
+                                                 sort_by='ev_count')
+        assert len(resp.json['belief_scores']) \
+               == len(resp.json['evidence_counts'])
+        beliefs = list(resp.json['belief_scores'].values())
+        assert not all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+        ev_counts = list(resp.json['evidence_counts'].values())
+        assert all(c1 >= c2 for c1, c2 in zip(ev_counts[:-1], ev_counts[1:]))
+
     def test_bad_camel(self):
         """Test that a type can be poorly formatted and resolve correctly."""
         resp = self.__check_good_statement_query(agent='MAPK1',

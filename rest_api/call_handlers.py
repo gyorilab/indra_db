@@ -345,7 +345,7 @@ class StatementApiCall(ApiCall):
                 beliefs = res_json.pop('belief_scores')
                 stmts = stmts_from_json(stmts_json.values())
                 db_rest_url = request.url_root[:-1] \
-                    + self._env.globals['url_for']('iamalive')[:-1]
+                    + self._env.globals['url_for']('root')[:-1]
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,
                                   ev_counts=ev_counts, beliefs=beliefs,

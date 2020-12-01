@@ -118,8 +118,13 @@ def render_my_template(template, title, **kwargs):
 
 
 @app.route('/', methods=['GET'])
-def iamalive():
+def root():
     return redirect(url_for('search'), code=302)
+
+
+@app.route('/healthcheck', methods=['GET'])
+def i_am_alive():
+    return jsonify({'status': 'testing' if TESTING['status'] else 'healthy'})
 
 
 @app.route('/ground', methods=['GET'])

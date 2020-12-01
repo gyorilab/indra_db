@@ -307,9 +307,12 @@ def expand_meta_row():
         has_medscan = api_key is not None
     logger.info(f'Auths for medscan: {has_medscan}')
 
+    # Get the sorting parameter.
+    sort_by = request.args.get('sort_by', 'ev_count')
+
     # Get the more detailed results.
     q = AgentJsonExpander(agent_json, stmt_type=stmt_type, hashes=hashes)
-    result = q.expand(sort_by='ev_count')
+    result = q.expand(sort_by=sort_by)
 
     # Filter out any medscan content, and construct english.
     entry_hash_lookup = defaultdict(list)

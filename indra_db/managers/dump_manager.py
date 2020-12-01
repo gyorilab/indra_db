@@ -133,9 +133,9 @@ class Dumper(object):
             else:
                 raise ValueError("No database specified.")
         if db_opt == 'principal':
-            return get_db('primary')
+            return get_db('primary', protected=False)
         else:  # if db_opt == 'readonly'
-            return get_ro('primary')
+            return get_ro('primary', protected=False)
 
     def get_s3_path(self):
         if self.s3_dump_path is None:
@@ -535,5 +535,6 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    dump(get_db(args.database), get_ro(args.readonly), args.delet_existing,
+    dump(get_db(args.database, protected=False),
+         get_ro(args.readonly, protected=False), args.delet_existing,
          args.allow_continue, args.load_only, args.dump_only)

@@ -3,11 +3,12 @@ import random
 from collections import defaultdict
 from itertools import combinations, permutations, product
 
-from indra.statements import Agent, get_statement_by_name, get_all_descendants
+from indra.statements import Agent, get_statement_by_name, get_all_descendants, \
+    Complex
 from indra_db.client.readonly.query import QueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
     SOURCE_GROUPS
-from indra_db.util import extract_agent_data, get_ro, get_db
+from indra_db.util import extract_agent_data, get_ro
 from indra_db.client.readonly.query import *
 
 from indra_db.tests.util import get_temp_db
@@ -25,7 +26,7 @@ def _build_test_set():
               {'NAME': 'MEK', 'FPLX': 'MEK'},
               {'NAME': 'Vemurafenib', 'CHEBI': 'CHEBI:63637'}]
     stypes = ['Phosphorylation', 'Activation', 'Inhibition', 'Complex']
-    sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc11', 'db'),
+    sources = [('medscan', 'rd'), ('reach', 'rd'), ('pc', 'db'),
                ('signor', 'db')]
     mesh_term_ids = ['D000225', 'D002352', 'D015536', 'D00123413', 'D0000334']
     mesh_concept_ids = ['C0001243', 'C005758']
@@ -73,30 +74,33 @@ def _build_test_set():
 
     name_meta_rows = []
     name_meta_cols = ('mk_hash', 'ag_num', 'db_id', 'role_num', 'type_num',
-                      'ev_count', 'activity', 'is_active', 'agent_count')
+                      'ev_count', 'belief', 'activity', 'is_active',
+                      'agent_count')
 
     text_meta_rows = []
     text_meta_cols = ('mk_hash', 'ag_num', 'db_id', 'role_num', 'type_num',
-                      'ev_count', 'activity', 'is_active', 'agent_count')
+                      'ev_count', 'belief', 'activity', 'is_active',
+                      'agent_count')
 
     other_meta_rows = []
     other_meta_cols = ('mk_hash', 'ag_num', 'db_name', 'db_id', 'role_num',
-                       'type_num', 'ev_count', 'activity', 'is_active',
-                       'agent_count')
+                       'type_num', 'ev_count', 'belief', 'activity',
+                       'is_active', 'agent_count')
 
     source_meta_rows = []
-    source_meta_cols = ('mk_hash', 'reach', 'medscan', 'pc11', 'signor',
-                        'ev_count', 'type_num', 'activity', 'is_active',
-                        'agent_count', 'num_srcs', 'src_json', 'only_src',
-                        'has_rd', 'has_db')
+    source_meta_cols = ('mk_hash', 'reach', 'medscan', 'pc', 'signor',
+                        'ev_count', 'belief', 'type_num', 'activity',
+                        'is_active', 'agent_count', 'num_srcs', 'src_json',
+                        'only_src', 'has_rd', 'has_db')
 
     mesh_term_meta_rows = []
-    mesh_term_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
-                           'activity', 'is_active', 'agent_count')
+    mesh_term_meta_cols = ('mk_hash', 'ev_count', 'belief', 'mesh_num',
+                           'type_num', 'activity', 'is_active', 'agent_count')
 
     mesh_concept_meta_rows = []
-    mesh_concept_meta_cols = ('mk_hash', 'ev_count', 'mesh_num', 'type_num',
-                              'activity', 'is_active', 'agent_count')
+    mesh_concept_meta_cols = ('mk_hash', 'ev_count', 'belief', 'mesh_num',
+                              'type_num', 'activity', 'is_active',
+                              'agent_count')
     for stype, refs, activity, is_active in stmts:
         # Extract agents, and make a Statement.
         StmtClass = get_statement_by_name(stype)
@@ -117,11 +121,12 @@ def _build_test_set():
         # Connect with a source.
         source_dict = source_data[len(source_meta_rows) % len(source_data)]
         ev_count = sum(source_dict['sources'].values())
+        belief = random.random()
         src_row = (stmt.get_hash(),)
-        for src_name in ['reach', 'medscan', 'pc11', 'signor']:
+        for src_name in ['reach', 'medscan', 'pc', 'signor']:
             src_row += (source_dict['sources'].get(src_name),)
-        src_row += (ev_count, ro_type_map.get_int(stype), activity, is_active,
-                    len(refs), len(source_dict['sources']),
+        src_row += (ev_count, belief, ro_type_map.get_int(stype), activity,
+                    is_active, len(refs), len(source_dict['sources']),
                     json.dumps(source_dict['sources']), source_dict['only_src'],
                     source_dict['has_rd'], source_dict['has_db'])
         source_meta_rows.append(src_row)
@@ -130,12 +135,12 @@ def _build_test_set():
         for mesh_id in source_dict['mesh_ids']:
             if mesh_id[0] == 'D':
                 mesh_term_meta_rows.append(
-                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                    (stmt.get_hash(), ev_count, belief, int(mesh_id[1:]),
                      ro_type_map.get_int(stype), activity, is_active, len(refs))
                 )
             else:
                 mesh_concept_meta_rows.append(
-                    (stmt.get_hash(), ev_count, int(mesh_id[1:]),
+                    (stmt.get_hash(), ev_count, belief, int(mesh_id[1:]),
                      ro_type_map.get_int(stype), activity, is_active, len(refs))
                 )
 
@@ -143,8 +148,8 @@ def _build_test_set():
         ref_rows, _, _ = extract_agent_data(stmt, stmt.get_hash())
         for row in ref_rows:
             row = row[:4] + (ro_role_map.get_int(row[4]),
-                             ro_type_map.get_int(stype),  ev_count, activity,
-                             is_active, len(refs))
+                             ro_type_map.get_int(stype),  ev_count, belief,
+                             activity, is_active, len(refs))
             if row[2] == 'NAME':
                 row = row[:2] + row[3:]
                 name_meta_rows.append(row)
@@ -156,10 +161,12 @@ def _build_test_set():
 
     db = get_temp_db(clear=True)
     src_meta_cols = [{'name': col} for col, _ in sources]
-    db.SourceMeta.load_cols(db.engine, src_meta_cols)
+    if 'readonly' not in db.get_schemas():
+        db.create_schema('readonly')
+    db.load_source_meta_cols(src_meta_cols)
     for tbl in [db.SourceMeta, db.MeshTermMeta, db.MeshConceptMeta, db.NameMeta,
                 db.TextMeta, db.OtherMeta]:
-        tbl.__table__.create(db.engine)
+        db.create_table(tbl)
     db.copy('readonly.source_meta', source_meta_rows, source_meta_cols)
     db.copy('readonly.mesh_term_meta', mesh_term_meta_rows, mesh_term_meta_cols)
     db.copy('readonly.mesh_concept_meta', mesh_concept_meta_rows,
@@ -208,7 +215,7 @@ class Counter:
 
 
 def test_has_sources():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasSources(['reach', 'sparser'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
     assert len(res.results) == 5
@@ -221,7 +228,7 @@ def test_has_sources():
 
 
 def test_has_only_source():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasOnlySource('signor')
     res = q.get_statements(ro, limit=5, ev_limit=8)
     res_json = res.json()
@@ -235,7 +242,7 @@ def test_has_only_source():
 
 
 def test_has_readings():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasReadings()
     res = q.get_statements(ro, limit=5, ev_limit=8)
     for sc in res.source_counts.values():
@@ -250,7 +257,7 @@ def test_has_readings():
 
 
 def test_has_databases():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasDatabases()
     res = q.get_statements(ro, limit=5, ev_limit=8)
     for sc in res.source_counts.values():
@@ -265,7 +272,7 @@ def test_has_databases():
 
 
 def test_has_hash():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     hashes = {h for h, in ro.session.query(ro.SourceMeta.mk_hash).limit(10)}
     q = HasHash(hashes)
     res = q.get_statements(ro, limit=5, ev_limit=8)
@@ -274,7 +281,7 @@ def test_has_hash():
 
 
 def test_has_agent():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasAgent('RAS')
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
@@ -285,6 +292,8 @@ def test_has_agent():
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
     assert all('MEK' == s.agent_list(deep_sorted=True)[0].db_refs['FPLX']
+               or (isinstance(s, Complex)
+                   and 'MEK' in {a.db_refs.get('FPLX') for a in s.agent_list()})
                for s in stmts)
 
     q = HasAgent('CHEBI:63637', namespace='CHEBI', agent_num=3)
@@ -297,7 +306,7 @@ def test_has_agent():
 
 
 def test_from_papers():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     pmid = '27014235'
     q = FromPapers([('pmid', pmid)])
     res = q.get_statements(ro, limit=5)
@@ -307,7 +316,7 @@ def test_from_papers():
 
 
 def test_has_num_agents():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasNumAgents((1, 2))
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
@@ -321,16 +330,16 @@ def test_has_num_agents():
 
 
 def test_num_evidence():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasNumEvidence(tuple(range(5, 10)))
     res = q.get_statements(ro, limit=5, ev_limit=8)
-    assert all(5 <= n < 10 for n in res.evidence_totals.values())
+    assert all(5 <= n < 10 for n in res.evidence_counts.values())
     stmts = res.statements()
     assert all(5 < len(s.evidence) <= 8 for s in stmts)
 
 
 def test_has_type():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = HasType(['Phosphorylation', 'Activation'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
     stmts = res.statements()
@@ -347,7 +356,7 @@ def test_has_type():
 
 
 def test_from_mesh():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q = FromMeshIds(['D001943'])
     res = q.get_statements(ro, limit=5, ev_limit=8)
     mm_entries = ro.select_all([ro.MeshTermMeta.mk_hash, ro.MeshTermMeta.mesh_num],
@@ -419,7 +428,7 @@ def test_query_set_behavior():
         HasHash(lookup_hashes[:-3]),
         HasHash(lookup_hashes[-1:]),
         HasHash(lookup_hashes[-4:-1]),
-        HasOnlySource('pc11'),
+        HasOnlySource('pc'),
         HasOnlySource('medscan'),
         HasReadings(),
         HasDatabases(),
@@ -440,15 +449,15 @@ def test_query_set_behavior():
     unfound = []
     collecting_results = True
 
-    def try_query(q, compair=None, md=None):
+    def try_query(q, compare=None, md=None):
         nonlocal n_runs
 
         # Test query logical consistency
         result = None
         try:
             result = dq(q)
-            if compair is not None:
-                assert result == compair, 'Result mismatch.'
+            if compare is not None:
+                assert result == compare, 'Result mismatch.'
             if not q.empty and not result:
                 unfound.append(q)
             if collecting_results:
@@ -457,7 +466,7 @@ def test_query_set_behavior():
             c.up(True)
         except Exception as e:
             failures.append({'query': q, 'error': e, 'result': result,
-                             'compair': compair, 'md': md})
+                             'compare': compare, 'md': md})
             if collecting_results:
                 results.append((result, q))
             n_runs += 1
@@ -559,7 +568,7 @@ def test_query_set_behavior():
 
 
 def test_get_interactions():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53')
     res = query.get_interactions(ro, limit=10)
     assert isinstance(res, QueryResult)
@@ -570,7 +579,7 @@ def test_get_interactions():
 
 
 def test_get_relations():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53')
     res = query.get_relations(ro, limit=10)
     assert isinstance(res, QueryResult)
@@ -581,7 +590,7 @@ def test_get_relations():
 
 
 def test_get_agents():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53')
     res = query.get_agents(ro, limit=10)
     assert isinstance(res, QueryResult)
@@ -592,7 +601,7 @@ def test_get_agents():
 
 
 def test_evidence_filtering_has_only_source():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = ~HasOnlySource('medscan')
     query = q1 & q2
@@ -609,7 +618,7 @@ def test_evidence_filtering_has_only_source():
 
 
 def test_evidence_filtering_has_source():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = HasSources(['reach', 'sparser'])
     query = q1 & q2
@@ -626,7 +635,7 @@ def test_evidence_filtering_has_source():
 
 
 def test_evidence_filtering_has_database():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = HasDatabases()
     query = q1 & q2
@@ -643,7 +652,7 @@ def test_evidence_filtering_has_database():
 
 
 def test_evidence_filtering_has_readings():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = HasReadings()
     query = q1 & q2
@@ -661,7 +670,7 @@ def test_evidence_filtering_has_readings():
 
 
 def test_evidence_filtering_mesh():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q2 = FromMeshIds(['D001943'])
     query = q1 & q2
@@ -670,7 +679,7 @@ def test_evidence_filtering_mesh():
     assert isinstance(res, StatementQueryResult)
     stmts = res.statements()
     assert len(stmts) == 2
-    assert all(len(s.evidence) < res.evidence_totals[s.get_hash()]
+    assert all(len(s.evidence) < res.evidence_counts[s.get_hash()]
                for s in stmts)
     js = res.json()
     assert 'results' in js
@@ -678,10 +687,10 @@ def test_evidence_filtering_mesh():
 
 
 def test_evidence_filtering_pairs():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q_list = [~HasOnlySource('medscan'), HasOnlySource('reach'),
-              ~HasSources(['reach', 'sparser']), HasSources(['pc11', 'signor']),
+              ~HasSources(['reach', 'sparser']), HasSources(['pc', 'signor']),
               HasDatabases(), ~HasReadings(), FromMeshIds(['D001943'])]
     for q2, q3 in combinations(q_list, 2):
         query = q1 | q2 | q3
@@ -693,7 +702,7 @@ def test_evidence_filtering_pairs():
 
 
 def test_evidence_filtering_trios():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     q1 = HasAgent('TP53')
     q_list = [~HasOnlySource('medscan'), HasSources(['reach', 'sparser']),
               HasDatabases(), HasReadings(), FromMeshIds(['D001943'])]
@@ -712,7 +721,7 @@ def test_evidence_filtering_trios():
 
 
 def test_evidence_count_is_none():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
     res = query.get_statements(ro, limit=2)
     assert isinstance(res, StatementQueryResult)
@@ -720,13 +729,13 @@ def test_evidence_count_is_none():
     assert len(stmts) == 2
     ev_list = stmts[0].evidence
     assert len(ev_list) > 10
-    assert all(len(s.evidence) == res.evidence_totals[s.get_hash()]
+    assert all(len(s.evidence) == res.evidence_counts[s.get_hash()]
                for s in stmts)
-    assert res.returned_evidence == sum(res.evidence_totals.values())
+    assert res.returned_evidence == sum(res.evidence_counts.values())
 
 
 def test_evidence_count_is_10():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
     res = query.get_statements(ro, limit=2, ev_limit=10)
     assert isinstance(res, StatementQueryResult)
@@ -734,11 +743,11 @@ def test_evidence_count_is_10():
     assert len(stmts) == 2
     assert all(len(s.evidence) <= 10 for s in stmts)
     assert res.returned_evidence == 20
-    assert sum(res.evidence_totals.values()) > 20
+    assert sum(res.evidence_counts.values()) > 20
 
 
 def test_evidence_count_is_0():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = HasAgent('TP53') - HasOnlySource('medscan')
     res = query.get_statements(ro, limit=2, ev_limit=0)
     assert isinstance(res, StatementQueryResult)
@@ -746,12 +755,12 @@ def test_evidence_count_is_0():
     assert len(stmts) == 2
     assert all(len(s.evidence) == 0 for s in stmts)
     assert res.returned_evidence == 0, res.returned_evidence
-    assert sum(res.evidence_totals.values()) > 20, \
-        sum(res.evidence_totals.values())
+    assert sum(res.evidence_counts.values()) > 20, \
+        sum(res.evidence_counts.values())
 
 
 def test_real_world_examples():
-    ro = get_db('primary')
+    ro = get_ro('primary')
     query = (HasAgent('MEK', namespace='FPLX', role='SUBJECT')
              & HasAgent('ERK', namespace='FPLX', role='OBJECT')
              & HasType(['Phosphorylation'])
@@ -765,3 +774,79 @@ def test_real_world_examples():
     res = query.get_statements(ro, limit=100, ev_limit=10)
     stmts = res.statements()
     assert len(stmts)
+
+
+def _check_belief_sorted_result(query):
+    ro = get_ro('primary')
+
+    # Test `get_statements`
+    res = query.get_statements(ro, sort_by='belief', limit=50, ev_limit=3)
+    stmts = res.statements()
+    assert len(res.belief_scores) == 50
+    assert len(stmts) == 50
+    assert all(len(s.evidence) <= 3 for s in stmts)
+    assert all(0 <= s2.belief <= s1.belief <= 1
+               for s1, s2 in zip(stmts[:-1], stmts[1:]))
+
+    # Test `get_hashes`
+    res = query.get_hashes(ro, sort_by='belief', limit=500)
+    assert len(res.belief_scores) <= 500, len(res.belief_scores)
+    assert len(res.results) == len(res.belief_scores)
+    beliefs = list(res.belief_scores.values())
+    assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+
+    # Test `get_agents`
+    res = query.get_agents(ro, limit=500, sort_by='belief', with_hashes=True)
+    assert len(res.belief_scores) <= 500
+    assert len(res.belief_scores) == len(res.results)
+    beliefs = list(res.belief_scores.values())
+    assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+
+    # Test AgentJsonExpander First level.
+    first_res = next(iter(res.results.values()))
+    exp = AgentJsonExpander(first_res['agents'], hashes=first_res['hashes'])
+    res = exp.expand(ro, sort_by='belief')
+    assert len(res.belief_scores) == len(res.results)
+    assert all(e['agents'] == first_res['agents']
+               and set(e['hashes']) <= set(first_res['hashes'])
+               for e in res.results.values())
+    beliefs = list(res.belief_scores.values())
+    assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+
+    # Test AgentJsonExpander Second level.
+    first_res = next(iter(res.results.values()))
+    exp2 = AgentJsonExpander(first_res['agents'], stmt_type=first_res['type'],
+                             hashes=first_res['hashes'])
+    res = exp2.expand(ro, sort_by='belief')
+    assert len(res.belief_scores) == len(res.results.values())
+    assert all(e['agents'] == first_res['agents']
+               and e['type'] == first_res['type']
+               and e['hash'] in first_res['hashes']
+               for e in res.results.values())
+    beliefs = list(res.belief_scores.values())
+    assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+
+
+def test_belief_sorting_simple():
+    query = HasAgent('MEK', namespace='NAME')
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_source_search():
+    query = HasOnlySource('trips')
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_source_intersection():
+    query = HasReadings() & HasDatabases()
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_intersection():
+    query = HasAgent('MEK', namespace='NAME') - HasOnlySource('medscan')
+    _check_belief_sorted_result(query)
+
+
+def test_belief_sorting_union():
+    q = HasAgent('MEK', namespace='NAME') | HasAgent('MAP2K1', namespace='NAME')
+    _check_belief_sorted_result(q)

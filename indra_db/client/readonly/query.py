@@ -39,8 +39,10 @@ class QueryResult(object):
         The limit that was applied to this query.
     offset_comp : int
         The next offset that would be appropriate if this is a paging query.
-    evidence_totals : dict
-        The total numbers of evidence for each element.
+    evidence_counts : dict
+        The count of evidence for each element.
+    belief_scores : dict
+        The belief score of each element.
     query_json : dict
         A description of the query that was used.
 
@@ -53,20 +55,27 @@ class QueryResult(object):
         The limit that was applied to this query.
     next_offset : int
         The next offset that would be appropriate if this is a paging query.
-    evidence_totals : dict
-        The total numbers of evidence for each element.
+    evidence_counts : dict
+        The count of evidence for each element.
+    belief_scores : dict
+        The belief score of each element.
     query_json : dict
         A description of the query that was used.
     """
     def __init__(self, results: TypeIterable, limit: int, offset: int,
-                 offset_comp: int, evidence_totals: dict, query_json: dict,
-                 result_type: str):
+                 offset_comp: int, evidence_counts: dict, belief_scores: dict,
+                 query_json: dict, result_type: str):
         if not isinstance(results, Iterable) or isinstance(results, str):
             raise ValueError("Input `results` is expected to be an iterable, "
                              "and not a string.")
         self.results = results
-        self.evidence_totals = evidence_totals
-        self.total_evidence = sum(self.evidence_totals.values())
+        self.evidence_counts = evidence_counts
+        self.belief_scores = belief_scores
+        self.total_evidence = sum(self.evidence_counts.values())
+        if self.belief_scores:
+            self.max_belief = max(self.belief_scores.values())
+        else:
+            self.max_belief = None
         self.limit = limit
         self.offset = offset
         self.result_type = result_type
@@ -76,6 +85,10 @@ class QueryResult(object):
         else:
             self.next_offset = (0 if offset is None else offset) + offset_comp
         self.query_json = query_json
+
+    @classmethod
+    def empty(cls, empty_res, limit, offset, query_json, result_type):
+        return cls(empty_res, limit, offset, 0, {}, {}, query_json, result_type)
 
     @classmethod
     def from_json(cls, json_dict) \
@@ -100,8 +113,10 @@ class QueryResult(object):
         # Convert result keys into integers, if appropriate
         if isinstance(nc.results, dict):
             if nc.result_type in ['statements', 'interactions']:
-                nc.evidence_totals = {int(k): v
-                                      for k, v in nc.evidence_totals.items()}
+                nc.evidence_counts = {int(k): v
+                                      for k, v in nc.evidence_counts.items()}
+                nc.belief_scores = {int(k): v
+                                    for k, v in nc.belief_scores.items()}
                 nc.results = {int(k): v for k, v in nc.results.items()}
 
         # Check calculated values.
@@ -125,7 +140,8 @@ class QueryResult(object):
         return {'results': json_results, 'limit': self.limit,
                 'offset': self.offset, 'next_offset': self.next_offset,
                 'query_json': self.query_json,
-                'evidence_totals': self.evidence_totals,
+                'evidence_counts': self.evidence_counts,
+                'belief_scores': self.belief_scores,
                 'total_evidence': self.total_evidence,
                 'result_type': self.result_type,
                 'offset_comp': self.offset_comp}
@@ -136,6 +152,25 @@ class StatementQueryResult(QueryResult):
 
     This class encapsulates the results of a search for statements in the
     database. This standardizes the results of such searches.
+
+    Parameters
+    ----------
+    results : dict
+        The results of the query.
+    limit : int
+        The content limit that was used in making the query.
+    offset : int
+        The offset that was used in making the query.
+    evidence_counts : dict
+        The count of evidence available for each element.
+    belief_scores : dict
+        The score for each element.
+    returned_evidence : int
+        The count of evidence that was returned in this query.
+    source_counts : dict
+        The counts of evidence from each source for each element.
+    query_json : dict
+        The JSON representation of the query that was used.
 
     Attributes
     ----------
@@ -148,14 +183,19 @@ class StatementQueryResult(QueryResult):
         A description of the query that was used.
     """
     def __init__(self, results: dict, limit: int, offset: int,
-                 evidence_totals: dict, returned_evidence: int,
-                 source_counts: dict, query_json: dict):
+                 evidence_counts: dict, belief_scores: dict,
+                 returned_evidence: int, source_counts: dict, query_json: dict):
         super(StatementQueryResult, self).__init__(results, limit,
                                                    offset, len(results),
-                                                   evidence_totals, query_json,
+                                                   evidence_counts,
+                                                   belief_scores, query_json,
                                                    'statements')
         self.returned_evidence = returned_evidence
         self.source_counts = source_counts
+
+    @classmethod
+    def empty(cls, limit: int, offset: int, query_json: dict):
+        return cls({}, limit, offset, {}, {}, 0, {}, query_json)
 
     def json(self) -> dict:
         """Get the JSON dump of the results."""
@@ -178,18 +218,23 @@ class StatementQueryResult(QueryResult):
 
     def statements(self) -> list:
         """Get a list of Statements from the results."""
+        assert isinstance(self.results, dict), "Results must be a dictionary."
         return stmts_from_json(list(self.results.values()))
 
 
 class AgentQueryResult(QueryResult):
     """The result of a query for agent JSONs."""
     def __init__(self, results: dict, limit: int, offset: int, num_rows: int,
-                 complexes_covered: set, evidence_totals: dict,
-                 query_json: dict):
+                 complexes_covered: set, evidence_counts: dict,
+                 belief_scores: dict, query_json: dict):
         super(AgentQueryResult, self).__init__(results, limit, offset, num_rows,
-                                               evidence_totals, query_json,
-                                               'agents')
+                                               evidence_counts, belief_scores,
+                                               query_json, 'agents')
         self.complexes_covered = complexes_covered
+
+    @classmethod
+    def empty(cls, limit, offset, query_json):
+        return cls({}, limit, offset, 0, set(), {}, {}, query_json)
 
     def json(self) -> dict:
         json_dict = super(AgentQueryResult, self).json()
@@ -226,6 +271,7 @@ class AgentJsonSQL:
                                   ro.AgentInteractions.type_num,
                                   ro.AgentInteractions.agent_count,
                                   ro.AgentInteractions.ev_count,
+                                  ro.AgentInteractions.belief,
                                   ro.AgentInteractions.activity,
                                   ro.AgentInteractions.is_active,
                                   ro.AgentInteractions.src_json).distinct()
@@ -253,28 +299,37 @@ class AgentJsonSQL:
     def order_by(self, *args, **kwargs):
         return self._do_to_query('order_by', *args, **kwargs)
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         raise NotImplementedError
 
     def run(self):
         raise NotImplementedError
 
+    def print(self):
+        print(self.agg_q)
+
 
 class InteractionSQL(AgentJsonSQL):
     meta_type = 'interactions'
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         self.agg_q = self.q
-        return [desc(ro.AgentInteractions.ev_count),
-                ro.AgentInteractions.type_num,
-                ro.AgentInteractions.agent_json]
+        if sort_by == 'ev_count':
+            return [desc(ro.AgentInteractions.ev_count),
+                    ro.AgentInteractions.type_num,
+                    ro.AgentInteractions.agent_json]
+        else:
+            return [desc(ro.AgentInteractions.belief),
+                    ro.AgentInteractions.type_num,
+                    ro.AgentInteractions.agent_json]
 
     def run(self):
         logger.debug(f"Executing query (interaction):\n{self.q}")
         names = self.agg_q.all()
         results = {}
         ev_totals = {}
-        for h, ag_json, type_num, n_ag, n_ev, act, is_act, src_json in names:
+        bel_maxes = {}
+        for h, ag_json, type_num, n_ag, n_ev, bel, act, is_act, src_json in names:
             results[h] = {
                 'hash': h,
                 'id': str(h),
@@ -285,20 +340,22 @@ class InteractionSQL(AgentJsonSQL):
                 'source_counts': src_json,
             }
             ev_totals[h] = sum(src_json.values())
+            bel_maxes[h] = max([bel, bel_maxes.get(h, 0)])
             assert ev_totals[h] == n_ev
-        return results, ev_totals, len(names)
+        return results, ev_totals, bel_maxes, len(names)
 
 
 class RelationSQL(AgentJsonSQL):
     meta_type = 'relations'
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         names_sq = self.q.subquery('names')
         rel_q = ro.session.query(
             names_sq.c.agent_json,
             names_sq.c.type_num,
             names_sq.c.agent_count,
             func.sum(names_sq.c.ev_count).label('ev_count'),
+            func.max(names_sq.c.belief).label('belief'),
             names_sq.c.activity,
             names_sq.c.is_active,
             func.array_agg(names_sq.c.src_json).label('src_jsons'),
@@ -315,16 +372,21 @@ class RelationSQL(AgentJsonSQL):
         sq = rel_q.subquery('relations')
         self.agg_q = ro.session.query(sq.c.agent_json, sq.c.type_num,
                                       sq.c.agent_count, sq.c.ev_count,
-                                      sq.c.activity, sq.c.is_active,
-                                      sq.c.src_jsons, sq.c.hashes)
-        return [desc(sq.c.ev_count), sq.c.type_num]
+                                      sq.c.belief, sq.c.activity,
+                                      sq.c.is_active, sq.c.src_jsons,
+                                      sq.c.hashes)
+        if sort_by == 'ev_count':
+            return [desc(sq.c.ev_count), sq.c.type_num]
+        else:
+            return [desc(sq.c.belief), sq.c.type_num]
 
     def run(self):
         logger.debug(f"Executing query (get_relations):\n{self.q}")
         names = self.agg_q.all()
         results = {}
         ev_totals = {}
-        for ag_json, type_num, n_ag, n_ev, act, is_act, srcs, hashes in names:
+        bel_maxes = {}
+        for ag_json, type_num, n_ag, n_ev, bel, act, is_act, srcs, hashes in names:
             # Build the unique key for this relation.
             ordered_agents = [ag_json.get(str(n))
                               for n in range(max(n_ag, int(max(ag_json))+1))]
@@ -347,11 +409,12 @@ class RelationSQL(AgentJsonSQL):
                             'type': stmt_type, 'activity': act,
                             'is_active': is_act, 'hashes': hashes}
             ev_totals[key] = sum(source_counts.values())
+            bel_maxes[key] = max([bel_maxes.get(key, 0), bel])
 
             # Do a quick sanity check. If this fails, something went VERY wrong.
             assert ev_totals[key] == n_ev, "Evidence totals don't add up."
 
-        return results, ev_totals, len(names)
+        return results, ev_totals, bel_maxes, len(names)
 
 
 class _AgentHashes:
@@ -392,12 +455,13 @@ class AgentSQL(AgentJsonSQL):
         self._offset = offset
         return self
 
-    def agg(self, ro, with_hashes=True):
+    def agg(self, ro, with_hashes=True, sort_by='ev_count'):
         names_sq = self.q.subquery('names')
         agent_q = ro.session.query(
             names_sq.c.agent_json,
             names_sq.c.agent_count,
             func.sum(names_sq.c.ev_count).label('ev_count'),
+            func.max(names_sq.c.belief).label('belief'),
             func.array_agg(names_sq.c.src_json).label('src_jsons'),
             func.jsonb_object(
                 func.array_agg(names_sq.c.mk_hash.cast(String)),
@@ -409,12 +473,15 @@ class AgentSQL(AgentJsonSQL):
         )
         sq = agent_q.subquery('agents')
         self.agg_q = ro.session.query(sq.c.agent_json, sq.c.agent_count,
-                                      sq.c.ev_count, sq.c.src_jsons,
-                                      sq.c.hashes)
+                                      sq.c.ev_count, sq.c.belief,
+                                      sq.c.src_jsons, sq.c.hashes)
         self._return_hashes = with_hashes
-        return [desc(sq.c.ev_count), sq.c.agent_json]
+        if sort_by == 'ev_count':
+            return [desc(sq.c.ev_count), sq.c.agent_json]
+        else:
+            return [desc(sq.c.belief), sq.c.agent_json]
 
-    def _get_next(self, more_offset=0):
+    def __get_next_query(self, more_offset=0):
         q = self.agg_q
         if self._offset or more_offset:
             net_offset = 0 if self._offset is None else self._offset
@@ -424,20 +491,21 @@ class AgentSQL(AgentJsonSQL):
         if self._limit is not None:
             q = q.limit(self._limit)
 
-        return q.all()
+        return q
 
     def run(self):
         logger.debug(f"Executing query (get_agents):\n{self.agg_q}")
-        names = self._get_next()
+        names = self.__get_next_query().all()
 
         results = {}
         ev_totals = {}
+        bel_maxes = {}
         if self.complexes_covered is None:
             self.complexes_covered = set()
         num_entries = 0
         num_rows = 0
         while True:
-            for ag_json, n_ag, n_ev, src_jsons, hashes in names:
+            for ag_json, n_ag, n_ev, bel, src_jsons, hashes in names:
                 num_rows += 1
 
                 # See if this row has anything new to offer.
@@ -469,6 +537,7 @@ class AgentSQL(AgentJsonSQL):
                 else:
                     results[key]['hashes'] = None
                 ev_totals[key] = sum(source_counts.values())
+                bel_maxes[key] = max([bel, bel_maxes.get(key, 0)])
 
                 # Sanity check. Only a coding error could cause this to fail.
                 assert n_ev == ev_totals[key], "Evidence counts don't add up."
@@ -479,11 +548,14 @@ class AgentSQL(AgentJsonSQL):
             if self._limit is None or num_entries >= self._limit:
                 break
 
-            names = self._get_next(num_rows)
+            names = self.__get_next_query(num_rows).all()
             if not names:
                 break
 
-        return results, ev_totals, num_rows
+        return results, ev_totals, bel_maxes, num_rows
+
+    def print(self):
+        print(self.__get_next_query())
 
 
 class Query(object):
@@ -557,13 +629,13 @@ class Query(object):
         """
         self._print_only = print_only
 
-    def _rest_get(self, result_type, limit=None, offset=None, best_first=True,
-                  **other_params):
+    def _rest_get(self, result_type, limit=None, offset=None,
+                  sort_by='ev_count', **other_params):
         """Retrieve results from the remote API."""
         logger.info("Using remote API to resolve query.")
         url = get_config('INDRA_DB_REST_URL', failure_ok=False)
         params = {'json': json.dumps(self.to_json()), 'limit': limit,
-                  'offset': offset, 'best_first': best_first}
+                  'offset': offset, 'sort_by': sort_by}
         params.update(other_params)
         resp = requests.get(f'{url}/query/{result_type}',
                             params=params)
@@ -573,8 +645,8 @@ class Query(object):
 
         return QueryResult.from_json(resp.json())
 
-    def get_statements(self, ro=None, limit=None, offset=None, best_first=True,
-                       ev_limit=None, evidence_filter=None) \
+    def get_statements(self, ro=None, limit=None, offset=None,
+                       sort_by='ev_count', ev_limit=None, evidence_filter=None) \
             -> Optional[StatementQueryResult]:
         """Get the statements that satisfy this query.
 
@@ -589,8 +661,9 @@ class Query(object):
         offset : int
             Get results starting from the value of offset. This along with limit
             allows you to page through results.
-        best_first : bool
-            Return the best (most evidence) statements first.
+        sort_by : str
+            Options are currently 'ev_count' or 'belief'. Results will return in
+            order of the given parameter.
         ev_limit : int
             Limit the number of evidence returned for each statement.
         evidence_filter : None or EvidenceFilter
@@ -608,8 +681,7 @@ class Query(object):
 
         # If the result is by definition empty, save ourselves time and work.
         if self.empty:
-            return StatementQueryResult({}, limit, offset, {}, 0, {},
-                                        self.to_json())
+            return StatementQueryResult.empty(limit, offset, self.to_json())
 
         # If the database isn't available, route through the web service.
         if ro is None:
@@ -617,16 +689,21 @@ class Query(object):
                 logger.warning("No direct R.O. access available, but passing "
                                "of evidence filter through API not yet "
                                "implemented.")
-            return self._rest_get('statements', limit, offset, best_first,
+            return self._rest_get('statements', limit, offset, sort_by,
                                   ev_limit=ev_limit)
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
         mk_hashes_q = self.build_hash_query(ro)
         mk_hashes_q = mk_hashes_q.distinct()
-        mk_hash_obj, n_ev_obj = self._hash_count_pair(ro)
-        mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
-                                         best_first)
+        mk_hash_obj, ev_count_obj, belief_obj = self._get_core_cols(ro)
+        if sort_by == 'ev_count':
+            sort_term = [desc(ev_count_obj)]
+        elif sort_by == 'belief':
+            sort_term = [desc(belief_obj)]
+        else:
+            raise ValueError(f"Invalid sort option: {sort_by}.")
+        mk_hashes_q = self._apply_limits(mk_hashes_q, sort_term, limit, offset)
 
         # Do the difficult work of turning a query for hashes and ev_counts
         # into a query for statement JSONs. Return the results.
@@ -651,18 +728,18 @@ class Query(object):
             stmts_q = (mk_hashes_al
                        .outerjoin(json_content_al, true())
                        .outerjoin(ro.SourceMeta,
-                                  ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
+                               ro.SourceMeta.mk_hash == mk_hashes_al.c.mk_hash))
             cols = [mk_hashes_al.c.mk_hash, ro.SourceMeta.src_json,
-                    mk_hashes_al.c.ev_count, json_content_al.c.raw_json,
-                    json_content_al.c.pa_json]
+                    mk_hashes_al.c.ev_count, mk_hashes_al.c.belief,
+                    json_content_al.c.raw_json, json_content_al.c.pa_json]
         else:
             json_content_al = cont_q.subquery().alias('json_content')
             stmts_q = (json_content_al
                        .outerjoin(ro.SourceMeta,
-                                  ro.SourceMeta.mk_hash == json_content_al.c.mk_hash))
+                            ro.SourceMeta.mk_hash == json_content_al.c.mk_hash))
             cols = [json_content_al.c.mk_hash, ro.SourceMeta.src_json,
-                    json_content_al.c.ev_count, json_content_al.c.raw_json,
-                    json_content_al.c.pa_json]
+                    json_content_al.c.ev_count, json_content_al.c.belief,
+                    json_content_al.c.raw_json, json_content_al.c.pa_json]
 
         # Join up with other tables to pull metadata.
         stmts_q = (stmts_q
@@ -692,7 +769,8 @@ class Query(object):
 
         # Unpack the statements.
         stmts_dict = OrderedDict()
-        ev_totals = OrderedDict()
+        ev_counts = OrderedDict()
+        beliefs = OrderedDict()
         source_counts = OrderedDict()
         returned_evidence = 0
         src_set = ro.get_source_names()
@@ -704,6 +782,7 @@ class Query(object):
             src_dict = dict.fromkeys(src_set, 0)
             src_dict.update(next(row_gen))
             ev_count = next(row_gen)
+            belief = next(row_gen)
             raw_json_bts = next(row_gen)
             pa_json_bts = next(row_gen)
             ref_dict = dict(zip(ref_link_keys, row_gen))
@@ -722,7 +801,8 @@ class Query(object):
             # Add a new statement if the hash is new.
             if mk_hash not in stmts_dict.keys():
                 source_counts[mk_hash] = src_dict
-                ev_totals[mk_hash] = ev_count
+                ev_counts[mk_hash] = ev_count
+                beliefs[mk_hash] = belief
                 stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
                 stmts_dict[mk_hash]['evidence'] = []
 
@@ -760,11 +840,11 @@ class Query(object):
                 # Add the evidence JSON to the list.
                 stmts_dict[mk_hash]['evidence'].append(ev_json)
 
-        return StatementQueryResult(stmts_dict, limit, offset, ev_totals,
-                                    returned_evidence, source_counts,
+        return StatementQueryResult(stmts_dict, limit, offset, ev_counts,
+                                    beliefs, returned_evidence, source_counts,
                                     self.to_json())
 
-    def get_hashes(self, ro=None, limit=None, offset=None, best_first=True) \
+    def get_hashes(self, ro=None, limit=None, offset=None, sort_by='ev_count') \
             -> Optional[QueryResult]:
         """Get the hashes of statements that satisfy this query.
 
@@ -779,8 +859,9 @@ class Query(object):
         offset : int
             Get results starting from the value of offset. This along with limit
             allows you to page through results.
-        best_first : bool
-            Return the best (most evidence) statements first.
+        sort_by : str
+            'ev_count' or 'belief': select the parameter by which results are
+            sorted.
 
         Returns
         -------
@@ -793,20 +874,23 @@ class Query(object):
 
         # If the result is by definition empty, save time and effort.
         if self.empty:
-            return QueryResult(set(), limit, offset, 0, {}, self.to_json(),
-                               'hashes')
+            return QueryResult.empty(set(), limit, offset, self.to_json(),
+                                     'hashes')
 
         # If the database isn't directly available, route through the web API.
         if ro is None:
-            return self._rest_get('hashes', limit, offset, best_first)
+            return self._rest_get('hashes', limit, offset, sort_by)
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
         mk_hashes_q = self.build_hash_query(ro)
         mk_hashes_q = mk_hashes_q.distinct()
-        _, n_ev_obj = self._hash_count_pair(ro)
-        mk_hashes_q = self._apply_limits(mk_hashes_q, n_ev_obj, limit, offset,
-                                         best_first)
+        _, n_ev_obj, belief_obj = self._get_core_cols(ro)
+        if sort_by == 'ev_count':
+            sort_list = [desc(n_ev_obj)]
+        else:
+            sort_list = [desc(belief_obj)]
+        mk_hashes_q = self._apply_limits(mk_hashes_q, sort_list, limit, offset)
 
         if self._print_only:
             print(mk_hashes_q)
@@ -815,14 +899,19 @@ class Query(object):
         # Make the query, and package the results.
         logger.debug(f"Executing query (get_hashes):\n{mk_hashes_q}")
         result = mk_hashes_q.all()
-        evidence_totals = {h: cnt for h, cnt in result}
+        evidence_counts = {}
+        belief_scores = {}
+        hashes = set()
+        for h, n_ev, belief in result:
+            hashes.add(h)
+            evidence_counts[h] = n_ev
+            belief_scores[h] = belief
 
-        return QueryResult(set(evidence_totals.keys()), limit, offset,
-                           len(result), evidence_totals, self.to_json(),
-                           'hashes')
+        return QueryResult(hashes, limit, offset, len(result), evidence_counts,
+                           belief_scores, self.to_json(), 'hashes')
 
     def get_interactions(self, ro=None, limit=None, offset=None,
-                         best_first=True) -> Optional[QueryResult]:
+                         sort_by='ev_count') -> Optional[QueryResult]:
         """Get the simple interaction information from the Statements metadata.
 
        Each entry in the result corresponds to a single preassembled Statement,
@@ -839,8 +928,9 @@ class Query(object):
         offset : int
             Get results starting from the value of offset. This along with limit
             allows you to page through results.
-        best_first : bool
-            Return the best (most evidence) statements first.
+        sort_by : str
+            Options are currently 'ev_count' or 'belief'. Results will return in
+            order of the given parameter.
         """
         if ro is None:
             ro = get_ro('primary')
@@ -849,22 +939,22 @@ class Query(object):
             if self._print_only:
                 print("Query is empty, no SQL run.")
                 return
-            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
-                               'interactions')
+            return QueryResult.empty({}, limit, offset, self.to_json(),
+                                     'interactions')
 
         if ro is None:
-            return self._rest_get('interactions', limit, offset, best_first)
+            return self._rest_get('interactions', limit, offset, sort_by)
 
         il = InteractionSQL(ro)
-        result_tuple = self._run_meta_sql(il, ro, limit, offset, best_first)
+        result_tuple = self._run_meta_sql(il, ro, limit, offset, sort_by)
         if result_tuple is None:
             return
-        results, ev_totals, off_comp = result_tuple
-        return QueryResult(results, limit, offset, off_comp, ev_totals,
-                           self.to_json(), il.meta_type)
+        results, ev_counts, belief_scores, off_comp = result_tuple
+        return QueryResult(results, limit, offset, off_comp, ev_counts,
+                           belief_scores, self.to_json(), il.meta_type)
 
-    def get_relations(self, ro=None, limit=None, offset=None, best_first=True,
-                      with_hashes=False) \
+    def get_relations(self, ro=None, limit=None, offset=None,
+                      sort_by='ev_count', with_hashes=False) \
             -> Optional[QueryResult]:
         """Get the agent and type information from the Statements metadata.
 
@@ -882,8 +972,9 @@ class Query(object):
         offset : int
             Get results starting from the value of offset. This along with limit
             allows you to page through results.
-        best_first : bool
-            Return the best (most evidence) statements first.
+        sort_by : str
+            Options are currently 'ev_count' or 'belief'. Results will return in
+            order of the given parameter.
         with_hashes : bool
             Default is False. If True, retrieve all the hashes that fit within
             each relational grouping.
@@ -892,24 +983,24 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return QueryResult({}, limit, offset, 0, {}, self.to_json(),
-                               'relations')
+            return QueryResult.empty({}, limit, offset, self.to_json(),
+                                     'relations')
 
         if ro is None:
-            return self._rest_get('relations', limit, offset, best_first,
+            return self._rest_get('relations', limit, offset, sort_by,
                                   with_hashes=with_hashes)
 
         r_sql = RelationSQL(ro)
-        result_tuple = self._run_meta_sql(r_sql, ro, limit, offset, best_first,
+        result_tuple = self._run_meta_sql(r_sql, ro, limit, offset, sort_by,
                                           with_hashes)
         if result_tuple is None:
             return None
 
-        results, ev_totals, off_comp = result_tuple
-        return QueryResult(results, limit, offset, off_comp, ev_totals,
-                           self.to_json(), r_sql.meta_type)
+        results, ev_counts, belief_scores, off_comp = result_tuple
+        return QueryResult(results, limit, offset, off_comp, ev_counts,
+                           belief_scores, self.to_json(), r_sql.meta_type)
 
-    def get_agents(self, ro=None, limit=None, offset=None, best_first=True,
+    def get_agents(self, ro=None, limit=None, offset=None, sort_by='ev_count',
                    with_hashes=False, complexes_covered=None) \
             -> Optional[QueryResult]:
         """Get the agent pairs from the Statements metadata.
@@ -928,8 +1019,9 @@ class Query(object):
         offset : Optional[int]
             Get results starting from the value of offset. This along with limit
             allows you to page through results.
-        best_first : bool
-            Return the best (most evidence) statements first.
+        sort_by : str
+            Options are currently 'ev_count' or 'belief'. Results will return in
+            order of the given parameter.
         with_hashes : bool
             Default is False. If True, retrieve all the hashes that fit within
             each agent pair grouping.
@@ -941,50 +1033,44 @@ class Query(object):
             ro = get_ro('primary')
 
         if self.empty:
-            return AgentQueryResult({}, limit, offset, 0, set(), {},
-                                    self.to_json())
+            return AgentQueryResult.empty(limit, offset, self.to_json())
 
         if ro is None:
-            return self._rest_get('agents', limit, offset, best_first,
+            return self._rest_get('agents', limit, offset, sort_by,
                                   with_hashes=with_hashes,
                                   complexes_covered=complexes_covered)
 
         ag_sql = AgentSQL(ro, with_complex_dups=True,
                           complexes_covered=complexes_covered)
-        result_tuple = self._run_meta_sql(ag_sql, ro, limit, offset, best_first,
-                               with_hashes)
+        result_tuple = self._run_meta_sql(ag_sql, ro, limit, offset, sort_by,
+                                          with_hashes)
         if result_tuple is None:
             return
 
-        results, ev_totals, off_comp = result_tuple
+        results, ev_counts, belief_scores, off_comp = result_tuple
         return AgentQueryResult(results, limit, offset, off_comp,
-                                ag_sql.complexes_covered, ev_totals,
-                                self.to_json())
+                                ag_sql.complexes_covered, ev_counts,
+                                belief_scores, self.to_json())
 
-    def _run_meta_sql(self, ms, ro, limit, offset, best_first,
-                      with_hashes=None):
+    def _run_meta_sql(self, ms, ro, limit, offset, sort_by, with_hashes=None):
         mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
         ms.filter(ro.AgentInteractions.mk_hash == mk_hashes_sq.c.mk_hash)
-        kwargs = {}
+        kwargs = {'sort_by': sort_by}
         if with_hashes is not None:
             kwargs['with_hashes'] = with_hashes
-        order_param = ms.agg(ro, **kwargs)
-        ms = self._apply_limits(ms, order_param, limit, offset, best_first)
+        order_params = ms.agg(ro, **kwargs)
+        ms = self._apply_limits(ms, order_params, limit, offset)
         if self._print_only:
-            print(ms.agg_q)
+            ms.print()
             return
         return ms.run()
 
     @staticmethod
-    def _apply_limits(mk_hashes_q, ev_count_obj, limit=None, offset=None,
-                      best_first=True):
+    def _apply_limits(mk_hashes_q, order_params, limit=None, offset=None):
         """Apply the general query limits to the net hash query."""
         # Apply the general options.
-        if best_first:
-            if isinstance(ev_count_obj, list):
-                mk_hashes_q = mk_hashes_q.order_by(*ev_count_obj)
-            else:
-                mk_hashes_q = mk_hashes_q.order_by(desc(ev_count_obj))
+        if order_params is not None:
+            mk_hashes_q = mk_hashes_q.order_by(*order_params)
         if limit is not None:
             mk_hashes_q = mk_hashes_q.limit(limit)
         if offset is not None:
@@ -1027,20 +1113,22 @@ class Query(object):
         raise NotImplementedError()
 
     def _base_query(self, ro):
-        mk_hash, ev_count = self._hash_count_pair(ro)
+        mk_hash, ev_count, belief = self._get_core_cols(ro)
         return ro.session.query(mk_hash.label('mk_hash'),
-                                ev_count.label('ev_count'))
+                                ev_count.label('ev_count'),
+                                belief.label('belief'))
 
-    def _hash_count_pair(self, ro) -> tuple:
+    def _get_core_cols(self, ro) -> tuple:
         meta = self._get_table(ro)
-        return meta.mk_hash, meta.ev_count
+        return meta.mk_hash, meta.ev_count, meta.belief
 
     def build_hash_query(self, ro, type_queries=None):
         """[Internal] Build the query for hashes."""
         # If the query is by definition everything, save much time and effort.
         if self.full:
             return ro.session.query(ro.SourceMeta.mk_hash.label('mk_hash'),
-                                    ro.SourceMeta.ev_count.label('ev_count'))
+                                    ro.SourceMeta.ev_count.label('ev_count'),
+                                    ro.SourceMeta.belief.label('belief'))
 
         # Otherwise proceed with the usual query.
         return self._get_hash_query(ro, type_queries)
@@ -1066,8 +1154,9 @@ class Query(object):
         if ev_limit is None or ev_limit == 0:
             mk_hash_c = ro.FastRawPaLink.mk_hash.label('mk_hash')
             ev_count_c = mk_hashes_al.c.ev_count.label('ev_count')
-            cont_q = ro.session.query(mk_hash_c, ev_count_c, raw_json_c,
-                                      pa_json_c, reading_id_c)
+            belief_c = mk_hashes_al.c.belief.label('belief')
+            cont_q = ro.session.query(mk_hash_c, ev_count_c, belief_c,
+                                      raw_json_c, pa_json_c, reading_id_c)
         else:
             cont_q = ro.session.query(raw_json_c, pa_json_c, reading_id_c)
         cont_q = cont_q.filter(frp_link)
@@ -1222,7 +1311,7 @@ class AgentInteractionMeta:
 
 
 class AgentJsonExpander(AgentInteractionMeta):
-    def expand(self, ro=None):
+    def expand(self, ro=None, sort_by='ev_count'):
         if ro is None:
             ro = get_ro('primary')
         if self.stmt_type is None:
@@ -1230,11 +1319,11 @@ class AgentJsonExpander(AgentInteractionMeta):
         else:
             meta = InteractionSQL(ro, with_complex_dups=True)
         meta.q = self._apply_constraints(ro, meta.q)
-        order_param = meta.agg(ro)
+        order_param = meta.agg(ro, sort_by=sort_by)
         meta.agg_q = meta.agg_q.order_by(*order_param)
-        results, ev_totals, off_comp = meta.run()
-        return QueryResult(results, None, None, off_comp, ev_totals,
-                           self.to_json(), meta.meta_type)
+        results, ev_counts, belief_scores, off_comp = meta.run()
+        return QueryResult(results, None, None, off_comp, ev_counts,
+                           belief_scores, self.to_json(), meta.meta_type)
 
     def to_json(self):
         return {'class': self.__class__.__name__,
@@ -1662,7 +1751,7 @@ class HasHash(SourceQuery):
 
     def _apply_filter(self, ro, query, invert=False):
         inverted = self._inverted ^ invert
-        mk_hash, _ = self._hash_count_pair(ro)
+        mk_hash, _, _ = self._get_core_cols(ro)
         if len(self.stmt_hashes) == 1:
             # If there is only one hash, use equalities (faster)
             if not inverted:
@@ -1804,7 +1893,8 @@ class HasAgent(Query):
                                                       *type_clauses))
             al = except_(self._base_query(ro), qry).alias('agent_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
-                                   al.c.ev_count.label('ev_count'))
+                                   al.c.ev_count.label('ev_count'),
+                                   al.c.belief.label('belief'))
 
         return qry
 
@@ -1878,7 +1968,7 @@ class FromPapers(_TextRefCore):
         return {'paper_list': self.paper_list}
 
     def _get_table(self, ro):
-        return ro.EvidenceCounts
+        return ro.SourceMeta
 
     def _get_conditions(self, ro):
         conditions = []
@@ -1916,7 +2006,7 @@ class FromPapers(_TextRefCore):
 
         # Map the reading metadata query to mk_hashes with statement counts.
         qry = (self._base_query(ro)
-               .filter(ro.EvidenceCounts.mk_hash == ro.FastRawPaLink.mk_hash,
+               .filter(ro.SourceMeta.mk_hash == ro.FastRawPaLink.mk_hash,
                        ro.FastRawPaLink.reading_id == sub_al.c.rid))
 
         if inject_queries is not None:
@@ -2029,7 +2119,8 @@ class FromMeshIds(_TextRefCore):
             # required to handle the type queries.
             new_base = ro.session.query(
                 ro.SourceMeta.mk_hash.label('mk_hash'),
-                ro.SourceMeta.ev_count.label('ev_count')
+                ro.SourceMeta.ev_count.label('ev_count'),
+                ro.SourceMeta.belief.label('belief')
             )
             if inject_queries:
                 for tq in inject_queries:
@@ -2038,7 +2129,8 @@ class FromMeshIds(_TextRefCore):
             # Invert the query.
             al = except_(new_base, qry).alias('mesh_exclude')
             qry = ro.session.query(al.c.mk_hash.label('mk_hash'),
-                                   al.c.ev_count.label('ev_count'))
+                                   al.c.ev_count.label('ev_count'),
+                                   al.c.belief.label('belief'))
         return qry
 
     def ev_filter(self):
@@ -2341,9 +2433,10 @@ class MergeQuery(Query):
             type_list += q.list_component_queries()
         return type_list + [self.__class__.__name__]
 
-    def _hash_count_pair(self, ro) -> tuple:
+    def _get_core_cols(self, ro) -> tuple:
         mk_hashes_al = self._get_table(ro)
-        return mk_hashes_al.c.mk_hash, mk_hashes_al.c.ev_count
+        return mk_hashes_al.c.mk_hash,  mk_hashes_al.c.ev_count,\
+               mk_hashes_al.c.belief
 
     def _get_hash_query(self, ro, inject_queries=None):
         self._injected_queries = inject_queries
@@ -2572,7 +2665,7 @@ class Intersection(MergeQuery):
             # If we have both kinds, do something special. We will except the
             # positive sense of the negative (inverted) queries, which in
             # general will mean more smaller queries are run (think of "not MEK"
-            # verses jsut looking for "MEK").
+            # verses just looking for "MEK").
             if pos and neg:
                 # Build a subquery out of the positive query or queries.
                 if len(pos) == 1:
@@ -2583,7 +2676,8 @@ class Intersection(MergeQuery):
                     ).alias('pos')
                     pos_sql = ro.session.query(
                         pos_tbl.c.mk_hash.label('mk_hash'),
-                        pos_tbl.c.ev_count.label('ev_count')
+                        pos_tbl.c.ev_count.label('ev_count'),
+                        pos_tbl.c.belief.label('belief')
                     )
 
                 # Build a subquery out of the negative query or queries,
@@ -2599,7 +2693,8 @@ class Intersection(MergeQuery):
                     ).alias('neg')
                     neg_sql = ro.session.query(
                         neg_tbl.c.mk_hash.label('mk_hash'),
-                        neg_tbl.c.ev_count.label('ev_count')
+                        neg_tbl.c.ev_count.label('ev_count'),
+                        neg_tbl.c.belief.label('belief')
                     )
 
                 # Take the positive except the negative as our "table".

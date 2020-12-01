@@ -73,7 +73,7 @@ class IndraDBTable(metaclass=IndraDBTableMetaClass):
 
     @staticmethod
     def execute(db, sql):
-        conn = db.engine.raw_connection()
+        conn = db.get_raw_connection()
         cursor = conn.cursor()
         cursor.execute(sql)
         conn.commit()

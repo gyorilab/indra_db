@@ -341,13 +341,15 @@ class StatementApiCall(ApiCall):
             stmts_json = result.results
             if self.fmt == 'html':
                 title = TITLE
-                ev_totals = res_json.pop('evidence_totals')
+                ev_counts = res_json.pop('evidence_counts')
+                beliefs = res_json.pop('belief_scores')
                 stmts = stmts_from_json(stmts_json.values())
                 db_rest_url = request.url_root[:-1] \
                     + self._env.globals['url_for']('iamalive')[:-1]
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,
-                                  ev_counts=ev_totals, title=title,
+                                  ev_counts=ev_counts, beliefs=beliefs,
+                                  sort_by=self.sort_by, title=title,
                                   source_counts=result.source_counts,
                                   db_rest_url=db_rest_url)
                 idbr_template = \

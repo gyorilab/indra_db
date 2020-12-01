@@ -30,12 +30,20 @@ from rest_api.call_handlers import *
 from rest_api.util import sec_since, get_s3_client, gilda_ground, \
     _make_english_from_meta, get_html_source_info
 
+
+# =========================
+# A lot of config and setup
+# =========================
+
+# Get a logger, and assert the logging level.
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
-set_log_service_name(f"db-rest-api-{DEPLOYMENT}")
+# Set the name of this service for the usage logs.
+set_log_service_name(f"db-rest-api-{DEPLOYMENT if DEPLOYMENT else 'stable'}")
 
 
+# Define a custom flask class to handle the deployment name prefix.
 class MyFlask(Flask):
     def route(self, url, *args, **kwargs):
         if DEPLOYMENT is not None:
@@ -44,15 +52,18 @@ class MyFlask(Flask):
         return flask_dec
 
 
+# Propagate the deployment name to the static path and auth URLs.
 static_url_path = None
 if DEPLOYMENT is not None:
     static_url_path = f'/{DEPLOYMENT}/static'
     auth.url_prefix = f'/{DEPLOYMENT}'
 
 
+# Initialize the flask application (with modified static path).
 app = MyFlask(__name__, static_url_path=static_url_path)
 
 
+# Register the auth application, and config it if we are not testing.
 app.register_blueprint(auth)
 app.config['DEBUG'] = True
 if not TESTING['status']:
@@ -60,9 +71,11 @@ if not TESTING['status']:
 else:
     logger.warning("TESTING: No auth will be enabled.")
 
+# Apply wrappers to the app that will compress responses and enable CORS.
 Compress(app)
 CORS(app)
 
+# The directory path to this location (works in any file system).
 HERE = path.abspath(path.dirname(__file__))
 
 # Instantiate a jinja2 env.
@@ -70,7 +83,9 @@ env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
                                        indra_loader]))
 
 
+# Overwrite url_for function in jinja to handle DEPLOYMENT prefix gracefully.
 def url_for(*args, **kwargs):
+    """Generate a url for a given endpoint, applying the DEPLOYMENT prefix."""
     res = base_url_for(*args, **kwargs)
     if DEPLOYMENT is not None:
         if not res.startswith(f'/{DEPLOYMENT}'):
@@ -78,11 +93,12 @@ def url_for(*args, **kwargs):
     return res
 
 
-# Here we can add functions to the jinja2 env.
 env.globals.update(url_for=url_for)
 
 
+# Define a useful helper function.
 def render_my_template(template, title, **kwargs):
+    """Render a Jinja2 template wrapping in identity and other details."""
     kwargs['title'] = TITLE + ': ' + title
     if not TESTING['status']:
         kwargs['identity'] = get_jwt_identity()

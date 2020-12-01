@@ -41,16 +41,31 @@ class ApiCall:
         self._env = env
 
         self.web_query = request.args.copy()
+
+        # Get the offset and limit
         self.offs = self._pop('offset', type_cast=int)
-        self.best_first = self._pop('best_first', True, bool)
         if 'limit' in self.web_query:
             self.limit = min(self._pop('limit', MAX_STMTS, int), MAX_STMTS)
         else:
             self.limit = min(self._pop('max_stmts', MAX_STMTS, int), MAX_STMTS)
+
+        # Sort out the sorting.
+        sort_by = self._pop('sort_by', None)
+        best_first = self._pop('best_first', True, bool)
+        if sort_by is not None:
+            self.sort_by = sort_by
+        elif best_first:
+            self.sort_by = 'ev_count'
+        else:
+            self.sort_by = None
+
+        # Gather other miscillaneous options
         self.fmt = self._pop('format', 'json')
         self.w_english = self._pop('with_english', False, bool)
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)
         self.strict = self._pop('strict', False, bool)
+
+        # Prime agent recorders.
         self.agent_dict = None
         self.agent_set = None
 

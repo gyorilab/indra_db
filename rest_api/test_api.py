@@ -185,6 +185,12 @@ class TestDbApi(unittest.TestCase):
                             if s1.matches(s2)]))
         return
 
+    def test_health_check(self):
+        """Test that the health check works."""
+        resp = self.app.get('healthcheck')
+        assert resp.status_code == 200, resp.status_code
+        assert resp.json == {'status': 'testing'}, resp.json
+
     def test_blank_response(self):
         """Test the response to an empty request."""
         resp, dt, size = self.__time_get_query('statements/from_agents', '')

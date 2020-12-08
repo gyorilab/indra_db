@@ -98,7 +98,7 @@ def get_content_by_refs(db, pmid_list=None, trid_list=None, sources=None,
         the corresponding content.
     """
     # Make sure we only get one type of list.
-    if not pmid_list or trid_list:
+    if not (pmid_list or trid_list):
         raise ValueError("One of `pmid_list` or `trid_list` must be defined.")
     if pmid_list and trid_list:
         raise ValueError("Only one of `pmid_list` or `trid_list` may be used.")

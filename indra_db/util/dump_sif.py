@@ -79,6 +79,7 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
             else:
                 tbl = ro.OtherMeta
                 filters.append(tbl.db_name.like(ns))
+            filters.append(tbl.is_complex_dup == False)
             res = ro.select_all([tbl.mk_hash, tbl.db_id, tbl.ag_num,
                                  tbl.ev_count, tbl.type_num], *filters)
             results[ns] = res

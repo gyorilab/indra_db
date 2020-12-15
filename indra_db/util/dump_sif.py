@@ -8,6 +8,7 @@ from io import StringIO
 from datetime import datetime
 from itertools import permutations
 from collections import OrderedDict
+from tqdm import tqdm
 
 from indra.util.aws import get_s3_client
 from indra_db.schemas.readonly_schema import ro_type_map
@@ -72,9 +73,9 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
         List of agent namespaces to include in the metadata query.
     pkl_filename : str
         Name of pickle file to save to (if reloading) or load from (if not
-        reloading). If an S3 path is given (i.e., pkl_filename starts with S3),
-        the file is loaded to/saved from S3. If not given, automatically
-        reloads the content (overriding reload).
+        reloading). If an S3 path is given (i.e., pkl_filename starts with
+        `s3:`), the file is loaded to/saved from S3. If not given,
+        automatically reloads the content (overriding reload).
     ro : ReadonlyDatabaseManager
         Readonly database to load the content from. If not given, calls
         `get_ro('primary')` to get the primary readonly DB.
@@ -156,14 +157,43 @@ def get_source_counts(pkl_filename=None, ro=None):
 
 
 def make_dataframe(reconvert, db_content, pkl_filename=None):
+    """Make a pickled DataFrame of the db content, one row per stmt.
+
+    Parameters
+    ----------
+    reconvert : bool
+        Whether to generate a new DataFrame from the database content or
+        to load and return a DataFrame from the given pickle file. If False,
+        `pkl_filename` must be given.
+    db_content : set of tuples
+        Set of tuples of agent/stmt data as returned by `load_db_content`.
+    pkl_filename : str
+        Name of pickle file to save to (if reconverting) or load from (if not
+        reconverting). If an S3 path is given (i.e., pkl_filename starts with
+        `s3:`), the file is loaded to/saved from S3. If not given, automatically
+        reloads the content (overriding reload).
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing the content, with columns: 'agA_ns', 'agA_id',
+        'agA_name', 'agB_ns', 'agB_id', 'agB_name', 'stmt_type',
+        'evidence_count', 'stmt_hash'.
+    """
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     if reconvert:
-        # Organize by statement
+        # Content consists of tuples organized by agent, e.g.
+        # (-11421523615931377, 'UP', 'P04792', 1, 1, 'Phosphorylation')
+        #
+        # First we need to organize by statement, collecting all agents
+        # for each statement along with evidence count and type.
+        # We also separately store the NAME attribute for each statement
+        # agent (indexing by hash/agent_num).
         logger.info("Organizing by statement...")
-        stmt_info = {}
-        ag_name_by_hash_num = {}
-        for h, db_nm, db_id, num, n, t in db_content:
+        stmt_info = {} # Store statement info (agents, ev, type) by hash
+        ag_name_by_hash_num = {} # Store name for each stmt agent
+        for h, db_nm, db_id, num, n, t in tqdm(db_content):
             # Populate the 'NAME' dictionary per agent
             if db_nm == 'NAME':
                 ag_name_by_hash_num[(h, num)] = db_id
@@ -178,12 +208,16 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
         error_keys = []
         rows = []
         logger.info("Converting to pairwise entries...")
-        for hash, info_dict in stmt_info.items():
-            # Find roles with more than one agent
+        # Iterate over each statement
+        for hash, info_dict in tqdm(stmt_info.items()):
+            # Get the priority grounding for the agents in each position
             agents_by_num = {}
             for num, db_nm, db_id in info_dict['agents']:
+                # Agent name is handled separately so we skip it here
                 if db_nm == 'NAME':
                     continue
+                # For other namespaces, we get the top-priority namespace
+                # given all namespaces for the agent
                 else:
                     assert db_nm in NS_PRIORITY_LIST
                     db_rank = NS_PRIORITY_LIST.index(db_nm)
@@ -197,13 +231,16 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
                         cur_rank = agents_by_num[num][3]
                         if db_rank < cur_rank:
                             agents_by_num[num] = (num, db_nm, db_id, db_rank)
-
+            # Make ordered list of agents for this statement, picking up
+            # the agent name from the ag_name_by_hash_num dict that we
+            # built earlier
             agents = []
             for num, db_nm, db_id, _ in sorted(agents_by_num.values()):
-                try:
-                    agents.append((db_nm, db_id,
-                                   ag_name_by_hash_num[(hash, num)]))
-                except KeyError:
+                # Try to get the agent name
+                ag_name = ag_name_by_hash_num.get((hash, num), None)
+                # If the name is not found, log it but allow the agent
+                # to be included as None
+                if ag_name is None:
                     nkey_errors += 1
                     error_keys.append((hash, num))
                     if nkey_errors < 11:
@@ -212,7 +249,7 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
                     elif nkey_errors == 11:
                         logger.warning('Got more than 10 key warnings: '
                                        'muting further warnings.')
-                    continue
+                agents.append((db_nm, db_id, ag_name))
 
             # Need at least two agents.
             if len(agents) < 2:

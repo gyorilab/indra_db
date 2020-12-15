@@ -61,6 +61,35 @@ def load_pickle_from_s3(s3_path):
 
 
 def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
+    """Get preassembled stmt metadata from the DB for export.
+
+    Queries the NameMeta, TextMeta, and OtherMeta tables as needed to get
+    agent/stmt metadata for agents from the given namespaces.
+
+    Parameters
+    ----------
+    ns_list : list of str
+        List of agent namespaces to include in the metadata query.
+    pkl_filename : str
+        Name of pickle file to save to (if reloading) or load from (if not
+        reloading). If an S3 path is given (i.e., pkl_filename starts with S3),
+        the file is loaded to/saved from S3. If not given, automatically
+        reloads the content (overriding reload).
+    ro : ReadonlyDatabaseManager
+        Readonly database to load the content from. If not given, calls
+        `get_ro('primary')` to get the primary readonly DB.
+    reload : bool
+        Whether to re-query the database for content or to load the content
+        from from `pkl_filename`. Note that even if `reload` is False,
+        if no `pkl_filename` is given, data will be reloaded anyway.
+
+    Returns
+    -------
+    set of tuples
+        Set of tuples containing statement information organized
+        by agent. Tuples contain (stmt_hash, agent_ns, agent_id, agent_num,
+        evidence_count, stmt_type).
+    """
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     # Get the raw data

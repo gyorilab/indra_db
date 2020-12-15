@@ -387,15 +387,16 @@ class DatabaseManager(object):
         if self.session is None or not self.session.is_active:
             logger.debug('Attempting to get session...')
             DBSession = sessionmaker(bind=self.__engine,
-                                     autoflush=self.__protected,
-                                     autocommit=self.__protected)
+                                     autoflush=not self.__protected,
+                                     autocommit=not self.__protected)
             logger.debug('Got session.')
             self.session = DBSession()
             if self.session is None:
                 raise IndraDbException("Failed to grab session.")
             if self.__protected:
-                self.session.flush = \
-                    lambda *a, **k: logger.error("Write not allowed!")
+                def no_flush(*a, **k):
+                    logger.error("Write not allowed!")
+                self.session.flush = no_flush
 
     def get_tables(self):
         """Get a list of available tables."""

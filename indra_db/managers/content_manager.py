@@ -826,6 +826,11 @@ class Pubmed(_NihManager):
         copy_rows = []
         for pmid, annotation_list in self.annotations.items():
             for annotation in annotation_list:
+                # If supplementary IDs (they start with C and their int-ified
+                # values can overlap with main terms that start with D) are
+                # supported, this condition can be removed
+                if annotation.get('type') == 'supplementary':
+                    continue
                 # Format the row.
                 copy_row = (int(pmid), int(annotation['mesh'][1:]),
                             annotation['major_topic'])

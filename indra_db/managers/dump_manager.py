@@ -441,13 +441,6 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Readonly dump exists, skipping.")
 
-        if not allow_continue or not Sif.from_list(starter.manifest):
-            logger.info("Dumping sif from the readonly schema on principal.")
-            Sif(db=principal_db, date_stamp=starter.date_stamp)\
-                .dump(continuing=allow_continue)
-        else:
-            logger.info("Sif dump exists, skipping.")
-
         if not allow_continue \
                 or not FullPaStmts.from_list(starter.manifest):
             logger.info("Dumping all PA Statements as a pickle.")
@@ -456,6 +449,13 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
                 .dump(continuing=allow_continue)
         else:
             logger.info("Statement dump exists, skipping.")
+
+        if not allow_continue or not Sif.from_list(starter.manifest):
+            logger.info("Dumping sif from the readonly schema on principal.")
+            Sif(db=principal_db, date_stamp=starter.date_stamp)\
+                .dump(continuing=allow_continue)
+        else:
+            logger.info("Sif dump exists, skipping.")
 
         if not allow_continue \
                 or not StatementHashMeshId.from_list(starter.manifest):

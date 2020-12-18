@@ -10,7 +10,7 @@ from itertools import permutations
 from collections import OrderedDict
 
 from indra.util.aws import get_s3_client
-from indra.assemblers.indranet.assembler import make_df
+from indra.assemblers.indranet import IndraNetAssembler
 from indra_db.schemas.readonly_schema import ro_type_map
 from indra.statements.agent import default_ns_order
 
@@ -300,7 +300,8 @@ def dump_sif_from_stmts(stmt_list, output):
     output : Union[str, S3Path]
         Where to save the output to. Can be local file path or an S3Path.
     """
-    df = make_df(stmt_list=stmt_list)
+    ia = IndraNetAssembler(statements=stmt_list)
+    df = ia.make_df()
     if isinstance(output, S3Path):
         s3 = get_s3_client(False)
         output.put(s3=s3, body=pickle.dumps(df))

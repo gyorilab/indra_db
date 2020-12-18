@@ -1,5 +1,5 @@
 __all__ = ['load_db_content', 'make_dataframe', 'get_source_counts', 'NS_LIST',
-           'dump_sif']
+           'dump_sif', 'dump_sif_from_stmts']
 
 import pickle
 import logging
@@ -10,6 +10,7 @@ from itertools import permutations
 from collections import OrderedDict
 
 from indra.util.aws import get_s3_client
+from indra.assemblers.indranet.assembler import make_df
 from indra_db.schemas.readonly_schema import ro_type_map
 from indra.statements.agent import default_ns_order
 
@@ -287,6 +288,25 @@ def get_parser():
                         default=False,
                         help='Use the principal db instead of the readonly')
     return parser
+
+
+def dump_sif_from_stmts(stmt_list, output):
+    """Create a dataframe with pairs of agents
+
+    Parameters
+    ----------
+    stmt_list : Union[str, List[indra.statements.Statement]
+        A list of statements to transform to a DataFrame
+    output : Union[str, S3Path]
+        Where to save the output to. Can be local file path or an S3Path.
+    """
+    df = make_df(stmt_list=stmt_list)
+    if isinstance(output, S3Path):
+        s3 = get_s3_client(False)
+        output.put(s3=s3, body=pickle.dumps(df))
+    else:
+        with open(output, 'wb') as f:
+            pickle.dump(obj=df, file=f)
 
 
 def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,

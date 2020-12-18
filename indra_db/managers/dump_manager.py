@@ -12,7 +12,7 @@ from indra_db.belief import get_belief
 from indra_db.config import CONFIG, get_s3_dump, record_in_test
 from indra_db.util import get_db, get_ro, S3Path
 from indra_db.util.aws import get_role_kwargs
-from indra_db.util.dump_sif import dump_sif, get_source_counts
+from indra_db.util.dump_sif import dump_sif_from_stmts, get_source_counts
 
 
 logger = logging.getLogger(__name__)
@@ -247,19 +247,18 @@ class End(Dumper):
 class Sif(Dumper):
     name = 'sif'
     fmt = 'pkl'
-    db_required = True
-    db_options = ['principal', 'readonly']
+    db_required = False
 
     def __init__(self, use_principal=False, **kwargs):
         super(Sif, self).__init__(use_principal=use_principal, **kwargs)
 
-    def dump(self, continuing=False, include_src_counts=True):
-        s3_path = self.get_s3_path()
-        if include_src_counts:
-            srcc = SourceCount(ro=self.db)
-            dump_sif(s3_path, src_count_file=srcc.get_s3_path(), ro=self.db)
-        else:
-            dump_sif(s3_path, ro=self.db)
+    def dump(self, continuing=False):
+        latest_full_pa = get_latest_dump_s3_path(FullPaStmts.name)
+        if latest_full_pa:
+            s3 = boto3.client('s3')
+            pa_stmts_list = latest_full_pa.get(s3)
+            s3_outpath = self.get_s3_path()
+            dump_sif_from_stmts(stmt_list=pa_stmts_list, output=s3_outpath)
 
 
 class Belief(Dumper):

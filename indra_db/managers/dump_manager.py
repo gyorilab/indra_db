@@ -256,7 +256,8 @@ class Sif(Dumper):
         latest_full_pa = get_latest_dump_s3_path(FullPaStmts.name)
         if latest_full_pa:
             s3 = boto3.client('s3')
-            pa_stmts_list = latest_full_pa.get(s3)
+            s3_res = latest_full_pa.get(s3)
+            pa_stmts_list = pickle.loads(s3_res['Body'].read())
             s3_outpath = self.get_s3_path()
             dump_sif_from_stmts(stmt_list=pa_stmts_list, output=s3_outpath)
 

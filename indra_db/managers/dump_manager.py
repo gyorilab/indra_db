@@ -289,7 +289,7 @@ class SourceCount(Dumper):
 
 class FullPaJson(Dumper):
     name = 'full_pa_json'
-    fmt = 'json'
+    fmt = 'jsonl'
     db_required = True
     db_options = ['principal', 'readonly']
 
@@ -298,9 +298,9 @@ class FullPaJson(Dumper):
 
     def dump(self, continuing=False):
         query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
-        json_list = [json.loads(js[0]) for js in query_res.all()]
+        jsonl_str = '\n'.join([js[0] for js in query_res.all()])
         s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, json.dumps(json_list).encode('utf-8'))
+        self.get_s3_path().upload(s3, jsonl_str.encode('utf-8'))
 
 
 class FullPaStmts(Dumper):

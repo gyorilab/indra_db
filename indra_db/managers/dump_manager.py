@@ -33,6 +33,18 @@ def list_dumps(started=None, ended=None):
         NOT been started. If None, do not filter by start status.
     ended : Optional[bool]
         The same as `started`, but checking whether the dump is ended or not.
+
+    Returns
+    -------
+    list of S3Path objects
+        Each S3Path object contains the bucket and key prefix information for
+        a set of dump files, e.g.
+
+            [S3Path(bigmech, indra-db/dumps/2020-07-16/),
+             S3Path(bigmech, indra-db/dumps/2020-08-28/),
+             S3Path(bigmech, indra-db/dumps/2020-09-18/),
+             S3Path(bigmech, indra-db/dumps/2020-11-12/),
+             S3Path(bigmech, indra-db/dumps/2020-11-13/)]
     """
     # Get all the dump "directories".
     s3_base = get_s3_dump()
@@ -59,8 +71,16 @@ def list_dumps(started=None, ended=None):
 def get_latest_dump_s3_path(dumper_name):
     """Get the latest version of a dump file by the given name.
 
-    `dumper_name` is indexed using the standardized `name` class attribute of
-    the dumper object.
+    Searches dumps that have already been *started* and gets the full S3
+    file path for the latest version of the dump of that type (e.g. "sif",
+    "belief", "source_count", etc.)
+
+    Parameters
+    ----------
+    dumper_name : str
+        The standardized name for the dumper classes defined in this module,
+        defined in the `name` class attribute of the dumper object.
+        E.g., the standard dumper name "sif" can be obtained from ``Sif.name``.
     """
     # Get all the dumps that were properly started.
     s3 = boto3.client('s3')
@@ -534,7 +554,8 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    # Collect args and run the top-level dump script
     args = parse_args()
     dump(get_db(args.database, protected=False),
-         get_ro(args.readonly, protected=False), args.delet_existing,
+         get_ro(args.readonly, protected=False), args.delete_existing,
          args.allow_continue, args.load_only, args.dump_only)

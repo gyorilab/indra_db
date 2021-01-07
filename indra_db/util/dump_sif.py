@@ -1,6 +1,7 @@
 __all__ = ['load_db_content', 'make_dataframe', 'get_source_counts', 'NS_LIST',
            'dump_sif', 'dump_sif_from_stmts']
 
+import json
 import pickle
 import logging
 import argparse
@@ -12,6 +13,7 @@ from collections import OrderedDict
 from indra.util.aws import get_s3_client
 from indra.assemblers.indranet import IndraNetAssembler
 from indra_db.schemas.readonly_schema import ro_type_map
+from indra.statements import get_all_descendants, Modification
 from indra.statements.agent import default_ns_order
 
 try:
@@ -102,6 +104,29 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
                 results = pickle.load(f)
     logger.info("{len} stmts loaded".format(len=len(results)))
     return results
+
+
+def load_res_pos(ro=None):
+    """Return residue/position data keyed by hash"""
+    if ro is None:
+        ro = get_ro('primary')
+    res = {}
+    for stmt_type in get_all_descendants(Modification):
+        stmt_name = stmt_type.__name__
+        if stmt_name in ('Modification', 'AddModification',
+                         'RemoveModification'):
+            continue
+        logger.info(f'Getting statements for type {stmt_name}')
+        type_num = ro_type_map.get_int(stmt_name)
+        query = ro.select_all(ro.FastRawPaLink.pa_json,
+                              ro.FastRawPaLink.type_num == type_num)
+        for jsb, in query:
+            js = json.loads(jsb)
+            if 'residue' in js or 'position' in js:
+                res[js['matches_hash']] = {'residue': js.get('residue'),
+                                           'position': js.get('position')}
+
+    return res
 
 
 def get_source_counts(pkl_filename=None, ro=None):

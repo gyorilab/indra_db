@@ -197,7 +197,7 @@ def get_source_counts(pkl_filename=None, ro=None):
 
 
 def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
-                   pkl_filename=None):
+                   belief_dict, pkl_filename=None):
     """Make a pickled DataFrame of the db content, one row per stmt.
 
     Parameters
@@ -209,11 +209,15 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
     db_content : set of tuples
         Set of tuples of agent/stmt data as returned by `load_db_content`.
     res_pos_dict : Dict[str, Dict[str, str]]
+        Dict containing residue and position keyed by hash.
     src_count_dict : Dict[str, Dict[str, int]]
+        Dict of dicts containing source counts per source api keyed by hash.
+    belief_dict : Dict[str, float]
+        Dict of belief scores keyed by hash.
     pkl_filename : str
         Name of pickle file to save to (if reconverting) or load from (if not
         reconverting). If an S3 path is given (i.e., pkl_filename starts with
-        `s3:`), the file is loaded to/saved from S3. If not given, automatically
+        `s3:`), the file is loaded to/saved from S3. If not given,
         reloads the content (overriding reload).
 
     Returns
@@ -321,7 +325,8 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
                     ('stmt_hash', hash),
                     ('residue', res_pos_dict['residue'].get(hash)),
                     ('position', res_pos_dict['position'].get(hash)),
-                    ('source_count', src_count_dict.get(hash))
+                    ('source_count', src_count_dict.get(hash)),
+                    ('belief', belief_dict.get(hash))
                 ])
                 rows.append(row)
         if nkey_errors:
@@ -403,8 +408,64 @@ def get_parser():
     return parser
 
 
-def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
-             reload=False, reconvert=True, ro=None):
+def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
+             db_res_file=None, csv_file=None, reload=False, reconvert=True,
+             ro=None):
+    """Build and dump a sif dataframe of PA statements with grounded agents
+
+    Parameters
+    ----------
+    src_count_file : Union[str, S3Path]
+        A location to load the source count dict from. Can be local file
+        path, an s3 url string or an S3Path instance.
+    res_pos_file : Union[str, S3Path]
+        A location to load the residue-postion dict from. Can be local file
+        path, an s3 url string or an S3Path instance.
+    belief_file : Union[str, S3Path]
+        A location to load the belief dict from. Can be local file path,
+        an s3 url string or an S3Path instance.
+    df_file : Optional[Union[str, S3Path]]
+        If provided, dump the sif to this location. Can be local file path,
+        an s3 url string or an S3Path instance.
+    db_res_file : Optional[Union[str, S3Path]]
+        If provided, save the db content to this location. Can be local file
+        path, an s3 url string or an S3Path instance.
+    csv_file : Optional[str, S3Path]
+        If provided, calculate dataframe statistics and save to local file
+        or s3. Can be local file path, an s3 url string or an S3Path instance.
+    reconvert : bool
+        Whether to generate a new DataFrame from the database content or
+        to load and return a DataFrame from `df_file`. If False, `df_file`
+        must be given.
+    reload : bool
+        If True, load new content from the database and make a new
+        dataframe. If False, content can be loaded from provided files.
+        Default: True.
+    ro : Optional[PrincipalDatabaseManager]
+        Provide a DatabaseManager to load database content from. If not
+        provided, `get_ro('primary')` will be used.
+    """
+    def _load_file(path):
+        if isinstance(path, str) and path.startswith('s3:') or \
+                isinstance(path, S3Path):
+            if isinstance(path, str):
+                s3path = S3Path.from_string(path)
+            else:
+                s3path = path
+            if s3path.to_string().endswith('pkl'):
+                return load_pickle_from_s3(s3path)
+            elif s3path.to_string().endswith('json'):
+                return load_json_from_s3(s3path)
+            else:
+                raise ValueError(f'Unknown file format of {path}')
+        else:
+            if path.endswith('pkl'):
+                with open(path, 'rb') as f:
+                    return pickle.load(f)
+            elif path.endswith('json'):
+                with open(path, 'r') as f:
+                    return json.load(f)
+
     if ro is None:
         ro = get_db('primary')
 
@@ -412,9 +473,15 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
                                  pkl_filename=db_res_file, ro=ro)
 
+    # Load supporting files
+    res_pos = _load_file(res_pos_file)
+    src_count = _load_file(src_count_file)
+    belief = _load_file(belief_file)
+
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
-                        db_content=db_content)
+                        db_content=db_content, src_count_dict=src_count,
+                        res_pos_dict=res_pos, belief_dict=belief)
 
     if csv_file:
         if isinstance(csv_file, str) and csv_file.startswith('s3:'):
@@ -448,9 +515,6 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
         # save locally
         else:
             type_counts.to_csv(csv_file)
-
-    if src_count_file:
-        _ = get_source_counts(src_count_file, ro=ro)
     return
 
 

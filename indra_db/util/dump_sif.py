@@ -1,5 +1,5 @@
 __all__ = ['load_db_content', 'make_dataframe', 'get_source_counts', 'NS_LIST',
-           'dump_sif']
+           'dump_sif', 'load_res_pos']
 
 import json
 import pickle

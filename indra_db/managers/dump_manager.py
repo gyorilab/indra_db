@@ -291,6 +291,7 @@ class Sif(Dumper):
 
 
 class Belief(Dumper):
+    """Dump a dict of belief scores keyed by hash"""
     name = 'belief'
     fmt = 'json'
     db_required = True
@@ -326,7 +327,7 @@ class ResiduePosition(Dumper):
 
     def __init__(self, use_principal=True, **kwargs):
         super(ResiduePosition, self).__init__(use_principal=use_principal,
-                                             **kwargs)
+                                              **kwargs)
 
     def dump(self, continuing=False):
         res_pos_dict = load_res_pos(ro=self.db)
@@ -335,6 +336,7 @@ class ResiduePosition(Dumper):
 
 
 class FullPaJson(Dumper):
+    """Dumps all statements found in FastRawPaLink as jsonl"""
     name = 'full_pa_json'
     fmt = 'jsonl'
     db_required = True
@@ -351,6 +353,7 @@ class FullPaJson(Dumper):
 
 
 class FullPaStmts(Dumper):
+    """Dumps all statements found in FastRawPaLink as a pickle"""
     name = 'full_pa_stmts'
     fmt = 'pkl'
     db_required = True

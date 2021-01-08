@@ -389,7 +389,7 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None,
     df_file : Optional[Union[str, S3Path]]
         If provided, dump the sif to this location. Can be local file path, an
         s3 url string or an S3Path instance.
-    src_count_file : str
+    src_count_file : Optional[Union[str, S3Path]]
         A location to dump the source count dict. Can be local file path, an
         s3 url string or an S3Path instance.
     db_res_file : Optional[Union[str, S3Path]]

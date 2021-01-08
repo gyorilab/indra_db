@@ -108,9 +108,10 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
 
 def load_res_pos(ro=None):
     """Return residue/position data keyed by hash"""
+    logger.info('Getting residue and position info')
     if ro is None:
         ro = get_ro('primary')
-    res = {}
+    res = {'residue': {}, 'position': {}}
     for stmt_type in get_all_descendants(Modification):
         stmt_name = stmt_type.__name__
         if stmt_name in ('Modification', 'AddModification',
@@ -122,10 +123,10 @@ def load_res_pos(ro=None):
                               ro.FastRawPaLink.type_num == type_num)
         for jsb, in query:
             js = json.loads(jsb)
-            if 'residue' in js or 'position' in js:
-                res[js['matches_hash']] = {'residue': js.get('residue'),
-                                           'position': js.get('position')}
-
+            if 'residue' in js:
+                res['residue'][js['matches_hash']] = js['residue']
+            if 'position' in js:
+                res['position'][js['matches_hash']] = js['position']
     return res
 
 

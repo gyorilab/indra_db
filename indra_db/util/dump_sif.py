@@ -182,7 +182,8 @@ def get_source_counts(pkl_filename=None, ro=None):
     return ev
 
 
-def make_dataframe(reconvert, db_content, pkl_filename=None):
+def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
+                   pkl_filename=None):
     """Make a pickled DataFrame of the db content, one row per stmt.
 
     Parameters
@@ -193,6 +194,8 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
         `pkl_filename` must be given.
     db_content : set of tuples
         Set of tuples of agent/stmt data as returned by `load_db_content`.
+    res_pos_dict : Dict[str, Dict[str, str]]
+    src_count_dict : Dict[str, Dict[str, int]]
     pkl_filename : str
         Name of pickle file to save to (if reconverting) or load from (if not
         reconverting). If an S3 path is given (i.e., pkl_filename starts with
@@ -293,15 +296,19 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
             # Add all the pairs, and count up total evidence.
             for pair in pairs:
                 row = OrderedDict([
-                        ('agA_ns', pair[0][0]),
-                        ('agA_id', pair[0][1]),
-                        ('agA_name', pair[0][2]),
-                        ('agB_ns', pair[1][0]),
-                        ('agB_id', pair[1][1]),
-                        ('agB_name', pair[1][2]),
-                        ('stmt_type', info_dict['type']),
-                        ('evidence_count', info_dict['ev_count']),
-                        ('stmt_hash', hash)])
+                    ('agA_ns', pair[0][0]),
+                    ('agA_id', pair[0][1]),
+                    ('agA_name', pair[0][2]),
+                    ('agB_ns', pair[1][0]),
+                    ('agB_id', pair[1][1]),
+                    ('agB_name', pair[1][2]),
+                    ('stmt_type', info_dict['type']),
+                    ('evidence_count', info_dict['ev_count']),
+                    ('stmt_hash', hash),
+                    ('residue', res_pos_dict['residue'].get(hash)),
+                    ('position', res_pos_dict['position'].get(hash)),
+                    ('source_count', src_count_dict.get(hash))
+                ])
                 rows.append(row)
         if nkey_errors:
             ef = 'key_errors.csv'

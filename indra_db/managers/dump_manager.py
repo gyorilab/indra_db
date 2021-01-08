@@ -285,6 +285,8 @@ class Sif(Dumper):
                  src_count_file=src_counts_path,
                  res_pos_file=res_pos_path,
                  belief_file=belief_path,
+                 reload=True,
+                 reconvert=True,
                  ro=self.db)
 
 

@@ -152,7 +152,25 @@ def get_source_counts(pkl_filename=None, ro=None):
     return ev
 
 
-def make_dataframe(reconvert, db_content, pkl_filename=None):
+def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
+                   pkl_filename=None):
+    """Load data in db_content into a pandas dataframe and dump it
+
+    Parameters
+    ----------
+    reconvert : bool
+    db_content : List[Tuple[
+    res_pos_dict : Dict[str, Dict[str, str]]
+    src_count_dict : Dict[str, Dict[str, int]]
+    pkl_filename : Optional[Union[str, S3Path]]
+
+    Returns
+    -------
+    pd.DataFrame
+        A pandas dataframe of pairwise agent interactions with statement
+        information for the interaction
+    """
+    # Todo fix the mess with which files are required and which ones are not
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     if reconvert:
@@ -227,15 +245,19 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
             # Add all the pairs, and count up total evidence.
             for pair in pairs:
                 row = OrderedDict([
-                        ('agA_ns', pair[0][0]),
-                        ('agA_id', pair[0][1]),
-                        ('agA_name', pair[0][2]),
-                        ('agB_ns', pair[1][0]),
-                        ('agB_id', pair[1][1]),
-                        ('agB_name', pair[1][2]),
-                        ('stmt_type', info_dict['type']),
-                        ('evidence_count', info_dict['ev_count']),
-                        ('stmt_hash', hash)])
+                    ('agA_ns', pair[0][0]),
+                    ('agA_id', pair[0][1]),
+                    ('agA_name', pair[0][2]),
+                    ('agB_ns', pair[1][0]),
+                    ('agB_id', pair[1][1]),
+                    ('agB_name', pair[1][2]),
+                    ('stmt_type', info_dict['type']),
+                    ('evidence_count', info_dict['ev_count']),
+                    ('stmt_hash', hash),
+                    ('residue', res_pos_dict['residue'].get(hash)),
+                    ('position', res_pos_dict['position'].get(hash)),
+                    ('source_count', src_count_dict.get(hash))
+                ])
                 rows.append(row)
         if nkey_errors:
             ef = 'key_errors.csv'

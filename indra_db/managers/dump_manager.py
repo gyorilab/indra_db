@@ -520,11 +520,9 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Sif dump exists, skipping.")
 
-        if not allow_continue \
-                or not FullPaStmts.from_list(starter.manifest):
-            logger.info("Dumping all PA Statements as a pickle.")
-            FullPaStmts(db=principal_db,
-                        date_stamp=starter.date_stamp)\
+        if not allow_continue or not FullPaJson.from_list(starter.manifest):
+            logger.info("Dumping all PA Statements as jsonl.")
+            FullPaJson(db=principal_db, date_stamp=starter.date_stamp)\
                 .dump(continuing=allow_continue)
         else:
             logger.info("Statement dump exists, skipping.")

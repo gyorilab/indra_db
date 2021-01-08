@@ -52,9 +52,9 @@ def upload_pickle_to_s3(obj, s3_path):
 
 def load_pickle_from_s3(s3_path):
     logger.info('Loading pickle %s.' % s3_path)
-    s3 = get_s3_client(unsigned=False)
+    s3 = get_s3_client(False)
     try:
-        res = s3.get_object(**s3_path.kw())
+        res = s3_path.get(s3)
         obj = pickle.loads(res['Body'].read())
         logger.info('Finished loading %s.' % s3_path)
         return obj

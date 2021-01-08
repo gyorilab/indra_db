@@ -81,6 +81,10 @@ def get_latest_dump_s3_path(dumper_name):
         The standardized name for the dumper classes defined in this module,
         defined in the `name` class attribute of the dumper object.
         E.g., the standard dumper name "sif" can be obtained from ``Sif.name``.
+
+    Returns
+    -------
+    Union[S3Path, None]
     """
     # Get all the dumps that were properly started.
     s3 = boto3.client('s3')

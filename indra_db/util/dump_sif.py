@@ -63,46 +63,56 @@ def load_pickle_from_s3(s3_path):
         logger.exception(e)
 
 
-def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
+def load_db_content(ns_list, pkl_filename=None, ro=None):
+    """Loads database content for grounded agents
+
+    Parameters
+    ----------
+    ns_list : List[str]
+        The list of namespaces to load from the database
+    pkl_filename : Optional[Union[str, S3Path]]
+        If provided, save the db content to it. Can be local file path, an
+        s3 url string or an S3Path instance.
+    ro : Optional[PrincipalDatabaseManager]
+        A DatabaseManager to use for querying the db. If not provided,
+        a new instance will be created from `get_ro('primary')`
+
+    Returns
+    -------
+    Set[Tuple[str]]
+        The database content as a set of tuples.
+    """
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
-    # Get the raw data
-    if reload or not pkl_filename:
-        if not ro:
-            ro = get_ro('primary')
-        logger.info("Querying the database for statement metadata...")
-        results = {}
-        for ns in ns_list:
-            logger.info("Querying for {ns}".format(ns=ns))
-            filters = []
-            if ns == 'NAME':
-                tbl = ro.NameMeta
-            elif ns == 'TEXT':
-                tbl = ro.TextMeta
-            else:
-                tbl = ro.OtherMeta
-                filters.append(tbl.db_name.like(ns))
-            res = ro.select_all([tbl.mk_hash, tbl.db_id, tbl.ag_num,
-                                 tbl.ev_count, tbl.type_num], *filters)
-            results[ns] = res
-        results = {(h, dbn, dbi, ag_num, ev_cnt, ro_type_map.get_str(tn))
-                   for dbn, value_list in results.items()
-                   for h, dbi, ag_num, ev_cnt, tn in value_list}
-        if pkl_filename:
-            if isinstance(pkl_filename, S3Path):
-                upload_pickle_to_s3(results, pkl_filename)
-            else:
-                with open(pkl_filename, 'wb') as f:
-                    pickle.dump(results, f)
-    # Get a cached pickle
-    else:
-        logger.info("Loading database content from %s" % pkl_filename)
-        if pkl_filename.startswith('s3:'):
-            results = load_pickle_from_s3(pkl_filename)
+
+    # Load database content
+    if not ro:
+        ro = get_ro('primary')
+    logger.info("Querying the database for statement metadata...")
+    results = {}
+    for ns in ns_list:
+        logger.info("Querying for {ns}".format(ns=ns))
+        filters = []
+        if ns == 'NAME':
+            tbl = ro.NameMeta
+        elif ns == 'TEXT':
+            tbl = ro.TextMeta
         else:
-            with open(pkl_filename, 'rb') as f:
-                results = pickle.load(f)
-    logger.info("{len} stmts loaded".format(len=len(results)))
+            tbl = ro.OtherMeta
+            filters.append(tbl.db_name.like(ns))
+        res = ro.select_all([tbl.mk_hash, tbl.db_id, tbl.ag_num,
+                             tbl.ev_count, tbl.type_num], *filters)
+        results[ns] = res
+    results = {(h, dbn, dbi, ag_num, ev_cnt, ro_type_map.get_str(tn))
+               for dbn, value_list in results.items()
+               for h, dbi, ag_num, ev_cnt, tn in value_list}
+    if pkl_filename:
+        if isinstance(pkl_filename, S3Path):
+            upload_pickle_to_s3(results, pkl_filename)
+        else:
+            with open(pkl_filename, 'wb') as f:
+                pickle.dump(results, f)
+    logger.info(f"{len(results)} stmts loaded")
     return results
 
 
@@ -130,24 +140,41 @@ def load_res_pos(ro=None):
     return res
 
 
-def get_source_counts(pkl_filename=None, ro=None):
+def get_source_counts(output_pkl_filename=None, ro=None):
     """Returns a dict of dicts with evidence count per source, per statement
 
     The dictionary is at the top level keyed by statement hash and each
     entry contains a dictionary keyed by the source that support the
-    statement where the entries are the evidence count for that source."""
-    if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
-        pkl_filename = S3Path.from_string(pkl_filename)
+    statement where the entries are the evidence count for that source
+
+    Parameters
+    ----------
+    output_pkl_filename : Union[str, S3Path]
+        If provided, dump the source counts dict to the provided location.
+    ro : Optional[PrincipalDatabaseManager]
+        If provided, used to query the database. If not provided,
+        `get_ro('primary')` will be used to provide database access.
+
+    Returns
+    -------
+    Dict[str, Dict[str, int]]
+        A dict of source count dicts, keyed by hash
+    -------
+
+    """
+    if isinstance(output_pkl_filename, str) and \
+            output_pkl_filename.startswith('s3:'):
+        pkl_filename = S3Path.from_string(output_pkl_filename)
     if not ro:
         ro = get_ro('primary-ro')
     ev = {h: j for h, j in ro.select_all([ro.SourceMeta.mk_hash,
                                           ro.SourceMeta.src_json])}
 
-    if pkl_filename:
-        if isinstance(pkl_filename, S3Path):
-            upload_pickle_to_s3(obj=ev, s3_path=pkl_filename)
+    if output_pkl_filename:
+        if isinstance(output_pkl_filename, S3Path):
+            upload_pickle_to_s3(obj=ev, s3_path=output_pkl_filename)
         else:
-            with open(pkl_filename, 'wb') as f:
+            with open(output_pkl_filename, 'wb') as f:
                 pickle.dump(ev, f)
     return ev
 
@@ -353,8 +380,8 @@ def dump_sif_from_stmts(stmt_list, output):
             pickle.dump(obj=df, file=f)
 
 
-def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
-             reload=False, ro=None):
+def dump_sif(df_file=None, db_res_file=None, csv_file=None,
+             src_count_file=None, ro=None):
     """Build and dump a sif dataframe of PA statements with grounded agents
 
     Parameters
@@ -369,10 +396,8 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
         If provided, save the db content to this location. Can be local file
         path, an s3 url string or an S3Path instance.
     csv_file : Optional[str]
-    reload : bool
-        If True, load new content from the database and make a new
-        dataframe. If False, content can be loaded from provided files.
-        Default: True.
+        If provided, save a CSV file with count statistics. Can be local file
+        path, an s3 url string  or an S3Path instance.
     ro : Optional[PrincipalDatabaseManager]
         Provide a DatabaseManager to load database content from. If not
         provided, `get_ro('primary')` will be used.
@@ -381,8 +406,14 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
         ro = get_db('primary')
 
     # Get the db content from a new DB dump or from file
-    db_content = load_db_content(reload=reload, ns_list=NS_LIST,
-                                 pkl_filename=db_res_file, ro=ro)
+    db_content = load_db_content(ns_list=NS_LIST, pkl_filename=db_res_file,
+                                 ro=ro)
+
+    # Get residue and position for the relevant stmt types
+    res_pos = load_res_pos(ro=ro)
+
+    # Get source counts: will also dump source counts
+    src_counts = get_source_counts(output_pkl_filename=src_count_file, ro=ro)
 
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, db_content=db_content,
@@ -421,8 +452,6 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
         else:
             type_counts.to_csv(csv_file)
 
-    if src_count_file:
-        _ = get_source_counts(src_count_file, ro=ro)
     return
 
 

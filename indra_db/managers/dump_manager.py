@@ -484,7 +484,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         res_pos_dump = ResiduePosition.from_list(starter.manifest)
         if not allow_continue or not res_pos_dump:
             logger.info("Dumping residue and position")
-            res_pos_dumper = ResiduePosition(db=principal_db,
+            res_pos_dumper = ResiduePosition(db=readonly_db,
                                              date_stamp=starter.date_stamp)
             res_pos_dumper.dump(continuing=allow_continue)
             res_pos_dump = res_pos_dumper.get_s3_path()

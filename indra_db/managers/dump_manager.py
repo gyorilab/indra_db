@@ -323,7 +323,7 @@ class ResiduePosition(Dumper):
     name = 'res_pos'
     fmt = 'pkl'
     db_required = True
-    db_options = ['readonly']
+    db_options = ['readonly', 'principal']
 
     def __init__(self, use_principal=True, **kwargs):
         super(ResiduePosition, self).__init__(use_principal=use_principal,

@@ -409,7 +409,7 @@ def get_parser():
 
 
 def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
-             db_res_file=None, csv_file=None, reload=False, reconvert=True,
+             db_res_file=None, csv_file=None, reload=True, reconvert=True,
              ro=None):
     """Build and dump a sif dataframe of PA statements with grounded agents
 
@@ -436,7 +436,7 @@ def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
     reconvert : bool
         Whether to generate a new DataFrame from the database content or
         to load and return a DataFrame from `df_file`. If False, `df_file`
-        must be given.
+        must be given. Default: True.
     reload : bool
         If True, load new content from the database and make a new
         dataframe. If False, content can be loaded from provided files.

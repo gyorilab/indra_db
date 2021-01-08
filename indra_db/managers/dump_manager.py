@@ -488,6 +488,16 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
                                              date_stamp=starter.date_stamp)
             res_pos_dumper.dump(continuing=allow_continue)
             res_pos_dump = res_pos_dumper.get_s3_path()
+        else:
+            logger.info("Residue position dump exists, skipping")
+
+        src_count_dump = SourceCount.from_list(starter.manifest)
+        if not allow_continue or not src_count_dump:
+            logger.info("Dumping source count")
+            src_count_dumper = SourceCount(db=readonly_db,
+                                           date_stamp=starter.date_stamp)
+            src_count_dumper.dump(continuing=allow_continue)
+            src_count_dump = src_count_dumper.get_s3_path()
 
         dump_file = Readonly.from_list(starter.manifest)
         if not allow_continue or not dump_file:

@@ -278,15 +278,13 @@ class Sif(Dumper):
     def __init__(self, use_principal=False, **kwargs):
         super(Sif, self).__init__(use_principal=use_principal, **kwargs)
 
-    def dump(self, continuing=False):
+    def dump(self, src_counts_path, res_pos_path, belief_path,
+             continuing=False):
         s3_path = self.get_s3_path()
-        src_counts = get_latest_dump_s3_path(SourceCount.name)
-        res_pos = get_latest_dump_s3_path(ResiduePosition.name)
-        belief = get_latest_dump_s3_path(Belief.name)
         dump_sif(df_file=s3_path,
-                 src_count_file=src_counts.get_s3_path(),
-                 res_pos_file=res_pos.get_s3_path(),
-                 belief_file=belief.get_s3_path(),
+                 src_count_file=src_counts_path,
+                 res_pos_file=res_pos_path,
+                 belief_file=belief_path,
                  ro=self.db)
 
 
@@ -513,7 +511,10 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         if not allow_continue or not Sif.from_list(starter.manifest):
             logger.info("Dumping sif from the readonly schema on principal.")
             Sif(db=principal_db, date_stamp=starter.date_stamp)\
-                .dump(continuing=allow_continue)
+                .dump(src_counts_path=src_count_dump,
+                      res_pos_path=res_pos_dump,
+                      belief_path=belief_dump,
+                      continuing=allow_continue)
         else:
             logger.info("Sif dump exists, skipping.")
 

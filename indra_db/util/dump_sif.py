@@ -152,17 +152,23 @@ def get_source_counts(pkl_filename=None, ro=None):
     return ev
 
 
-def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
+def make_dataframe(db_content, res_pos_dict, src_count_dict,
                    pkl_filename=None):
     """Load data in db_content into a pandas dataframe and dump it
 
     Parameters
     ----------
-    reconvert : bool
-    db_content : List[Tuple[
+    db_content : Set[Tuple[str]]
+        The loaded database content as a set of tuples.
     res_pos_dict : Dict[str, Dict[str, str]]
+        Provide a dict of {'residue': {hash: residue}, 'position': {hash:
+        position}} to load residue and position into the dataframe with.
     src_count_dict : Dict[str, Dict[str, int]]
+        Provide source counts to merge into the dataframe.
     pkl_filename : Optional[Union[str, S3Path]]
+        If provided, dump the dataframe to this location. Can be local
+        file path, s3 url string, or instance of S3Path.
+
 
     Returns
     -------
@@ -170,121 +176,110 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
         A pandas dataframe of pairwise agent interactions with statement
         information for the interaction
     """
-    # Todo fix the mess with which files are required and which ones are not
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
-    if reconvert:
-        # Organize by statement
-        logger.info("Organizing by statement...")
-        stmt_info = {}
-        ag_name_by_hash_num = {}
-        for h, db_nm, db_id, num, n, t in db_content:
-            # Populate the 'NAME' dictionary per agent
+
+    # Organize by statement
+    logger.info("Organizing by statement...")
+    stmt_info = {}
+    ag_name_by_hash_num = {}
+    for h, db_nm, db_id, num, n, t in db_content:
+        # Populate the 'NAME' dictionary per agent
+        if db_nm == 'NAME':
+            ag_name_by_hash_num[(h, num)] = db_id
+        if h not in stmt_info.keys():
+            stmt_info[h] = {'agents': [], 'ev_count': n, 'type': t}
+        stmt_info[h]['agents'].append((num, db_nm, db_id))
+    # Turn into dataframe with geneA, geneB, type, indexed by hash;
+    # expand out complexes to multiple rows
+
+    # Organize by pairs of genes, counting evidence.
+    nkey_errors = 0
+    error_keys = []
+    rows = []
+    logger.info("Converting to pairwise entries...")
+    for hash, info_dict in stmt_info.items():
+        # Find roles with more than one agent
+        agents_by_num = {}
+        for num, db_nm, db_id in info_dict['agents']:
             if db_nm == 'NAME':
-                ag_name_by_hash_num[(h, num)] = db_id
-            if h not in stmt_info.keys():
-                stmt_info[h] = {'agents': [], 'ev_count': n, 'type': t}
-            stmt_info[h]['agents'].append((num, db_nm, db_id))
-        # Turn into dataframe with geneA, geneB, type, indexed by hash;
-        # expand out complexes to multiple rows
-
-        # Organize by pairs of genes, counting evidence.
-        nkey_errors = 0
-        error_keys = []
-        rows = []
-        logger.info("Converting to pairwise entries...")
-        for hash, info_dict in stmt_info.items():
-            # Find roles with more than one agent
-            agents_by_num = {}
-            for num, db_nm, db_id in info_dict['agents']:
-                if db_nm == 'NAME':
-                    continue
+                continue
+            else:
+                assert db_nm in NS_PRIORITY_LIST
+                db_rank = NS_PRIORITY_LIST.index(db_nm)
+                # If we don't already have an agent for this num, use the
+                # one we've found
+                if num not in agents_by_num:
+                    agents_by_num[num] = (num, db_nm, db_id, db_rank)
+                # Otherwise, take the current agent if the identifier type
+                # has a higher rank
                 else:
-                    assert db_nm in NS_PRIORITY_LIST
-                    db_rank = NS_PRIORITY_LIST.index(db_nm)
-                    # If we don't already have an agent for this num, use the
-                    # one we've found
-                    if num not in agents_by_num:
+                    cur_rank = agents_by_num[num][3]
+                    if db_rank < cur_rank:
                         agents_by_num[num] = (num, db_nm, db_id, db_rank)
-                    # Otherwise, take the current agent if the identifier type
-                    # has a higher rank
-                    else:
-                        cur_rank = agents_by_num[num][3]
-                        if db_rank < cur_rank:
-                            agents_by_num[num] = (num, db_nm, db_id, db_rank)
 
-            agents = []
-            for num, db_nm, db_id, _ in sorted(agents_by_num.values()):
-                try:
-                    agents.append((db_nm, db_id,
-                                   ag_name_by_hash_num[(hash, num)]))
-                except KeyError:
-                    nkey_errors += 1
-                    error_keys.append((hash, num))
-                    if nkey_errors < 11:
-                        logger.warning('Missing key in agent name dict: '
-                                       '(%s, %s)' % (hash, num))
-                    elif nkey_errors == 11:
-                        logger.warning('Got more than 10 key warnings: '
-                                       'muting further warnings.')
-                    continue
-
-            # Need at least two agents.
-            if len(agents) < 2:
+        agents = []
+        for num, db_nm, db_id, _ in sorted(agents_by_num.values()):
+            try:
+                agents.append((db_nm, db_id,
+                               ag_name_by_hash_num[(hash, num)]))
+            except KeyError:
+                nkey_errors += 1
+                error_keys.append((hash, num))
+                if nkey_errors < 11:
+                    logger.warning('Missing key in agent name dict: '
+                                   '(%s, %s)' % (hash, num))
+                elif nkey_errors == 11:
+                    logger.warning('Got more than 10 key warnings: '
+                                   'muting further warnings.')
                 continue
 
-            # If this is a complex, or there are more than two agents, permute!
-            if info_dict['type'] == 'Complex':
-                # Skip complexes with 4 or more members
-                if len(agents) > 3:
-                    continue
-                pairs = permutations(agents, 2)
-            else:
-                pairs = [agents]
+        # Need at least two agents.
+        if len(agents) < 2:
+            continue
 
-            # Add all the pairs, and count up total evidence.
-            for pair in pairs:
-                row = OrderedDict([
-                    ('agA_ns', pair[0][0]),
-                    ('agA_id', pair[0][1]),
-                    ('agA_name', pair[0][2]),
-                    ('agB_ns', pair[1][0]),
-                    ('agB_id', pair[1][1]),
-                    ('agB_name', pair[1][2]),
-                    ('stmt_type', info_dict['type']),
-                    ('evidence_count', info_dict['ev_count']),
-                    ('stmt_hash', hash),
-                    ('residue', res_pos_dict['residue'].get(hash)),
-                    ('position', res_pos_dict['position'].get(hash)),
-                    ('source_count', src_count_dict.get(hash))
-                ])
-                rows.append(row)
-        if nkey_errors:
-            ef = 'key_errors.csv'
-            logger.warning('%d KeyErrors. Offending keys found in %s' %
-                           (nkey_errors, ef))
-            with open(ef, 'w') as f:
-                f.write('hash,PaMeta.ag_num\n')
-                for kn in error_keys:
-                    f.write('%s,%s\n' % kn)
-        df = pd.DataFrame.from_dict(rows)
-
-        if pkl_filename:
-            if isinstance(pkl_filename, S3Path):
-                upload_pickle_to_s3(obj=df, s3_path=pkl_filename)
-            else:
-                with open(pkl_filename, 'wb') as f:
-                    pickle.dump(df, f)
-    else:
-        if not pkl_filename:
-            logger.error('Have to provide pickle file if not reconverting')
-            raise FileExistsError
+        # If this is a complex, or there are more than two agents, permute!
+        if info_dict['type'] == 'Complex':
+            # Skip complexes with 4 or more members
+            if len(agents) > 3:
+                continue
+            pairs = permutations(agents, 2)
         else:
-            if isinstance(pkl_filename, S3Path):
-                df = load_pickle_from_s3(pkl_filename)
-            else:
-                with open(pkl_filename, 'rb') as f:
-                    df = pickle.load(f)
+            pairs = [agents]
+
+        # Add all the pairs, and count up total evidence.
+        for pair in pairs:
+            row = OrderedDict([
+                ('agA_ns', pair[0][0]),
+                ('agA_id', pair[0][1]),
+                ('agA_name', pair[0][2]),
+                ('agB_ns', pair[1][0]),
+                ('agB_id', pair[1][1]),
+                ('agB_name', pair[1][2]),
+                ('stmt_type', info_dict['type']),
+                ('evidence_count', info_dict['ev_count']),
+                ('stmt_hash', hash),
+                ('residue', res_pos_dict['residue'].get(hash)),
+                ('position', res_pos_dict['position'].get(hash)),
+                ('source_count', src_count_dict.get(hash))
+            ])
+            rows.append(row)
+    if nkey_errors:
+        ef = 'key_errors.csv'
+        logger.warning('%d KeyErrors. Offending keys found in %s' %
+                       (nkey_errors, ef))
+        with open(ef, 'w') as f:
+            f.write('hash,PaMeta.ag_num\n')
+            for kn in error_keys:
+                f.write('%s,%s\n' % kn)
+    df = pd.DataFrame.from_dict(rows)
+
+    if pkl_filename:
+        if isinstance(pkl_filename, S3Path):
+            upload_pickle_to_s3(obj=df, s3_path=pkl_filename)
+        else:
+            with open(pkl_filename, 'wb') as f:
+                pickle.dump(df, f)
     return df
 
 
@@ -359,7 +354,29 @@ def dump_sif_from_stmts(stmt_list, output):
 
 
 def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
-             reload=False, reconvert=True, ro=None):
+             reload=False, ro=None):
+    """Build and dump a sif dataframe of PA statements with grounded agents
+
+    Parameters
+    ----------
+    df_file : Optional[Union[str, S3Path]]
+        If provided, dump the sif to this location. Can be local file path, an
+        s3 url string or an S3Path instance.
+    src_count_file : str
+        A location to dump the source count dict. Can be local file path, an
+        s3 url string or an S3Path instance.
+    db_res_file : Optional[Union[str, S3Path]]
+        If provided, save the db content to this location. Can be local file
+        path, an s3 url string or an S3Path instance.
+    csv_file : Optional[str]
+    reload : bool
+        If True, load new content from the database and make a new
+        dataframe. If False, content can be loaded from provided files.
+        Default: True.
+    ro : Optional[PrincipalDatabaseManager]
+        Provide a DatabaseManager to load database content from. If not
+        provided, `get_ro('primary')` will be used.
+    """
     if ro is None:
         ro = get_db('primary')
 
@@ -368,8 +385,8 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
                                  pkl_filename=db_res_file, ro=ro)
 
     # Convert the database query result into a set of pairwise relationships
-    df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
-                        db_content=db_content)
+    df = make_dataframe(pkl_filename=df_file, db_content=db_content,
+                        res_pos_dict=res_pos, src_count_dict=src_counts)
 
     if csv_file:
         if isinstance(csv_file, str) and csv_file.startswith('s3:'):

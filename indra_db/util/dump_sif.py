@@ -63,6 +63,20 @@ def load_pickle_from_s3(s3_path):
         logger.exception(e)
 
 
+def load_json_from_s3(s3_path):
+    """Helper to load json from s3"""
+    logger.info(f'Loading json {s3_path} from s3.')
+    s3 = get_s3_client(False)
+    try:
+        res = s3_path.get(s3)
+        obj = json.loads(res['Body'].read().decode())
+        logger.info(f'Finished loading {s3_path}.')
+        return obj
+    except Exception as e:
+        logger.error(f'Failed to load {s3_path}.')
+        logger.exception(e)
+
+
 def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
     """Get preassembled stmt metadata from the DB for export.
 

@@ -12,7 +12,7 @@ from indra_db.belief import get_belief
 from indra_db.config import CONFIG, get_s3_dump, record_in_test
 from indra_db.util import get_db, get_ro, S3Path
 from indra_db.util.aws import get_role_kwargs
-from indra_db.util.dump_sif import dump_sif, get_source_counts
+from indra_db.util.dump_sif import dump_sif, get_source_counts, load_res_pos
 
 
 logger = logging.getLogger(__name__)
@@ -269,6 +269,7 @@ class End(Dumper):
 
 
 class Sif(Dumper):
+    """Dumps a pandas dataframe of preassembled statements"""
     name = 'sif'
     fmt = 'pkl'
     db_required = True
@@ -277,13 +278,16 @@ class Sif(Dumper):
     def __init__(self, use_principal=False, **kwargs):
         super(Sif, self).__init__(use_principal=use_principal, **kwargs)
 
-    def dump(self, continuing=False, include_src_counts=True):
+    def dump(self, continuing=False):
         s3_path = self.get_s3_path()
-        if include_src_counts:
-            srcc = SourceCount(ro=self.db)
-            dump_sif(s3_path, src_count_file=srcc.get_s3_path(), ro=self.db)
-        else:
-            dump_sif(s3_path, ro=self.db)
+        src_counts = get_latest_dump_s3_path(SourceCount.name)
+        res_pos = get_latest_dump_s3_path(ResiduePosition.name)
+        belief = get_latest_dump_s3_path(Belief.name)
+        dump_sif(df_file=s3_path,
+                 src_count_file=src_counts.get_s3_path(),
+                 res_pos_file=res_pos.get_s3_path(),
+                 belief_file=belief.get_s3_path(),
+                 ro=self.db)
 
 
 class Belief(Dumper):
@@ -299,16 +303,35 @@ class Belief(Dumper):
 
 
 class SourceCount(Dumper):
+    """Dumps a dict of dicts with source counts per source api per statement"""
     name = 'source_count'
     fmt = 'pkl'
     db_required = True
     db_options = ['principal', 'readonly']
 
     def __init__(self, use_principal=True, **kwargs):
-        super(SourceCount, self).__init__(use_principal=use_principal, **kwargs)
+        super(SourceCount, self).__init__(use_principal=use_principal,
+                                          **kwargs)
 
     def dump(self, continuing=False):
         get_source_counts(self.get_s3_path(), self.db)
+
+
+class ResiduePosition(Dumper):
+    """Dumps a dict of dicts with residue/position data from Modifications"""
+    name = 'res_pos'
+    fmt = 'pkl'
+    db_required = True
+    db_options = ['readonly']
+
+    def __init__(self, use_principal=True, **kwargs):
+        super(ResiduePosition, self).__init__(use_principal=use_principal,
+                                             **kwargs)
+
+    def dump(self, continuing=False):
+        res_pos_dict = load_res_pos(ro=self.db)
+        s3 = boto3.client('s3')
+        self.get_s3_path().upload(s3=s3, body=pickle.dumps(res_pos_dict))
 
 
 class FullPaJson(Dumper):
@@ -454,6 +477,14 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
             belief_dump = belief_dumper.get_s3_path()
         else:
             logger.info("Belief dump exists, skipping.")
+
+        res_pos_dump = ResiduePosition.from_list(starter.manifest)
+        if not allow_continue or not res_pos_dump:
+            logger.info("Dumping residue and position")
+            res_pos_dumper = ResiduePosition(db=principal_db,
+                                             date_stamp=starter.date_stamp)
+            res_pos_dumper.dump(continuing=allow_continue)
+            res_pos_dump = res_pos_dumper.get_s3_path()
 
         dump_file = Readonly.from_list(starter.manifest)
         if not allow_continue or not dump_file:

@@ -332,6 +332,8 @@ class ResiduePosition(Dumper):
     def dump(self, continuing=False):
         res_pos_dict = load_res_pos(ro=self.db)
         s3 = boto3.client('s3')
+        logger.info(f'Uploading residue position dump to '
+                    f'{self.get_s3_path().to_string()}')
         self.get_s3_path().upload(s3=s3, body=pickle.dumps(res_pos_dict))
 
 

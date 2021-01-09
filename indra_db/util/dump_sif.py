@@ -180,6 +180,7 @@ def get_source_counts(pkl_filename=None, ro=None):
     The dictionary is at the top level keyed by statement hash and each
     entry contains a dictionary keyed by the source that support the
     statement where the entries are the evidence count for that source."""
+    logger.info('Getting source counts per statement')
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     if not ro:

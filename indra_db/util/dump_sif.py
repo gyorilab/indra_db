@@ -327,7 +327,7 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
                     ('residue', res_pos_dict['residue'].get(hash)),
                     ('position', res_pos_dict['position'].get(hash)),
                     ('source_count', src_count_dict.get(hash)),
-                    ('belief', belief_dict.get(hash))
+                    ('belief', belief_dict.get(str(hash)))
                 ])
                 rows.append(row)
         if nkey_errors:

@@ -168,9 +168,9 @@ def load_res_pos(ro=None):
         for jsb, in query:
             js = json.loads(jsb)
             if 'residue' in js:
-                res['residue'][js['matches_hash']] = js['residue']
+                res['residue'][int(js['matches_hash'])] = js['residue']
             if 'position' in js:
-                res['position'][js['matches_hash']] = js['position']
+                res['position'][int(js['matches_hash'])] = js['position']
     return res
 
 

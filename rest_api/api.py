@@ -109,7 +109,7 @@ def render_my_template(template, title, **kwargs):
         kwargs[key] = kwargs.pop(key, False)
 
     kwargs['simple'] = False
-    return env.get_template(template).render(**kwargs).encode('utf-8')
+    return env.get_template(template).render(**kwargs)
 
 
 # ==========================

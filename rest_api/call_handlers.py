@@ -659,7 +659,7 @@ class FromQueryJsonApiCall(StatementApiCall):
     def _build_db_query(self):
         query_json = request.json['query']
         try:
-            q = Query.from_json(query_json)
+            q = Query.from_simple_json(query_json)
             if self.filter_ev:
                 self.ev_filter = q.ev_filter()
         except (KeyError, ValueError):

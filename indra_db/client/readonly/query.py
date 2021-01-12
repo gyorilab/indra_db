@@ -1101,6 +1101,23 @@ class Query(object):
         return obj
 
     @classmethod
+    def from_simple_json(cls, json_dict):
+        """Generate a proper query from a simplified JSON."""
+        def make_query(jd):
+            if json_dict['class'] == 'And':
+                q = EmptyQuery()
+                for qj in json_dict['constraint']['queries']:
+                    q &= make_query(qj)
+            elif json_dict['class'] == 'Or':
+                q = EmptyQuery()
+                for qj in json_dict['constraint']['queries']:
+                    q |= make_query(qj)
+            else:
+                q = Query.from_json(jd)
+            return q
+        return make_query(json_dict)
+
+    @classmethod
     def _from_constraint_json(cls, constraint_json):
         return cls(** {k: v for k, v in constraint_json.items()
                        if not k.startswith('_')})

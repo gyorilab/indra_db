@@ -18,7 +18,7 @@ from indra.assemblers.html.assembler import loader as indra_loader
 
 from indra_db.exceptions import BadHashError
 from indra_db.client.principal.curation import *
-from indra_db.client.readonly import AgentJsonExpander
+from indra_db.client.readonly import AgentJsonExpander, Query
 from indra_db.util.constructors import get_ro_host
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
@@ -376,6 +376,17 @@ def expand_meta_row():
 def get_statements_by_query_json(result_type):
     note_in_log(result_type=result_type)
     return FallbackQueryApiCall(env).run(result_type)
+
+
+@app.route('/compile/<fmt>', methods=['POST'])
+def compile_query(fmt):
+    q = Query.from_simple_json(request.json)
+    if format == 'json':
+        return jsonify(q.to_json())
+    elif format == 'string':
+        return str(q)
+    else:
+        abort(Response(f"Invalid format name: {fmt}!", 400))
 
 
 @app.route('/curation', methods=['GET'])

@@ -271,7 +271,7 @@ def get_statements(result_type, method):
         call = FromPapersApiCall(env)
     elif method == 'from_agent_json' and request.method == 'POST':
         call = FromAgentJsonApiCall(env)
-    elif method == 'from_query_json' and request.method == 'POST':
+    elif method == 'from_simple_json' and request.method == 'POST':
         call = FromQueryJsonApiCall(env)
     else:
         return abort(Response('Page not found.', 404))

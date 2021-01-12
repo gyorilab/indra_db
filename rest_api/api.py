@@ -381,9 +381,9 @@ def get_statements_by_query_json(result_type):
 @app.route('/compile/<fmt>', methods=['POST'])
 def compile_query(fmt):
     q = Query.from_simple_json(request.json)
-    if format == 'json':
+    if fmt == 'json':
         return jsonify(q.to_json())
-    elif format == 'string':
+    elif fmt == 'string':
         return str(q)
     else:
         abort(Response(f"Invalid format name: {fmt}!", 400))

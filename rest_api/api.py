@@ -272,7 +272,7 @@ def get_statements(result_type, method):
     elif method == 'from_agent_json' and request.method == 'POST':
         call = FromAgentJsonApiCall(env)
     elif method == 'from_simple_json' and request.method == 'POST':
-        call = FromQueryJsonApiCall(env)
+        call = FromSimpleJsonApiCall(env)
     else:
         return abort(Response('Page not found.', 404))
 

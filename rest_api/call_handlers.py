@@ -1,5 +1,5 @@
 __all__ = ['ApiCall', 'FromAgentsApiCall', 'FromHashApiCall',
-           'FromHashesApiCall', 'FromPapersApiCall', 'FromQueryJsonApiCall',
+           'FromHashesApiCall', 'FromPapersApiCall', 'FromSimpleJsonApiCall',
            'FromAgentJsonApiCall', 'FallbackQueryApiCall']
 
 import sys
@@ -650,14 +650,15 @@ def _check_query(query):
     return
 
 
-class FromQueryJsonApiCall(StatementApiCall):
+class FromSimpleJsonApiCall(StatementApiCall):
     def __init__(self, env):
-        super(FromQueryJsonApiCall, self).__init__(env)
+        super(FromSimpleJsonApiCall, self).__init__(env)
         self.web_query['complexes_covered'] = \
             request.json.get('complexes_covered')
 
     def _build_db_query(self):
         query_json = request.json['query']
+        logger.info('Simple JSON:\n' + json.dumps(query_json, indent=2))
         try:
             q = Query.from_simple_json(query_json)
             if self.filter_ev:

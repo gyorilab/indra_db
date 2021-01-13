@@ -31,6 +31,10 @@ from rest_api.util import LogTracker, sec_since, get_source, process_agent, \
 logger = logging.getLogger('call_handlers')
 
 
+def pop_request_bool(args, key, default):
+    return args.pop(key, str(default).lower()).lower() == 'true'
+
+
 class ApiCall:
     default_ev_lim = 10
 
@@ -144,7 +148,7 @@ class ApiCall:
 
     def _pop(self, key, default=None, type_cast=None):
         if isinstance(default, bool):
-            val = self.web_query.pop(key, str(default).lower()).lower() == 'true'
+            val = pop_request_bool(self.web_query, key, default)
         else:
             val = self.web_query.pop(key, default)
 
@@ -678,8 +682,9 @@ class FromSimpleJsonApiCall(StatementApiCall):
 class DirectQueryApiCall(ApiCall):
     def __init__(self, env):
         super(DirectQueryApiCall, self).__init__(env)
-        self.web_query['complexes_covered'] = \
-            request.json.get('complexes_covered')
+        if request.method == 'POST':
+            self.web_query['complexes_covered'] = \
+                request.json.get('complexes_covered')
         self.filter_ev = self._pop('filter_ev', True, bool)
 
     def _build_db_query(self):

@@ -24,6 +24,7 @@ from indra_db.util.constructors import get_ro_host
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indralab_auth_tools.log import note_in_log, set_log_service_name, \
     user_log_endpoint
+from rest_api.call_handlers import pop_request_bool
 
 from rest_api.config import *
 from rest_api.call_handlers import *
@@ -380,7 +381,10 @@ def get_statements_by_query_json(result_type):
 
 @app.route('/compile/<fmt>', methods=['POST'])
 def compile_query(fmt):
-    q = Query.from_simple_json(request.json)
+    if pop_request_bool(request.args, 'simple', True):
+        q = Query.from_simple_json(request.json)
+    else:
+        q = Query.from_json(request.json)
     if fmt == 'json':
         return jsonify(q.to_json())
     elif fmt == 'string':

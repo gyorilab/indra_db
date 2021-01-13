@@ -381,7 +381,7 @@ def get_statements_by_query_json(result_type):
 
 @app.route('/compile/<fmt>', methods=['POST'])
 def compile_query(fmt):
-    if pop_request_bool(request.args, 'simple', True):
+    if pop_request_bool(dict(request.args), 'simple', True):
         q = Query.from_simple_json(request.json)
     else:
         q = Query.from_json(request.json)

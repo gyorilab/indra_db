@@ -173,8 +173,32 @@ class ApiCall:
             if is_log_running():
                 note_in_log(query=self.db_query.to_json())
 
-        logger.info(f"Constructed query \"{self.db_query}\":\n"
-                    f"{json.dumps(self.db_query.to_json(), indent=2)}")
+            logger.info(f"Constructed query \"{self.db_query}\":\n"
+                        f"{json.dumps(self.db_query.to_json(), indent=2)}")
+
+            # Prevent someone from breaking the database by querying too many
+            # hashes, paper IDs, or MeshIds.
+            query_set = set(self.db_query.list_component_queries())
+            if {'HasHash', 'FromPapers', 'FromMeshIds'} & query_set:
+                for q in self.db_query.iter_component_queries():
+                    if isinstance(q, HasHash):
+                        list_len = len(q.stmt_hashes)
+                        lbl = 'hashes'
+                    elif isinstance(q, FromPapers):
+                        list_len = len(q.paper_list)
+                        lbl = 'paper IDs'
+                    elif isinstance(q, FromMeshIds):
+                        list_len = len(q.mesh_ids)
+                        lbl = 'MeSH IDs'
+                    else:
+                        list_len = 0
+                        lbl = None
+
+                    if list_len > MAX_LIST_LEN:
+                        logger.error("")
+                        return abort(Response(f"Too many {lbl}! Only "
+                                              f"{MAX_LIST_LEN} {lbl} allowed.",
+                                              400))
         return self.db_query
 
     def _build_db_query(self):
@@ -595,12 +619,6 @@ class FromHashesApiCall(StatementApiCall):
         if not hashes:
             logger.error("No hashes provided!")
             return abort(Response("No hashes given!", 400))
-        if len(hashes) > MAX_STMTS:
-            logger.error("Too many hashes given!")
-            return abort(
-                Response(f"Too many hashes given, {MAX_STMTS} allowed.",
-                         400)
-            )
 
         self.web_query['hashes'] = hashes
         return self._db_query_from_web_query()

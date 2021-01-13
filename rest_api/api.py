@@ -375,7 +375,7 @@ def expand_meta_row():
 @user_log_endpoint
 def get_statements_by_query_json(result_type):
     note_in_log(result_type=result_type)
-    return FallbackQueryApiCall(env).run(result_type)
+    return DirectQueryApiCall(env).run(result_type)
 
 
 @app.route('/compile/<fmt>', methods=['POST'])

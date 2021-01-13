@@ -1,6 +1,6 @@
 __all__ = ['ApiCall', 'FromAgentsApiCall', 'FromHashApiCall',
            'FromHashesApiCall', 'FromPapersApiCall', 'FromSimpleJsonApiCall',
-           'FromAgentJsonApiCall', 'FallbackQueryApiCall']
+           'FromAgentJsonApiCall', 'DirectQueryApiCall']
 
 import sys
 import json
@@ -23,7 +23,7 @@ from indralab_auth_tools.log import note_in_log, is_log_running
 from indralab_auth_tools.src.models import UserDatabaseError
 
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
-    jwt_nontest_optional
+    jwt_nontest_optional, MAX_LIST_LEN
 from rest_api.util import LogTracker, sec_since, get_source, process_agent, \
     process_mesh_term, DbAPIError, iter_free_agents, _make_english_from_meta, \
     get_html_source_info
@@ -657,17 +657,6 @@ class FromAgentJsonApiCall(StatementApiCall):
         return db_query
 
 
-def _check_query(query):
-    required_queries = {'HasAgent', 'FromPapers', 'FromMeshIds'}
-    if not required_queries & set(query.list_component_queries()):
-        abort(Response(f"Query must contain at least one of "
-                       f"{required_queries}."), 400)
-    if query.full:
-        abort(Response("Query would retrieve all statements. "
-                       "Please constrain further.", 400))
-    return
-
-
 class FromSimpleJsonApiCall(StatementApiCall):
     def __init__(self, env):
         super(FromSimpleJsonApiCall, self).__init__(env)
@@ -682,14 +671,33 @@ class FromSimpleJsonApiCall(StatementApiCall):
             if self.filter_ev:
                 self.ev_filter = q.ev_filter()
         except (KeyError, ValueError):
-            abort(Response("Invalid JSON.", 400))
-        _check_query(q)
+            return abort(Response("Invalid JSON.", 400))
         return q
 
 
-class FallbackQueryApiCall(ApiCall):
+class DirectQueryApiCall(ApiCall):
+    def __init__(self, env):
+        super(DirectQueryApiCall, self).__init__(env)
+        self.web_query['complexes_covered'] = \
+            request.json.get('complexes_covered')
+        self.filter_ev = self._pop('filter_ev', True, bool)
+
     def _build_db_query(self):
-        query_json = json.loads(self._pop('json', '{}'))
-        q = Query.from_json(query_json)
-        _check_query(q)
+        if request.method == 'GET':
+            query_json = json.loads(self._pop('json', '{}'))
+        elif request.method == 'POST':
+            query_json = request.json.get('query', {})
+        else:
+            return abort(Response(f"Invalid method: {request.method}"))
+
+        is_simple = self._pop('simple', False, bool)
+        try:
+            if is_simple:
+                q = Query.from_simple_json(query_json)
+            else:
+                q = Query.from_json(query_json)
+            if self.filter_ev:
+                self.ev_filter = q.ev_filter()
+        except (KeyError, ValueError):
+            return abort(Response("Invalid JSON.", 400))
         return q

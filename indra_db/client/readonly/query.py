@@ -1124,7 +1124,10 @@ class Query(object):
 
     def list_component_queries(self) -> list:
         """Get a list of the query elements included, in no particular order."""
-        return [self.__class__.__name__]
+        return [q.__class__.__name__ for q in self.iter_component_queries()]
+
+    def iter_component_queries(self):
+        yield self
 
     def _get_table(self, ro):
         raise NotImplementedError()
@@ -1529,9 +1532,10 @@ class SourceIntersection(Query):
                       for qj in constraint_json['source_queries']]
         return cls(query_list)
 
-    def list_component_queries(self) -> list:
-        return [q.__class__.__name__ for q in self.source_queries] \
-               + [self.__class__.__name__]
+    def iter_component_queries(self):
+        for q in self.source_queries:
+            yield q
+        yield self
 
     def _get_table(self, ro):
         return ro.SourceMeta
@@ -2444,11 +2448,14 @@ class MergeQuery(Query):
                       for qj in constraint_json['query_list']]
         return cls(query_list)
 
-    def list_component_queries(self) -> list:
-        type_list = []
+    def iter_component_queries(self):
         for q in self.queries:
-            type_list += q.list_component_queries()
-        return type_list + [self.__class__.__name__]
+            if isinstance(q, MergeQuery) or isinstance(q, SourceIntersection):
+                for sub_q in q.iter_component_queries():
+                    yield sub_q
+            else:
+                yield q
+        yield self
 
     def _get_core_cols(self, ro) -> tuple:
         mk_hashes_al = self._get_table(ro)

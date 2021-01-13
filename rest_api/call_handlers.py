@@ -685,6 +685,8 @@ class DirectQueryApiCall(ApiCall):
         if request.method == 'POST':
             kwargs = request.json.get('kwargs', {})
             self.filter_ev = kwargs.pop('filter_ev', True)
+            self.web_query['complexes_covered'] = \
+                request.json.get('complexes_covered')
             self.web_query.update(kwargs)
             self.query_json = request.json.get('query', {})
         elif request.method == 'GET':

@@ -5,7 +5,7 @@ from itertools import combinations, permutations, product
 
 from indra.statements import Agent, get_statement_by_name, get_all_descendants, \
     Complex
-from indra_db.client.readonly.query import QueryResult
+from indra.sources.indra_db_rest.query_results import QueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
     SOURCE_GROUPS
 from indra_db.util import extract_agent_data, get_ro

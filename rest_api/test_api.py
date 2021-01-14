@@ -16,8 +16,9 @@ from indra.databases import hgnc_client
 from indra.statements import stmts_from_json
 from indra_db import get_db
 
-from indra_db.client.readonly.query import QueryResult
-from indra_db.client import HasAgent, HasType, StatementQueryResult, FromMeshIds
+from indra.sources.indra_db_rest.query_results import QueryResult, \
+    StatementQueryResult
+from indra_db.client import HasAgent, HasType, FromMeshIds
 
 from rest_api.util import get_source
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TESTING

@@ -629,22 +629,6 @@ class Query(object):
         """
         self._print_only = print_only
 
-    def _rest_get(self, result_type, limit=None, offset=None,
-                  sort_by='ev_count', **other_params):
-        """Retrieve results from the remote API."""
-        logger.info("Using remote API to resolve query.")
-        url = get_config('INDRA_DB_REST_URL', failure_ok=False)
-        params = {'json': json.dumps(self.to_json()), 'limit': limit,
-                  'offset': offset, 'sort_by': sort_by}
-        params.update(other_params)
-        resp = requests.get(f'{url}/query/{result_type}',
-                            params=params)
-        if resp.status_code != 200:
-            raise ApiError(f"REST API failed with ({resp.status_code}): "
-                           f"{resp.json()}")
-
-        return QueryResult.from_json(resp.json())
-
     def get_statements(self, ro=None, limit=None, offset=None,
                        sort_by='ev_count', ev_limit=None, evidence_filter=None) \
             -> Optional[StatementQueryResult]:
@@ -682,15 +666,6 @@ class Query(object):
         # If the result is by definition empty, save ourselves time and work.
         if self.empty:
             return StatementQueryResult.empty(limit, offset, self.to_json())
-
-        # If the database isn't available, route through the web service.
-        if ro is None:
-            if evidence_filter:
-                logger.warning("No direct R.O. access available, but passing "
-                               "of evidence filter through API not yet "
-                               "implemented.")
-            return self._rest_get('statements', limit, offset, sort_by,
-                                  ev_limit=ev_limit)
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
@@ -877,10 +852,6 @@ class Query(object):
             return QueryResult.empty(set(), limit, offset, self.to_json(),
                                      'hashes')
 
-        # If the database isn't directly available, route through the web API.
-        if ro is None:
-            return self._rest_get('hashes', limit, offset, sort_by)
-
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
         mk_hashes_q = self.build_hash_query(ro)
@@ -941,9 +912,6 @@ class Query(object):
                 return
             return QueryResult.empty({}, limit, offset, self.to_json(),
                                      'interactions')
-
-        if ro is None:
-            return self._rest_get('interactions', limit, offset, sort_by)
 
         il = InteractionSQL(ro)
         result_tuple = self._run_meta_sql(il, ro, limit, offset, sort_by)
@@ -1034,11 +1002,6 @@ class Query(object):
 
         if self.empty:
             return AgentQueryResult.empty(limit, offset, self.to_json())
-
-        if ro is None:
-            return self._rest_get('agents', limit, offset, sort_by,
-                                  with_hashes=with_hashes,
-                                  complexes_covered=complexes_covered)
 
         ag_sql = AgentSQL(ro, with_complex_dups=True,
                           complexes_covered=complexes_covered)

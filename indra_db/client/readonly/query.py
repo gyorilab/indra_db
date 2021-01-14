@@ -1,9 +1,9 @@
-__all__ = ['Query', 'Intersection', 'Union',
-           'MergeQuery', 'HasAgent', 'FromMeshIds', 'HasHash',
-           'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
-           'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
-           'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter',
-           'AgentJsonExpander', 'FromAgentJson', 'EmptyQuery']
+__all__ = ['Query', 'Intersection', 'Union', 'MergeQuery', 'HasAgent',
+           'FromMeshIds', 'HasHash', 'HasSources', 'HasOnlySource',
+           'HasReadings', 'HasDatabases', 'SourceQuery', 'SourceIntersection',
+           'HasType', 'IntrusiveQuery', 'HasNumAgents', 'HasNumEvidence',
+           'FromPapers', 'EvidenceFilter', 'AgentJsonExpander', 'FromAgentJson',
+           'EmptyQuery']
 
 import json
 import logging

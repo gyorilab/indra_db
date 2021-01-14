@@ -682,25 +682,25 @@ class FromSimpleJsonApiCall(StatementApiCall):
 class DirectQueryApiCall(ApiCall):
     def __init__(self, env):
         super(DirectQueryApiCall, self).__init__(env)
+        self.is_simple = self._pop('simple', False, bool)
         if request.method == 'POST':
-            self.web_query['complexes_covered'] = \
-                request.json.get('complexes_covered')
-        self.filter_ev = self._pop('filter_ev', True, bool)
+            kwargs = request.json.get('kwargs', {})
+            self.filter_ev = kwargs.pop('filter_ev', True)
+            self.web_query.update(kwargs)
+            self.query_json = request.json.get('query', {})
+        elif request.method == 'GET':
+            self.filter_ev = self._pop('filter_ev', True, bool)
+            self.web_query.update(json.loads(self._pop('json_kwargs', '{}')))
+            self.query_json = json.loads(self._pop('json', '{}'))
+        else:
+            abort(Response(f"Invalid method: {request.method}"))
 
     def _build_db_query(self):
-        if request.method == 'GET':
-            query_json = json.loads(self._pop('json', '{}'))
-        elif request.method == 'POST':
-            query_json = request.json.get('query', {})
-        else:
-            return abort(Response(f"Invalid method: {request.method}"))
-
-        is_simple = self._pop('simple', False, bool)
         try:
-            if is_simple:
-                q = Query.from_simple_json(query_json)
+            if self.is_simple:
+                q = Query.from_simple_json(self.query_json)
             else:
-                q = Query.from_json(query_json)
+                q = Query.from_json(self.query_json)
             if self.filter_ev:
                 self.ev_filter = q.ev_filter()
         except (KeyError, ValueError):

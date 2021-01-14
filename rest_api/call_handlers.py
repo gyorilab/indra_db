@@ -63,7 +63,7 @@ class ApiCall:
         else:
             self.sort_by = None
 
-        # Gather other miscillaneous options
+        # Gather other miscellaneous options
         self.fmt = self._pop('format', 'json')
         self.w_english = self._pop('with_english', False, bool)
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)

@@ -592,7 +592,8 @@ class Query(object):
                                     beliefs, returned_evidence, source_counts,
                                     self.to_json())
 
-    def get_hashes(self, ro=None, limit=None, offset=None, sort_by='ev_count') \
+    def get_hashes(self, ro=None, limit=None, offset=None, sort_by='ev_count',
+                   with_src_counts=True) \
             -> Optional[QueryResult]:
         """Get the hashes of statements that satisfy this query.
 
@@ -610,6 +611,10 @@ class Query(object):
         sort_by : str
             'ev_count' or 'belief': select the parameter by which results are
             sorted.
+        with_src_counts : bool
+            Choose whether source counts are included with the result or not.
+            The default is True (included), but the query may be marginally
+            faster with source counts excluded (False).
 
         Returns
         -------
@@ -636,23 +641,39 @@ class Query(object):
             sort_list = [desc(belief_obj)]
         mk_hashes_q = self._apply_limits(mk_hashes_q, sort_list, limit, offset)
 
+        # Get the source counts if they are requested
+        if with_src_counts:
+            sub_q = mk_hashes_q.subquery().alias('hashes')
+            q = ro.session.query(ro.SourceMeta.mk_hash, ro.SourceMeta.src_json,
+                                 ro.SourceMeta.ev_count, ro.SourceMeta.belief)\
+                .filter(ro.SourceMeta.mk_hash == sub_q.c.mk_hash)
+        else:
+            q = mk_hashes_q
+
         if self._print_only:
-            print(mk_hashes_q)
+            print(q)
             return
 
         # Make the query, and package the results.
-        logger.debug(f"Executing query (get_hashes):\n{mk_hashes_q}")
-        result = mk_hashes_q.all()
+        logger.debug(f"Executing query (get_hashes):\n{q}")
+        result = q.all()
         evidence_counts = {}
         belief_scores = {}
-        hashes = set()
-        for h, n_ev, belief in result:
-            hashes.add(h)
+        source_counts = {}
+        hashes = []
+        for row in result:
+            if with_src_counts:
+                h, src_json, n_ev, belief = row
+                source_counts[h] = src_json
+            else:
+                h, n_ev, belief = row
+            hashes.append(h)
             evidence_counts[h] = n_ev
             belief_scores[h] = belief
 
         return QueryResult(hashes, limit, offset, len(result), evidence_counts,
-                           belief_scores, self.to_json(), 'hashes')
+                           belief_scores, source_counts, self.to_json(),
+                           'hashes')
 
     def get_interactions(self, ro=None, limit=None, offset=None,
                          sort_by='ev_count') -> Optional[QueryResult]:

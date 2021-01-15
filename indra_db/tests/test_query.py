@@ -416,8 +416,8 @@ def test_query_set_behavior():
             "Somehow thoroughly reconstituted query IS original query."
 
         # Test actually running the query
-        res = query.get_hashes(db)
-        return res.results
+        res = query.get_hashes(db, with_src_counts=False)
+        return set(res.results)
 
     queries = [
         HasAgent('TP53', role='SUBJECT'),

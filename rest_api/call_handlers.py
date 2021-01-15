@@ -213,12 +213,10 @@ class ApiCall:
         content = json.dumps(res_json)
 
         resp = Response(content, mimetype='application/json')
-        logger.info("Exiting with %d results that have %d total evidence, "
-                    "with size %f MB after %s seconds."
-                    % (len(res_json['results']),
-                       res_json['total_evidence'],
-                       sys.getsizeof(resp.data) / 1e6,
-                       sec_since(self.start_time)))
+        logger.info(f"Exiting with {len(result.results)} results "
+                    f"of type {result.result_type}, "
+                    f"with size {sys.getsizeof(resp.data) / 1e6} MB "
+                    f"after {sec_since(self.start_time)} seconds.")
         return resp
 
     def process_entries(self, result):

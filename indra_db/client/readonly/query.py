@@ -101,8 +101,9 @@ class InteractionSQL(AgentJsonSQL):
         names = self.agg_q.all()
         results = {}
         ev_totals = {}
-        bel_maxes = {}
-        for h, ag_json, type_num, n_ag, n_ev, bel, act, is_act, src_json in names:
+        src_counts = {}
+        beliefs = {}
+        for h, ag_json, type_num, n_ag, n_ev, bel, act, is_act, sj in names:
             results[h] = {
                 'hash': h,
                 'id': str(h),
@@ -110,12 +111,13 @@ class InteractionSQL(AgentJsonSQL):
                 'type': ro_type_map.get_str(type_num),
                 'activity': act,
                 'is_active': is_act,
-                'source_counts': src_json,
+                'source_counts': sj,
             }
-            ev_totals[h] = sum(src_json.values())
-            bel_maxes[h] = max([bel, bel_maxes.get(h, 0)])
-            assert ev_totals[h] == n_ev
-        return results, ev_totals, bel_maxes, len(names)
+            ev_totals[h] = n_ev
+            beliefs[h] = bel
+            src_counts[h] = sj
+            assert ev_totals[h] == sum(sj.values())
+        return results, ev_totals, beliefs, src_counts, len(names)
 
 
 class RelationSQL(AgentJsonSQL):
@@ -159,6 +161,7 @@ class RelationSQL(AgentJsonSQL):
         results = {}
         ev_totals = {}
         bel_maxes = {}
+        src_counts = {}
         for ag_json, type_num, n_ag, n_ev, bel, act, is_act, srcs, hashes in names:
             # Build the unique key for this relation.
             ordered_agents = [ag_json.get(str(n))
@@ -175,19 +178,22 @@ class RelationSQL(AgentJsonSQL):
             for src_json in srcs:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
+            source_counts = dict(source_counts)
 
             # Add this relation to the results and ev_totals.
-            results[key] = {'id': key, 'source_counts': dict(source_counts),
+            results[key] = {'id': key, 'source_counts': source_counts,
                             'agents': _make_agent_dict(ag_json),
                             'type': stmt_type, 'activity': act,
                             'is_active': is_act, 'hashes': hashes}
-            ev_totals[key] = sum(source_counts.values())
+            ev_totals[key] = n_ev
             bel_maxes[key] = max([bel_maxes.get(key, 0), bel])
+            src_counts[key] = source_counts.copy()
 
             # Do a quick sanity check. If this fails, something went VERY wrong.
-            assert ev_totals[key] == n_ev, "Evidence totals don't add up."
+            assert ev_totals[key] == sum(source_counts.values()),\
+                "Evidence totals don't add up."
 
-        return results, ev_totals, bel_maxes, len(names)
+        return results, ev_totals, bel_maxes, src_counts, len(names)
 
 
 class _AgentHashes:
@@ -273,6 +279,7 @@ class AgentSQL(AgentJsonSQL):
         results = {}
         ev_totals = {}
         bel_maxes = {}
+        src_counts = {}
         if self.complexes_covered is None:
             self.complexes_covered = set()
         num_entries = 0
@@ -301,9 +308,10 @@ class AgentSQL(AgentJsonSQL):
                 for src_json in src_jsons:
                     for src, cnt in src_json.items():
                         source_counts[src] += cnt
+                source_counts = dict(source_counts)
 
                 # Add this entry to the results.
-                results[key] = {'id': key, 'source_counts': dict(source_counts),
+                results[key] = {'id': key, 'source_counts': source_counts,
                                 'agents': _make_agent_dict(ag_json)}
                 if self._return_hashes:
                     results[key]['hashes'] = my_hashes.hashes
@@ -311,6 +319,7 @@ class AgentSQL(AgentJsonSQL):
                     results[key]['hashes'] = None
                 ev_totals[key] = sum(source_counts.values())
                 bel_maxes[key] = max([bel, bel_maxes.get(key, 0)])
+                src_counts[key] = source_counts.copy()
 
                 # Sanity check. Only a coding error could cause this to fail.
                 assert n_ev == ev_totals[key], "Evidence counts don't add up."
@@ -325,7 +334,7 @@ class AgentSQL(AgentJsonSQL):
             if not names:
                 break
 
-        return results, ev_totals, bel_maxes, num_rows
+        return results, ev_totals, bel_maxes, src_counts, num_rows
 
     def print(self):
         print(self.__get_next_query())
@@ -711,9 +720,10 @@ class Query(object):
         result_tuple = self._run_meta_sql(il, ro, limit, offset, sort_by)
         if result_tuple is None:
             return
-        results, ev_counts, belief_scores, off_comp = result_tuple
+        results, ev_counts, belief_scores, src_counts, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_counts,
-                           belief_scores, self.to_json(), il.meta_type)
+                           belief_scores, src_counts, self.to_json(),
+                           il.meta_type)
 
     def get_relations(self, ro=None, limit=None, offset=None,
                       sort_by='ev_count', with_hashes=False) \
@@ -758,9 +768,10 @@ class Query(object):
         if result_tuple is None:
             return None
 
-        results, ev_counts, belief_scores, off_comp = result_tuple
+        results, ev_counts, belief_scores, src_counts, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_counts,
-                           belief_scores, self.to_json(), r_sql.meta_type)
+                           belief_scores, src_counts, self.to_json(),
+                           r_sql.meta_type)
 
     def get_agents(self, ro=None, limit=None, offset=None, sort_by='ev_count',
                    with_hashes=False, complexes_covered=None) \
@@ -804,10 +815,10 @@ class Query(object):
         if result_tuple is None:
             return
 
-        results, ev_counts, belief_scores, off_comp = result_tuple
+        results, ev_counts, belief_scores, src_counts, off_comp = result_tuple
         return AgentQueryResult(results, limit, offset, off_comp,
                                 ag_sql.complexes_covered, ev_counts,
-                                belief_scores, self.to_json())
+                                belief_scores, src_counts, self.to_json())
 
     def _run_meta_sql(self, ms, ro, limit, offset, sort_by, with_hashes=None):
         mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')

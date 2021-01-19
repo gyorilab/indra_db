@@ -1,6 +1,7 @@
 __all__ = ['load_db_content', 'make_dataframe', 'get_source_counts', 'NS_LIST',
-           'dump_sif']
+           'dump_sif', 'load_res_pos']
 
+import json
 import pickle
 import logging
 import argparse
@@ -8,9 +9,11 @@ from io import StringIO
 from datetime import datetime
 from itertools import permutations
 from collections import OrderedDict
+from tqdm import tqdm
 
 from indra.util.aws import get_s3_client
 from indra_db.schemas.readonly_schema import ro_type_map
+from indra.statements import get_all_descendants, Modification
 from indra.statements.agent import default_ns_order
 
 try:
@@ -49,9 +52,9 @@ def upload_pickle_to_s3(obj, s3_path):
 
 def load_pickle_from_s3(s3_path):
     logger.info('Loading pickle %s.' % s3_path)
-    s3 = get_s3_client(unsigned=False)
+    s3 = get_s3_client(False)
     try:
-        res = s3.get_object(**s3_path.kw())
+        res = s3_path.get(s3)
         obj = pickle.loads(res['Body'].read())
         logger.info('Finished loading %s.' % s3_path)
         return obj
@@ -60,7 +63,50 @@ def load_pickle_from_s3(s3_path):
         logger.exception(e)
 
 
+def load_json_from_s3(s3_path):
+    """Helper to load json from s3"""
+    logger.info(f'Loading json {s3_path} from s3.')
+    s3 = get_s3_client(False)
+    try:
+        res = s3_path.get(s3)
+        obj = json.loads(res['Body'].read().decode())
+        logger.info(f'Finished loading {s3_path}.')
+        return obj
+    except Exception as e:
+        logger.error(f'Failed to load {s3_path}.')
+        logger.exception(e)
+
+
 def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
+    """Get preassembled stmt metadata from the DB for export.
+
+    Queries the NameMeta, TextMeta, and OtherMeta tables as needed to get
+    agent/stmt metadata for agents from the given namespaces.
+
+    Parameters
+    ----------
+    ns_list : list of str
+        List of agent namespaces to include in the metadata query.
+    pkl_filename : str
+        Name of pickle file to save to (if reloading) or load from (if not
+        reloading). If an S3 path is given (i.e., pkl_filename starts with
+        `s3:`), the file is loaded to/saved from S3. If not given,
+        automatically reloads the content (overriding reload).
+    ro : ReadonlyDatabaseManager
+        Readonly database to load the content from. If not given, calls
+        `get_ro('primary')` to get the primary readonly DB.
+    reload : bool
+        Whether to re-query the database for content or to load the content
+        from from `pkl_filename`. Note that even if `reload` is False,
+        if no `pkl_filename` is given, data will be reloaded anyway.
+
+    Returns
+    -------
+    set of tuples
+        Set of tuples containing statement information organized
+        by agent. Tuples contain (stmt_hash, agent_ns, agent_id, agent_num,
+        evidence_count, stmt_type).
+    """
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     # Get the raw data
@@ -79,6 +125,7 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
             else:
                 tbl = ro.OtherMeta
                 filters.append(tbl.db_name.like(ns))
+            filters.append(tbl.is_complex_dup == False)
             res = ro.select_all([tbl.mk_hash, tbl.db_id, tbl.ag_num,
                                  tbl.ev_count, tbl.type_num], *filters)
             results[ns] = res
@@ -103,12 +150,37 @@ def load_db_content(ns_list, pkl_filename=None, ro=None, reload=False):
     return results
 
 
+def load_res_pos(ro=None):
+    """Return residue/position data keyed by hash"""
+    logger.info('Getting residue and position info')
+    if ro is None:
+        ro = get_ro('primary')
+    res = {'residue': {}, 'position': {}}
+    for stmt_type in get_all_descendants(Modification):
+        stmt_name = stmt_type.__name__
+        if stmt_name in ('Modification', 'AddModification',
+                         'RemoveModification'):
+            continue
+        logger.info(f'Getting statements for type {stmt_name}')
+        type_num = ro_type_map.get_int(stmt_name)
+        query = ro.select_all(ro.FastRawPaLink.pa_json,
+                              ro.FastRawPaLink.type_num == type_num)
+        for jsb, in query:
+            js = json.loads(jsb)
+            if 'residue' in js:
+                res['residue'][int(js['matches_hash'])] = js['residue']
+            if 'position' in js:
+                res['position'][int(js['matches_hash'])] = js['position']
+    return res
+
+
 def get_source_counts(pkl_filename=None, ro=None):
     """Returns a dict of dicts with evidence count per source, per statement
 
     The dictionary is at the top level keyed by statement hash and each
     entry contains a dictionary keyed by the source that support the
     statement where the entries are the evidence count for that source."""
+    logger.info('Getting source counts per statement')
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     if not ro:
@@ -125,15 +197,51 @@ def get_source_counts(pkl_filename=None, ro=None):
     return ev
 
 
-def make_dataframe(reconvert, db_content, pkl_filename=None):
+def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
+                   belief_dict, pkl_filename=None):
+    """Make a pickled DataFrame of the db content, one row per stmt.
+
+    Parameters
+    ----------
+    reconvert : bool
+        Whether to generate a new DataFrame from the database content or
+        to load and return a DataFrame from the given pickle file. If False,
+        `pkl_filename` must be given.
+    db_content : set of tuples
+        Set of tuples of agent/stmt data as returned by `load_db_content`.
+    res_pos_dict : Dict[str, Dict[str, str]]
+        Dict containing residue and position keyed by hash.
+    src_count_dict : Dict[str, Dict[str, int]]
+        Dict of dicts containing source counts per source api keyed by hash.
+    belief_dict : Dict[str, float]
+        Dict of belief scores keyed by hash.
+    pkl_filename : str
+        Name of pickle file to save to (if reconverting) or load from (if not
+        reconverting). If an S3 path is given (i.e., pkl_filename starts with
+        `s3:`), the file is loaded to/saved from S3. If not given,
+        reloads the content (overriding reload).
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing the content, with columns: 'agA_ns', 'agA_id',
+        'agA_name', 'agB_ns', 'agB_id', 'agB_name', 'stmt_type',
+        'evidence_count', 'stmt_hash'.
+    """
     if isinstance(pkl_filename, str) and pkl_filename.startswith('s3:'):
         pkl_filename = S3Path.from_string(pkl_filename)
     if reconvert:
-        # Organize by statement
+        # Content consists of tuples organized by agent, e.g.
+        # (-11421523615931377, 'UP', 'P04792', 1, 1, 'Phosphorylation')
+        #
+        # First we need to organize by statement, collecting all agents
+        # for each statement along with evidence count and type.
+        # We also separately store the NAME attribute for each statement
+        # agent (indexing by hash/agent_num).
         logger.info("Organizing by statement...")
-        stmt_info = {}
-        ag_name_by_hash_num = {}
-        for h, db_nm, db_id, num, n, t in db_content:
+        stmt_info = {} # Store statement info (agents, ev, type) by hash
+        ag_name_by_hash_num = {} # Store name for each stmt agent
+        for h, db_nm, db_id, num, n, t in tqdm(db_content):
             # Populate the 'NAME' dictionary per agent
             if db_nm == 'NAME':
                 ag_name_by_hash_num[(h, num)] = db_id
@@ -148,12 +256,16 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
         error_keys = []
         rows = []
         logger.info("Converting to pairwise entries...")
-        for hash, info_dict in stmt_info.items():
-            # Find roles with more than one agent
+        # Iterate over each statement
+        for hash, info_dict in tqdm(stmt_info.items()):
+            # Get the priority grounding for the agents in each position
             agents_by_num = {}
             for num, db_nm, db_id in info_dict['agents']:
+                # Agent name is handled separately so we skip it here
                 if db_nm == 'NAME':
                     continue
+                # For other namespaces, we get the top-priority namespace
+                # given all namespaces for the agent
                 else:
                     assert db_nm in NS_PRIORITY_LIST
                     db_rank = NS_PRIORITY_LIST.index(db_nm)
@@ -167,13 +279,16 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
                         cur_rank = agents_by_num[num][3]
                         if db_rank < cur_rank:
                             agents_by_num[num] = (num, db_nm, db_id, db_rank)
-
+            # Make ordered list of agents for this statement, picking up
+            # the agent name from the ag_name_by_hash_num dict that we
+            # built earlier
             agents = []
             for num, db_nm, db_id, _ in sorted(agents_by_num.values()):
-                try:
-                    agents.append((db_nm, db_id,
-                                   ag_name_by_hash_num[(hash, num)]))
-                except KeyError:
+                # Try to get the agent name
+                ag_name = ag_name_by_hash_num.get((hash, num), None)
+                # If the name is not found, log it but allow the agent
+                # to be included as None
+                if ag_name is None:
                     nkey_errors += 1
                     error_keys.append((hash, num))
                     if nkey_errors < 11:
@@ -182,7 +297,7 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
                     elif nkey_errors == 11:
                         logger.warning('Got more than 10 key warnings: '
                                        'muting further warnings.')
-                    continue
+                agents.append((db_nm, db_id, ag_name))
 
             # Need at least two agents.
             if len(agents) < 2:
@@ -200,15 +315,20 @@ def make_dataframe(reconvert, db_content, pkl_filename=None):
             # Add all the pairs, and count up total evidence.
             for pair in pairs:
                 row = OrderedDict([
-                        ('agA_ns', pair[0][0]),
-                        ('agA_id', pair[0][1]),
-                        ('agA_name', pair[0][2]),
-                        ('agB_ns', pair[1][0]),
-                        ('agB_id', pair[1][1]),
-                        ('agB_name', pair[1][2]),
-                        ('stmt_type', info_dict['type']),
-                        ('evidence_count', info_dict['ev_count']),
-                        ('stmt_hash', hash)])
+                    ('agA_ns', pair[0][0]),
+                    ('agA_id', pair[0][1]),
+                    ('agA_name', pair[0][2]),
+                    ('agB_ns', pair[1][0]),
+                    ('agB_id', pair[1][1]),
+                    ('agB_name', pair[1][2]),
+                    ('stmt_type', info_dict['type']),
+                    ('evidence_count', info_dict['ev_count']),
+                    ('stmt_hash', hash),
+                    ('residue', res_pos_dict['residue'].get(hash)),
+                    ('position', res_pos_dict['position'].get(hash)),
+                    ('source_count', src_count_dict.get(hash)),
+                    ('belief', belief_dict.get(str(hash)))
+                ])
                 rows.append(row)
         if nkey_errors:
             ef = 'key_errors.csv'
@@ -289,8 +409,64 @@ def get_parser():
     return parser
 
 
-def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
-             reload=False, reconvert=True, ro=None):
+def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
+             db_res_file=None, csv_file=None, reload=True, reconvert=True,
+             ro=None):
+    """Build and dump a sif dataframe of PA statements with grounded agents
+
+    Parameters
+    ----------
+    src_count_file : Union[str, S3Path]
+        A location to load the source count dict from. Can be local file
+        path, an s3 url string or an S3Path instance.
+    res_pos_file : Union[str, S3Path]
+        A location to load the residue-postion dict from. Can be local file
+        path, an s3 url string or an S3Path instance.
+    belief_file : Union[str, S3Path]
+        A location to load the belief dict from. Can be local file path,
+        an s3 url string or an S3Path instance.
+    df_file : Optional[Union[str, S3Path]]
+        If provided, dump the sif to this location. Can be local file path,
+        an s3 url string or an S3Path instance.
+    db_res_file : Optional[Union[str, S3Path]]
+        If provided, save the db content to this location. Can be local file
+        path, an s3 url string or an S3Path instance.
+    csv_file : Optional[str, S3Path]
+        If provided, calculate dataframe statistics and save to local file
+        or s3. Can be local file path, an s3 url string or an S3Path instance.
+    reconvert : bool
+        Whether to generate a new DataFrame from the database content or
+        to load and return a DataFrame from `df_file`. If False, `df_file`
+        must be given. Default: True.
+    reload : bool
+        If True, load new content from the database and make a new
+        dataframe. If False, content can be loaded from provided files.
+        Default: True.
+    ro : Optional[PrincipalDatabaseManager]
+        Provide a DatabaseManager to load database content from. If not
+        provided, `get_ro('primary')` will be used.
+    """
+    def _load_file(path):
+        if isinstance(path, str) and path.startswith('s3:') or \
+                isinstance(path, S3Path):
+            if isinstance(path, str):
+                s3path = S3Path.from_string(path)
+            else:
+                s3path = path
+            if s3path.to_string().endswith('pkl'):
+                return load_pickle_from_s3(s3path)
+            elif s3path.to_string().endswith('json'):
+                return load_json_from_s3(s3path)
+            else:
+                raise ValueError(f'Unknown file format of {path}')
+        else:
+            if path.endswith('pkl'):
+                with open(path, 'rb') as f:
+                    return pickle.load(f)
+            elif path.endswith('json'):
+                with open(path, 'r') as f:
+                    return json.load(f)
+
     if ro is None:
         ro = get_db('primary')
 
@@ -298,9 +474,15 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
     db_content = load_db_content(reload=reload, ns_list=NS_LIST,
                                  pkl_filename=db_res_file, ro=ro)
 
+    # Load supporting files
+    res_pos = _load_file(res_pos_file)
+    src_count = _load_file(src_count_file)
+    belief = _load_file(belief_file)
+
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
-                        db_content=db_content)
+                        db_content=db_content, src_count_dict=src_count,
+                        res_pos_dict=res_pos, belief_dict=belief)
 
     if csv_file:
         if isinstance(csv_file, str) and csv_file.startswith('s3:'):
@@ -334,9 +516,6 @@ def dump_sif(df_file=None, db_res_file=None, csv_file=None, src_count_file=None,
         # save locally
         else:
             type_counts.to_csv(csv_file)
-
-    if src_count_file:
-        _ = get_source_counts(src_count_file, ro=ro)
     return
 
 

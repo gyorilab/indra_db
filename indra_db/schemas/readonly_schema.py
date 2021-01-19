@@ -636,6 +636,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
+        is_complex_dup = Column(Boolean)
     ro_tables[TextMeta.__tablename__] = TextMeta
 
     class NameMeta(Base, NamespaceLookup):
@@ -657,6 +658,7 @@ def get_schema(Base):
         activity = Column(String)
         is_active = Column(Boolean)
         agent_count = Column(Integer)
+        is_complex_dup = Column(Boolean)
     ro_tables[NameMeta.__tablename__] = NameMeta
 
     class OtherMeta(Base, ReadonlyTable):

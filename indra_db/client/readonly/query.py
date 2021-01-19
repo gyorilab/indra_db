@@ -16,7 +16,7 @@ from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
 from indra.sources.indra_db_rest.query_results import QueryResult, \
     StatementQueryResult, AgentQueryResult
 from indra.statements import get_statement_by_name, \
-    get_all_descendants
+    get_all_descendants, make_statement_camel
 
 from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
     SOURCE_GROUPS
@@ -2125,7 +2125,7 @@ class HasType(IntrusiveQuery):
 
     def __init__(self, stmt_types, include_subclasses=False):
         # Do the expansion of sub classes, if requested.
-        st_set = set(stmt_types)
+        st_set = {make_statement_camel(t) for t in stmt_types}
         if include_subclasses:
             for stmt_type in stmt_types:
                 stmt_class = get_statement_by_name(stmt_type)

@@ -696,6 +696,8 @@ class DirectQueryApiCall(ApiCall):
     def _build_db_query(self):
         try:
             if self.is_simple:
+                logger.info("Simple JSON:\n"
+                            + json.dumps(self.query_json, indent=2))
                 q = Query.from_simple_json(self.query_json)
             else:
                 q = Query.from_json(self.query_json)

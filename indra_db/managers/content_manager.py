@@ -835,11 +835,9 @@ class Pubmed(_NihManager):
                             annotation['major_topic'], is_concept)
 
                 # Handle the qualifier
-                qual = annotation['qualifier']
-                if qual is None:
-                    copy_row += (None,)
-                else:
-                    copy_row += (int(qual['mesh'][1:]),)
+                qualifiers = annotation['qualifiers']
+                qual = int(qualifiers[0]['mesh'][1:]) if qualifiers else None
+                copy_row += (qual,)
 
                 copy_rows.append(copy_row)
 

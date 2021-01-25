@@ -20,6 +20,7 @@ from indra.assemblers.html.assembler import HtmlAssembler, _format_stmt_text, \
 from indra_db.client.readonly import *
 from indra_db.client.principal.curation import *
 from indralab_auth_tools.log import note_in_log, is_log_running
+from indralab_auth_tools.src.models import UserDatabaseError
 
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
     jwt_nontest_optional
@@ -56,7 +57,11 @@ class ApiCall:
         # Figure out authorization.
         self.has = dict.fromkeys(['elsevier', 'medscan'], False)
         if not TESTING['status']:
-            self.user, roles = resolve_auth(self.web_query)
+            try:
+                self.user, roles = resolve_auth(self.web_query)
+            except UserDatabaseError:
+                abort(Response("Invalid credentials.", 401))
+                return
             for role in roles:
                 for resource in self.has.keys():
                     self.has[resource] |= role.permissions.get(resource, False)

@@ -1774,11 +1774,14 @@ class FromPapers(_TextRefCore):
                 if id_type in ['trid', 'tcid']:
                     conditions.append(tbl_attr == int(paper_id))
                 else:
-                    conditions.append(tbl_attr.like(str(paper_id)))
+                    constraint = ro.ReadingRefLink.has_ref(id_type,
+                                                           [str(paper_id)])
+                    conditions.append(constraint)
             else:
                 if id_type in ['trid', 'tcid']:
                     conditions.append(tbl_attr != int(paper_id))
                 else:
+                    # Note that this is a highly non-optimized approach.
                     conditions.append(tbl_attr.notlike(str(paper_id)))
         return conditions
 

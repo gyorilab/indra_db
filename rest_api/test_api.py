@@ -463,10 +463,19 @@ class TestDbApi(unittest.TestCase):
         self.__check_time(dt, time_goal=1)
         return
 
-    def test_paper_link(self):
+    def test_paper_link_pmid(self):
         resp, dt, size = \
             self.__time_query('get', 'statements/from_paper/pmid/27014235')
         assert resp.status_code == 200, str(resp)
+        assert dt < 10, f"Took too long: {dt}"
+        assert len(resp.json['results'])
+
+    def test_paper_link_trid(self):
+        resp, dt, size = \
+            self.__time_query('get', 'statements/from_paper/trid/19649148')
+        assert resp.status_code == 200, str(resp)
+        assert dt < 10, f"Took too long: {dt}"
+        assert len(resp.json['results'])
 
     def __test_basic_paper_query(self, id_val, id_type, min_num_results=1):
         id_list = [{'id': id_val, 'type': id_type}]

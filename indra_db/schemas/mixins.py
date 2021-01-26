@@ -348,6 +348,18 @@ class IndraDBRefTable:
 
         return tuple_(cls.doi_ns, cls.doi_id).in_(doi_tuple_set)
 
+    @classmethod
+    def has_ref(cls, id_type, id_list, filter_ids=False):
+        """Get the appropriate constraint for the given ID list."""
+        if id_type == 'pmid':
+            return cls.pmid_in(id_list, filter_ids)
+        elif id_type == 'pmcid':
+            return cls.pmcid_in(id_list, filter_ids)
+        elif id_type == 'doi':
+            return cls.doi_in(id_list, filter_ids)
+        else:
+            return getattr(cls, id_type).in_(id_list)
+
     def get_ref_dict(self):
         ref_dict = {}
         for ref in self._ref_cols:

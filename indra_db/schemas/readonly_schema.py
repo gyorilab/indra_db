@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import BYTEA, JSON, JSONB, REAL
 from indra.statements import get_all_descendants, Statement
 
 from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable, \
-    IndraDBTable
+    IndraDBTable, IndraDBRefTable
 from .indexes import *
 
 
@@ -158,7 +158,7 @@ def get_schema(Base):
         ev_count = Column(Integer)
     ro_tables[EvidenceCounts.__tablename__] = EvidenceCounts
 
-    class ReadingRefLink(Base, ReadonlyTable):
+    class ReadingRefLink(Base, ReadonlyTable, IndraDBRefTable):
         __tablename__ = 'reading_ref_link'
         __table_args__ = {'schema': 'readonly'}
         __definition__ = ('SELECT pmid, pmid_num, pmcid, pmcid_num, '

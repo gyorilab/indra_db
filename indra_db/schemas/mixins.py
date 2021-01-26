@@ -1,7 +1,7 @@
 import logging
 from termcolor import colored
 from psycopg2.errors import DuplicateTable
-from sqlalchemy import inspect, Column, BigInteger, tuple_
+from sqlalchemy import inspect, Column, BigInteger, tuple_, and_
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
@@ -299,6 +299,7 @@ class IndraDBRefTable:
     @classmethod
     def pmid_in(cls, pmid_list, filter_ids=False):
         """Get sqlalchemy clauses for a list of pmids."""
+        # Process the ID list.
         pmid_num_set = set()
         for pmid in pmid_list:
             _, pmid_num = cls.process_pmid(pmid)
@@ -310,11 +311,17 @@ class IndraDBRefTable:
                 else:
                     ValueError('"%s" is not a valid pmid.' % pmid)
             pmid_num_set.add(pmid_num)
-        return cls.pmid_num.in_(pmid_num_set)
+
+        # Return the constraint
+        if len(pmid_num_set) == 1:
+            return cls.pmid_num == pmid_num_set.pop()
+        else:
+            return cls.pmid_num.in_(pmid_num_set)
 
     @classmethod
     def pmcid_in(cls, pmcid_list, filter_ids=False):
         """Get the sqlalchemy clauses for a list of pmcids."""
+        # Process the ID list.
         pmcid_num_set = set()
         for pmcid in pmcid_list:
             _, pmcid_num, _ = cls.process_pmcid(pmcid)
@@ -328,11 +335,16 @@ class IndraDBRefTable:
             else:
                 pmcid_num_set.add(pmcid_num)
 
-        return cls.pmcid_num.in_(pmcid_num_set)
+        # Return the constraint
+        if len(pmcid_num_set) == 1:
+            return cls.pmcid_num == pmcid_num_set.pop()
+        else:
+            return cls.pmcid_num.in_(pmcid_num_set)
 
     @classmethod
     def doi_in(cls, doi_list, filter_ids=False):
         """Get clause for looking up a list of dois."""
+        # Parse the DOIs in the list.
         doi_tuple_set = set()
         for doi in doi_list:
             doi, doi_ns, doi_id = cls.process_doi(doi)
@@ -346,7 +358,12 @@ class IndraDBRefTable:
             else:
                 doi_tuple_set.add((doi_ns, doi_id))
 
-        return tuple_(cls.doi_ns, cls.doi_id).in_(doi_tuple_set)
+        # Return the constraint
+        if len(doi_tuple_set) == 1:
+            doi_ns, doi_id = doi_tuple_set.pop()
+            return and_(cls.doi_ns == doi_ns, cls.doi_id == doi_id)
+        else:
+            return tuple_(cls.doi_ns, cls.doi_id).in_(doi_tuple_set)
 
     @classmethod
     def has_ref(cls, id_type, id_list, filter_ids=False):

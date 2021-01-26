@@ -453,8 +453,8 @@ class TestDbApi(unittest.TestCase):
         return
 
     def test_get_big_statement_by_single_hash_query(self):
-        resp, dt, size = self.__time_query('get',
-            'statements/from_hash/-29396420431585282')
+        resp, dt, size =\
+            self.__time_query('get', 'statements/from_hash/-29396420431585282')
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)
@@ -462,6 +462,11 @@ class TestDbApi(unittest.TestCase):
         assert len(resp_dict['statements']) == 1, len(resp_dict['statements'])
         self.__check_time(dt, time_goal=1)
         return
+
+    def test_paper_link(self):
+        resp, dt, size = \
+            self.__time_query('get', 'statements/from_paper/pmid/27014235')
+        assert resp.status_code == 200, str(resp)
 
     def __test_basic_paper_query(self, id_val, id_type, min_num_results=1):
         id_list = [{'id': id_val, 'type': id_type}]

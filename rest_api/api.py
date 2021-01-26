@@ -272,6 +272,15 @@ def get_statements(result_type, method):
         call.web_query['hash'] = method[len('from_hash/'):]
     elif method == 'from_papers' and request.method == 'POST':
         call = FromPapersApiCall(env)
+    elif method.startswith('from_paper/') and request.method == 'GET':
+        try:
+            _, id_type, id_val = method.split('/')
+        except Exception as e:
+            logger.error(f"Failed to parse paper ID: {method}")
+            logger.exception(e)
+            return abort(Response('Page not found.', 404))
+        call = FromPapersApiCall(env)
+        call.web_query['paper_ids'] = [{'type': id_type, 'id': id_val}]
     elif method == 'from_agent_json' and request.method == 'POST':
         call = FromAgentJsonApiCall(env)
     elif method == 'from_simple_json' and request.method == 'POST':

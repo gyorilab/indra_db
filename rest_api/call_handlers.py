@@ -41,16 +41,31 @@ class ApiCall:
         self._env = env
 
         self.web_query = request.args.copy()
+
+        # Get the offset and limit
         self.offs = self._pop('offset', type_cast=int)
-        self.best_first = self._pop('best_first', True, bool)
         if 'limit' in self.web_query:
             self.limit = min(self._pop('limit', MAX_STMTS, int), MAX_STMTS)
         else:
             self.limit = min(self._pop('max_stmts', MAX_STMTS, int), MAX_STMTS)
+
+        # Sort out the sorting.
+        sort_by = self._pop('sort_by', None)
+        best_first = self._pop('best_first', True, bool)
+        if sort_by is not None:
+            self.sort_by = sort_by
+        elif best_first:
+            self.sort_by = 'ev_count'
+        else:
+            self.sort_by = None
+
+        # Gather other miscillaneous options
         self.fmt = self._pop('format', 'json')
         self.w_english = self._pop('with_english', False, bool)
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)
         self.strict = self._pop('strict', False, bool)
+
+        # Prime agent recorders.
         self.agent_dict = None
         self.agent_set = None
 
@@ -90,7 +105,7 @@ class ApiCall:
 
         # Actually run the function
         params = dict(offset=self.offs, limit=self.limit,
-                      best_first=self.best_first)
+                      sort_by=self.sort_by)
         logger.info(f"Sending query with params: {params}")
         if result_type == 'statements':
             self.special['ev_limit'] = \
@@ -231,9 +246,9 @@ class ApiCall:
                     if result.result_type == 'statements':
                         result.source_counts[key].pop('medscan', 0)
                     else:
-                        result.evidence_totals[key] -= \
+                        result.evidence_counts[key] -= \
                             entry['source_counts'].pop('medscan', 0)
-                        entry['total_count'] = result.evidence_totals[key]
+                        entry['total_count'] = result.evidence_counts[key]
                         if not entry['source_counts']:
                             logger.warning("Censored content present.")
 
@@ -326,13 +341,15 @@ class StatementApiCall(ApiCall):
             stmts_json = result.results
             if self.fmt == 'html':
                 title = TITLE
-                ev_totals = res_json.pop('evidence_totals')
+                ev_counts = res_json.pop('evidence_counts')
+                beliefs = res_json.pop('belief_scores')
                 stmts = stmts_from_json(stmts_json.values())
                 db_rest_url = request.url_root[:-1] \
-                    + self._env.globals['url_for']('iamalive')[:-1]
+                    + self._env.globals['url_for']('root')[:-1]
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,
-                                  ev_counts=ev_totals, title=title,
+                                  ev_counts=ev_counts, beliefs=beliefs,
+                                  sort_by=self.sort_by, title=title,
                                   source_counts=result.source_counts,
                                   db_rest_url=db_rest_url)
                 idbr_template = \

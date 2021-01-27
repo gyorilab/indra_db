@@ -185,6 +185,12 @@ class TestDbApi(unittest.TestCase):
                             if s1.matches(s2)]))
         return
 
+    def test_health_check(self):
+        """Test that the health check works."""
+        resp = self.app.get('healthcheck')
+        assert resp.status_code == 200, resp.status_code
+        assert resp.json == {'status': 'testing'}, resp.json
+
     def test_blank_response(self):
         """Test the response to an empty request."""
         resp, dt, size = self.__time_get_query('statements/from_agents', '')
@@ -243,6 +249,28 @@ class TestDbApi(unittest.TestCase):
                 (0, 'HGNC', hgnc_client.get_hgnc_id('MAPK1'))])
         return
 
+    def test_belief_sort_in_agent_search(self):
+        """Test sorting by belief."""
+        resp = self.__check_good_statement_query(agent='MAPK1',
+                                                 sort_by='belief')
+        assert len(resp.json['belief_scores']) \
+               == len(resp.json['evidence_counts'])
+        beliefs = list(resp.json['belief_scores'].values())
+        assert all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+        ev_counts = list(resp.json['evidence_counts'].values())
+        assert not all(c1 >= c2 for c1, c2 in zip(ev_counts[:-1], ev_counts[1:]))
+
+    def test_explicit_ev_count_sort_agent_search(self):
+        """Test sorting by ev_count explicitly."""
+        resp = self.__check_good_statement_query(agent='MAPK1',
+                                                 sort_by='ev_count')
+        assert len(resp.json['belief_scores']) \
+               == len(resp.json['evidence_counts'])
+        beliefs = list(resp.json['belief_scores'].values())
+        assert not all(b1 >= b2 for b1, b2 in zip(beliefs[:-1], beliefs[1:]))
+        ev_counts = list(resp.json['evidence_counts'].values())
+        assert all(c1 >= c2 for c1, c2 in zip(ev_counts[:-1], ev_counts[1:]))
+
     def test_bad_camel(self):
         """Test that a type can be poorly formatted and resolve correctly."""
         resp = self.__check_good_statement_query(agent='MAPK1',
@@ -277,7 +305,7 @@ class TestDbApi(unittest.TestCase):
                                                   time_goal=20)
         j1 = json.loads(resp1.data)
         hashes1 = set(j1['statements'].keys())
-        ev_counts1 = j1['evidence_totals']
+        ev_counts1 = j1['evidence_counts']
         resp2 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
                                                   offset=MAX_STMTS,
                                                   check_stmts=False,
@@ -286,7 +314,7 @@ class TestDbApi(unittest.TestCase):
         hashes2 = set(j2['statements'].keys())
         assert not hashes2 & hashes1
 
-        ev_counts2 = j2['evidence_totals']
+        ev_counts2 = j2['evidence_counts']
         assert max(ev_counts2.values()) <= min(ev_counts1.values())
 
         return

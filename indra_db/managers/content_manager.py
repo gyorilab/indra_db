@@ -826,22 +826,25 @@ class Pubmed(_NihManager):
         copy_rows = []
         for pmid, annotation_list in self.annotations.items():
             for annotation in annotation_list:
+                # Handle it if supplementary IDs (they start with C and their
+                # intified values can overlap with main terms that start with D)
+                is_concept = annotation.get('type') == 'supplementary'
+
                 # Format the row.
                 copy_row = (int(pmid), int(annotation['mesh'][1:]),
-                            annotation['major_topic'])
+                            annotation['major_topic'], is_concept)
 
                 # Handle the qualifier
-                qual = annotation['qualifier']
-                if qual is None:
-                    copy_row += (None,)
-                else:
-                    copy_row += (int(qual['mesh'][1:]),)
+                qualifiers = annotation['qualifiers']
+                qual = int(qualifiers[0]['mesh'][1:]) if qualifiers else None
+                copy_row += (qual,)
 
                 copy_rows.append(copy_row)
 
         # Copy the results into the database
         self.copy_into_db(db, 'mesh_ref_annotations', copy_rows,
-                          ('pmid_num', 'mesh_num', 'major_topic', 'qual_num'))
+                          ('pmid_num', 'mesh_num', 'major_topic','is_concept',
+                           'qual_num'))
         return True
 
     def load_files_and_annotations(self, db, *args, **kwargs):

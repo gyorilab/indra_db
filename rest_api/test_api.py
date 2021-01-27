@@ -305,7 +305,7 @@ class TestDbApi(unittest.TestCase):
                                                   time_goal=20)
         j1 = json.loads(resp1.data)
         hashes1 = set(j1['statements'].keys())
-        ev_counts1 = j1['evidence_totals']
+        ev_counts1 = j1['evidence_counts']
         resp2 = self.__check_good_statement_query(agent='NFkappaB@FPLX',
                                                   offset=MAX_STMTS,
                                                   check_stmts=False,
@@ -314,7 +314,7 @@ class TestDbApi(unittest.TestCase):
         hashes2 = set(j2['statements'].keys())
         assert not hashes2 & hashes1
 
-        ev_counts2 = j2['evidence_totals']
+        ev_counts2 = j2['evidence_counts']
         assert max(ev_counts2.values()) <= min(ev_counts1.values())
 
         return

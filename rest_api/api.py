@@ -319,13 +319,13 @@ def expand_meta_row():
     for key, entry in result.results.copy().items():
         # Filter medscan...
         if not has_medscan:
-            result.evidence_totals[key] -= \
+            result.evidence_counts[key] -= \
                 entry['source_counts'].pop('medscan', 0)
-            entry['total_count'] = result.evidence_totals[key]
+            entry['total_count'] = result.evidence_counts[key]
             if not entry['source_counts']:
                 logger.warning("Censored content present. Removing it.")
                 result.results.pop(key)
-                result.evidence_totals.pop(key)
+                result.evidence_counts.pop(key)
                 continue
 
         # Add english...

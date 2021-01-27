@@ -246,9 +246,9 @@ class ApiCall:
                     if result.result_type == 'statements':
                         result.source_counts[key].pop('medscan', 0)
                     else:
-                        result.evidence_totals[key] -= \
+                        result.evidence_counts[key] -= \
                             entry['source_counts'].pop('medscan', 0)
-                        entry['total_count'] = result.evidence_totals[key]
+                        entry['total_count'] = result.evidence_counts[key]
                         if not entry['source_counts']:
                             logger.warning("Censored content present.")
 

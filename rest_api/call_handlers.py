@@ -35,6 +35,13 @@ def pop_request_bool(args, key, default):
     return args.pop(key, str(default).lower()).lower() == 'true'
 
 
+class ResultTypeError(ValueError):
+    def __init__(self, result_type):
+        self.result_type = result_type
+        msg = f"Invalid result type: {result_type}"
+        super(ResultTypeError, self).__init__(msg)
+
+
 class ApiCall:
     default_ev_lim = 10
 
@@ -139,7 +146,7 @@ class ApiCall:
         elif result_type == 'hashes':
             res = self.get_db_query().get_hashes(**params)
         else:
-            raise ValueError(f"Invalid result type: {result_type}")
+            raise ResultTypeError(result_type)
         logger.info(f"Got results from query after "
                     f"{sec_since(self.start_time)} seconds.")
         self.process_entries(res)

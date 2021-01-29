@@ -24,7 +24,7 @@ from indra_db.util.constructors import get_ro_host
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indralab_auth_tools.log import note_in_log, set_log_service_name, \
     user_log_endpoint
-from rest_api.call_handlers import pop_request_bool
+from rest_api.call_handlers import pop_request_bool, ResultTypeError
 
 from rest_api.config import *
 from rest_api.call_handlers import *
@@ -376,7 +376,10 @@ def expand_meta_row():
 @user_log_endpoint
 def get_statements_by_query_json(result_type):
     note_in_log(result_type=result_type)
-    return DirectQueryApiCall(env).run(result_type)
+    try:
+        return DirectQueryApiCall(env).run(result_type)
+    except ResultTypeError as e:
+        return abort(Response(f"Invalid result type: {e.result_type}", 400))
 
 
 @app.route('/compile/<fmt>', methods=['POST'])

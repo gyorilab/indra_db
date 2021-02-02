@@ -403,6 +403,7 @@ def describe_curation():
 
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_nontest_optional
+@user_log_endpoint
 def submit_curation_endpoint(hash_val, **kwargs):
     user, roles = resolve_auth(dict(request.args))
     if not roles and not user:

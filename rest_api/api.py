@@ -405,10 +405,10 @@ def describe_curation():
 @jwt_nontest_optional
 @user_log_endpoint
 def submit_curation_endpoint(hash_val, **kwargs):
-    user, roles = resolve_auth(dict(request.args))
+    user, roles = resolve_auth(request.args.copy())
     if not roles and not user:
-        res_dict = {"result": "failure", "reason": "Invalid Credentials"}
-        return jsonify(res_dict), 401
+        return jsonify({"result": "failure",
+                        "reason": "Invalid Credentials"}), 401
 
     if user:
         email = user.email
@@ -444,6 +444,26 @@ def submit_curation_endpoint(hash_val, **kwargs):
 def list_curations(stmt_hash, src_hash):
     curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
     return jsonify(curations)
+
+
+@app.route('/curation/dump', methods=['GET'])
+@jwt_nontest_optional
+@user_log_endpoint
+def dump_curations():
+    user, roles = resolve_auth(request.args.copy())
+    if not roles:
+        return jsonify({"result": "failure",
+                        "reason": "Invalid Credentials"}),\
+               401
+    can_dump = False
+    for role in roles:
+        can_dump |= role.permissions.get('get_curations', False)
+    if not can_dump:
+        return jsonify({"result": "failure",
+                        "reason": "Insufficient permissions."}), \
+                401
+    curations = get_curations()
+    return jsonify(curations), 200
 
 
 def main():

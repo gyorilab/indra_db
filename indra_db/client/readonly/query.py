@@ -874,11 +874,11 @@ class Query(object):
         def make_query(jd):
             if jd['class'] == 'And':
                 q = EmptyQuery()
-                for qj in json_dict['constraint']['queries']:
+                for qj in jd['constraint']['queries']:
                     q &= make_query(qj)
             elif jd['class'] == 'Or':
                 q = EmptyQuery()
-                for qj in json_dict['constraint']['queries']:
+                for qj in jd['constraint']['queries']:
                     q |= make_query(qj)
             else:
                 q = Query.from_json(jd)

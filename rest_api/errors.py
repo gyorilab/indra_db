@@ -11,7 +11,7 @@ class HttpUserError(ValueError):
         return {"result": "failure", "reason": self.msg}
 
     def response(self):
-        return Response(jsonify(self.to_json()), self.err_code)
+        return jsonify(self.to_json()), self.err_code
 
 
 class ResultTypeError(HttpUserError):
@@ -23,11 +23,11 @@ class ResultTypeError(HttpUserError):
 
 class InvalidCredentials(HttpUserError):
     def __init__(self, cred_type):
-        super(HttpUserError, self).\
+        super(InvalidCredentials, self).\
             __init__(f"Invalid credentials: {cred_type}", 401)
 
 
 class InsufficientPermission(HttpUserError):
     def __init__(self, resource):
-        super(HttpUserError, self).\
+        super(InsufficientPermission, self).\
             __init__(f"Insufficient permissions for: {resource}", 403)

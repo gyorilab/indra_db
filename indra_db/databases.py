@@ -386,9 +386,11 @@ class DatabaseManager(object):
             return
         if self.session is None or not self.session.is_active:
             logger.debug('Attempting to get session...')
-            DBSession = sessionmaker(bind=self.__engine,
-                                     autoflush=not self.__protected,
-                                     autocommit=not self.__protected)
+            if not self.__protected:
+                DBSession = sessionmaker(bind=self.__engine)
+            else:
+                DBSession = sessionmaker(bind=self.__engine, autoflush=False,
+                                         autocommit=False)
             logger.debug('Got session.')
             self.session = DBSession()
             if self.session is None:

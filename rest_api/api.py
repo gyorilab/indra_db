@@ -275,7 +275,8 @@ def get_statements(result_type, method):
     elif method == 'from_simple_json' and request.method == 'POST':
         call = FromSimpleJsonApiCall(env)
     else:
-        return abort(Response('Page not found.', 404))
+        logger.error(f'Invalid URL: {request.url}')
+        return abort(404)
 
     return call.run(result_type=result_type)
 
@@ -288,7 +289,7 @@ def expand_meta_row():
     agent_json = request.json.get('agent_json')
     if not agent_json:
         logger.error("No agent_json provided!")
-        return abort(Response("No agent_json in request!", 400))
+        return Response("No agent_json in request!", 400)
     stmt_type = request.json.get('stmt_type')
     hashes = request.json.get('hashes')
     logger.info(f"Expanding on agent_json={agent_json}, stmt_type={stmt_type}, "
@@ -379,7 +380,7 @@ def get_statements_by_query_json(result_type):
     try:
         return DirectQueryApiCall(env).run(result_type)
     except ResultTypeError as e:
-        return abort(Response(f"Invalid result type: {e.result_type}", 400))
+        return Response(f"Invalid result type: {e.result_type}", 400)
 
 
 @app.route('/compile/<fmt>', methods=['POST'])
@@ -393,7 +394,7 @@ def compile_query(fmt):
     elif fmt == 'string':
         return str(q)
     else:
-        abort(Response(f"Invalid format name: {fmt}!", 400))
+        return Response(f"Invalid format name: {fmt}!", 400)
 
 
 @app.route('/curation', methods=['GET'])
@@ -432,7 +433,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
             dbid = submit_curation(hash_val, tag, email, ip, text, ev_hash,
                                    source_api)
         except BadHashError as e:
-            abort(Response("Invalid hash: %s." % e.mk_hash, 400))
+            return Response("Invalid hash: %s." % e.mk_hash, 400)
         res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}

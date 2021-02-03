@@ -404,15 +404,30 @@ def describe_curation():
     return redirect('/statements', code=302)
 
 
+def auth_curation():
+    if not TESTING['status']:
+        failure_reason = {}
+        user, roles = resolve_auth(request.args.copy(), failure_reason)
+        if failure_reason:
+            raise InvalidCredentials(failure_reason['auth_attempted'])
+    else:
+        api_key = request.args.get('api_key', None)
+        if api_key is None:  # any key will do for testing.
+            raise InvalidCredentials("API key")
+        user = None
+
+        class MockRole:
+            permissions = {"get_curations": True}
+
+        roles = [MockRole()]
+    return user, roles
+
+
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_nontest_optional
 @user_log_endpoint
 def submit_curation_endpoint(hash_val):
-    failure_reason = {}
-    user, roles = resolve_auth(request.args.copy(), failure_reason)
-    if failure_reason:
-        raise InvalidCredentials(failure_reason['auth_attempted'])
-
+    user, _ = auth_curation()
     if user:
         email = user.email
     else:
@@ -455,10 +470,7 @@ def list_curations(stmt_hash, src_hash):
 @jwt_nontest_optional
 @user_log_endpoint
 def dump_curations():
-    failure_reason = {}
-    user, roles = resolve_auth(request.args.copy(), failure_reason)
-    if failure_reason:
-        raise InvalidCredentials(failure_reason['auth_attempted'])
+    user, roles = auth_curation()
     can_dump = False
     for role in roles:
         can_dump |= role.permissions.get('get_curations', False)
@@ -474,7 +486,7 @@ def dump_curations():
 
 @app.errorhandler(HttpUserError)
 def handle_user_error(error):
-    logger.error(f"Got user error ({error.err_code}: {error.msg}")
+    logger.error(f"Got user error ({error.err_code}): {error.msg}")
     return error.response()
 
 

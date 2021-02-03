@@ -644,7 +644,7 @@ class TestDbApi(unittest.TestCase):
                 for rel in rels:
                     drill_down(rel, 'statements')
 
-        url_base = "agents/from_query_json"
+        url_base = "agents/from_simple_json"
         query = HasAgent('MEK')
         query_str = ("limit=50&with_cur_counts=true&with_english=true"
                      "&with_hashes=true")
@@ -691,7 +691,7 @@ class TestDbApi(unittest.TestCase):
     def test_IL6_agents_with_creds(self):
         """Test the timing of a query for agents with text=IL-6, "signed in"."""
         query = HasAgent('IL-6', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=True)
@@ -699,7 +699,7 @@ class TestDbApi(unittest.TestCase):
     def test_IL6_agents_no_creds(self):
         """Test timing of a query for agents with text=IL-6, "signed out"."""
         query = HasAgent('IL-6', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=False)
@@ -719,7 +719,7 @@ class TestDbApi(unittest.TestCase):
     def test_ROS_agents_with_creds(self):
         """Test the timing of a query for agents with text=ROS, "signed in"."""
         query = HasAgent('ROS', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=True)
@@ -727,7 +727,7 @@ class TestDbApi(unittest.TestCase):
     def test_ROS_agents_no_creds(self):
         """Test timing of a query for agents with text=ROS, "signed out"."""
         query = HasAgent('ROS', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=False)
@@ -740,7 +740,7 @@ class TestDbApi(unittest.TestCase):
         """
         db = get_db('primary')
         q = HasAgent('ACE2') & FromMeshIds(['C000657245'])
-        resp, dt, size = self.__time_query('post', 'statements/from_query_json',
+        resp, dt, size = self.__time_query('post', 'statements/from_simple_json',
                                            'limit=50&ev_limit=6',
                                            query=q.to_json(), with_auth=True)
         assert resp.status_code == 200, f"Query failed: {resp.data.decode()}"

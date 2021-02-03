@@ -456,27 +456,30 @@ def submit_curation_endpoint(hash_val):
     return jsonify(res)
 
 
-@app.route('/curation/list/<stmt_hash>', defaults={"src_hash": None})
-@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
-def list_curations(stmt_hash, src_hash):
-    params = {"pa_hash": stmt_hash}
-    if src_hash is not None:
-        params["source_hash"] = src_hash
-    curations = get_curations(**params)
-    return jsonify(curations)
-
-
-@app.route('/curation/dump', methods=['GET'])
+@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'],
+           defaults={"stmt_hash": None, "src_hash": None})
 @jwt_nontest_optional
 @user_log_endpoint
-def dump_curations():
+def list_curations(stmt_hash, src_hash):
+    params = {}
+    if stmt_hash is not None:
+        params["pa_hash"] = stmt_hash
+    if src_hash is not None:
+        params["source_hash"] = src_hash
+
+    # The user needs to have an account to get curations at all.
     user, roles = auth_curation()
-    can_dump = False
-    for role in roles:
-        can_dump |= role.permissions.get('get_curations', False)
-    if not can_dump:
-        raise InsufficientPermission("get curations")
-    curations = get_curations()
+
+    # The user needs extra permission to load all curations.
+    if not params:
+        can_load = False
+        for role in roles:
+            can_load |= role.permissions.get('get_curations', False)
+        if not can_load:
+            raise InsufficientPermission("get curations")
+
+    # Get the curations.
+    curations = get_curations(**params)
     return jsonify(curations), 200
 
 

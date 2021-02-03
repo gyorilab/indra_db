@@ -185,7 +185,7 @@ class RelationSQL(AgentJsonSQL):
                             'agents': _make_agent_dict(ag_json),
                             'type': stmt_type, 'activity': act,
                             'is_active': is_act, 'hashes': hashes}
-            ev_totals[key] = n_ev
+            ev_totals[key] = int(n_ev)
             bel_maxes[key] = max([bel_maxes.get(key, 0), bel])
             src_counts[key] = source_counts.copy()
 
@@ -1109,9 +1109,10 @@ class AgentJsonExpander(AgentInteractionMeta):
         meta.q = self._apply_constraints(ro, meta.q)
         order_param = meta.agg(ro, sort_by=sort_by)
         meta.agg_q = meta.agg_q.order_by(*order_param)
-        results, ev_counts, belief_scores, off_comp = meta.run()
+        results, ev_counts, belief_scores, src_counts, off_comp = meta.run()
         return QueryResult(results, None, None, off_comp, ev_counts,
-                           belief_scores, self.to_json(), meta.meta_type)
+                           belief_scores, src_counts, self.to_json(),
+                           meta.meta_type)
 
     def to_json(self):
         return {'class': self.__class__.__name__,

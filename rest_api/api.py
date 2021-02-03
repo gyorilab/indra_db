@@ -441,9 +441,13 @@ def submit_curation_endpoint(hash_val):
     return jsonify(res)
 
 
+@app.route('/curation/list/<stmt_hash>', defaults={"src_hash": None})
 @app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
 def list_curations(stmt_hash, src_hash):
-    curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
+    params = {"pa_hash": stmt_hash}
+    if src_hash is not None:
+        params["source_hash"] = src_hash
+    curations = get_curations(**params)
     return jsonify(curations)
 
 

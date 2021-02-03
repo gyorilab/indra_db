@@ -24,6 +24,7 @@ from indralab_auth_tools.src.models import UserDatabaseError
 
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
     jwt_nontest_optional, MAX_LIST_LEN
+from rest_api.errors import HttpUserError, ResultTypeError
 from rest_api.util import LogTracker, sec_since, get_source, process_agent, \
     process_mesh_term, DbAPIError, iter_free_agents, _make_english_from_meta, \
     get_html_source_info
@@ -33,13 +34,6 @@ logger = logging.getLogger('call_handlers')
 
 def pop_request_bool(args, key, default):
     return args.pop(key, str(default).lower()).lower() == 'true'
-
-
-class ResultTypeError(ValueError):
-    def __init__(self, result_type):
-        self.result_type = result_type
-        msg = f"Invalid result type: {result_type}"
-        super(ResultTypeError, self).__init__(msg)
 
 
 class ApiCall:
@@ -83,11 +77,11 @@ class ApiCall:
         # Figure out authorization.
         self.has = dict.fromkeys(['elsevier', 'medscan'], False)
         if not TESTING['status']:
-            try:
-                self.user, roles = resolve_auth(self.web_query)
-            except UserDatabaseError:
-                abort(Response("Invalid credentials.", 401))
-                return
+            failure_reason = {}
+            self.user, roles = resolve_auth(self.web_query, failure_reason)
+            if failure_reason:
+                logger.info(f"Auth error ({failure_reason['auth_attempted']}): "
+                            f"{failure_reason['reason']}")
             for role in roles:
                 for resource in self.has.keys():
                     self.has[resource] |= role.permissions.get(resource, False)
@@ -206,10 +200,10 @@ class ApiCall:
                         lbl = None
 
                     if list_len > MAX_LIST_LEN:
-                        logger.error("")
-                        return abort(Response(f"Too many {lbl}! Only "
-                                              f"{MAX_LIST_LEN} {lbl} allowed.",
-                                              400))
+                        logger.error(f"Length exceeded: {list_len} > "
+                                     f"{MAX_LIST_LEN}")
+                        raise HttpUserError(f"Too many {lbl}! Only "
+                                            f"{MAX_LIST_LEN} {lbl} allowed.")
         return self.db_query
 
     def _build_db_query(self):
@@ -647,7 +641,7 @@ class FromPapersApiCall(StatementApiCall):
         ids = request.json.get('ids')
         if not ids:
             logger.error("No ids provided!")
-            return abort(Response("No ids in request!", 400))
+            raise HttpUserError("No IDs in request.")
         mesh_ids = request.json.get('mesh_ids', [])
         self.web_query['paper_ids'] = ids
         self.web_query['mesh_ids'] = mesh_ids
@@ -680,7 +674,7 @@ class FromSimpleJsonApiCall(StatementApiCall):
             if self.filter_ev:
                 self.ev_filter = q.ev_filter()
         except (KeyError, ValueError):
-            return abort(Response("Invalid JSON.", 400))
+            raise HttpUserError("Invalid JSON.")
         return q
 
 
@@ -698,7 +692,7 @@ class DirectQueryApiCall(ApiCall):
             self.web_query.update(json.loads(self._pop('json_kwargs', '{}')))
             self.query_json = json.loads(self._pop('json', '{}'))
         else:
-            abort(Response(f"Invalid method: {request.method}"))
+            raise HttpUserError(f"Invalid method: {request.method}")
 
     def _build_db_query(self):
         try:
@@ -711,5 +705,5 @@ class DirectQueryApiCall(ApiCall):
             if self.filter_ev:
                 self.ev_filter = q.ev_filter()
         except (KeyError, ValueError):
-            return abort(Response("Invalid JSON.", 400))
+            raise HttpUserError("Invalid JSON.")
         return q

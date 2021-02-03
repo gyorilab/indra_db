@@ -24,7 +24,9 @@ from indra_db.util.constructors import get_ro_host
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indralab_auth_tools.log import note_in_log, set_log_service_name, \
     user_log_endpoint
-from rest_api.call_handlers import pop_request_bool, ResultTypeError
+from rest_api.call_handlers import pop_request_bool
+from rest_api.errors import HttpUserError, ResultTypeError, InvalidCredentials, \
+    InsufficientPermission
 
 from rest_api.config import *
 from rest_api.call_handlers import *
@@ -405,20 +407,18 @@ def describe_curation():
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_nontest_optional
 @user_log_endpoint
-def submit_curation_endpoint(hash_val, **kwargs):
-    user, roles = resolve_auth(request.args.copy())
-    if not roles and not user:
-        return jsonify({"result": "failure",
-                        "reason": "Invalid Credentials"}), 401
+def submit_curation_endpoint(hash_val):
+    failure_reason = {}
+    user, roles = resolve_auth(request.args.copy(), failure_reason)
+    if failure_reason:
+        raise InvalidCredentials(failure_reason['auth_attempted'])
 
     if user:
         email = user.email
     else:
         email = request.json.get('email')
         if not email:
-            res_dict = {"result": "failure",
-                        "reason": "POST with API key requires a user email."}
-            return jsonify(res_dict), 400
+            raise HttpUserError("POST with API key requires a user email.")
 
     logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')
@@ -433,7 +433,7 @@ def submit_curation_endpoint(hash_val, **kwargs):
             dbid = submit_curation(hash_val, tag, email, ip, text, ev_hash,
                                    source_api)
         except BadHashError as e:
-            return Response("Invalid hash: %s." % e.mk_hash, 400)
+            raise HttpUserError(f"Invalid hash: {e.mk_hash}")
         res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}
@@ -451,20 +451,27 @@ def list_curations(stmt_hash, src_hash):
 @jwt_nontest_optional
 @user_log_endpoint
 def dump_curations():
-    user, roles = resolve_auth(request.args.copy())
-    if not roles:
-        return jsonify({"result": "failure",
-                        "reason": "Invalid Credentials"}),\
-               401
+    failure_reason = {}
+    user, roles = resolve_auth(request.args.copy(), failure_reason)
+    if failure_reason:
+        raise InvalidCredentials(failure_reason['auth_attempted'])
     can_dump = False
     for role in roles:
         can_dump |= role.permissions.get('get_curations', False)
     if not can_dump:
-        return jsonify({"result": "failure",
-                        "reason": "Insufficient permissions."}), \
-                401
+        raise InsufficientPermission("get curations")
     curations = get_curations()
     return jsonify(curations), 200
+
+
+# =====================
+# Define Error Handlers
+# =====================
+
+@app.errorhandler(HttpUserError)
+def handle_user_error(error):
+    logger.error(f"Got user error ({error.err_code}: {error.msg}")
+    return error.response()
 
 
 def main():

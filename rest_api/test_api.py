@@ -540,8 +540,16 @@ class TestDbApi(unittest.TestCase):
 
     def test_curation_submission(self):
         # This can only test the surface layer endpoint.
-        self.__time_query('post', 'curation/submit/12345?test', tag='test',
-                          curator='tester', text='This is text.')
+        resp, _, _ = self.__time_query('post', 'curation/submit/12345?test',
+                                       tag='test', email='tester',
+                                       text='This is text.', with_auth=True)
+        assert resp.status_code == 200
+
+    def test_curation_submission_wo_api_key(self):
+        resp, _, _ = self.__time_query('post', 'curation/submit/12345?test',
+                                       tag='test', email='tester',
+                                       text='This is text.')
+        assert resp.status_code == 401
 
     def test_interaction_query(self):
         self.__time_query('get', 'metadata/relations/from_agents',

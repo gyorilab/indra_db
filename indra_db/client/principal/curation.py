@@ -1,7 +1,7 @@
 __all__ = ['submit_curation', 'get_curations', 'get_grounding_curations']
 
-import json
 import re
+import json
 import logging
 import datetime
 from collections import Counter

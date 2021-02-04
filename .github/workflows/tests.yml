@@ -26,7 +26,8 @@ jobs:
         pip install jsonschema coverage nose-timer doctest-ignore-unicode awscli pycodestyle
         pip install cython psycopg2
         # Now install INDRA DB with all its extras
-        pip install .[test]
+        pip install git+https://github.com/pagreene/indra.git@api-update
+        pip install .[all]
     - name: Run API tests
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

@@ -1,0 +1,69 @@
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Set up Python 3.6
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.6
+    - name: Install dependencies
+      run: |
+        echo $GITHUB_EVENT_NAME
+        sudo apt-get update
+        sudo apt-get install libstdc++6 graphviz python3-dev libgraphviz-dev pkg-config
+        # Install test/github-workflows-specific dependencies not covered elsewhere
+        pip install jsonschema coverage nose-timer doctest-ignore-unicode awscli pycodestyle
+        pip install cython, psycopg2
+        # Now install INDRA DB with all its extras
+        pip install .[test]
+        # Download adeft models
+        python -m adeft.download
+    - name: Run unit tests
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        INDRADBPRIMARY: ${{ secrets.INDRADBPRIMARY }}
+        INDRAROPRIMARY: ${{ secrets.INDRAROPRIMARY }}
+      run: |
+        # Set nose attributes based on the context in which we are running
+        export NOSEATTR="!notravis,!slow,!cron";
+        export NOSEATTR=$(if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then echo $NOSEATTR,!nonpublic; else echo $NOSEATTR; fi)
+        echo $NOSEATTR
+        # These are files that are ignored so that doctests don't fail
+        export NOSE_IGNORE_FILES="find_full_text_sentence.py";
+
+        echo $NOSEATTR
+        #- cd $TRAVIS_BUILD_DIR
+        # Now run all INDRA DB REST API tests
+        cd rest_api
+        nosetests -v -a $NOSEATTR --with-coverage --cover-inclusive --cover-package=indra --with-doctest --with-doctest-ignore-unicode --with-timer --timer-top-n 10 --processes=0
+    #- name: Run all other tests
+    #  env:
+    #    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    #    INDRADBPRIMARY: ${{ secrets.INDRADBPRIMARY }}
+    #    INDRAROPRIMARY: ${{ secrets.INDRAROPRIMARY }}
+    #  run: |
+    #    # Set nose attributes based on the context in which we are running
+    #    export NOSEATTR="!notravis,!slow,!cron";
+    #    export NOSEATTR=$(if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then echo $NOSEATTR,!nonpublic; else echo $NOSEATTR; fi)
+    #    echo $NOSEATTR
+    #    # These are files that are ignored so that doctests don't fail
+    #    export NOSE_IGNORE_FILES="find_full_text_sentence.py";
+    #    echo $NOSEATTR
+    #    #- cd $TRAVIS_BUILD_DIR
+    #    # Now run all INDRA DB REST API tests
+    #    cd indra_db
+    #    nosetests -v -a $NOSEATTR --with-coverage --cover-inclusive --cover-package=indra --with-doctest --with-doctest-ignore-unicode --with-timer --timer-top-n 10 --processes=0
+        

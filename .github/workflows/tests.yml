@@ -20,6 +20,8 @@ jobs:
     - name: Install dependencies
       run: |
         echo $GITHUB_EVENT_NAME
+        ls
+        pwd
         sudo apt-get update
         sudo apt-get install libstdc++6 graphviz python3-dev libgraphviz-dev pkg-config
         # Install test/github-workflows-specific dependencies not covered elsewhere
@@ -27,7 +29,10 @@ jobs:
         pip install cython psycopg2
         # Now install INDRA DB with all its extras
         pip install git+https://github.com/pagreene/indra.git@api-update
-        pip install https://github.com/pagreene/ui_util/tree/extend-user-log/indralab_auth_tools
+        git clone https://github.com/pagreene/ui_util
+        cd ui_util/indralab_auth_tools
+        pip install .
+        cd ..
         pip install .[all]
     - name: Run API tests
       env:

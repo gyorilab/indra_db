@@ -456,16 +456,22 @@ def submit_curation_endpoint(hash_val):
     return jsonify(res)
 
 
-@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'],
+@app.route('/curation/list', methods=['GET'],
            defaults={"stmt_hash": None, "src_hash": None})
+@app.route('/curation/list/<stmt_hash>', methods=['GET'],
+           defaults={"src_hash": None})
+@app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
 @jwt_nontest_optional
 @user_log_endpoint
 def list_curations(stmt_hash, src_hash):
+    # In order of priority: we need a hash, and then we can look for a src_hash.
     params = {}
     if stmt_hash is not None:
         params["pa_hash"] = stmt_hash
-    if src_hash is not None:
-        params["source_hash"] = src_hash
+        if src_hash is not None:
+            params["source_hash"] = src_hash
+    else:
+        assert src_hash is None, "Somehow someone broke our URL system."
 
     # The user needs to have an account to get curations at all.
     user, roles = auth_curation()

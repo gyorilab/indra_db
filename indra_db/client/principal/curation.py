@@ -1,5 +1,6 @@
 __all__ = ['submit_curation', 'get_curations', 'get_grounding_curations']
 
+import json
 import re
 import logging
 import datetime
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def submit_curation(hash_val, tag, curator, ip, text=None, ev_hash=None,
-                    source='direct_client', stmt_json=None, ev_json=None,
+                    source='direct_client', pa_json=None, ev_json=None,
                     db=None):
     """Submit a curation for a given preassembled or raw extraction.
 
@@ -37,19 +38,27 @@ def submit_curation(hash_val, tag, curator, ip, text=None, ev_hash=None,
         The name of the access point through which the curation was performed.
         The default is 'direct_client', meaning this function was used
         directly. Any higher-level application should identify itself here.
-    stmt_json : Optional[dict]
-        The JSON of a preassembled or raw statement that was curated.
+    pa_json : Optional[dict]
+        The JSON of a preassembled or raw statement that was curated. If None,
+        we will try to get the pa_json from the database.
     ev_json : Optional[dict]
-        The JSON of the evidence that was curated.
+        The JSON of the evidence that was curated. This cannot be retrieved from
+        the database if not given.
     db : DatabaseManager
         A database manager object used to access the database.
     """
     if db is None:
         db = get_db('primary')
 
+    if pa_json is None:
+        pa_json_strs = db.select_one(db.PAStatements.json,
+                                     db.PAStatements.mk_hash == int(hash_val))
+        if pa_json_strs is not None:
+            pa_json = json.loads(pa_json_strs[0])
+
     inp = {'tag': tag, 'text': text, 'curator': curator, 'ip': ip,
            'source': source, 'pa_hash': hash_val, 'source_hash': ev_hash,
-           'pa_json': stmt_json, 'ev_json': ev_json}
+           'pa_json': pa_json, 'ev_json': ev_json}
 
     logger.info("Adding curation: %s" % str(inp))
 

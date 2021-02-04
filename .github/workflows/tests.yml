@@ -27,6 +27,7 @@ jobs:
         pip install cython psycopg2
         # Now install INDRA DB with all its extras
         pip install git+https://github.com/pagreene/indra.git@api-update
+        pip install https://github.com/pagreene/ui_util/tree/extend_user_log/indralab_auth_tools
         pip install .[all]
     - name: Run API tests
       env:

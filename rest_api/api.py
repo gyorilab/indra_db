@@ -417,7 +417,7 @@ def auth_curation():
         user = None
 
         class MockRole:
-            permissions = {"get_curations": True}
+            permissions = {"get_curations": api_key == 'GET_CURATIONS'}
 
         roles = [MockRole()]
     return user, roles
@@ -476,7 +476,7 @@ def list_curations(stmt_hash, src_hash):
         for role in roles:
             can_load |= role.permissions.get('get_curations', False)
         if not can_load:
-            raise InsufficientPermission("get curations")
+            raise InsufficientPermission("get all curations")
 
     # Get the curations.
     curations = get_curations(**params)

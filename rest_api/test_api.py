@@ -551,6 +551,65 @@ class TestDbApi(unittest.TestCase):
                                        text='This is text.')
         assert resp.status_code == 401
 
+    def test_get_curation(self):
+        pa_hash = -15396645825529833
+        src_hash = -6540587366662950154
+        resp, _, _ = self.__time_query('get',
+                                       f'curation/list/{pa_hash}/{src_hash}',
+                                       with_auth=True)
+        assert resp.status_code == 200
+        assert isinstance(resp.json, list)
+        assert len(resp.json) > 0
+        assert all(c['pa_hash'] == pa_hash and c['source_hash'] == src_hash
+                   for c in resp.json)
+
+    def test_get_curation_no_auth(self):
+        pa_hash = -15396645825529833
+        src_hash = -6540587366662950154
+        resp, _, _ = self.__time_query('get',
+                                       f'curation/list/{pa_hash}/{src_hash}')
+        assert resp.status_code == 401
+
+    def test_get_curations_stmt_hash_only(self):
+        pa_hash = -15396645825529833
+        resp, _, _ = self.__time_query('get', f'curation/list/{pa_hash}',
+                                       with_auth=True)
+        assert resp.status_code == 200
+        assert isinstance(resp.json, list)
+        assert len(resp.json) > 0
+        assert all(c['pa_hash'] == pa_hash for c in resp.json)
+
+    def test_get_curation_stmt_hash_only_no_auth(self):
+        pa_hash = -15396645825529833
+        resp, _, _ = self.__time_query('get', f'curation/list/{pa_hash}')
+        assert resp.status_code == 401
+
+    def test_get_all_curations(self):
+        if TEST_DEPLOYMENT:
+            raise SkipTest("Cannot test particular auth with single API key.")
+        resp = self.app.get('curation/list?api_key=GET_CURATIONS')
+        assert resp.status_code == 200
+        assert isinstance(resp.json, list)
+        assert len(resp.json) > 100
+
+    def test_get_all_curations_no_auth(self):
+        if TEST_DEPLOYMENT:
+            raise SkipTest("Cannot test particular auth with single API key.")
+        resp = self.app.get('curation/list')
+        assert resp.status_code == 401
+        reason = resp.json['reason']
+        assert 'invalid credentials' in reason.lower()
+        assert 'api key' in reason.lower()
+
+    def test_get_all_curations_wrong_auth(self):
+        if TEST_DEPLOYMENT:
+            raise SkipTest("Cannot test particular auth with single API key.")
+        resp = self.app.get('curation/list?api_key=OTHER_API_KEY')
+        assert resp.status_code == 403
+        reason = resp.json['reason']
+        assert 'insufficient permissions' in reason.lower()
+        assert 'get all curations' in reason.lower()
+
     def test_interaction_query(self):
         self.__time_query('get', 'metadata/relations/from_agents',
                           'agent0=mek%40AUTO&limit=50&with_cur_counts=true')

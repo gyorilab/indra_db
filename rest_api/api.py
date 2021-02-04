@@ -441,12 +441,14 @@ def submit_curation_endpoint(hash_val):
     tag = request.json.get('tag')
     ip = request.remote_addr
     text = request.json.get('text')
+    pa_json = request.json.get('pa_json')
+    ev_json = request.json.get('ev_json')
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'
         try:
             dbid = submit_curation(hash_val, tag, email, ip, text, ev_hash,
-                                   source_api)
+                                   source_api, pa_json, ev_json)
         except BadHashError as e:
             raise HttpUserError(f"Invalid hash: {e.mk_hash}")
         res = {'result': 'success', 'ref': {'id': dbid}}

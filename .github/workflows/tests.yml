@@ -27,9 +27,7 @@ jobs:
         pip install cython psycopg2
         # Now install INDRA DB with all its extras
         pip install .[test]
-        # Download adeft models
-        python -m adeft.download
-    - name: Run unit tests
+    - name: Run API tests
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

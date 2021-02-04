@@ -24,7 +24,7 @@ jobs:
         sudo apt-get install libstdc++6 graphviz python3-dev libgraphviz-dev pkg-config
         # Install test/github-workflows-specific dependencies not covered elsewhere
         pip install jsonschema coverage nose-timer doctest-ignore-unicode awscli pycodestyle
-        pip install cython, psycopg2
+        pip install cython psycopg2
         # Now install INDRA DB with all its extras
         pip install .[test]
         # Download adeft models

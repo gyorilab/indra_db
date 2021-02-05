@@ -59,7 +59,7 @@ TEST_DEPLOYMENT = False
 
 def test_secret():
     import os
-    print("SECRET:", os.environ.get('SUPERSECRETSECRET'))
+    print("SECRET:", os.environ)
     print("The Secret: it is secret")
     assert False, "Oh no!"
     return

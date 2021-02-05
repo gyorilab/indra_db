@@ -61,6 +61,7 @@ def test_secret():
     import os
     print("SECRET:", os.environ.get('SUPERSECRETSECRET'))
     print("The Secret: it is secret")
+    assert False, "Oh no!"
     return
 
 

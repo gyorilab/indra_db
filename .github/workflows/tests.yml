@@ -43,6 +43,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         INDRADBPRIMARY: ${{ secrets.INDRADBPRIMARY }}
         INDRAROPRIMARY: ${{ secrets.INDRAROPRIMARY }}
+        SUPERSECRETSECREST: ${{ secrets.SUPERSECRETSECRET }}
       run: |
         # Set nose attributes based on the context in which we are running
         export NOSEATTR="!notravis,!slow,!cron";

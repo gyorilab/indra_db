@@ -22,8 +22,7 @@ def main():
           install_requires=['indra', 'boto3', 'sqlalchemy', 'psycopg2',
                             'pgcopy', 'matplotlib', 'nltk', 'reportlab',
                             'cachetools', 'termcolor'],
-          extras_require=extras_require
-          )
+          extras_require=extras_require)
 
 
 if __name__ == '__main__':

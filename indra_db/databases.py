@@ -149,7 +149,7 @@ reader_versions = {
     'sparser': ['sept14-linux\n', 'sept14-linux', 'June2018-linux',
                 'October2018-linux', 'February2020-linux', 'April2020-linux'],
     'reach': ['61059a-biores-e9ee36', '1.3.3-61059a-biores-', '1.6.1'],
-    'trips': ['STATIC', '2019Nov14'],
+    'trips': ['STATIC', '2019Nov14', '2021Jan26'],
     'isi': ['20180503'],
     'eidos': ['0.2.3-SNAPSHOT'],
     'mti': ['1.0'],

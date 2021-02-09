@@ -1,6 +1,3 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 import os
 import json
 import random
@@ -28,8 +25,7 @@ from indra.tests.util import needs_py3
 
 from indra_db import util as db_util
 from indra_db import client as db_client
-from indra_db.managers import preassembly_manager as pm
-from indra_db.managers.preassembly_manager import shash
+from indra_db.preassembly import preassemble_db as pdb
 from indra_db.tests.util import get_pa_loaded_db, get_temp_db
 
 from nose.plugins.attrib import attr
@@ -197,7 +193,7 @@ def _check_against_opa_stmts(db, raw_stmts, pa_stmts):
                 vals_2.append(val)
         if len(vals_1) or len(vals_2):
             print("Found mismatched %s for hash %s:\n\t%s=%s\n\t%s=%s"
-                  % (label, shash(stmt_1), stmt_1_name, vals_1, stmt_2_name,
+                  % (label, stmt_1.get_hash(), stmt_1_name, vals_1, stmt_2_name,
                      vals_2))
             return {'diffs': {stmt_1_name: vals_1, stmt_2_name: vals_2},
                     'stmts': {stmt_1_name: stmt_1, stmt_2_name: stmt_2}}
@@ -205,8 +201,8 @@ def _check_against_opa_stmts(db, raw_stmts, pa_stmts):
 
     opa_stmts = _do_old_fashioned_preassembly(raw_stmts)
 
-    old_stmt_dict = {shash(s): s for s in opa_stmts}
-    new_stmt_dict = {shash(s): s for s in pa_stmts}
+    old_stmt_dict = {s.get_hash(): s for s in opa_stmts}
+    new_stmt_dict = {s.get_hash(): s for s in pa_stmts}
 
     new_hash_set = set(new_stmt_dict.keys())
     old_hash_set = set(old_stmt_dict.keys())
@@ -227,11 +223,11 @@ def _check_against_opa_stmts(db, raw_stmts, pa_stmts):
               'label': 'evidence text',
               'results': []},
              {'funcs': {'list': lambda s: s.supports[:],
-                        'comp': lambda s: shash(s)},
+                        'comp': lambda s: s.get_hash()},
               'label': 'supports matches keys',
               'results': []},
              {'funcs': {'list': lambda s: s.supported_by[:],
-                        'comp': lambda s: shash(s)},
+                        'comp': lambda s: s.get_hash()},
               'label': 'supported-by matches keys',
               'results': []}]
     comp_hashes = new_hash_set & old_hash_set
@@ -286,7 +282,7 @@ def str_imp(o, uuid=None, other_stmt_keys=None):
                  % (str(s), o.id, o.db_info_id, o.reading_id,
                     o.uuid[:8] + '...', o.type,
                     o.indra_version[:14] + '...', o.mk_hash))
-        if other_stmt_keys and shash(s) in other_stmt_keys:
+        if other_stmt_keys and s.get_hash() in other_stmt_keys:
             s_str = '+' + s_str
         if s.uuid == uuid:
             s_str = '*' + s_str
@@ -302,10 +298,10 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
         uuid = s.uuid
         print('-'*100)
         print('uuid: %s\nhash: %s\nshallow hash: %s'
-              % (s.uuid, s.get_hash(shallow=False), shash(s)))
+              % (s.uuid, s.get_hash(shallow=False), s.get_hash()))
         print('-'*100)
         db_pas = db.select_one(db.PAStatements,
-                               db.PAStatements.mk_hash == shash(s))
+                               db.PAStatements.mk_hash == s.get_hash())
         print('\tPA statement:', db_pas.__dict__ if db_pas else '~')
         print('-'*100)
         db_s = db.select_one(db.RawStatements, db.RawStatements.uuid == s.uuid)
@@ -372,9 +368,8 @@ def _check_preassembly_with_database(num_stmts, batch_size):
 
     # Run the preassembly initialization.
     start = datetime.now()
-    pa_manager = pm.PreassemblyManager(batch_size=batch_size,
-                                       print_logs=True)
-    pa_manager.create_corpus(db)
+    preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True)
+    preassembler.create_corpus(db)
     end = datetime.now()
     print("Duration:", end-start)
 
@@ -405,7 +400,8 @@ def _check_preassembly_with_database(num_stmts, batch_size):
                                                 len(pa_stmt_list))
 
     self_supports = {
-        shash(s): shash(s) in {shash(s_) for s_ in s.supported_by + s.supports}
+        s.get_hash(): s.get_hash() in {s_.get_hash()
+                                       for s_ in s.supported_by + s.supports}
         for s in pa_stmts
         }
     if any(self_supports.values()):
@@ -417,15 +413,14 @@ def _check_preassembly_with_database(num_stmts, batch_size):
 
 @needs_py3
 def _check_db_pa_supplement(num_stmts, batch_size, split=0.8):
-    pa_manager = pm.PreassemblyManager(batch_size=batch_size,
-                                       print_logs=True)
-    db = get_pa_loaded_db(num_stmts, split=split, pam=pa_manager)
+    preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True)
+    db = get_pa_loaded_db(num_stmts, split=split, pam=preassembler)
     opa_inp_stmts = _get_opa_input_stmts(db)
     start = datetime.now()
     print('sleeping...')
     sleep(5)
     print("Beginning supplement...")
-    pa_manager.supplement_corpus(db)
+    preassembler.supplement_corpus(db)
     end = datetime.now()
     print("Duration of incremental update:", end-start)
 

@@ -553,7 +553,7 @@ class DbPreassembler:
                 db.PAStatements.json,
                 db.PAStatements.mk_hash.in_(new_hashes[out_s:out_e])
             )
-            npa_batch = [_stmt_from_json(s_json) for s_json in npa_json_q.all()]
+            npa_batch = [_stmt_from_json(s_json) for s_json, in npa_json_q.all()]
 
             # Compare internally
             self._log(f"Getting support for new pa batch {outer_idx}/"

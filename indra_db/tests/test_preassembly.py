@@ -173,8 +173,8 @@ def _get_opa_input_stmts(db):
     stmt_nd = db_util.get_reading_stmt_dict(db, get_full_stmts=True)
     reading_stmts, _ =\
         db_util.get_filtered_rdg_stmts(stmt_nd, get_full_stmts=True)
-    db_stmts = db_client.get_statements([db.RawStatements.reading_id.is_(None)],
-                                        preassembled=False, db=db)
+    db_stmts = db_client.get_pa_statements([db.RawStatements.reading_id.is_(None)],
+                                           preassembled=False, db=db)
     stmts = reading_stmts | set(db_stmts)
     print("Got %d statements for opa." % len(stmts))
     return stmts
@@ -394,8 +394,7 @@ def _check_preassembly_with_database(num_stmts, batch_size):
         "Found self-support in the database."
 
     # Try to get all the preassembled statements from the table.
-    pa_stmts = db_client.get_statements([], preassembled=True, db=db,
-                                        with_support=True)
+    pa_stmts = db_client.get_pa_statements(db=db)
     assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
                                                 len(pa_stmt_list))
 
@@ -424,8 +423,7 @@ def _check_db_pa_supplement(num_stmts, batch_size, split=0.8):
     end = datetime.now()
     print("Duration of incremental update:", end-start)
 
-    pa_stmts = db_client.get_statements([], preassembled=True, db=db,
-                                        with_support=True)
+    pa_stmts = db_client.get_pa_statements(db=db)
     _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
     return
 

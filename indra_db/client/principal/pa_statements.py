@@ -1,4 +1,4 @@
-__all__ = ["get_statements"]
+__all__ = ["get_pa_statements"]
 
 import json
 from collections import defaultdict
@@ -11,7 +11,7 @@ from indra.statements import Statement
 from indra_db.util.constructors import get_db
 
 
-def get_statements(clauses=None, with_evidence=True, db=None, limit=1000):
+def get_pa_statements(clauses=None, with_evidence=True, db=None, limit=1000):
     """Load preassembled Statements from the principal database."""
     if db is None:
         db = get_db('primary')

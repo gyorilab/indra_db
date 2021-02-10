@@ -1,7 +1,9 @@
+__all__ = ["get_statements"]
+
 import json
 from collections import defaultdict
 
-from sqlalchemy import func, tuple_, cast, String, null
+from sqlalchemy import func, cast, String, null
 from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import aliased
 
@@ -9,8 +11,7 @@ from indra.statements import Statement
 from indra_db.util.constructors import get_db
 
 
-def load_pa_statements(clauses=None, with_evidence=True,
-                       db=None, limit=None):
+def get_statements(clauses=None, with_evidence=True, db=None, limit=1000):
     """Load preassembled Statements from the principal database."""
     if db is None:
         db = get_db('primary')
@@ -84,22 +85,37 @@ def load_pa_statements(clauses=None, with_evidence=True,
     )
 
     # Run and parse the query.
-    result_jsons = []
+    result_dicts = []
+    stmts_by_hash = {}
     for mk_hash, sj, raw_jsons, db_refs, supporting, supported in q.all():
+        # Gather the agent refs.
         db_ref_dicts = defaultdict(lambda: defaultdict(list))
         for ag_num, db_name, db_id in db_refs:
-            db_ref_dicts[ag_num][db_name].append(db_id)
+            db_ref_dicts[int(ag_num)][db_name].append(db_id)
         db_ref_dicts = {k: dict(v) for k, v in db_ref_dicts.items()}
+
+        # Construct the Statement object.
         stmt = Statement._from_json(json.loads(sj))
         ev_list = [Statement._from_json(json.loads(rj)).evidence[0]
                    for rj in raw_jsons]
         stmt.evidence = ev_list
+
+        # Resolve supports supported-by, as much as possible.
+        stmts_by_hash[mk_hash] = stmt
+        for h in (h for h in supporting if h in stmts_by_hash):
+            stmt.supports.append(stmts_by_hash[h])
+            stmts_by_hash[h].supported_by.append(stmt)
+        for h in (h for h in supported if h in stmts_by_hash):
+            stmt.supported_by.append(stmts_by_hash[h])
+            stmts_by_hash[h].supports.append(stmt)
+
+        # Put it together in a dictionary.
         result_dict = {
             "mk_hash": mk_hash,
             "stmt": stmt,
             "db_refs": db_ref_dicts,
-            "supporting_hashes": supporting,
-            "supported_hashes": supported
+            "supports_hashes": supporting,
+            "supported_by_hashes": supported
         }
-        result_jsons.append(result_dict)
-    return result_jsons
+        result_dicts.append(result_dict)
+    return result_dicts

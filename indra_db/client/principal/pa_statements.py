@@ -24,15 +24,34 @@ def get_pa_statements(clauses=None, with_evidence=True, db=None, limit=1000):
         core_q = db.session.query(
             db.PAStatements.mk_hash.label('mk_hash'),
             db.PAStatements.json.label('json'),
-            func.array_agg(db.RawStatements.json).label("raw_jsons")
-        ).filter(
-            *db.link(db.PAAgents, db.RawStatements)
+            func.array_agg(db.RawStatements.json).label("raw_jsons"),
+            func.array_agg(db.Reading.id).label("rids"),
+            func.array_agg(db.TextContent.id).label("tcids"),
+            func.array_agg(db.TextRef).label("text_refs")
+        ).outerjoin(
+            db.RawUniqueLinks,
+            db.RawUniqueLinks.pa_stmt_mk_hash == db.PAStatements.mk_hash
+        ).join(
+            db.RawStatements,
+            db.RawStatements.id == db.RawUniqueLinks.raw_stmt_id
+        ).outerjoin(
+            db.Reading,
+            db.Reading.id == db.RawStatements.reading_id
+        ).join(
+            db.TextContent,
+            db.TextContent.id == db.Reading.text_content_id
+        ).join(
+            db.TextRef,
+            db.TextRef.id == db.TextContent.text_ref_id
         )
     else:
         core_q = db.session.query(
             db.PAStatements.mk_hash.label('mk_hash'),
             db.PAStatements.json.label('json'),
-            null().label('raw_jsons')
+            null().label('raw_jsons'),
+            null().label('rids'),
+            null().label('tcids'),
+            null().label('text_refs')
         )
     core_q = core_q.filter(
         *clauses
@@ -52,6 +71,9 @@ def get_pa_statements(clauses=None, with_evidence=True, db=None, limit=1000):
         core_sq.c.mk_hash,
         core_sq.c.json,
         core_sq.c.raw_jsons,
+        core_sq.c.rids,
+        core_sq.c.tcids,
+        core_sq.c.text_refs,
         func.array_agg(array(agent_tuple)).label('db_refs')
     ).filter(
         db.PAAgents.stmt_mk_hash == core_sq.c.mk_hash
@@ -68,6 +90,9 @@ def get_pa_statements(clauses=None, with_evidence=True, db=None, limit=1000):
         at_sq.c.mk_hash,
         at_sq.c.json,
         at_sq.c.raw_jsons,
+        at_sq.c.rids,
+        at_sq.c.tcids,
+        at_sq.c.text_refs,
         at_sq.c.db_refs,
         func.array_agg(sup_from.supporting_mk_hash).label('supporting_hashes'),
         func.array_agg(sup_to.supported_mk_hash).label('supported_hashes')

@@ -1,5 +1,5 @@
-__all__ = ['get_direct_raw_stmt_jsons_from_agents',
-           'get_raw_stmt_jsons_from_papers', 'get_raw_jsons']
+__all__ = ['get_raw_stmt_jsons_from_agents', 'get_raw_stmt_jsons_from_papers',
+           'get_raw_stmt_jsons']
 
 import json
 from collections import defaultdict
@@ -88,6 +88,9 @@ def get_raw_stmt_jsons_from_agents(agents=None, stmt_type=None, db=None,
     if db is None:
         db = get_db('primary')
 
+    if agents is None:
+        agents = []
+
     # Turn the agents parameters into an intersection of queries for stmt ids.
     entity_queries = []
     for role, ag_dbid, ns in agents:
@@ -133,7 +136,8 @@ def get_raw_stmt_jsons_from_agents(agents=None, stmt_type=None, db=None,
 
 
 def get_raw_stmt_jsons(clauses=None, db=None, max_stmts=None, offset=None):
-    """Get Raw Statements from the principle database, given arbitrary clauses."""
+    """Get Raw Statements from the principle database, given arbitrary clauses.
+    """
     if db is None:
         db = get_db('primary')
 
@@ -144,11 +148,11 @@ def get_raw_stmt_jsons(clauses=None, db=None, max_stmts=None, offset=None):
         db.RawStatements.id,
         db.RawStatements.json,
         db.Reading.id,
-        db.TextContennt.id,
+        db.TextContent.id,
         db.TextRef
     ).filter(
         *clauses
-    ).outerjoind(
+    ).outerjoin(
         db.Reading,
         db.Reading.id == db.RawStatements.reading_id
     ).join(

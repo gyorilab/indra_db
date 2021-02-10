@@ -11,7 +11,7 @@ from indra.statements import Statement
 from indra_db.util.constructors import get_db
 
 
-def get_pa_statements(clauses=None, with_evidence=True, db=None, limit=1000):
+def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
     """Load preassembled Statements from the principal database."""
     if db is None:
         db = get_db('primary')
@@ -110,9 +110,9 @@ def get_pa_statements(clauses=None, with_evidence=True, db=None, limit=1000):
     )
 
     # Run and parse the query.
-    result_dicts = []
+    stmt_jsons = {}
     stmts_by_hash = {}
-    for mk_hash, sj, raw_jsons, db_refs, supporting, supported in q.all():
+    for h, sj, rjs, rids, tcids, text_refs, db_refs, supping, supped in q.all():
         # Gather the agent refs.
         db_ref_dicts = defaultdict(lambda: defaultdict(list))
         for ag_num, db_name, db_id in db_refs:
@@ -120,27 +120,26 @@ def get_pa_statements(clauses=None, with_evidence=True, db=None, limit=1000):
         db_ref_dicts = {k: dict(v) for k, v in db_ref_dicts.items()}
 
         # Construct the Statement object.
-        stmt = Statement._from_json(json.loads(sj))
-        ev_list = [Statement._from_json(json.loads(rj)).evidence[0]
-                   for rj in raw_jsons]
-        stmt.evidence = ev_list
+        stmt_json = json.loads(sj)
+        ev_list = [json.loads(rj)['evidence'][0] for rj in rjs]
+        stmt_json['evidence'] = ev_list
 
         # Resolve supports supported-by, as much as possible.
-        stmts_by_hash[mk_hash] = stmt
-        for h in (h for h in supporting if h in stmts_by_hash):
-            stmt.supports.append(stmts_by_hash[h])
-            stmts_by_hash[h].supported_by.append(stmt)
-        for h in (h for h in supported if h in stmts_by_hash):
-            stmt.supported_by.append(stmts_by_hash[h])
-            stmts_by_hash[h].supports.append(stmt)
+        stmts_by_hash[h] = stmt_json
+        for h in (h for h in supping if h in stmts_by_hash):
+            stmt_json['supports'].append(stmts_by_hash[h])
+            stmts_by_hash[h]['supported_by'].append(stmt_json)
+        for h in (h for h in supped if h in stmts_by_hash):
+            stmt_json['supported_by'].append(stmts_by_hash[h])
+            stmts_by_hash[h]['supports'].append(stmt_json)
 
         # Put it together in a dictionary.
         result_dict = {
-            "mk_hash": mk_hash,
-            "stmt": stmt,
+            "mk_hash": h,
+            "stmt": stmt_json,
             "db_refs": db_ref_dicts,
-            "supports_hashes": supporting,
-            "supported_by_hashes": supported
+            "supports_hashes": supping,
+            "supported_by_hashes": supped
         }
-        result_dicts.append(result_dict)
-    return result_dicts
+        stmt_jsons[h] = result_dict
+    return stmt_json

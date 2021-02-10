@@ -1,4 +1,4 @@
-__all__ = ["get_pa_statements"]
+__all__ = ["get_pa_stmt_jsons"]
 
 import json
 from collections import defaultdict
@@ -7,9 +7,8 @@ from sqlalchemy import func, cast, String, null
 from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import aliased
 
-from indra.statements import Statement
-from indra_db.client.principal.raw_statements import _fix_evidence
 from indra_db.util.constructors import get_db
+from indra_db.client.principal.raw_statements import _fix_evidence
 
 
 def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):

@@ -168,12 +168,7 @@ def get_raw_stmt_jsons(clauses=None, db=None, max_stmts=None, offset=None):
     raw_stmt_jsons = {}
     for sid, json_bytes, rid, tcid, tr in q.all():
         raw_j = json.loads(json_bytes)
-        ev = raw_j['evidence'][0]
-        ev['text_refs'] = tr.get_ref_dict()
-        ev['text_refs']['TCID'] = tcid
-        ev['text_refs']['READING_ID'] = rid
-        if tr.pmid:
-            ev['pmid'] = tr.pmid
+        _fix_evidence(raw_j['evidence'][0], rid, tcid, tr)
         raw_stmt_jsons[sid] = raw_j
 
     return raw_stmt_jsons
@@ -193,4 +188,13 @@ def _get_id_col(tr, id_type):
         except AttributeError:
             raise ValueError("Invalid id_type: %s" % id_type)
     return id_attr
+
+
+def _fix_evidence(ev, rid, tcid, tr):
+    ev['text_refs'] = tr.get_ref_dict()
+    ev['text_refs']['TCID'] = tcid
+    ev['text_refs']['READING_ID'] = rid
+    if tr.pmid:
+        ev['pmid'] = tr.pmid
+    return
 

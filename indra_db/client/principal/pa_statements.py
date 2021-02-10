@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import aliased
 
 from indra.statements import Statement
+from indra_db.client.principal.raw_statements import _fix_evidence
 from indra_db.util.constructors import get_db
 
 
@@ -119,10 +120,16 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
             db_ref_dicts[int(ag_num)][db_name].append(db_id)
         db_ref_dicts = {k: dict(v) for k, v in db_ref_dicts.items()}
 
-        # Construct the Statement object.
+        # Parse the JSON bytes into JSON.
         stmt_json = json.loads(sj)
-        ev_list = [json.loads(rj)['evidence'][0] for rj in rjs]
-        stmt_json['evidence'] = ev_list
+
+        # Load the evidence.
+        if rjs is not None:
+            for rj, rid, tcid, tr in zip(rjs, rids, tcids, text_refs):
+                raw_json = json.loads(rj)
+                ev = raw_json['evidence'][0]
+                _fix_evidence(ev, rid, tcid, tr)
+                stmt_json['evidence'].append(ev)
 
         # Resolve supports supported-by, as much as possible.
         stmts_by_hash[h] = stmt_json
@@ -142,4 +149,4 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
             "supported_by_hashes": supped
         }
         stmt_jsons[h] = result_dict
-    return stmt_json
+    return stmt_jsons

@@ -5,6 +5,7 @@ from indra.statements import Agent, Phosphorylation, Evidence, Complex, \
 from indra_db.client.principal import *
 
 from indra_db.tests.util import get_temp_db
+from indra_db.util import insert_raw_agents, insert_pa_agents
 
 
 def _construct_database():
@@ -82,6 +83,36 @@ def _construct_database():
     db.session.add_all(raw_stmts)
     db.session.commit()
 
+    insert_raw_agents(db, 0, [s for sl in raw_statements_pre.values()
+                              for s in sl])
+
+    pa_statements_pre = [
+        (Phosphorylation(mek, erk), [raw_stmts[0], raw_stmts[2]]),
+        (Complex([mek, erk]), [raw_stmts[1], raw_stmts[4]]),
+        (Activation(mek, erk), [raw_stmts[3]])
+    ]
+    pa_stmts = []
+    raw_unique_links = []
+    for pa_stmt, raw_stmt_list in pa_statements_pre:
+        pa_json = pa_stmt.to_json()
+        h = pa_stmt.get_hash()
+        for raw_stmt in raw_stmt_list:
+            raw_unique_links.append(
+                db.RawUniqueLinks(raw_stmt_id=raw_stmt.id, pa_stmt_mk_hash=h)
+            )
+        pa_stmts.append(
+            db.PAStatements(mk_hash=h, json=json.dumps(pa_json).encode('utf-8'),
+                            type=pa_json['type'], uuid=pa_stmt.uuid,
+                            matches_key=pa_stmt.matches_key(),
+                            indra_version='test')
+        )
+    db.session.add_all(pa_stmts)
+    db.session.commit()
+    db.session.add_all(raw_unique_links)
+    db.session.commit()
+
+    insert_pa_agents(db, [s for s, _ in pa_statements_pre])
+
     return db
 
 
@@ -94,5 +125,23 @@ def test_raw_statement_retrieval_from_agents_type_only():
 
 def test_raw_statement_retrieval_generic():
     db = _construct_database()
-    res = get_raw_stmt_jsons([db.Reading.reader == 'REACH'])
-    assert res
+    res = get_raw_stmt_jsons([db.Reading.reader == 'REACH',
+                              db.Reading.id == db.RawStatements.reading_id],
+                             db=db)
+    assert len(res) > 0
+    assert len(res) < 5
+    assert all(sj['evidence'][0]['source_api'] == 'reach'
+               for sj in res.values())
+
+
+def test_pa_statement_retrieval_generic():
+    db = _construct_database()
+    res = get_pa_stmt_jsons(db=db)
+    assert len(res) == 3
+
+
+def test_pa_statement_retrieval_by_type():
+    db = _construct_database()
+    res = get_pa_stmt_jsons([db.PAStatements.type == 'Complex'], db=db)
+    assert len(res) == 1
+    assert all(j['stmt']['type'] == 'Complex' for j in res.values())

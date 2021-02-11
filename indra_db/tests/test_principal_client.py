@@ -116,11 +116,26 @@ def _construct_database():
     return db
 
 
+def test_get_raw_statements_all():
+    db = _construct_database()
+    res = get_raw_stmt_jsons(db=db)
+    assert len(res) == 5
+
+
 def test_raw_statement_retrieval_from_agents_type_only():
     db = _construct_database()
     res = get_raw_stmt_jsons_from_agents(stmt_type='Complex', db=db)
-    assert len(res) == 2
-    assert set(res.keys()) == {2, 5}
+    assert len(res) > 0
+    assert len(res) < 5
+    assert all(sj['type'] == 'Complex' for sj in res.values())
+
+
+def test_raw_statement_retrieval_from_agents_mek():
+    db = _construct_database()
+    res = get_raw_stmt_jsons_from_agents(agents=[(None, 'MEK', 'FPLX')], db=db)
+    assert len(res) > 0
+    assert len(res) < 5
+    assert all('MEK' in json.dumps(sj) for sj in res.values())
 
 
 def test_raw_statement_retrieval_generic():

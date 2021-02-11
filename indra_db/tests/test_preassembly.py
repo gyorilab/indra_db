@@ -18,7 +18,8 @@ ps_logger.setLevel(logging.WARNING)
 pa_logger = logging.getLogger('preassembler')
 pa_logger.setLevel(logging.WARNING)
 
-from indra.statements import Statement, Phosphorylation, Agent, Evidence
+from indra.statements import Statement, Phosphorylation, Agent, Evidence, \
+    stmts_from_json, Inhibition, Activation
 from indra.util.nested_dict import NestedDict
 from indra.tools import assemble_corpus as ac
 from indra.tests.util import needs_py3
@@ -27,6 +28,7 @@ from indra_db import util as db_util
 from indra_db import client as db_client
 from indra_db.preassembly import preassemble_db as pdb
 from indra_db.tests.util import get_pa_loaded_db, get_temp_db
+from indra_db.tests.db_building_util import DbBuilder
 
 from nose.plugins.attrib import attr
 
@@ -173,8 +175,11 @@ def _get_opa_input_stmts(db):
     stmt_nd = db_util.get_reading_stmt_dict(db, get_full_stmts=True)
     reading_stmts, _ =\
         db_util.get_filtered_rdg_stmts(stmt_nd, get_full_stmts=True)
-    db_stmts = db_client.get_pa_statements([db.RawStatements.reading_id.is_(None)],
-                                           preassembled=False, db=db)
+    db_stmt_jsons = db_client.get_raw_stmt_jsons(
+        [db.RawStatements.reading_id.is_(None)],
+        db=db
+    )
+    db_stmts = stmts_from_json(db_stmt_jsons.values())
     stmts = reading_stmts | set(db_stmts)
     print("Got %d statements for opa." % len(stmts))
     return stmts
@@ -353,6 +358,60 @@ def _check_statement_distillation(num_stmts):
     assert stmt_ids_p == stmt_ids
 
 
+def _generate_pa_sample_db():
+    db = get_temp_db(clear=True)
+
+    db_builder = DbBuilder(db)
+    db_builder.add_text_refs([
+        ('12345', 'PMC54321'),
+        ('24680', 'PMC08642'),
+        ('97531',)
+    ])
+    db_builder.add_text_content([
+        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
+        ['pubmed-abs', 'manuscripts'],
+        ['pubmed-ttl', 'pubmed-abs']
+    ])
+    db_builder.add_readings([
+        ['REACH', 'TRIPS'],
+        ['REACH', 'SPARSER'],
+        ['REACH', 'ISI'],
+        ['SPARSER'],
+        ['REACH', 'SPARSER'],
+        ['SPARSER', 'TRIPS', 'REACH'],
+        ['REACH', 'EIDOS']
+    ])
+
+    mek = Agent('MEK', db_refs={'FPLX': 'MEK'})
+    erk = Agent('ERK', db_refs={'FPLX': 'ERK'})
+    raf = Agent('RAF', db_refs={'FPLX': 'RAF'})
+    ras = Agent('RAS', db_refs={'FPLX': 'RAS'})
+    simvastatin = Agent('simvastatin', db_refs={'CHEBI': 'CHEBI:9150'})
+    db_builder.add_raw_reading_statements([
+        [],  # reach pubmed title
+        [Phosphorylation(mek, erk, 'T', '124')],  # trips pubmed title
+        [Phosphorylation(mek, erk), Inhibition(erk, ras)],  # reach pubmed-abs
+        [],  # sparser pubmed-abs
+        [],  # reach pmc_oa
+        [],  # ISI pmc_oa
+        [],  # sparser pubmed-abs
+        [],  # reach manuscripts
+        [],  # sparser manuscripts
+        [],  # sparser pubmed title
+        [],  # TRIPS pubmed title
+        [],  # reach pubmed title
+        [],  # reach pubmed abs
+        [],  # eidos pubmed abs
+    ])
+    db_builder.add_databases(['pc', 'tas', 'bel'])
+    db_builder.add_raw_database_statements([
+        [Activation(mek, raf), Inhibition(erk, ras), Phosphorylation(mek, erk)],
+        [Inhibition(simvastatin, raf)],
+        [Phosphorylation(mek, erk, 'T', '124')]
+    ])
+    return db
+
+
 @needs_py3
 def _check_preassembly_with_database(num_stmts, batch_size):
     db = get_pa_loaded_db(num_stmts)
@@ -394,7 +453,8 @@ def _check_preassembly_with_database(num_stmts, batch_size):
         "Found self-support in the database."
 
     # Try to get all the preassembled statements from the table.
-    pa_stmts = db_client.get_pa_statements(db=db)
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
     assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
                                                 len(pa_stmt_list))
 
@@ -423,7 +483,8 @@ def _check_db_pa_supplement(num_stmts, batch_size, split=0.8):
     end = datetime.now()
     print("Duration of incremental update:", end-start)
 
-    pa_stmts = db_client.get_pa_statements(db=db)
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
     _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
     return
 

@@ -44,6 +44,7 @@ def _construct_database():
 
     mek = Agent('MEK', db_refs={'FPLX': 'MEK'})
     erk = Agent('ERK', db_refs={'FPLX': 'ERK'})
+    raf = Agent('RAF', db_refs={'FPLX': 'RAF'})
 
     def ev(ridx, pmid=None):
         if pmid is None:
@@ -63,7 +64,8 @@ def _construct_database():
             Activation(mek, erk, evidence=[ev(2)])
         ],
         3: [
-            Complex([mek, erk], evidence=[ev(3, None)])
+            Complex([mek, erk], evidence=[ev(3, None)]),
+            Complex([raf, erk], evidence=[ev(3, None)])
         ]
     }
 
@@ -89,7 +91,8 @@ def _construct_database():
     pa_statements_pre = [
         (Phosphorylation(mek, erk), [raw_stmts[0], raw_stmts[2]]),
         (Complex([mek, erk]), [raw_stmts[1], raw_stmts[4]]),
-        (Activation(mek, erk), [raw_stmts[3]])
+        (Activation(mek, erk), [raw_stmts[3]]),
+        (Complex([raf, erk]), [raw_stmts[5]])
     ]
     pa_stmts = []
     raw_unique_links = []
@@ -119,14 +122,14 @@ def _construct_database():
 def test_get_raw_statements_all():
     db = _construct_database()
     res = get_raw_stmt_jsons(db=db)
-    assert len(res) == 5
+    assert len(res) == 6
 
 
 def test_raw_statement_retrieval_from_agents_type_only():
     db = _construct_database()
     res = get_raw_stmt_jsons_from_agents(stmt_type='Complex', db=db)
     assert len(res) > 0
-    assert len(res) < 5
+    assert len(res) < 6
     assert all(sj['type'] == 'Complex' for sj in res.values())
 
 
@@ -134,7 +137,7 @@ def test_raw_statement_retrieval_from_agents_mek():
     db = _construct_database()
     res = get_raw_stmt_jsons_from_agents(agents=[(None, 'MEK', 'FPLX')], db=db)
     assert len(res) > 0
-    assert len(res) < 5
+    assert len(res) < 6
     assert all('MEK' in json.dumps(sj) for sj in res.values())
 
 
@@ -144,7 +147,7 @@ def test_raw_statement_retrieval_generic():
                               db.Reading.id == db.RawStatements.reading_id],
                              db=db)
     assert len(res) > 0
-    assert len(res) < 5
+    assert len(res) < 6
     assert all(sj['evidence'][0]['source_api'] == 'reach'
                for sj in res.values())
 
@@ -152,11 +155,11 @@ def test_raw_statement_retrieval_generic():
 def test_pa_statement_retrieval_generic():
     db = _construct_database()
     res = get_pa_stmt_jsons(db=db)
-    assert len(res) == 3
+    assert len(res) == 4
 
 
 def test_pa_statement_retrieval_by_type():
     db = _construct_database()
     res = get_pa_stmt_jsons([db.PAStatements.type == 'Complex'], db=db)
-    assert len(res) == 1
+    assert len(res) == 2
     assert all(j['stmt']['type'] == 'Complex' for j in res.values())

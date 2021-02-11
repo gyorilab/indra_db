@@ -68,7 +68,7 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
     )
     if limit:
         core_q = core_q.limit(limit)
-    core_sq = core_q.subquery.alias('core')
+    core_sq = core_q.subquery().alias('core')
 
     # Construct the layer of the query that gathers agent info.
     agent_tuple = (cast(db.PAAgents.ag_num, String),

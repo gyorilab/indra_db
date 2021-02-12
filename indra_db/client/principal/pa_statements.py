@@ -44,10 +44,10 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
         ).outerjoin(
             db.Reading,
             db.Reading.id == db.RawStatements.reading_id
-        ).join(
+        ).outerjoin(
             db.TextContent,
             db.TextContent.id == db.Reading.text_content_id
-        ).join(
+        ).outerjoin(
             db.TextRef,
             db.TextRef.id == db.TextContent.text_ref_id
         )

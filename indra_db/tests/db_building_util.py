@@ -45,7 +45,7 @@ class DbBuilder:
                     kwargs = {'source': src, 'format': 'xml',
                               'text_type': 'fulltext'}
                 kwargs.update(basic_kwargs)
-                self.text_content.append(self.db.TextContent(*kwargs))
+                self.text_content.append(self.db.TextContent(**kwargs))
         self.db.session.add_all(self.text_content)
         self.db.session.commit()
 
@@ -55,9 +55,11 @@ class DbBuilder:
         assert self.readings is None
         self.readings = []
         for i, rdr_list in enumerate(rdr_specs):
-            basic_kwargs = {'text_content_id': self.text_content[i].id}
+            basic_kwargs = {'text_content_id': self.text_content[i].id,
+                            'batch_id': 0}
             for rdr in rdr_list:
-                kwargs = {'reader': rdr}
+                kwargs = {'reader': rdr,
+                          'reader_version': reader_versions[rdr.lower()][-1]}
                 if rdr == 'SPARSER':
                     kwargs['format'] = 'json'
                 else:

@@ -1,6 +1,10 @@
 __all__ = ['DbBuilder']
 
+import json
+
 from indra.statements import Evidence
+from indra_db.databases import reader_versions
+from indra_db.reading.read_db import DatabaseStatementData
 from indra_db.util import insert_raw_agents
 
 
@@ -77,13 +81,22 @@ class DbBuilder:
             else:
                 pmid = self.readings[ridx].text_content.text_ref.pmid
 
-            def ev():
+            def ev(stmt, detail=None):
+                reading = self.readings[ridx]
+                text = f"{reading.text_content.source} from trid " \
+                       f"{reading.text_content.text_ref_id} indicates " \
+                       f"{type(stmt)}: {stmt.agent_list()}."
+                if detail is not None:
+                    text = detail + text
                 return Evidence(self.readings[ridx].reader.lower(), pmid=pmid,
-                                text="This is evidence text.")
+                                text=text)
 
-            src_hash = ev().get_source_hash()
             for stmt in stmt_list:
-                stmt.evidence.append(ev())
+                if isinstance(stmt, tuple):
+                    stmt, detail = stmt
+                else:
+                    detail = None
+                stmt.evidence.append(ev(stmt, detail))
                 raw_json = stmt.to_json()
                 db_rs = self.db.RawStatements(
                     reading_id=rid,
@@ -91,7 +104,8 @@ class DbBuilder:
                     type=raw_json['type'],
                     uuid=stmt.uuid,
                     batch_id=0,
-                    source_hash=src_hash,
+                    text_hash=DatabaseStatementData(stmt)._get_text_hash(),
+                    source_hash=stmt.evidence[0].get_source_hash(),
                     mk_hash=stmt.get_hash(),
                     indra_version="test"
                 )
@@ -101,7 +115,8 @@ class DbBuilder:
         self.db.session.commit()
 
         insert_raw_agents(self.db, 0,
-                          [s for slist in stmt_lists for s in slist])
+                          [s[0] if isinstance(s, tuple) else s
+                           for slist in stmt_lists for s in slist])
 
     def add_databases(self, db_names):
         """Add database refs into the database."""
@@ -129,7 +144,7 @@ class DbBuilder:
                 src_hash = ev.get_source_hash()
                 raw_json = stmt.to_json()
                 db_rs = self.db.RawStatements(
-                    db_info_id = db_info.id,
+                    db_info_id=db_info.id,
                     json=json.dumps(raw_json).encode('utf-8'),
                     type=raw_json['type'],
                     uuid=stmt.uuid,

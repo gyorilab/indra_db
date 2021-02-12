@@ -23,7 +23,6 @@ from indra.statements import Statement, Phosphorylation, Agent, Evidence, \
     stmts_from_json, Inhibition, Activation, Complex
 from indra.util.nested_dict import NestedDict
 from indra.tools import assemble_corpus as ac
-from indra.tests.util import needs_py3
 
 from indra_db import util as db_util
 from indra_db import client as db_client
@@ -344,7 +343,6 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
 # Generic test definitions
 # =============================================================================
 
-@needs_py3
 def _check_statement_distillation(num_stmts):
     db = get_pa_loaded_db(num_stmts)
     assert db is not None, "Test was broken. Got None instead of db insance."
@@ -423,9 +421,8 @@ def _generate_pa_sample_db():
     return db
 
 
-@needs_py3
-def _check_preassembly_with_database(num_stmts, batch_size):
-    db = get_pa_loaded_db(num_stmts)
+def _check_preassembly_with_database(batch_size):
+    db = _generate_pa_sample_db()
 
     # Now test the set of preassembled (pa) statements from the database
     # against what we get from old-fashioned preassembly (opa).
@@ -486,7 +483,6 @@ def _check_preassembly_with_database(num_stmts, batch_size):
     return
 
 
-@needs_py3
 def _check_db_pa_supplement(num_stmts, batch_size, split=0.8):
     preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True)
     db = get_pa_loaded_db(num_stmts, split=split, pam=preassembler)
@@ -678,7 +674,7 @@ def test_lazy_copier_update():
 
 @attr('nonpublic')
 def test_db_preassembly_small():
-    _check_preassembly_with_database(400, 37)
+    _check_preassembly_with_database(3)
 
 
 # @attr('nonpublic', 'slow')

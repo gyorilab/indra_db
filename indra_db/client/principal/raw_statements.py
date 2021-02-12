@@ -155,10 +155,10 @@ def get_raw_stmt_jsons(clauses=None, db=None, max_stmts=None, offset=None):
     ).outerjoin(
         db.Reading,
         db.Reading.id == db.RawStatements.reading_id
-    ).join(
+    ).outerjoin(
         db.TextContent,
         db.TextContent.id == db.Reading.text_content_id
-    ).join(
+    ).outerjoin(
         db.TextRef,
         db.TextRef.id == db.TextContent.text_ref_id
     )
@@ -172,7 +172,8 @@ def get_raw_stmt_jsons(clauses=None, db=None, max_stmts=None, offset=None):
     raw_stmt_jsons = {}
     for sid, json_bytes, rid, tcid, tr in q.all():
         raw_j = json.loads(json_bytes)
-        _fix_evidence(raw_j['evidence'][0], rid, tcid, tr.get_ref_dict())
+        if rid is not None:
+            _fix_evidence(raw_j['evidence'][0], rid, tcid, tr.get_ref_dict())
         raw_stmt_jsons[sid] = raw_j
 
     return raw_stmt_jsons

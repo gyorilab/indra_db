@@ -19,7 +19,7 @@ pa_logger = logging.getLogger('preassembler')
 pa_logger.setLevel(logging.WARNING)
 
 from indra.statements import Statement, Phosphorylation, Agent, Evidence, \
-    stmts_from_json, Inhibition, Activation
+    stmts_from_json, Inhibition, Activation, Complex
 from indra.util.nested_dict import NestedDict
 from indra.tools import assemble_corpus as ac
 from indra.tests.util import needs_py3
@@ -181,7 +181,7 @@ def _get_opa_input_stmts(db):
     )
     db_stmts = stmts_from_json(db_stmt_jsons.values())
     stmts = reading_stmts | set(db_stmts)
-    print("Got %d statements for opa." % len(stmts))
+    print("Got %d statements for vanilla preassembly." % len(stmts))
     return stmts
 
 
@@ -382,22 +382,30 @@ def _generate_pa_sample_db():
         ['REACH', 'EIDOS']
     ])
 
-    mek = Agent('MEK', db_refs={'FPLX': 'MEK'})
-    erk = Agent('ERK', db_refs={'FPLX': 'ERK'})
-    raf = Agent('RAF', db_refs={'FPLX': 'RAF'})
-    ras = Agent('RAS', db_refs={'FPLX': 'RAS'})
-    simvastatin = Agent('simvastatin', db_refs={'CHEBI': 'CHEBI:9150'})
+    mek = Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'MEK'})
+    map2k1 = Agent('MAP2K1', db_refs={'HGNC': '6840', 'TEXT': 'MAP2K1'})
+    map2k1_mg = Agent('MAP2K1', db_refs={'HGNC': '680', 'TEXT': 'MAP2K'})
+    erk = Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'mapk'})
+    mapk1 = Agent('MAPK1', db_refs={'HGNC': '6871', 'TEXT': 'mapk1'})
+    raf = Agent('RAF', db_refs={'FPLX': 'RAF', 'TEXT': 'raf'})
+    ras = Agent('RAS', db_refs={'FPLX': 'RAS', 'TEXT': 'RAS'})
+    simvastatin = Agent('simvastatin',
+                        db_refs={'CHEBI': 'CHEBI:9150', 'TEXT': 'simvastatin'})
+    simvastatin_ng = Agent('simvastatin', db_refs={'TEXT': 'Simvastatin'})
     db_builder.add_raw_reading_statements([
-        [],  # reach pubmed title
+        [Phosphorylation(mek, erk)],  # reach pubmed title
         [Phosphorylation(mek, erk, 'T', '124')],  # trips pubmed title
-        [Phosphorylation(mek, erk), Inhibition(erk, ras)],  # reach pubmed-abs
-        [],  # sparser pubmed-abs
+        [Phosphorylation(mek, erk), Inhibition(erk, ras),
+         (Phosphorylation(mek, erk), 'in the body')],  # reach pubmed-abs
+        [Complex([mek, erk]), Complex([erk, ras]),
+         (Phosphorylation(None, erk), 'In the body')],  # sparser pubmed-abs
         [],  # reach pmc_oa
         [],  # ISI pmc_oa
-        [],  # sparser pubmed-abs
+        [Phosphorylation(map2k1, mapk1)],  # sparser pubmed-abs
         [],  # reach manuscripts
         [],  # sparser manuscripts
-        [],  # sparser pubmed title
+        [Inhibition(simvastatin_ng, raf),
+         Activation(map2k1_mg, erk)],  # sparser pubmed title
         [],  # TRIPS pubmed title
         [],  # reach pubmed title
         [],  # reach pubmed abs

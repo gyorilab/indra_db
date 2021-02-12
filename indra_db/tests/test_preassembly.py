@@ -1,5 +1,6 @@
 import os
 import json
+import pickle
 import random
 import logging
 from datetime import datetime
@@ -32,10 +33,12 @@ from indra_db.tests.db_building_util import DbBuilder
 
 from nose.plugins.attrib import attr
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+TEST_ONTOLOGY = os.path.join(HERE, 'test_resources/test_ontology.pkl')
 MAX_NUM_STMTS = 11721
 BATCH_SIZE = 2017
 STMTS = None
+
 
 # ==============================================================================
 # Support classes and functions
@@ -433,9 +436,14 @@ def _check_preassembly_with_database(num_stmts, batch_size):
     all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
     assert len(raw_stmt_list)
 
+    # Load the test ontology.
+    with open(TEST_ONTOLOGY, 'rb') as f:
+        test_ontology = pickle.load(f)
+
     # Run the preassembly initialization.
     start = datetime.now()
-    preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True)
+    preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True,
+                                      ontology=test_ontology)
     preassembler.create_corpus(db)
     end = datetime.now()
     print("Duration:", end-start)

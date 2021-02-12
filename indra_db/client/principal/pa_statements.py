@@ -126,6 +126,10 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
 
         # Parse the JSON bytes into JSON.
         stmt_json = json.loads(sj)
+        if 'supports' not in stmt_json:
+            stmt_json['supports'] = []
+        if 'supported_by' not in stmt_json:
+            stmt_json['supported_by'] = []
 
         # Load the evidence.
         if rjs is not None:
@@ -145,11 +149,11 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
         # Resolve supports supported-by, as much as possible.
         stmts_by_hash[h] = stmt_json
         for h in (h for h in supping if h in stmts_by_hash):
-            stmt_json['supports'].append(stmts_by_hash[h])
-            stmts_by_hash[h]['supported_by'].append(stmt_json)
+            stmt_json['supports'].append(stmts_by_hash[h]['id'])
+            stmts_by_hash[h]['supported_by'].append(stmt_json['id'])
         for h in (h for h in supped if h in stmts_by_hash):
-            stmt_json['supported_by'].append(stmts_by_hash[h])
-            stmts_by_hash[h]['supports'].append(stmt_json)
+            stmt_json['supported_by'].append(stmts_by_hash[h]['id'])
+            stmts_by_hash[h]['supports'].append(stmt_json['id'])
 
         # Put it together in a dictionary.
         result_dict = {

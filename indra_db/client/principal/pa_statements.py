@@ -130,12 +130,13 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
         # Load the evidence.
         if rjs is not None:
             for rj, text_ref_values in zip(rjs, text_refs):
-                tr_dict = {lbl: typ(val) for lbl, typ, val
+                tr_dict = {lbl.upper(): None if val == "None" else typ(val)
+                           for lbl, typ, val
                            in zip(text_ref_labels, text_ref_types,
                                   text_ref_values)}
                 raw_json = json.loads(rj)
                 ev = raw_json['evidence'][0]
-                _fix_evidence(ev, tr_dict.pop('rid'), tr_dict.pop('tcid'),
+                _fix_evidence(ev, tr_dict.pop('RID'), tr_dict.pop('TCID'),
                               tr_dict)
                 if 'evidence' not in stmt_json:
                     stmt_json['evidence'] = []

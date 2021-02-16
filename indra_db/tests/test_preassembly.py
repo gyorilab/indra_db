@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from time import sleep
 
-
 gm_logger = logging.getLogger('grounding_mapper')
 gm_logger.setLevel(logging.WARNING)
 

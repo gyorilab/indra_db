@@ -168,7 +168,8 @@ def _do_old_fashioned_preassembly(stmts):
     grounded_stmts = ac.map_grounding(stmts, use_adeft=True,
                                       gilda_mode='local')
     ms_stmts = ac.map_sequence(grounded_stmts, use_cache=True)
-    opa_stmts = ac.run_preassembly(ms_stmts, return_toplevel=False)
+    opa_stmts = ac.run_preassembly(ms_stmts, return_toplevel=False,
+                                   ontology=_get_test_ontology())
     return opa_stmts
 
 
@@ -411,13 +412,20 @@ def _generate_pa_sample_db():
         [],  # reach pubmed abs
         [],  # eidos pubmed abs
     ])
-    db_builder.add_databases(['pc', 'tas', 'bel'])
+    db_builder.add_databases(['biopax', 'tas', 'bel'])
     db_builder.add_raw_database_statements([
         [Activation(mek, raf), Inhibition(erk, ras), Phosphorylation(mek, erk)],
         [Inhibition(simvastatin, raf)],
         [Phosphorylation(mek, erk, 'T', '124')]
     ])
     return db
+
+
+def _get_test_ontology():
+    # Load the test ontology.
+    with open(TEST_ONTOLOGY, 'rb') as f:
+        test_ontology = pickle.load(f)
+    return test_ontology
 
 
 def _check_preassembly_with_database(batch_size):
@@ -432,14 +440,10 @@ def _check_preassembly_with_database(batch_size):
     all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
     assert len(raw_stmt_list)
 
-    # Load the test ontology.
-    with open(TEST_ONTOLOGY, 'rb') as f:
-        test_ontology = pickle.load(f)
-
     # Run the preassembly initialization.
     start = datetime.now()
     preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True,
-                                      ontology=test_ontology)
+                                      ontology=_get_test_ontology())
     preassembler.create_corpus(db)
     end = datetime.now()
     print("Duration:", end-start)

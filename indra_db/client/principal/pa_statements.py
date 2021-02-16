@@ -149,12 +149,12 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
 
         # Resolve supports supported-by, as much as possible.
         stmts_by_hash[h] = stmt_json
-        for supping_h in (h for h in supping if h in stmts_by_hash):
-            stmt_json['supports'].append(stmts_by_hash[supping_h]['id'])
-            stmts_by_hash[supping_h]['supported_by'].append(stmt_json['id'])
         for supped_h in (h for h in supped if h in stmts_by_hash):
-            stmt_json['supported_by'].append(stmts_by_hash[supped_h]['id'])
-            stmts_by_hash[supped_h]['supports'].append(stmt_json['id'])
+            stmt_json['supports'].append(stmts_by_hash[supped_h]['id'])
+            stmts_by_hash[supped_h]['supported_by'].append(stmt_json['id'])
+        for supping_h in (h for h in supping if h in stmts_by_hash):
+            stmt_json['supported_by'].append(stmts_by_hash[supping_h]['id'])
+            stmts_by_hash[supping_h]['supports'].append(stmt_json['id'])
 
         # Put it together in a dictionary.
         result_dict = {

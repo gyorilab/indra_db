@@ -401,6 +401,43 @@ def _generate_pa_sample_db():
     return db
 
 
+class RefLoadedDb:
+    def __init__(self):
+        self.db = get_temp_db(clear=True)
+
+        N = int(10**5)
+        S = int(10**8)
+        self.fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
+        self.fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
+                        for i in range(N)}
+
+        self.expected = {id: pmid for id, pmid in self.fake_pmids_a}
+        for id, pmid in self.fake_pmids_b:
+            self.expected[id] = pmid
+
+        start = datetime.now()
+        self.db.copy('text_ref', self.fake_pmids_a, ('id', 'pmid'))
+        print("First load:", datetime.now() - start)
+
+        try:
+            self.db.copy('text_ref', self.fake_pmids_b, ('id', 'pmid'))
+            assert False, "Vanilla copy succeeded when it should have failed."
+        except Exception as e:
+            self.db._conn.rollback()
+            pass
+
+    def check_result(self):
+        refs = self.db.select_all([self.db.TextRef.id, self.db.TextRef.pmid])
+        result = {id: pmid for id, pmid in refs}
+        assert result.keys() == self.expected.keys()
+        passed = True
+        for id, pmid in self.expected.items():
+            if result[id] != pmid:
+                print(id, pmid)
+                passed = False
+        assert passed, "Result did not match expected."
+
+
 def _get_test_ontology():
     # Load the test ontology.
     with open(TEST_ONTOLOGY, 'rb') as f:
@@ -438,54 +475,26 @@ def test_distillation_on_curated_set():
 
 @attr('nonpublic')
 def test_db_lazy_insert():
-    db = get_temp_db(clear=True)
-
-    N = int(10**5)
-    S = int(10**8)
-    fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
-    fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
-                    for i in range(N)}
-
-    expected = {id: pmid for id, pmid in fake_pmids_b}
-    for id, pmid in fake_pmids_a:
-        expected[id] = pmid
-
-    start = datetime.now()
-    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
-    print("First load:", datetime.now() - start)
-
-    try:
-        db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
-        assert False, "Vanilla copy succeeded when it should have failed."
-    except Exception as e:
-        db._conn.rollback()
-        pass
+    rldb = RefLoadedDb()
 
     # Try adding more text refs lazily. Overlap is guaranteed.
     start = datetime.now()
-    db.copy_lazy('text_ref', fake_pmids_b, ('id', 'pmid'))
+    rldb.db.copy_lazy('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
     print("Lazy copy:", datetime.now() - start)
 
-    refs = db.select_all([db.TextRef.id, db.TextRef.pmid])
-    result = {id: pmid for id, pmid in refs}
-    assert result.keys() == expected.keys()
-    passed = True
-    for id, pmid in expected.items():
-        if result[id] != pmid:
-            print(id, pmid)
-            passed = False
-    assert passed, "Result did not match expected."
+    rldb.check_result()
 
     # As a benchmark, see how long this takes the "old fashioned" way.
-    db._clear(force=True)
+    rldb.db._clear(force=True)
     start = datetime.now()
-    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
+    rldb.db.copy('text_ref', rldb.fake_pmids_a, ('id', 'pmid'))
     print('Second load:', datetime.now() - start)
 
     start = datetime.now()
-    current_ids = {trid for trid, in db.select_all(db.TextRef.id)}
-    clean_fake_pmids_b = {t for t in fake_pmids_b if t[0] not in current_ids}
-    db.copy('text_ref', clean_fake_pmids_b, ('id', 'pmid'))
+    current_ids = {trid for trid, in rldb.db.select_all(rldb.db.TextRef.id)}
+    clean_fake_pmids_b = {t for t in rldb.fake_pmids_b
+                          if t[0] not in current_ids}
+    rldb.db.copy('text_ref', clean_fake_pmids_b, ('id', 'pmid'))
     print('Old fashioned copy:', datetime.now() - start)
     return
 
@@ -525,43 +534,14 @@ def test_lazy_copier_unique_constraints():
 
 @attr('nonpublic')
 def test_lazy_copier_update():
-    db = get_temp_db(clear=True)
-
-    N = int(10**5)
-    S = int(10**8)
-    fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
-    fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
-                    for i in range(N)}
-
-    expected = {id: pmid for id, pmid in fake_pmids_a}
-    for id, pmid in fake_pmids_b:
-        expected[id] = pmid
-
-    start = datetime.now()
-    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
-    print("First load:", datetime.now() - start)
-
-    try:
-        db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
-        assert False, "Vanilla copy succeeded when it should have failed."
-    except Exception as e:
-        db._conn.rollback()
-        pass
+    rldb = RefLoadedDb()
 
     # Try adding more text refs lazily. Overlap is guaranteed.
     start = datetime.now()
-    db.copy_push('text_ref', fake_pmids_b, ('id', 'pmid'))
+    rldb.db.copy_push('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
     print("Lazy copy:", datetime.now() - start)
-
-    refs = db.select_all([db.TextRef.id, db.TextRef.pmid])
-    result = {id: pmid for id, pmid in refs}
-    assert result.keys() == expected.keys()
-    passed = True
-    for id, pmid in expected.items():
-        if result[id] != pmid:
-            print(id, pmid)
-            passed = False
-    assert passed, "Result did not match expected."
+    
+    rldb.check_result()
 
 
 @attr('nonpublic')

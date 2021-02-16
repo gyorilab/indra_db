@@ -87,9 +87,9 @@ class DbBuilder:
                 reading = self.readings[ridx]
                 text = f"{reading.text_content.source} from trid " \
                        f"{reading.text_content.text_ref_id} indicates " \
-                       f"{type(stmt)}: {stmt.agent_list()}."
+                       f"{type(stmt).__name__}: {stmt.agent_list()}."
                 if detail is not None:
-                    text = detail + text
+                    text = f"{detail} {text}"
                 return Evidence(self.readings[ridx].reader.lower(), pmid=pmid,
                                 text=text)
 

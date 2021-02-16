@@ -339,26 +339,6 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
         print('='*100)
 
 
-# =============================================================================
-# Generic test definitions
-# =============================================================================
-
-def _check_statement_distillation(num_stmts):
-    db = get_pa_loaded_db(num_stmts)
-    assert db is not None, "Test was broken. Got None instead of db insance."
-    stmts = db_util.distill_stmts(db, get_full_stmts=True)
-    assert len(stmts), "Got zero statements."
-    assert isinstance(list(stmts)[0], Statement), type(list(stmts)[0])
-    stmt_ids = db_util.distill_stmts(db)
-    assert len(stmts) == len(stmt_ids), \
-        "stmts: %d, stmt_ids: %d" % (len(stmts), len(stmt_ids))
-    assert isinstance(list(stmt_ids)[0], int), type(list(stmt_ids)[0])
-    stmts_p = db_util.distill_stmts(db)
-    assert len(stmts_p) == len(stmt_ids)
-    stmt_ids_p = db_util.distill_stmts(db)
-    assert stmt_ids_p == stmt_ids
-
-
 def _generate_pa_sample_db():
     db = get_temp_db(clear=True)
 
@@ -428,84 +408,8 @@ def _get_test_ontology():
     return test_ontology
 
 
-def _check_preassembly_with_database(batch_size):
-    db = _generate_pa_sample_db()
-
-    # Now test the set of preassembled (pa) statements from the database
-    # against what we get from old-fashioned preassembly (opa).
-    opa_inp_stmts = _get_opa_input_stmts(db)
-
-    # Get the set of raw statements.
-    raw_stmt_list = db.select_all(db.RawStatements)
-    all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
-    assert len(raw_stmt_list)
-
-    # Run the preassembly initialization.
-    start = datetime.now()
-    preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True,
-                                      ontology=_get_test_ontology())
-    preassembler.create_corpus(db)
-    end = datetime.now()
-    print("Duration:", end-start)
-
-    # Make sure the number of pa statements is within reasonable bounds.
-    pa_stmt_list = db.select_all(db.PAStatements)
-    assert 0 < len(pa_stmt_list) < len(raw_stmt_list)
-
-    # Check the evidence links.
-    raw_unique_link_list = db.select_all(db.RawUniqueLinks)
-    assert len(raw_unique_link_list)
-    all_link_ids = {ru.raw_stmt_id for ru in raw_unique_link_list}
-    all_link_mk_hashes = {ru.pa_stmt_mk_hash for ru in raw_unique_link_list}
-    assert len(all_link_ids - all_raw_ids) is 0
-    assert all([pa_stmt.mk_hash in all_link_mk_hashes
-                for pa_stmt in pa_stmt_list])
-
-    # Check the support links.
-    sup_links = db.select_all([db.PASupportLinks.supporting_mk_hash,
-                               db.PASupportLinks.supported_mk_hash])
-    assert sup_links
-    assert not any([l[0] == l[1] for l in sup_links]),\
-        "Found self-support in the database."
-
-    # Try to get all the preassembled statements from the table.
-    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
-    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
-    assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
-                                                len(pa_stmt_list))
-
-    self_supports = {
-        s.get_hash(): s.get_hash() in {s_.get_hash()
-                                       for s_ in s.supported_by + s.supports}
-        for s in pa_stmts
-        }
-    if any(self_supports.values()):
-        assert False, "Found self-support in constructed pa statement objects."
-
-    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
-    return
-
-
-def _check_db_pa_supplement(num_stmts, batch_size, split=0.8):
-    preassembler = pdb.DbPreassembler(batch_size=batch_size, print_logs=True)
-    db = get_pa_loaded_db(num_stmts, split=split, pam=preassembler)
-    opa_inp_stmts = _get_opa_input_stmts(db)
-    start = datetime.now()
-    print('sleeping...')
-    sleep(5)
-    print("Beginning supplement...")
-    preassembler.supplement_corpus(db)
-    end = datetime.now()
-    print("Duration of incremental update:", end-start)
-
-    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
-    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
-    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
-    return
-
-
 # ==============================================================================
-# Specific Tests
+# Tests
 # ==============================================================================
 
 
@@ -530,21 +434,6 @@ def test_distillation_on_curated_set():
                                        linked_sids=ev_link_sids)
     assert len(filtered_id_set) == len(filtered_set), \
         (len(filtered_set), len(filtered_id_set))
-
-
-@attr('nonpublic')
-def test_statement_distillation_small():
-    _check_statement_distillation(1000)
-
-
-@attr('nonpublic', 'slow')
-def test_statement_distillation_large():
-    _check_statement_distillation(11721)
-
-
-# @attr('nonpublic', 'slow')
-# def test_statement_distillation_extra_large():
-#     _check_statement_distillation(1001721)
 
 
 @attr('nonpublic')
@@ -677,39 +566,77 @@ def test_lazy_copier_update():
 
 @attr('nonpublic')
 def test_db_preassembly_small():
-    _check_preassembly_with_database(3)
+    db = _generate_pa_sample_db()
 
+    # Now test the set of preassembled (pa) statements from the database
+    # against what we get from old-fashioned preassembly (opa).
+    opa_inp_stmts = _get_opa_input_stmts(db)
 
-# @attr('nonpublic', 'slow')
-# def test_db_preassembly_large():
-#     _check_preassembly_with_database(11721, 2017)
+    # Get the set of raw statements.
+    raw_stmt_list = db.select_all(db.RawStatements)
+    all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
+    assert len(raw_stmt_list)
 
+    # Run the preassembly initialization.
+    start = datetime.now()
+    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True,
+                                      ontology=_get_test_ontology())
+    preassembler.create_corpus(db)
+    end = datetime.now()
+    print("Duration:", end-start)
 
-# @attr('nonpublic', 'slow')
-# def test_db_preassembly_extra_large():
-#     _check_preassembly_with_database(101721, 20017)
+    # Make sure the number of pa statements is within reasonable bounds.
+    pa_stmt_list = db.select_all(db.PAStatements)
+    assert 0 < len(pa_stmt_list) < len(raw_stmt_list)
 
+    # Check the evidence links.
+    raw_unique_link_list = db.select_all(db.RawUniqueLinks)
+    assert len(raw_unique_link_list)
+    all_link_ids = {ru.raw_stmt_id for ru in raw_unique_link_list}
+    all_link_mk_hashes = {ru.pa_stmt_mk_hash for ru in raw_unique_link_list}
+    assert len(all_link_ids - all_raw_ids) is 0
+    assert all([pa_stmt.mk_hash in all_link_mk_hashes
+                for pa_stmt in pa_stmt_list])
 
-# @attr('nonpublic', 'slow')
-# def test_db_preassembly_supremely_large():
-#     _check_preassembly_with_database(1001721, 200017)
+    # Check the support links.
+    sup_links = db.select_all([db.PASupportLinks.supporting_mk_hash,
+                               db.PASupportLinks.supported_mk_hash])
+    assert sup_links
+    assert not any([l[0] == l[1] for l in sup_links]), \
+        "Found self-support in the database."
+
+    # Try to get all the preassembled statements from the table.
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
+                                                len(pa_stmt_list))
+
+    self_supports = {
+        s.get_hash(): s.get_hash() in {s_.get_hash()
+                                       for s_ in s.supported_by + s.supports}
+        for s in pa_stmts
+    }
+    if any(self_supports.values()):
+        assert False, "Found self-support in constructed pa statement objects."
+
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
+    return
 
 
 @attr('nonpublic')
 def test_db_incremental_preassembly_small():
-    _check_db_pa_supplement(400, 43)
+    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True)
+    db = _generate_pa_sample_db()
+    opa_inp_stmts = _get_opa_input_stmts(db)
+    start = datetime.now()
+    print('sleeping...')
+    sleep(5)
+    print("Beginning supplement...")
+    preassembler.supplement_corpus(db)
+    end = datetime.now()
+    print("Duration of incremental update:", end-start)
 
-
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_large():
-#     _check_db_pa_supplement(11721, 2017)
-
-
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_very_large():
-#     _check_db_pa_supplement(100000, 20000)
-
-
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_1M():
-#     _check_db_pa_supplement(1000000, 200000)
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
+    return

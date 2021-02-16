@@ -199,7 +199,7 @@ def _fix_evidence(ev, rid, tcid, tr_dict):
     ev['text_refs'] = tr_dict
     ev['text_refs']['TCID'] = tcid
     ev['text_refs']['READING_ID'] = rid
-    if 'pmid' in tr_dict:
-        ev['pmid'] = tr_dict['pmid']
+    if 'PMID' in tr_dict:
+        ev['pmid'] = tr_dict['PMID']
     return
 

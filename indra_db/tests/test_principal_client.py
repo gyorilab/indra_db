@@ -1,8 +1,7 @@
 import json
 
-from indra.statements import Agent, Phosphorylation, Complex, Activation
 from indra_db.client.principal import *
-from indra_db.util import insert_pa_agents
+from indra.statements import Agent, Phosphorylation, Complex, Activation
 
 from indra_db.tests.util import get_temp_db
 from indra_db.tests.db_building_util import DbBuilder
@@ -40,37 +39,12 @@ def _construct_database():
     db_builder.add_raw_database_statements([
         [Complex([raf, erk])]
     ])
-
-    raw_stmts = db_builder.raw_statements
-
-    pa_statements_pre = [
-        (Phosphorylation(mek, erk), [raw_stmts[0], raw_stmts[2]]),
-        (Complex([mek, erk]), [raw_stmts[1], raw_stmts[4]]),
-        (Activation(mek, erk), [raw_stmts[3]]),
-        (Complex([raf, erk]), [raw_stmts[5], raw_stmts[6]])
-    ]
-    pa_stmts = []
-    raw_unique_links = []
-    for pa_stmt, raw_stmt_list in pa_statements_pre:
-        pa_json = pa_stmt.to_json()
-        h = pa_stmt.get_hash()
-        for raw_stmt in raw_stmt_list:
-            raw_unique_links.append(
-                db.RawUniqueLinks(raw_stmt_id=raw_stmt.id, pa_stmt_mk_hash=h)
-            )
-        pa_stmts.append(
-            db.PAStatements(mk_hash=h, json=json.dumps(pa_json).encode('utf-8'),
-                            type=pa_json['type'], uuid=pa_stmt.uuid,
-                            matches_key=pa_stmt.matches_key(),
-                            indra_version='test')
-        )
-    db.session.add_all(pa_stmts)
-    db.session.commit()
-    db.session.add_all(raw_unique_links)
-    db.session.commit()
-
-    insert_pa_agents(db, [s for s, _ in pa_statements_pre])
-
+    db_builder.add_pa_statements([
+        (Phosphorylation(mek, erk), [0, 2]),
+        (Complex([mek, erk]), [1, 4]),
+        (Activation(mek, erk), [3]),
+        (Complex([raf, erk]), [5, 6])
+    ])
     return db
 
 

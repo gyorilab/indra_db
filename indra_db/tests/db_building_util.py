@@ -5,7 +5,7 @@ import json
 from indra.statements import Evidence
 from indra_db.databases import reader_versions
 from indra_db.reading.read_db import DatabaseStatementData
-from indra_db.util import insert_raw_agents
+from indra_db.util import insert_raw_agents, insert_pa_agents
 
 
 class DbBuilder:
@@ -133,6 +133,7 @@ class DbBuilder:
         self.db.session.commit()
 
     def add_raw_database_statements(self, stmt_lists):
+        """Add raw statementes that came from knowledge bases/databases."""
         assert self.databases is not None
         if self.raw_statements is None:
             self.raw_statements = []
@@ -163,4 +164,35 @@ class DbBuilder:
 
         insert_raw_agents(self.db, 1,
                           [s for slist in stmt_lists for s in slist])
+
+    def add_pa_statements(self, stmt_list):
+        """Add preassembled statements to the test database."""
+        pa_stmts = []
+        raw_unique_links = []
+        for pa_stmt, raw_stmt_idx_list in stmt_list:
+            pa_json = pa_stmt.to_json()
+            h = pa_stmt.get_hash()
+            for raw_stmt_idx in raw_stmt_idx_list:
+                raw_stmt = self.raw_statements[raw_stmt_idx]
+                raw_unique_links.append(
+                    self.db.RawUniqueLinks(raw_stmt_id=raw_stmt.id,
+                                           pa_stmt_mk_hash=h)
+                )
+            pa_stmts.append(
+                self.db.PAStatements(
+                    mk_hash=h,
+                    json=json.dumps(pa_json).encode('utf-8'),
+                    type=pa_json['type'],
+                    uuid=pa_stmt.uuid,
+                    matches_key=pa_stmt.matches_key(),
+                    indra_version='test'
+                )
+            )
+        self.db.session.add_all(pa_stmts)
+        self.db.session.commit()
+        self.db.session.add_all(raw_unique_links)
+        self.db.session.commit()
+
+        insert_pa_agents(self.db, [s for s, _ in stmt_list])
+
 

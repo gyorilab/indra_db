@@ -151,7 +151,7 @@ class DbPreassembler:
 
     def _init_cache(self, continuing):
         if self.s3_cache is None:
-            return
+            return datetime.utcnow()
 
         import boto3
         s3 = boto3.client('s3')

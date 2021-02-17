@@ -168,8 +168,19 @@ class DbBuilder:
     def add_pa_statements(self, stmt_list):
         """Add preassembled statements to the test database."""
         pa_stmts = []
+        pa_supp_links = []
         raw_unique_links = []
-        for pa_stmt, raw_stmt_idx_list in stmt_list:
+        for tpl in stmt_list:
+            if len(tpl) == 3:
+                pa_stmt, raw_stmt_idx_list, supports = tpl
+                for supp_idx in supports:
+                    pa_supp_links.append(self.db.PASupportLinks(
+                        supporting_mk_hash=pa_stmt.get_hash(),
+                        supported_mk_hash=stmt_list[supp_idx][0].get_hash()
+                    ))
+            else:
+                pa_stmt, raw_stmt_idx_list = tpl
+
             pa_json = pa_stmt.to_json()
             h = pa_stmt.get_hash()
             for raw_stmt_idx in raw_stmt_idx_list:
@@ -192,7 +203,9 @@ class DbBuilder:
         self.db.session.commit()
         self.db.session.add_all(raw_unique_links)
         self.db.session.commit()
+        self.db.session.add_all(pa_supp_links)
+        self.db.session.commit()
 
-        insert_pa_agents(self.db, [s for s, _ in stmt_list])
+        insert_pa_agents(self.db, [tpl[0] for tpl in stmt_list])
 
 

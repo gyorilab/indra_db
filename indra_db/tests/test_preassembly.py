@@ -19,7 +19,7 @@ pa_logger = logging.getLogger('preassembler')
 pa_logger.setLevel(logging.WARNING)
 
 from indra.statements import Statement, Phosphorylation, Agent, Evidence, \
-    stmts_from_json, Inhibition, Activation, Complex
+    stmts_from_json, Inhibition, Activation, Complex, IncreaseAmount
 from indra.util.nested_dict import NestedDict
 from indra.tools import assemble_corpus as ac
 
@@ -339,68 +339,6 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
         print('='*100)
 
 
-def _generate_pa_sample_db():
-    db = get_temp_db(clear=True)
-
-    db_builder = DbBuilder(db)
-    db_builder.add_text_refs([
-        ('12345', 'PMC54321'),
-        ('24680', 'PMC08642'),
-        ('97531',)
-    ])
-    db_builder.add_text_content([
-        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
-        ['pubmed-abs', 'manuscripts'],
-        ['pubmed-ttl', 'pubmed-abs']
-    ])
-    db_builder.add_readings([
-        ['REACH', 'TRIPS'],
-        ['REACH', 'SPARSER'],
-        ['REACH', 'ISI'],
-        ['SPARSER'],
-        ['REACH', 'SPARSER'],
-        ['SPARSER', 'TRIPS', 'REACH'],
-        ['REACH', 'EIDOS']
-    ])
-
-    mek = Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'MEK'})
-    map2k1 = Agent('MAP2K1', db_refs={'HGNC': '6840', 'TEXT': 'MAP2K1'})
-    map2k1_mg = Agent('MAP2K1', db_refs={'HGNC': '680', 'TEXT': 'MAP2K'})
-    erk = Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'mapk'})
-    mapk1 = Agent('MAPK1', db_refs={'HGNC': '6871', 'TEXT': 'mapk1'})
-    raf = Agent('RAF', db_refs={'FPLX': 'RAF', 'TEXT': 'raf'})
-    ras = Agent('RAS', db_refs={'FPLX': 'RAS', 'TEXT': 'RAS'})
-    simvastatin = Agent('simvastatin',
-                        db_refs={'CHEBI': 'CHEBI:9150', 'TEXT': 'simvastatin'})
-    simvastatin_ng = Agent('simvastatin', db_refs={'TEXT': 'Simvastatin'})
-    db_builder.add_raw_reading_statements([
-        [Phosphorylation(mek, erk)],  # reach pubmed title
-        [Phosphorylation(mek, erk, 'T', '124')],  # trips pubmed title
-        [Phosphorylation(mek, erk), Inhibition(erk, ras),
-         (Phosphorylation(mek, erk), 'in the body')],  # reach pubmed-abs
-        [Complex([mek, erk]), Complex([erk, ras]),
-         (Phosphorylation(None, erk), 'In the body')],  # sparser pubmed-abs
-        [],  # reach pmc_oa
-        [],  # ISI pmc_oa
-        [Phosphorylation(map2k1, mapk1)],  # sparser pubmed-abs
-        [],  # reach manuscripts
-        [],  # sparser manuscripts
-        [Inhibition(simvastatin_ng, raf),
-         Activation(map2k1_mg, erk)],  # sparser pubmed title
-        [],  # TRIPS pubmed title
-        [],  # reach pubmed title
-        [],  # reach pubmed abs
-        [],  # eidos pubmed abs
-    ])
-    db_builder.add_databases(['biopax', 'tas', 'bel'])
-    db_builder.add_raw_database_statements([
-        [Activation(mek, raf), Inhibition(erk, ras), Phosphorylation(mek, erk)],
-        [Inhibition(simvastatin, raf)],
-        [Phosphorylation(mek, erk, 'T', '124')]
-    ])
-    return db
-
-
 class RefLoadedDb:
     def __init__(self):
         self.db = get_temp_db(clear=True)
@@ -544,9 +482,69 @@ def test_lazy_copier_update():
     rldb.check_result()
 
 
+mek = Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'MEK'})
+map2k1 = Agent('MAP2K1', db_refs={'HGNC': '6840', 'TEXT': 'MAP2K1'})
+map2k1_mg = Agent('MAP2K1', db_refs={'HGNC': '6840', 'TEXT': 'MEK1/2'})
+erk = Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'mapk'})
+mapk1 = Agent('MAPK1', db_refs={'HGNC': '6871', 'TEXT': 'mapk1'})
+raf = Agent('RAF', db_refs={'FPLX': 'RAF', 'TEXT': 'raf'})
+braf = Agent('BRAF', db_refs={'HGNC': '1097', 'TEXT': 'BRAF'})
+ras = Agent('RAS', db_refs={'FPLX': 'RAS', 'TEXT': 'RAS'})
+kras = Agent('KRAS', db_refs={'HGNC': '6407', 'TEXT': 'KRAS'})
+simvastatin = Agent('simvastatin',
+                    db_refs={'CHEBI': 'CHEBI:9150', 'TEXT': 'simvastatin'})
+simvastatin_ng = Agent('simvastatin', db_refs={'TEXT': 'simvastatin'})
+
+
 @attr('nonpublic')
-def test_db_preassembly_small():
-    db = _generate_pa_sample_db()
+def test_db_preassembly():
+    db = get_temp_db(clear=True)
+
+    db_builder = DbBuilder(db)
+    db_builder.add_text_refs([
+        ('12345', 'PMC54321'),
+        ('24680', 'PMC08642'),
+        ('97531',)
+    ])
+    db_builder.add_text_content([
+        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
+        ['pubmed-abs', 'manuscripts'],
+        ['pubmed-ttl', 'pubmed-abs']
+    ])
+    db_builder.add_readings([
+        ['REACH', 'TRIPS'],
+        ['REACH', 'SPARSER'],
+        ['REACH', 'ISI'],
+        ['SPARSER'],
+        ['REACH', 'SPARSER'],
+        ['SPARSER', 'TRIPS', 'REACH'],
+        ['REACH', 'EIDOS']
+    ])
+    db_builder.add_raw_reading_statements([
+        [Phosphorylation(mek, erk)],  # reach pubmed title
+        [Phosphorylation(mek, erk, 'T', '124')],  # trips pubmed title
+        [Phosphorylation(mek, erk), Inhibition(erk, ras),
+         (Phosphorylation(mek, erk), 'in the body')],  # reach pubmed-abs
+        [Complex([mek, erk]), Complex([erk, ras]),
+         (Phosphorylation(None, erk), 'In the body')],  # sparser pubmed-abs
+        [],  # reach pmc_oa
+        [],  # ISI pmc_oa
+        [Phosphorylation(map2k1, mapk1)],  # sparser pubmed-abs
+        [],  # reach manuscripts
+        [],  # sparser manuscripts
+        [Inhibition(simvastatin_ng, raf),
+         Activation(map2k1_mg, erk)],  # sparser pubmed title
+        [],  # TRIPS pubmed title
+        [],  # reach pubmed title
+        [],  # reach pubmed abs
+        [],  # eidos pubmed abs
+    ])
+    db_builder.add_databases(['biopax', 'tas', 'bel'])
+    db_builder.add_raw_database_statements([
+        [Activation(mek, raf), Inhibition(erk, ras), Phosphorylation(mek, erk)],
+        [Inhibition(simvastatin, raf)],
+        [Phosphorylation(mek, erk, 'T', '124')]
+    ])
 
     # Now test the set of preassembled (pa) statements from the database
     # against what we get from old-fashioned preassembly (opa).
@@ -604,13 +602,126 @@ def test_db_preassembly_small():
 
 
 @attr('nonpublic')
-def test_db_incremental_preassembly_small():
-    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True)
-    db = _generate_pa_sample_db()
+def test_db_preassembly_update():
+    db = get_temp_db(clear=True)
+
+    db_builder = DbBuilder(db)
+    db_builder.add_text_refs([
+        ('12345', 'PMC54321'),
+        ('24680', 'PMC08642'),
+        ('97531',),
+        ('87687',)
+    ])
+    db_builder.add_text_content([
+        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
+        ['pubmed-ttl', 'pubmed-abs', 'manuscripts'],
+        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
+        ['pubmed-ttl', 'pubmed-abs']
+    ])
+    db_builder.add_readings([
+        # Ref 1
+        ['REACH', 'TRIPS'],  # pubmed ttl
+        ['REACH', 'SPARSER'],  # pubmed abs
+        ['REACH', 'ISI'],  # pmc_oa
+        # Ref 2
+        ['REACH', 'TRIPS'],  # pubmed ttl (new)
+        ['SPARSER'],  # pubmed abs
+        ['REACH', 'SPARSER'],  # manuscripts
+        # Ref 3
+        ['SPARSER', 'TRIPS', 'REACH'],  # pubmed ttl
+        ['REACH', 'EIDOS', 'SPARSER'],  # pubmed abs
+        ['SPARSER'],  # pmc oa (new)
+        # Ref 4
+        ['TRIPS', 'REACH', 'SPARSER'],  # pubmed ttl (new)
+        ['REACH', 'SPARSER'],  # pubmed abs (new)
+    ])
+
+    db_builder.add_raw_reading_statements([
+        # Ref 1
+        # pubmed ttl
+        [Phosphorylation(mek, erk)],  # reach
+        [Phosphorylation(mek, erk, 'T', '124')],  # trips
+        # pubmed abs
+        [Phosphorylation(mek, erk),
+         Inhibition(erk, ras),
+         (Phosphorylation(mek, erk), 'in the body')],  # reach
+        [Complex([mek, erk]),
+         Complex([erk, ras]),
+         (Phosphorylation(None, erk), 'In the body')],  # sparser
+        # pmc OA
+        [],  # reach
+        [],  # ISI
+
+        # Ref 2
+        # pubmed ttl
+        [Phosphorylation(map2k1, mapk1)],  # reach (new)
+        [Phosphorylation(map2k1, mapk1, 'T', '124')],  # trips (new)
+        # pubmed abs
+        [Phosphorylation(map2k1, mapk1)],  # sparser
+        # manuscript
+        [],  # reach
+        [],  # sparser
+
+        # Ref 3
+        # pubmed ttl
+        [],  # sparser
+        [Inhibition(simvastatin, raf)],  # TRIPS
+        [],  # reach
+        # pubmed abs
+        [],  # reach
+        [],  # eidos
+        [Activation(map2k1_mg, erk),
+         Inhibition(simvastatin_ng, raf)],  # sparser (new)
+        # pmc oa
+        [Inhibition(simvastatin_ng, raf),
+         Inhibition(erk, ras),
+         Activation(ras, raf)],  # sparser (new)
+
+        # Ref 4
+        # pubmed ttl
+        [],  # trips (new)
+        [],  # reach (new)
+        [],  # sparser (new)
+        # pubmed abstract
+        [Activation(kras, braf),
+         Complex([map2k1, mapk1]),
+         Complex([kras, braf])],  # reach (new)
+        [Complex([kras, braf]),
+         Complex([mek, erk]),
+         IncreaseAmount(kras, braf)],  # sparser (new)
+    ])
+    db_builder.add_databases(['biopax', 'tas', 'bel'])
+    db_builder.add_raw_database_statements([
+        [Activation(mek, raf),
+         Inhibition(erk, ras),
+         Phosphorylation(mek, erk),
+         Activation(ras, raf)],
+        [Inhibition(simvastatin, raf)],
+        [Phosphorylation(mek, erk, 'T', '124')]
+    ])
+    db_builder.add_pa_statements([
+        (Phosphorylation(mek, erk), [0, 2, 4, 25], [1, 8]),
+        (Phosphorylation(mek, erk, 'T', '124'), [1, 28]),
+        (Phosphorylation(None, erk), [7], [0, 1, 8]),
+        (Activation(mek, raf), [23]),
+        (Inhibition(simvastatin, raf), [11, 27]),
+        (Complex([mek, erk]), [5]),
+        (Complex([erk, ras]), [6]),
+        (Inhibition(erk, ras), [3, 24]),
+        (Phosphorylation(map2k1, mapk1), [10])
+    ])
+
+    # Add the preassembly update.
+    pu = db.PreassemblyUpdates(corpus_init=True)
+    db.session.add(pu)
+    db.session.commit()
+
+    # Run the preassembly test.
+    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True,
+                                      ontology=_get_test_ontology())
     opa_inp_stmts = _get_opa_input_stmts(db)
+    sleep(0.5)
     start = datetime.now()
-    print('sleeping...')
-    sleep(5)
     print("Beginning supplement...")
     preassembler.supplement_corpus(db)
     end = datetime.now()

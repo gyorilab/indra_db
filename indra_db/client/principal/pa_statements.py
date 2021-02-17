@@ -124,6 +124,10 @@ def get_pa_stmt_jsons(clauses=None, with_evidence=True, db=None, limit=1000):
             db_ref_dicts[int(ag_num)][db_name].append(db_id)
         db_ref_dicts = {k: dict(v) for k, v in db_ref_dicts.items()}
 
+        # Clean supping and supped.
+        supping = [h for h in set(supping) if h is not None]
+        supped = [h for h in set(supped) if h is not None]
+
         # Parse the JSON bytes into JSON.
         stmt_json = json.loads(sj)
         if 'supports' not in stmt_json:

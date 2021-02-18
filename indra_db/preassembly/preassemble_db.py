@@ -151,7 +151,7 @@ class DbPreassembler:
 
     def _init_cache(self, continuing):
         if self.s3_cache is None:
-            return
+            return datetime.utcnow()
 
         import boto3
         s3 = boto3.client('s3')
@@ -449,7 +449,9 @@ class DbPreassembler:
                     db.PAStatements.mk_hash.in_(hash_list[in_si:in_ei])
                 )
                 inner_batch = [_stmt_from_json(sj) for sj, in inner_sj_q.all()]
-                split_idx = len(inner_batch)
+                # NOTE: deliberately subtracting 1 because the INDRA
+                # implementation is weird.
+                split_idx = len(inner_batch) - 1
                 full_list = inner_batch + outer_batch
                 self._log(f'Getting support between outer batch {outer_idx}/'
                           f'{len(idx_batches)-1} and inner batch {inner_idx}/'
@@ -553,7 +555,7 @@ class DbPreassembler:
                 db.PAStatements.json,
                 db.PAStatements.mk_hash.in_(new_hashes[out_s:out_e])
             )
-            npa_batch = [_stmt_from_json(s_json) for s_json in npa_json_q.all()]
+            npa_batch = [_stmt_from_json(s_json) for s_json, in npa_json_q.all()]
 
             # Compare internally
             self._log(f"Getting support for new pa batch {outer_idx}/"
@@ -569,7 +571,9 @@ class DbPreassembler:
                 )
                 other_npa_batch = [_stmt_from_json(sj)
                                    for sj, in other_npa_q.all()]
-                split_idx = len(npa_batch)
+                # NOTE: deliberately subtracting 1 because the INDRA
+                # implementation is weird.
+                split_idx = len(npa_batch) - 1
                 full_list = npa_batch + other_npa_batch
                 self._log(f"Comparing outer batch {outer_idx}/"
                           f"{len(idx_batches)-1} to inner batch {in_idx}/"
@@ -589,7 +593,9 @@ class DbPreassembler:
             for opa_idx, opa_json_batch in opa_json_iter:
                 opa_batch = [_stmt_from_json(s_json)
                              for s_json, in opa_json_batch]
-                split_idx = len(npa_batch)
+                # NOTE: deliberately subtracting 1 because the INDRA
+                # implementation is weird.
+                split_idx = len(npa_batch) - 1
                 full_list = npa_batch + opa_batch
                 self._log(f"Comparing new batch {outer_idx}/"
                           f"{len(idx_batches)-1} to batch {opa_idx} of old pa "

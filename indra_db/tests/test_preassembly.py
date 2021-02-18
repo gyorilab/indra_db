@@ -1,13 +1,10 @@
-from __future__ import absolute_import, print_function, unicode_literals
-from builtins import dict, str
-
 import os
 import json
+import pickle
 import random
 import logging
 from datetime import datetime
 from time import sleep
-
 
 gm_logger = logging.getLogger('grounding_mapper')
 gm_logger.setLevel(logging.WARNING)
@@ -21,23 +18,25 @@ ps_logger.setLevel(logging.WARNING)
 pa_logger = logging.getLogger('preassembler')
 pa_logger.setLevel(logging.WARNING)
 
-from indra.statements import Statement, Phosphorylation, Agent, Evidence
+from indra.statements import Statement, Phosphorylation, Agent, Evidence, \
+    stmts_from_json, Inhibition, Activation, Complex, IncreaseAmount
 from indra.util.nested_dict import NestedDict
 from indra.tools import assemble_corpus as ac
-from indra.tests.util import needs_py3
 
 from indra_db import util as db_util
 from indra_db import client as db_client
-from indra_db.managers import preassembly_manager as pm
-from indra_db.managers.preassembly_manager import shash
+from indra_db.preassembly import preassemble_db as pdb
 from indra_db.tests.util import get_pa_loaded_db, get_temp_db
+from indra_db.tests.db_building_util import DbBuilder
 
 from nose.plugins.attrib import attr
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+TEST_ONTOLOGY = os.path.join(HERE, 'test_resources/test_ontology.pkl')
 MAX_NUM_STMTS = 11721
 BATCH_SIZE = 2017
 STMTS = None
+
 
 # ==============================================================================
 # Support classes and functions
@@ -169,7 +168,8 @@ def _do_old_fashioned_preassembly(stmts):
     grounded_stmts = ac.map_grounding(stmts, use_adeft=True,
                                       gilda_mode='local')
     ms_stmts = ac.map_sequence(grounded_stmts, use_cache=True)
-    opa_stmts = ac.run_preassembly(ms_stmts, return_toplevel=False)
+    opa_stmts = ac.run_preassembly(ms_stmts, return_toplevel=False,
+                                   ontology=_get_test_ontology())
     return opa_stmts
 
 
@@ -177,10 +177,13 @@ def _get_opa_input_stmts(db):
     stmt_nd = db_util.get_reading_stmt_dict(db, get_full_stmts=True)
     reading_stmts, _ =\
         db_util.get_filtered_rdg_stmts(stmt_nd, get_full_stmts=True)
-    db_stmts = db_client.get_statements([db.RawStatements.reading_id.is_(None)],
-                                        preassembled=False, db=db)
+    db_stmt_jsons = db_client.get_raw_stmt_jsons(
+        [db.RawStatements.reading_id.is_(None)],
+        db=db
+    )
+    db_stmts = stmts_from_json(db_stmt_jsons.values())
     stmts = reading_stmts | set(db_stmts)
-    print("Got %d statements for opa." % len(stmts))
+    print("Got %d statements for vanilla preassembly." % len(stmts))
     return stmts
 
 
@@ -197,7 +200,7 @@ def _check_against_opa_stmts(db, raw_stmts, pa_stmts):
                 vals_2.append(val)
         if len(vals_1) or len(vals_2):
             print("Found mismatched %s for hash %s:\n\t%s=%s\n\t%s=%s"
-                  % (label, shash(stmt_1), stmt_1_name, vals_1, stmt_2_name,
+                  % (label, stmt_1.get_hash(), stmt_1_name, vals_1, stmt_2_name,
                      vals_2))
             return {'diffs': {stmt_1_name: vals_1, stmt_2_name: vals_2},
                     'stmts': {stmt_1_name: stmt_1, stmt_2_name: stmt_2}}
@@ -205,8 +208,8 @@ def _check_against_opa_stmts(db, raw_stmts, pa_stmts):
 
     opa_stmts = _do_old_fashioned_preassembly(raw_stmts)
 
-    old_stmt_dict = {shash(s): s for s in opa_stmts}
-    new_stmt_dict = {shash(s): s for s in pa_stmts}
+    old_stmt_dict = {s.get_hash(): s for s in opa_stmts}
+    new_stmt_dict = {s.get_hash(): s for s in pa_stmts}
 
     new_hash_set = set(new_stmt_dict.keys())
     old_hash_set = set(old_stmt_dict.keys())
@@ -227,11 +230,11 @@ def _check_against_opa_stmts(db, raw_stmts, pa_stmts):
               'label': 'evidence text',
               'results': []},
              {'funcs': {'list': lambda s: s.supports[:],
-                        'comp': lambda s: shash(s)},
+                        'comp': lambda s: s.get_hash()},
               'label': 'supports matches keys',
               'results': []},
              {'funcs': {'list': lambda s: s.supported_by[:],
-                        'comp': lambda s: shash(s)},
+                        'comp': lambda s: s.get_hash()},
               'label': 'supported-by matches keys',
               'results': []}]
     comp_hashes = new_hash_set & old_hash_set
@@ -286,7 +289,7 @@ def str_imp(o, uuid=None, other_stmt_keys=None):
                  % (str(s), o.id, o.db_info_id, o.reading_id,
                     o.uuid[:8] + '...', o.type,
                     o.indra_version[:14] + '...', o.mk_hash))
-        if other_stmt_keys and shash(s) in other_stmt_keys:
+        if other_stmt_keys and s.get_hash() in other_stmt_keys:
             s_str = '+' + s_str
         if s.uuid == uuid:
             s_str = '*' + s_str
@@ -302,10 +305,10 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
         uuid = s.uuid
         print('-'*100)
         print('uuid: %s\nhash: %s\nshallow hash: %s'
-              % (s.uuid, s.get_hash(shallow=False), shash(s)))
+              % (s.uuid, s.get_hash(shallow=False), s.get_hash()))
         print('-'*100)
         db_pas = db.select_one(db.PAStatements,
-                               db.PAStatements.mk_hash == shash(s))
+                               db.PAStatements.mk_hash == s.get_hash())
         print('\tPA statement:', db_pas.__dict__ if db_pas else '~')
         print('-'*100)
         db_s = db.select_one(db.RawStatements, db.RawStatements.uuid == s.uuid)
@@ -336,107 +339,239 @@ def elaborate_on_hash_diffs(db, lbl, stmt_list, other_stmt_keys):
         print('='*100)
 
 
-# =============================================================================
-# Generic test definitions
-# =============================================================================
+class RefLoadedDb:
+    def __init__(self):
+        self.db = get_temp_db(clear=True)
 
-@needs_py3
-def _check_statement_distillation(num_stmts):
-    db = get_pa_loaded_db(num_stmts)
-    assert db is not None, "Test was broken. Got None instead of db insance."
-    stmts = db_util.distill_stmts(db, get_full_stmts=True)
-    assert len(stmts), "Got zero statements."
-    assert isinstance(list(stmts)[0], Statement), type(list(stmts)[0])
-    stmt_ids = db_util.distill_stmts(db)
-    assert len(stmts) == len(stmt_ids), \
-        "stmts: %d, stmt_ids: %d" % (len(stmts), len(stmt_ids))
-    assert isinstance(list(stmt_ids)[0], int), type(list(stmt_ids)[0])
-    stmts_p = db_util.distill_stmts(db)
-    assert len(stmts_p) == len(stmt_ids)
-    stmt_ids_p = db_util.distill_stmts(db)
-    assert stmt_ids_p == stmt_ids
+        N = int(10**5)
+        S = int(10**8)
+        self.fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
+        self.fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
+                        for i in range(N)}
 
+        self.expected = {id: pmid for id, pmid in self.fake_pmids_a}
+        for id, pmid in self.fake_pmids_b:
+            self.expected[id] = pmid
 
-@needs_py3
-def _check_preassembly_with_database(num_stmts, batch_size):
-    db = get_pa_loaded_db(num_stmts)
+        start = datetime.now()
+        self.db.copy('text_ref', self.fake_pmids_a, ('id', 'pmid'))
+        print("First load:", datetime.now() - start)
 
-    # Now test the set of preassembled (pa) statements from the database
-    # against what we get from old-fashioned preassembly (opa).
-    opa_inp_stmts = _get_opa_input_stmts(db)
+        try:
+            self.db.copy('text_ref', self.fake_pmids_b, ('id', 'pmid'))
+            assert False, "Vanilla copy succeeded when it should have failed."
+        except Exception as e:
+            self.db._conn.rollback()
+            pass
 
-    # Get the set of raw statements.
-    raw_stmt_list = db.select_all(db.RawStatements)
-    all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
-    assert len(raw_stmt_list)
-
-    # Run the preassembly initialization.
-    start = datetime.now()
-    pa_manager = pm.PreassemblyManager(batch_size=batch_size,
-                                       print_logs=True)
-    pa_manager.create_corpus(db)
-    end = datetime.now()
-    print("Duration:", end-start)
-
-    # Make sure the number of pa statements is within reasonable bounds.
-    pa_stmt_list = db.select_all(db.PAStatements)
-    assert 0 < len(pa_stmt_list) < len(raw_stmt_list)
-
-    # Check the evidence links.
-    raw_unique_link_list = db.select_all(db.RawUniqueLinks)
-    assert len(raw_unique_link_list)
-    all_link_ids = {ru.raw_stmt_id for ru in raw_unique_link_list}
-    all_link_mk_hashes = {ru.pa_stmt_mk_hash for ru in raw_unique_link_list}
-    assert len(all_link_ids - all_raw_ids) is 0
-    assert all([pa_stmt.mk_hash in all_link_mk_hashes
-                for pa_stmt in pa_stmt_list])
-
-    # Check the support links.
-    sup_links = db.select_all([db.PASupportLinks.supporting_mk_hash,
-                               db.PASupportLinks.supported_mk_hash])
-    assert sup_links
-    assert not any([l[0] == l[1] for l in sup_links]),\
-        "Found self-support in the database."
-
-    # Try to get all the preassembled statements from the table.
-    pa_stmts = db_client.get_statements([], preassembled=True, db=db,
-                                        with_support=True)
-    assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
-                                                len(pa_stmt_list))
-
-    self_supports = {
-        shash(s): shash(s) in {shash(s_) for s_ in s.supported_by + s.supports}
-        for s in pa_stmts
-        }
-    if any(self_supports.values()):
-        assert False, "Found self-support in constructed pa statement objects."
-
-    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
-    return
+    def check_result(self):
+        refs = self.db.select_all([self.db.TextRef.id, self.db.TextRef.pmid])
+        result = {id: pmid for id, pmid in refs}
+        assert result.keys() == self.expected.keys()
+        passed = True
+        for id, pmid in self.expected.items():
+            if result[id] != pmid:
+                print(id, pmid)
+                passed = False
+        assert passed, "Result did not match expected."
 
 
-@needs_py3
-def _check_db_pa_supplement(num_stmts, batch_size, split=0.8):
-    pa_manager = pm.PreassemblyManager(batch_size=batch_size,
-                                       print_logs=True)
-    db = get_pa_loaded_db(num_stmts, split=split, pam=pa_manager)
-    opa_inp_stmts = _get_opa_input_stmts(db)
-    start = datetime.now()
-    print('sleeping...')
-    sleep(5)
-    print("Beginning supplement...")
-    pa_manager.supplement_corpus(db)
-    end = datetime.now()
-    print("Duration of incremental update:", end-start)
-
-    pa_stmts = db_client.get_statements([], preassembled=True, db=db,
-                                        with_support=True)
-    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
-    return
+def _get_test_ontology():
+    # Load the test ontology.
+    with open(TEST_ONTOLOGY, 'rb') as f:
+        test_ontology = pickle.load(f)
+    return test_ontology
 
 
 # ==============================================================================
-# Specific Tests
+# Test Database Definitions.
+# ==============================================================================
+
+
+mek = Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'MEK'})
+map2k1 = Agent('MAP2K1', db_refs={'HGNC': '6840', 'TEXT': 'MAP2K1'})
+map2k1_mg = Agent('MAP2K1', db_refs={'HGNC': '6840', 'TEXT': 'MEK1/2'})
+erk = Agent('ERK', db_refs={'FPLX': 'ERK', 'TEXT': 'mapk'})
+mapk1 = Agent('MAPK1', db_refs={'HGNC': '6871', 'TEXT': 'mapk1'})
+raf = Agent('RAF', db_refs={'FPLX': 'RAF', 'TEXT': 'raf'})
+braf = Agent('BRAF', db_refs={'HGNC': '1097', 'TEXT': 'BRAF'})
+ras = Agent('RAS', db_refs={'FPLX': 'RAS', 'TEXT': 'RAS'})
+kras = Agent('KRAS', db_refs={'HGNC': '6407', 'TEXT': 'KRAS'})
+simvastatin = Agent('simvastatin',
+                    db_refs={'CHEBI': 'CHEBI:9150', 'TEXT': 'simvastatin'})
+simvastatin_ng = Agent('simvastatin', db_refs={'TEXT': 'simvastatin'})
+
+
+def _get_db_no_pa_stmts():
+    db = get_temp_db(clear=True)
+
+    db_builder = DbBuilder(db)
+    db_builder.add_text_refs([
+        ('12345', 'PMC54321'),
+        ('24680', 'PMC08642'),
+        ('97531',)
+    ])
+    db_builder.add_text_content([
+        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
+        ['pubmed-abs', 'manuscripts'],
+        ['pubmed-ttl', 'pubmed-abs']
+    ])
+    db_builder.add_readings([
+        ['REACH', 'TRIPS'],
+        ['REACH', 'SPARSER'],
+        ['REACH', 'ISI'],
+        ['SPARSER'],
+        ['REACH', 'SPARSER'],
+        ['SPARSER', 'TRIPS', 'REACH'],
+        ['REACH', 'EIDOS']
+    ])
+    db_builder.add_raw_reading_statements([
+        [Phosphorylation(mek, erk)],  # reach pubmed title
+        [Phosphorylation(mek, erk, 'T', '124')],  # trips pubmed title
+        [Phosphorylation(mek, erk), Inhibition(erk, ras),
+         (Phosphorylation(mek, erk), 'in the body')],  # reach pubmed-abs
+        [Complex([mek, erk]), Complex([erk, ras]),
+         (Phosphorylation(None, erk), 'In the body')],  # sparser pubmed-abs
+        [],  # reach pmc_oa
+        [],  # ISI pmc_oa
+        [Phosphorylation(map2k1, mapk1)],  # sparser pubmed-abs
+        [],  # reach manuscripts
+        [],  # sparser manuscripts
+        [Inhibition(simvastatin_ng, raf),
+         Activation(map2k1_mg, erk)],  # sparser pubmed title
+        [],  # TRIPS pubmed title
+        [],  # reach pubmed title
+        [],  # reach pubmed abs
+        [],  # eidos pubmed abs
+    ])
+    db_builder.add_databases(['biopax', 'tas', 'bel'])
+    db_builder.add_raw_database_statements([
+        [Activation(mek, raf), Inhibition(erk, ras), Phosphorylation(mek, erk)],
+        [Inhibition(simvastatin, raf)],
+        [Phosphorylation(mek, erk, 'T', '124')]
+    ])
+    return db
+
+
+def _get_db_with_pa_stmts():
+    db = get_temp_db(clear=True)
+
+    db_builder = DbBuilder(db)
+    db_builder.add_text_refs([
+        ('12345', 'PMC54321'),
+        ('24680', 'PMC08642'),
+        ('97531',),
+        ('87687',)
+    ])
+    db_builder.add_text_content([
+        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
+        ['pubmed-ttl', 'pubmed-abs', 'manuscripts'],
+        ['pubmed-ttl', 'pubmed-abs', 'pmc_oa'],
+        ['pubmed-ttl', 'pubmed-abs']
+    ])
+    db_builder.add_readings([
+        # Ref 1
+        ['REACH', 'TRIPS'],  # pubmed ttl
+        ['REACH', 'SPARSER'],  # pubmed abs
+        ['REACH', 'ISI'],  # pmc_oa
+        # Ref 2
+        ['REACH', 'TRIPS'],  # pubmed ttl (new)
+        ['SPARSER'],  # pubmed abs
+        ['REACH', 'SPARSER'],  # manuscripts
+        # Ref 3
+        ['SPARSER', 'TRIPS', 'REACH'],  # pubmed ttl
+        ['REACH', 'EIDOS', 'SPARSER'],  # pubmed abs
+        ['SPARSER'],  # pmc oa (new)
+        # Ref 4
+        ['TRIPS', 'REACH', 'SPARSER'],  # pubmed ttl (new)
+        ['REACH', 'SPARSER'],  # pubmed abs (new)
+    ])
+
+    db_builder.add_raw_reading_statements([
+        # Ref 1
+        # pubmed ttl
+        [Phosphorylation(mek, erk)],  # reach
+        [Phosphorylation(mek, erk, 'T', '124')],  # trips
+        # pubmed abs
+        [Phosphorylation(mek, erk),
+         Inhibition(erk, ras),
+         (Phosphorylation(mek, erk), 'in the body')],  # reach
+        [Complex([mek, erk]),
+         Complex([erk, ras]),
+         (Phosphorylation(None, erk), 'In the body')],  # sparser
+        # pmc OA
+        [],  # reach
+        [],  # ISI
+
+        # Ref 2
+        # pubmed ttl
+        [Phosphorylation(map2k1, mapk1)],  # reach (new)
+        [Phosphorylation(map2k1, mapk1, 'T', '124')],  # trips (new)
+        # pubmed abs
+        [Phosphorylation(map2k1, mapk1)],  # sparser
+        # manuscript
+        [],  # reach
+        [],  # sparser
+
+        # Ref 3
+        # pubmed ttl
+        [],  # sparser
+        [Inhibition(simvastatin, raf)],  # TRIPS
+        [],  # reach
+        # pubmed abs
+        [],  # reach
+        [],  # eidos
+        [Activation(map2k1_mg, erk),
+         Inhibition(simvastatin_ng, raf)],  # sparser (new)
+        # pmc oa
+        [Inhibition(simvastatin_ng, raf),
+         Inhibition(erk, ras),
+         Activation(ras, raf)],  # sparser (new)
+
+        # Ref 4
+        # pubmed ttl
+        [],  # trips (new)
+        [],  # reach (new)
+        [],  # sparser (new)
+        # pubmed abstract
+        [Activation(kras, braf),
+         Complex([map2k1, mapk1]),
+         Complex([kras, braf])],  # reach (new)
+        [Complex([kras, braf]),
+         Complex([mek, erk]),
+         IncreaseAmount(kras, braf)],  # sparser (new)
+    ])
+    db_builder.add_databases(['biopax', 'tas', 'bel'])
+    db_builder.add_raw_database_statements([
+        [Activation(mek, raf),
+         Inhibition(erk, ras),
+         Phosphorylation(mek, erk),
+         Activation(ras, raf)],
+        [Inhibition(simvastatin, raf)],
+        [Phosphorylation(mek, erk, 'T', '124')]
+    ])
+    db_builder.add_pa_statements([
+        (Phosphorylation(mek, erk), [0, 2, 4, 25], [1, 8]),
+        (Phosphorylation(mek, erk, 'T', '124'), [1, 28]),
+        (Phosphorylation(None, erk), [7], [0, 1, 8]),
+        (Activation(mek, raf), [23]),
+        (Inhibition(simvastatin, raf), [11, 27]),
+        (Complex([mek, erk]), [5]),
+        (Complex([erk, ras]), [6]),
+        (Inhibition(erk, ras), [3, 24]),
+        (Phosphorylation(map2k1, mapk1), [10])
+    ])
+
+    # Add the preassembly update.
+    pu = db.PreassemblyUpdates(corpus_init=True)
+    db.session.add(pu)
+    db.session.commit()
+
+    return db
+
+
+# ==============================================================================
+# Tests
 # ==============================================================================
 
 
@@ -464,70 +599,27 @@ def test_distillation_on_curated_set():
 
 
 @attr('nonpublic')
-def test_statement_distillation_small():
-    _check_statement_distillation(1000)
-
-
-@attr('nonpublic', 'slow')
-def test_statement_distillation_large():
-    _check_statement_distillation(11721)
-
-
-# @attr('nonpublic', 'slow')
-# def test_statement_distillation_extra_large():
-#     _check_statement_distillation(1001721)
-
-
-@attr('nonpublic')
 def test_db_lazy_insert():
-    db = get_temp_db(clear=True)
-
-    N = int(10**5)
-    S = int(10**8)
-    fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
-    fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
-                    for i in range(N)}
-
-    expected = {id: pmid for id, pmid in fake_pmids_b}
-    for id, pmid in fake_pmids_a:
-        expected[id] = pmid
-
-    start = datetime.now()
-    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
-    print("First load:", datetime.now() - start)
-
-    try:
-        db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
-        assert False, "Vanilla copy succeeded when it should have failed."
-    except Exception as e:
-        db._conn.rollback()
-        pass
+    rldb = RefLoadedDb()
 
     # Try adding more text refs lazily. Overlap is guaranteed.
     start = datetime.now()
-    db.copy_lazy('text_ref', fake_pmids_b, ('id', 'pmid'))
+    rldb.db.copy_lazy('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
     print("Lazy copy:", datetime.now() - start)
 
-    refs = db.select_all([db.TextRef.id, db.TextRef.pmid])
-    result = {id: pmid for id, pmid in refs}
-    assert result.keys() == expected.keys()
-    passed = True
-    for id, pmid in expected.items():
-        if result[id] != pmid:
-            print(id, pmid)
-            passed = False
-    assert passed, "Result did not match expected."
+    rldb.check_result()
 
     # As a benchmark, see how long this takes the "old fashioned" way.
-    db._clear(force=True)
+    rldb.db._clear(force=True)
     start = datetime.now()
-    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
+    rldb.db.copy('text_ref', rldb.fake_pmids_a, ('id', 'pmid'))
     print('Second load:', datetime.now() - start)
 
     start = datetime.now()
-    current_ids = {trid for trid, in db.select_all(db.TextRef.id)}
-    clean_fake_pmids_b = {t for t in fake_pmids_b if t[0] not in current_ids}
-    db.copy('text_ref', clean_fake_pmids_b, ('id', 'pmid'))
+    current_ids = {trid for trid, in rldb.db.select_all(rldb.db.TextRef.id)}
+    clean_fake_pmids_b = {t for t in rldb.fake_pmids_b
+                          if t[0] not in current_ids}
+    rldb.db.copy('text_ref', clean_fake_pmids_b, ('id', 'pmid'))
     print('Old fashioned copy:', datetime.now() - start)
     return
 
@@ -567,80 +659,118 @@ def test_lazy_copier_unique_constraints():
 
 @attr('nonpublic')
 def test_lazy_copier_update():
-    db = get_temp_db(clear=True)
-
-    N = int(10**5)
-    S = int(10**8)
-    fake_pmids_a = {(i, str(random.randint(0, S))) for i in range(N)}
-    fake_pmids_b = {(int(N/2 + i), str(random.randint(0, S)))
-                    for i in range(N)}
-
-    expected = {id: pmid for id, pmid in fake_pmids_a}
-    for id, pmid in fake_pmids_b:
-        expected[id] = pmid
-
-    start = datetime.now()
-    db.copy('text_ref', fake_pmids_a, ('id', 'pmid'))
-    print("First load:", datetime.now() - start)
-
-    try:
-        db.copy('text_ref', fake_pmids_b, ('id', 'pmid'))
-        assert False, "Vanilla copy succeeded when it should have failed."
-    except Exception as e:
-        db._conn.rollback()
-        pass
+    rldb = RefLoadedDb()
 
     # Try adding more text refs lazily. Overlap is guaranteed.
     start = datetime.now()
-    db.copy_push('text_ref', fake_pmids_b, ('id', 'pmid'))
+    rldb.db.copy_push('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
     print("Lazy copy:", datetime.now() - start)
-
-    refs = db.select_all([db.TextRef.id, db.TextRef.pmid])
-    result = {id: pmid for id, pmid in refs}
-    assert result.keys() == expected.keys()
-    passed = True
-    for id, pmid in expected.items():
-        if result[id] != pmid:
-            print(id, pmid)
-            passed = False
-    assert passed, "Result did not match expected."
+    
+    rldb.check_result()
 
 
 @attr('nonpublic')
-def test_db_preassembly_small():
-    _check_preassembly_with_database(400, 37)
+def test_db_preassembly():
+    db = _get_db_no_pa_stmts()
 
+    # Now test the set of preassembled (pa) statements from the database
+    # against what we get from old-fashioned preassembly (opa).
+    opa_inp_stmts = _get_opa_input_stmts(db)
 
-# @attr('nonpublic', 'slow')
-# def test_db_preassembly_large():
-#     _check_preassembly_with_database(11721, 2017)
+    # Get the set of raw statements.
+    raw_stmt_list = db.select_all(db.RawStatements)
+    all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
+    assert len(raw_stmt_list)
 
+    # Run the preassembly initialization.
+    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True,
+                                      ontology=_get_test_ontology())
+    preassembler.create_corpus(db)
 
-# @attr('nonpublic', 'slow')
-# def test_db_preassembly_extra_large():
-#     _check_preassembly_with_database(101721, 20017)
+    # Make sure the number of pa statements is within reasonable bounds.
+    pa_stmt_list = db.select_all(db.PAStatements)
+    assert 0 < len(pa_stmt_list) < len(raw_stmt_list)
 
+    # Check the evidence links.
+    raw_unique_link_list = db.select_all(db.RawUniqueLinks)
+    assert len(raw_unique_link_list)
+    all_link_ids = {ru.raw_stmt_id for ru in raw_unique_link_list}
+    all_link_mk_hashes = {ru.pa_stmt_mk_hash for ru in raw_unique_link_list}
+    assert len(all_link_ids - all_raw_ids) is 0
+    assert all([pa_stmt.mk_hash in all_link_mk_hashes
+                for pa_stmt in pa_stmt_list])
 
-# @attr('nonpublic', 'slow')
-# def test_db_preassembly_supremely_large():
-#     _check_preassembly_with_database(1001721, 200017)
+    # Check the support links.
+    sup_links = db.select_all([db.PASupportLinks.supporting_mk_hash,
+                               db.PASupportLinks.supported_mk_hash])
+    assert sup_links
+    assert not any([l[0] == l[1] for l in sup_links]), \
+        "Found self-support in the database."
+
+    # Try to get all the preassembled statements from the table.
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
+                                                len(pa_stmt_list))
+
+    self_supports = {
+        s.get_hash(): s.get_hash() in {s_.get_hash()
+                                       for s_ in s.supported_by + s.supports}
+        for s in pa_stmts
+    }
+    if any(self_supports.values()):
+        assert False, "Found self-support in constructed pa statement objects."
+
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
+    return
 
 
 @attr('nonpublic')
-def test_db_incremental_preassembly_small():
-    _check_db_pa_supplement(400, 43)
+def test_db_preassembly_update():
+    db = _get_db_with_pa_stmts()
+
+    # Run the preassembly test.
+    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True,
+                                      ontology=_get_test_ontology())
+    opa_inp_stmts = _get_opa_input_stmts(db)
+    sleep(0.5)
+    preassembler.supplement_corpus(db)
+
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
+    return
 
 
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_large():
-#     _check_db_pa_supplement(11721, 2017)
+def test_preassembly_create_corpus_div_by_type():
+    db = _get_db_no_pa_stmts()
+    opa_inp_stmts = _get_opa_input_stmts(db)
+
+    all_types = {t for t, in db.select_all(db.RawStatements.type)}
+    for stmt_type in all_types:
+        pa = pdb.DbPreassembler(batch_size=2, print_logs=True,
+                                ontology=_get_test_ontology(),
+                                stmt_type=stmt_type)
+        pa.create_corpus(db)
+
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
 
 
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_very_large():
-#     _check_db_pa_supplement(100000, 20000)
+def test_preassembly_supplement_corpus_div_by_type():
+    db = _get_db_with_pa_stmts()
+    opa_inp_stmts = _get_opa_input_stmts(db)
 
+    sleep(0.5)
 
-# @attr('nonpublic', 'slow')
-# def test_db_incremental_preassembly_1M():
-#     _check_db_pa_supplement(1000000, 200000)
+    all_types = {t for t, in db.select_all(db.RawStatements.type)}
+    for stmt_type in all_types:
+        pa = pdb.DbPreassembler(batch_size=2, print_logs=True,
+                                ontology=_get_test_ontology(),
+                                stmt_type=stmt_type)
+        pa.supplement_corpus(db)
+
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)

@@ -37,7 +37,7 @@ class PreassemblySubmitter(Submitter):
         job_name = f'{self.job_base}_{self.task}_{stmt_type}'
         s3_cache = f's3://{bucket_name}/{self.s3_base}/{job_name}'
         cmd = ['python3', '-m', 'indra_db.preassembly.preassemble_db',
-               self.task, '-n', '32', '-C', s3_cache, '-T', stmt_type, '-Y',
+               self.task, '-C', s3_cache, '-T', stmt_type, '-Y',
                '-b', str(batch_size)]
         if continuing:
             cmd += ['-c']
@@ -54,4 +54,3 @@ class PreassemblySubmitter(Submitter):
 
         for stmt_type in type_list:
             yield (stmt_type,) + tuple(args[1:])
-

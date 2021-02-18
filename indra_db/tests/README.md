@@ -95,5 +95,10 @@ Enter `\q` to exit the prompt, and you should be all set to run the tests.
 
 You should also create a test readonly database:
 ```bash
-psql -u postgres createdb indradb_ro_test
+sudo -u postgres createdb indradb_ro_test
 ```
+
+## Other Test Resources
+
+To test preassembly, you will also need a test ontology (called `test_ontology.pkl`)
+in a directory called `test_resources` within `indra_db/tests`.

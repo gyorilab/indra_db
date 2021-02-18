@@ -384,102 +384,8 @@ def _get_test_ontology():
 
 
 # ==============================================================================
-# Tests
+# Test Database Definitions.
 # ==============================================================================
-
-
-def test_distillation_on_curated_set():
-    stmt_dict, stmt_list, target_sets, target_bettered_ids, ev_link_sids = \
-        make_raw_statement_set_for_distillation()
-    filtered_set, bettered_ids = \
-        db_util.get_filtered_rdg_stmts(stmt_dict, get_full_stmts=True,
-                                       linked_sids=ev_link_sids)
-    for stmt_set, dup_set in target_sets:
-        if stmt_set == filtered_set:
-            break
-    else:
-        assert False, "Filtered set does not match any valid possibilities."
-    assert bettered_ids == target_bettered_ids
-    # assert dup_set == duplicate_ids, (dup_set - duplicate_ids,
-    #                                   duplicate_ids - dup_set)
-    stmt_dict, stmt_list, target_sets, target_bettered_ids, ev_link_sids = \
-        make_raw_statement_set_for_distillation()
-    filtered_id_set, bettered_ids = \
-        db_util.get_filtered_rdg_stmts(stmt_dict, get_full_stmts=False,
-                                       linked_sids=ev_link_sids)
-    assert len(filtered_id_set) == len(filtered_set), \
-        (len(filtered_set), len(filtered_id_set))
-
-
-@attr('nonpublic')
-def test_db_lazy_insert():
-    rldb = RefLoadedDb()
-
-    # Try adding more text refs lazily. Overlap is guaranteed.
-    start = datetime.now()
-    rldb.db.copy_lazy('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
-    print("Lazy copy:", datetime.now() - start)
-
-    rldb.check_result()
-
-    # As a benchmark, see how long this takes the "old fashioned" way.
-    rldb.db._clear(force=True)
-    start = datetime.now()
-    rldb.db.copy('text_ref', rldb.fake_pmids_a, ('id', 'pmid'))
-    print('Second load:', datetime.now() - start)
-
-    start = datetime.now()
-    current_ids = {trid for trid, in rldb.db.select_all(rldb.db.TextRef.id)}
-    clean_fake_pmids_b = {t for t in rldb.fake_pmids_b
-                          if t[0] not in current_ids}
-    rldb.db.copy('text_ref', clean_fake_pmids_b, ('id', 'pmid'))
-    print('Old fashioned copy:', datetime.now() - start)
-    return
-
-
-@attr('nonpublic')
-def test_lazy_copier_unique_constraints():
-    db = get_temp_db(clear=True)
-
-    N = int(10**5)
-    S = int(10**8)
-    fake_mids_a = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
-    fake_mids_b = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
-
-    assert len(fake_mids_a | fake_mids_b) < len(fake_mids_a) + len(fake_mids_b)
-
-    start = datetime.now()
-    db.copy('text_ref', fake_mids_a, ('manuscript_id',))
-    print("First load:", datetime.now() - start)
-
-    try:
-        db.copy('text_ref', fake_mids_b, ('manuscript_id',))
-        assert False, "Vanilla copy succeeded when it should have failed."
-    except Exception as e:
-        db._conn.rollback()
-        pass
-
-    start = datetime.now()
-    db.copy_lazy('text_ref', fake_mids_b, ('manuscript_id',))
-    print("Lazy copy:", datetime.now() - start)
-
-    mid_results = [mid for mid, in db.select_all(db.TextRef.manuscript_id)]
-    assert len(mid_results) == len(set(mid_results)), \
-        (len(mid_results), len(set(mid_results)))
-
-    return
-
-
-@attr('nonpublic')
-def test_lazy_copier_update():
-    rldb = RefLoadedDb()
-
-    # Try adding more text refs lazily. Overlap is guaranteed.
-    start = datetime.now()
-    rldb.db.copy_push('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
-    print("Lazy copy:", datetime.now() - start)
-    
-    rldb.check_result()
 
 
 mek = Agent('MEK', db_refs={'FPLX': 'MEK', 'TEXT': 'MEK'})
@@ -496,8 +402,7 @@ simvastatin = Agent('simvastatin',
 simvastatin_ng = Agent('simvastatin', db_refs={'TEXT': 'simvastatin'})
 
 
-@attr('nonpublic')
-def test_db_preassembly():
+def _get_db_no_pa_stmts():
     db = get_temp_db(clear=True)
 
     db_builder = DbBuilder(db)
@@ -545,64 +450,10 @@ def test_db_preassembly():
         [Inhibition(simvastatin, raf)],
         [Phosphorylation(mek, erk, 'T', '124')]
     ])
-
-    # Now test the set of preassembled (pa) statements from the database
-    # against what we get from old-fashioned preassembly (opa).
-    opa_inp_stmts = _get_opa_input_stmts(db)
-
-    # Get the set of raw statements.
-    raw_stmt_list = db.select_all(db.RawStatements)
-    all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
-    assert len(raw_stmt_list)
-
-    # Run the preassembly initialization.
-    start = datetime.now()
-    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True,
-                                      ontology=_get_test_ontology())
-    preassembler.create_corpus(db)
-    end = datetime.now()
-    print("Duration:", end-start)
-
-    # Make sure the number of pa statements is within reasonable bounds.
-    pa_stmt_list = db.select_all(db.PAStatements)
-    assert 0 < len(pa_stmt_list) < len(raw_stmt_list)
-
-    # Check the evidence links.
-    raw_unique_link_list = db.select_all(db.RawUniqueLinks)
-    assert len(raw_unique_link_list)
-    all_link_ids = {ru.raw_stmt_id for ru in raw_unique_link_list}
-    all_link_mk_hashes = {ru.pa_stmt_mk_hash for ru in raw_unique_link_list}
-    assert len(all_link_ids - all_raw_ids) is 0
-    assert all([pa_stmt.mk_hash in all_link_mk_hashes
-                for pa_stmt in pa_stmt_list])
-
-    # Check the support links.
-    sup_links = db.select_all([db.PASupportLinks.supporting_mk_hash,
-                               db.PASupportLinks.supported_mk_hash])
-    assert sup_links
-    assert not any([l[0] == l[1] for l in sup_links]), \
-        "Found self-support in the database."
-
-    # Try to get all the preassembled statements from the table.
-    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
-    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
-    assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
-                                                len(pa_stmt_list))
-
-    self_supports = {
-        s.get_hash(): s.get_hash() in {s_.get_hash()
-                                       for s_ in s.supported_by + s.supports}
-        for s in pa_stmts
-    }
-    if any(self_supports.values()):
-        assert False, "Found self-support in constructed pa statement objects."
-
-    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
-    return
+    return db
 
 
-@attr('nonpublic')
-def test_db_preassembly_update():
+def _get_db_with_pa_stmts():
     db = get_temp_db(clear=True)
 
     db_builder = DbBuilder(db)
@@ -716,18 +567,210 @@ def test_db_preassembly_update():
     db.session.add(pu)
     db.session.commit()
 
+    return db
+
+
+# ==============================================================================
+# Tests
+# ==============================================================================
+
+
+def test_distillation_on_curated_set():
+    stmt_dict, stmt_list, target_sets, target_bettered_ids, ev_link_sids = \
+        make_raw_statement_set_for_distillation()
+    filtered_set, bettered_ids = \
+        db_util.get_filtered_rdg_stmts(stmt_dict, get_full_stmts=True,
+                                       linked_sids=ev_link_sids)
+    for stmt_set, dup_set in target_sets:
+        if stmt_set == filtered_set:
+            break
+    else:
+        assert False, "Filtered set does not match any valid possibilities."
+    assert bettered_ids == target_bettered_ids
+    # assert dup_set == duplicate_ids, (dup_set - duplicate_ids,
+    #                                   duplicate_ids - dup_set)
+    stmt_dict, stmt_list, target_sets, target_bettered_ids, ev_link_sids = \
+        make_raw_statement_set_for_distillation()
+    filtered_id_set, bettered_ids = \
+        db_util.get_filtered_rdg_stmts(stmt_dict, get_full_stmts=False,
+                                       linked_sids=ev_link_sids)
+    assert len(filtered_id_set) == len(filtered_set), \
+        (len(filtered_set), len(filtered_id_set))
+
+
+@attr('nonpublic')
+def test_db_lazy_insert():
+    rldb = RefLoadedDb()
+
+    # Try adding more text refs lazily. Overlap is guaranteed.
+    start = datetime.now()
+    rldb.db.copy_lazy('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
+    print("Lazy copy:", datetime.now() - start)
+
+    rldb.check_result()
+
+    # As a benchmark, see how long this takes the "old fashioned" way.
+    rldb.db._clear(force=True)
+    start = datetime.now()
+    rldb.db.copy('text_ref', rldb.fake_pmids_a, ('id', 'pmid'))
+    print('Second load:', datetime.now() - start)
+
+    start = datetime.now()
+    current_ids = {trid for trid, in rldb.db.select_all(rldb.db.TextRef.id)}
+    clean_fake_pmids_b = {t for t in rldb.fake_pmids_b
+                          if t[0] not in current_ids}
+    rldb.db.copy('text_ref', clean_fake_pmids_b, ('id', 'pmid'))
+    print('Old fashioned copy:', datetime.now() - start)
+    return
+
+
+@attr('nonpublic')
+def test_lazy_copier_unique_constraints():
+    db = get_temp_db(clear=True)
+
+    N = int(10**5)
+    S = int(10**8)
+    fake_mids_a = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
+    fake_mids_b = {('man-' + str(random.randint(0, S)),) for _ in range(N)}
+
+    assert len(fake_mids_a | fake_mids_b) < len(fake_mids_a) + len(fake_mids_b)
+
+    start = datetime.now()
+    db.copy('text_ref', fake_mids_a, ('manuscript_id',))
+    print("First load:", datetime.now() - start)
+
+    try:
+        db.copy('text_ref', fake_mids_b, ('manuscript_id',))
+        assert False, "Vanilla copy succeeded when it should have failed."
+    except Exception as e:
+        db._conn.rollback()
+        pass
+
+    start = datetime.now()
+    db.copy_lazy('text_ref', fake_mids_b, ('manuscript_id',))
+    print("Lazy copy:", datetime.now() - start)
+
+    mid_results = [mid for mid, in db.select_all(db.TextRef.manuscript_id)]
+    assert len(mid_results) == len(set(mid_results)), \
+        (len(mid_results), len(set(mid_results)))
+
+    return
+
+
+@attr('nonpublic')
+def test_lazy_copier_update():
+    rldb = RefLoadedDb()
+
+    # Try adding more text refs lazily. Overlap is guaranteed.
+    start = datetime.now()
+    rldb.db.copy_push('text_ref', rldb.fake_pmids_b, ('id', 'pmid'))
+    print("Lazy copy:", datetime.now() - start)
+    
+    rldb.check_result()
+
+
+@attr('nonpublic')
+def test_db_preassembly():
+    db = _get_db_no_pa_stmts()
+
+    # Now test the set of preassembled (pa) statements from the database
+    # against what we get from old-fashioned preassembly (opa).
+    opa_inp_stmts = _get_opa_input_stmts(db)
+
+    # Get the set of raw statements.
+    raw_stmt_list = db.select_all(db.RawStatements)
+    all_raw_ids = {raw_stmt.id for raw_stmt in raw_stmt_list}
+    assert len(raw_stmt_list)
+
+    # Run the preassembly initialization.
+    preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True,
+                                      ontology=_get_test_ontology())
+    preassembler.create_corpus(db)
+
+    # Make sure the number of pa statements is within reasonable bounds.
+    pa_stmt_list = db.select_all(db.PAStatements)
+    assert 0 < len(pa_stmt_list) < len(raw_stmt_list)
+
+    # Check the evidence links.
+    raw_unique_link_list = db.select_all(db.RawUniqueLinks)
+    assert len(raw_unique_link_list)
+    all_link_ids = {ru.raw_stmt_id for ru in raw_unique_link_list}
+    all_link_mk_hashes = {ru.pa_stmt_mk_hash for ru in raw_unique_link_list}
+    assert len(all_link_ids - all_raw_ids) is 0
+    assert all([pa_stmt.mk_hash in all_link_mk_hashes
+                for pa_stmt in pa_stmt_list])
+
+    # Check the support links.
+    sup_links = db.select_all([db.PASupportLinks.supporting_mk_hash,
+                               db.PASupportLinks.supported_mk_hash])
+    assert sup_links
+    assert not any([l[0] == l[1] for l in sup_links]), \
+        "Found self-support in the database."
+
+    # Try to get all the preassembled statements from the table.
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    assert len(pa_stmts) == len(pa_stmt_list), (len(pa_stmts),
+                                                len(pa_stmt_list))
+
+    self_supports = {
+        s.get_hash(): s.get_hash() in {s_.get_hash()
+                                       for s_ in s.supported_by + s.supports}
+        for s in pa_stmts
+    }
+    if any(self_supports.values()):
+        assert False, "Found self-support in constructed pa statement objects."
+
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
+    return
+
+
+@attr('nonpublic')
+def test_db_preassembly_update():
+    db = _get_db_with_pa_stmts()
+
     # Run the preassembly test.
     preassembler = pdb.DbPreassembler(batch_size=3, print_logs=True,
                                       ontology=_get_test_ontology())
     opa_inp_stmts = _get_opa_input_stmts(db)
     sleep(0.5)
-    start = datetime.now()
-    print("Beginning supplement...")
     preassembler.supplement_corpus(db)
-    end = datetime.now()
-    print("Duration of incremental update:", end-start)
 
     pa_jsons = db_client.get_pa_stmt_jsons(db=db)
     pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
     _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
     return
+
+
+def test_preassembly_create_corpus_div_by_type():
+    db = _get_db_no_pa_stmts()
+    opa_inp_stmts = _get_opa_input_stmts(db)
+
+    all_types = {t for t, in db.select_all(db.RawStatements.type)}
+    for stmt_type in all_types:
+        pa = pdb.DbPreassembler(batch_size=2, print_logs=True,
+                                ontology=_get_test_ontology(),
+                                stmt_type=stmt_type)
+        pa.create_corpus(db)
+
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)
+
+
+def test_preassembly_supplement_corpus_div_by_type():
+    db = _get_db_with_pa_stmts()
+    opa_inp_stmts = _get_opa_input_stmts(db)
+
+    sleep(0.5)
+
+    all_types = {t for t, in db.select_all(db.RawStatements.type)}
+    for stmt_type in all_types:
+        pa = pdb.DbPreassembler(batch_size=2, print_logs=True,
+                                ontology=_get_test_ontology(),
+                                stmt_type=stmt_type)
+        pa.supplement_corpus(db)
+
+    pa_jsons = db_client.get_pa_stmt_jsons(db=db)
+    pa_stmts = stmts_from_json([r['stmt'] for r in pa_jsons.values()])
+    _check_against_opa_stmts(db, opa_inp_stmts, pa_stmts)

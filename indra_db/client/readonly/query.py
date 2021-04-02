@@ -5,6 +5,7 @@ __all__ = ['Query', 'Intersection', 'Union', 'MergeQuery', 'HasAgent',
            'FromPapers', 'EvidenceFilter', 'AgentJsonExpander', 'FromAgentJson',
            'EmptyQuery']
 
+import re
 import json
 import logging
 from itertools import combinations
@@ -2011,16 +2012,28 @@ class IntrusiveQuery(Query):
     def _get_clause(self, meta):
         q_values = self._get_query_values()
         col = getattr(meta, self.col_name)
-        if len(q_values) == 1:
-            if not self._inverted:
-                clause = col == q_values[0]
+        if self.item_type == Bound:
+            if len(q_values) == 1:
+                if not self._inverted:
+                    clause = q_values[0].clause(col)
+                else:
+                    clause = q_values[0].invert().clause(col)
             else:
-                clause = col != q_values[0]
+                if not self._inverted:
+                    clause = and_([val.clause(col) for val in q_values])
+                else:
+                    clause = or_([val.invert().clause(col) for val in q_values])
         else:
-            if not self._inverted:
-                clause = col.in_(q_values)
+            if len(q_values) == 1:
+                if not self._inverted:
+                    clause = col == q_values[0]
+                else:
+                    clause = col != q_values[0]
             else:
-                clause = col.notin_(q_values)
+                if not self._inverted:
+                    clause = col.in_(q_values)
+                else:
+                    clause = col.notin_(q_values)
         return clause
 
     def _apply_filter(self, meta, query):
@@ -2102,6 +2115,82 @@ class HasNumEvidence(IntrusiveQuery):
     def __str__(self):
         inv = 'do not ' if self._inverted else ''
         return f"{inv}have {_join_list(self.evidence_nums)} evidence"
+
+
+class Bound:
+    _patt = re.compile("([<>=]{1,2})[ \t]*([0-9]+)")
+    _opposites = [('<', '>='), ('>', '<='), ('==', '!=')]
+    _rev_dict = {k: v for a, b in _opposites for k, v in [(a, b), (b, a)]}
+
+    def __init__(self, bound):
+        if isinstance(bound, str):
+            m = self._patt.match(bound)
+            if m is None:
+                raise ValueError(f"invalid literal for type Bound: \'{bound}\'")
+            self.relation, value = m.groups()
+            self.num = int(value)
+        elif isinstance(bound, tuple):
+            self.relation, value = bound
+            self.num = int(value)
+        elif isinstance(bound, Bound):
+            self.relation = bound.relation
+            self.num = bound.num
+        else:
+            raise TypeError(f"Bound() argument must be string, tuple, or "
+                            f"Bound, not \'{type(bound)}\'")
+
+        if self.relation not in ['>', '<', '>=', '<=', '==', '!=']:
+            raise ValueError(f"invalid relation: \'{self.relation}\'")
+
+        return
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(\'{self.relation} {self.num}\')"
+
+    def __str__(self):
+        return f"{self.relation} {self.num}"
+
+    def __invert__(self):
+        return Bound((self._rev_dict[self.relation], self.num))
+
+    def constraint(self, col):
+        if self.relation == '<':
+            return col < self.num
+        elif self.relation == '>':
+            return col > self.num
+        elif self.relation == '<=':
+            return col <= self.num
+        elif self.relation == '>=':
+            return col >= self.num
+        elif self.relation == '!=':
+            return col != self.num
+        else:
+            return col == self.num
+
+
+class HasEvidenceBound(IntrusiveQuery):
+    """Find Statements that fit given evidence bounds.
+
+    A list of bounds will be combined using the logic of "or", so ["<1", ">3"]
+    will return Statements that are _either_ less than 1 OR greater than 3.
+
+    """
+    name = 'has_evidence_bounds'
+    list_name = 'evidence_bounds'
+    item_type = Bound
+    col_name = 'ev_count'
+
+    def __init__(self, bounds):
+        super(HasEvidenceBound, self).__init__(bounds)
+
+    def __str__(self):
+        if self._inverted:
+            effective_bounds = [bound.invert() for bound in self.bounds]
+            joiner = 'or'
+        else:
+            effective_bounds = self.bounds
+            joiner = 'and'
+        return f"have {_join_list(effective_bounds, joiner)} evidence"
 
 
 class HasType(IntrusiveQuery):

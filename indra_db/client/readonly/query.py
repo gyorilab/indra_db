@@ -9,7 +9,8 @@ import re
 import json
 import logging
 from itertools import combinations
-from typing import Optional, Iterable, Union
+from typing import Optional, Iterable
+from typing import Union as TypeUnion
 from collections import OrderedDict, defaultdict
 from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
     String, union, intersect
@@ -2195,7 +2196,7 @@ class HasEvidenceBound(IntrusiveQuery):
     item_type = Bound
     col_name = 'ev_count'
 
-    def __init__(self, evidence_bounds: Iterable[Union[str, Bound]]):
+    def __init__(self, evidence_bounds: Iterable[TypeUnion[str, Bound]]):
         super(HasEvidenceBound, self).__init__(evidence_bounds)
 
     def __str__(self):
@@ -2207,6 +2208,14 @@ class HasEvidenceBound(IntrusiveQuery):
             effective_bounds = self.evidence_bounds
             joiner = 'and'
         return f"have {_join_list(effective_bounds, joiner)} evidence"
+
+    def _get_constraint_json(self) -> dict:
+        return {'evidence_bounds': sorted(str(bound)
+                                          for bound in self.evidence_bounds)}
+
+    @classmethod
+    def _from_constraint_json(cls, constraint_json):
+        return cls(constraint_json["evidence_bounds"])
 
 
 class HasType(IntrusiveQuery):

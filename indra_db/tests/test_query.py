@@ -760,6 +760,26 @@ def test_evidence_count_is_0():
         sum(res.evidence_counts.values())
 
 
+def test_evidence_bounds_null_cases():
+    ro = get_ro('primary')
+    query = HasAgent('MEK') & HasEvidenceBound(["< 1"])
+    res = query.get_hashes(ro, limit=10)
+    assert len(res.results) == 0
+
+    query = HasAgent('MEK') & HasEvidenceBound(["== 0"])
+    res = query.get_hashes(ro, limit=10)
+    assert len(res.results) == 0
+
+
+def test_evidence_bounds_basic_case():
+    ro = get_ro("primary")
+
+    query = HasAgent('MEK') & HasAgent('ERK') \
+        & HasEvidenceBound(["<= 10", " > 5"])
+    res = query.get_hashes(ro)
+    assert all(5 < c <= 10 for c in res.evidence_counts.values())
+
+
 def test_real_world_examples():
     ro = get_ro('primary')
     query = (HasAgent('MEK', namespace='FPLX', role='SUBJECT')

@@ -2124,7 +2124,7 @@ class Bound:
 
     def __init__(self, bound):
         if isinstance(bound, str):
-            m = self._patt.match(bound)
+            m = self._patt.match(bound.strip())
             if m is None:
                 raise ValueError(f"invalid literal for type Bound: \'{bound}\'")
             self.relation, value = m.groups()

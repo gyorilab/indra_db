@@ -2020,9 +2020,9 @@ class IntrusiveQuery(Query):
                     clause = q_values[0].invert().clause(col)
             else:
                 if not self._inverted:
-                    clause = and_([val.clause(col) for val in q_values])
+                    clause = and_(val.clause(col) for val in q_values)
                 else:
-                    clause = or_([val.invert().clause(col) for val in q_values])
+                    clause = or_(val.invert().clause(col) for val in q_values)
         else:
             if len(q_values) == 1:
                 if not self._inverted:

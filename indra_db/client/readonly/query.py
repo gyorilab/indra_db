@@ -3,7 +3,7 @@ __all__ = ['Query', 'Intersection', 'Union', 'MergeQuery', 'HasAgent',
            'HasReadings', 'HasDatabases', 'SourceQuery', 'SourceIntersection',
            'HasType', 'IntrusiveQuery', 'HasNumAgents', 'HasNumEvidence',
            'FromPapers', 'EvidenceFilter', 'AgentJsonExpander', 'FromAgentJson',
-           'EmptyQuery']
+           'EmptyQuery', 'HasEvidenceBound', 'Bound']
 
 import re
 import json
@@ -2153,7 +2153,7 @@ class Bound:
     def __invert__(self):
         return Bound((self._rev_dict[self.relation], self.num))
 
-    def constraint(self, col):
+    def clause(self, col):
         if self.relation == '<':
             return col < self.num
         elif self.relation == '>':
@@ -2180,15 +2180,16 @@ class HasEvidenceBound(IntrusiveQuery):
     item_type = Bound
     col_name = 'ev_count'
 
-    def __init__(self, bounds):
-        super(HasEvidenceBound, self).__init__(bounds)
+    def __init__(self, evidence_bounds):
+        super(HasEvidenceBound, self).__init__(evidence_bounds)
 
     def __str__(self):
         if self._inverted:
-            effective_bounds = [bound.invert() for bound in self.bounds]
+            effective_bounds = [bound.invert()
+                                for bound in self.evidence_bounds]
             joiner = 'or'
         else:
-            effective_bounds = self.bounds
+            effective_bounds = self.evidence_bounds
             joiner = 'and'
         return f"have {_join_list(effective_bounds, joiner)} evidence"
 

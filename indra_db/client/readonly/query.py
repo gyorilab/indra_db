@@ -2153,6 +2153,14 @@ class Bound:
     def __invert__(self):
         return Bound((self._rev_dict[self.relation], self.num))
 
+    def __lt__(self, other):
+        symbol_order = ["<", "<=", "==", "!=", ">", ">="]
+        return (self.num, symbol_order.index(self.relation)) \
+               < (other.num, symbol_order.index(other.relation))
+
+    def __eq__(self, other):
+        return self.num == other.num and self.relation == other.relation
+
     def clause(self, col):
         if self.relation == '<':
             return col < self.num

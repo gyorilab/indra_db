@@ -270,7 +270,7 @@ class PaDatabaseEnv(DatabaseEnv):
             on the added statements.
         """
         available_tuples = self.get_available_stmt_tuples()
-        if fraction is not 1:
+        if fraction != 1:
             num_stmts = int(fraction*len(available_tuples))
             input_tuples = random.sample(available_tuples, num_stmts)
         else:

@@ -9,7 +9,7 @@ import re
 import json
 import logging
 from itertools import combinations
-from typing import Optional
+from typing import Optional, Iterable, Union
 from collections import OrderedDict, defaultdict
 from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
     String, union, intersect
@@ -2174,13 +2174,20 @@ class HasEvidenceBound(IntrusiveQuery):
     A list of bounds will be combined using the logic of "or", so ["<1", ">3"]
     will return Statements that are _either_ less than 1 OR greater than 3.
 
+    Parameters
+    ----------
+    evidence_bounds :
+        An iterable containing bounds for the evidence support of Statements to
+        be returned, such as `Bound("< 10")` or simply "< 10" (the string will
+        be parsed into a Bound object, if possible).
+
     """
     name = 'has_evidence_bounds'
     list_name = 'evidence_bounds'
     item_type = Bound
     col_name = 'ev_count'
 
-    def __init__(self, evidence_bounds):
+    def __init__(self, evidence_bounds: Iterable[Union[str, Bound]]):
         super(HasEvidenceBound, self).__init__(evidence_bounds)
 
     def __str__(self):

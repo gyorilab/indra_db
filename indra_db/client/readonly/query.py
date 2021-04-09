@@ -1595,10 +1595,17 @@ class HasAgent(Query):
         (optional) None by default. The regularized position of the agent in the
         Statement's list of agents.
     """
-    def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):
+    def __init__(self, agent_id=None, namespace='NAME', role=None,
+                 agent_num=None):
+        # NAME and AUTO namespaces apply to all agents, so without an ID there
+        # is no constraint.
+        if agent_id is None and namespace in ['NAME', 'AUTO']:
+            raise ValueError("Either an agent ID or a limiting namespace must "
+                             "be specified.")
+
         # If the user sends the namespace "auto", use gilda to guess the
         # true ID and namespace.
-        if namespace == 'AUTO':
+        if namespace == 'AUTO' and agent_id is not None:
             res = gilda_ground(agent_id)
             if not res:
                 raise NoGroundingFound(f"Could not resolve {agent_id} with "
@@ -1628,7 +1635,10 @@ class HasAgent(Query):
 
     def __str__(self):
         s = 'do not ' if self._inverted else ''
-        s += f"have an agent where {self.namespace}={self.agent_id}"
+        if self.agent_id is not None:
+            s += f"have an agent where {self.namespace}={self.agent_id}"
+        else:
+            s += f"have an agent in namespace {self.namespace}"
         if self.role is not None:
             s += f" with role={self.role}"
         elif self.agent_num is not None:

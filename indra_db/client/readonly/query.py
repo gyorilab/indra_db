@@ -1578,22 +1578,46 @@ def gilda_ground(agent_text):
 class HasAgent(Query):
     """Get Statements that have a particular agent in a particular role.
 
+    **NOTE:** At this time 2 agent queries do NOT necessarily imply that the 2
+    agents are different. E.g. ```HasAgent("MEK") & HasAgent("MEK")``` will get
+    any Statements that have agent with name MEK, not Statements with two agents
+    called MEK. This may change in the future, however in the meantime you can
+    get around this fairly well by specifying the roles:
+
+    >>> HasAgent("MEK", role="SUBJECT") & HasAgent("MEK", role="OBJECT")
+
+    Or for a more complicated case, consider a query for Statements where one
+    agent is MEK and the other has namespace FPLX. Naturally any agent labeled
+    as MEK will also have a namespace FPLX (MEK is a famplex identifier), and
+    in general you will not want to constrain which role is MEK and which is the
+    "other" agent. To accomplish this you need to use ```|```:
+
+    >>> (
+    >>>   HasAgent("MEK", role="SUBJECT")
+    >>>   & HasAgent(namespace="FPLX", role="OBJECT")
+    >>> ) | (
+    >>>   HasAgent("MEK", role="OBJECT")
+    >>>   & HasAgent(namespace="FPLX", role="SUBJECT")
+    >>> )
+
     Parameters
     ----------
-    agent_id : str
+    agent_id : Optional[str]
         The ID string naming the agent, for example 'ERK' (FPLX or NAME) or
-        'plx' (TEXT), and so on.
-    namespace : str
-        (optional) By default, this is NAME, indicating the canonical name of
+        'plx' (TEXT), and so on. If None, the query must then be constrained by
+        the namespace. (Default is None)
+    namespace : Optional[str]
+        By default, this is NAME, indicating the canonical name of
         the agent. Other options for namespace include FPLX (FamPlex), CHEBI,
         CHEMBL, HGNC, UP (UniProt), TEXT (for raw text mentions), and many more.
-        If you use the namespace "AUTO", GILDA will be used to try and guess the
-        proper namespace and agent ID.
-    role : str or None
-        (optional) None by default. Options are "SUBJECT", "OBJECT", or "OTHER".
-    agent_num : int or None
-        (optional) None by default. The regularized position of the agent in the
-        Statement's list of agents.
+        If you use the namespace AUTO, GILDA will be used to try and guess the
+        proper namespace and agent ID. If `agent_id` is None, namespace must be
+        specified and must not be NAME, TEXT, or AUTO.
+    role : Optional[str]
+        Options are "SUBJECT", "OBJECT", or "OTHER". (Default is None)
+    agent_num : Optional[int]
+        The regularized position of the agent in the Statement's list of agents.
+        (Default is None)
     """
     def __init__(self, agent_id=None, namespace='NAME', role=None,
                  agent_num=None):

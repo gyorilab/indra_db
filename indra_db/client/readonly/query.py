@@ -1626,7 +1626,10 @@ class HasAgent(Query):
         self.agent_num = agent_num
 
         # Regularize ID based on Database optimization (e.g. striping prefixes)
-        self.regularized_id = regularize_agent_id(agent_id, namespace)
+        if agent_id is not None:
+            self.regularized_id = regularize_agent_id(agent_id, namespace)
+        else:
+            self.regularized_id = None
         super(HasAgent, self).__init__()
 
     def _copy(self):
@@ -1663,7 +1666,9 @@ class HasAgent(Query):
     def _get_hash_query(self, ro, inject_queries=None):
         # Get the base query and filter by regularized ID.
         meta = self._get_table(ro)
-        qry = self._base_query(ro).filter(meta.db_id.like(self.regularized_id))
+        qry = self._base_query(ro)
+        if self.regularized_id is not None:
+            qry = qry.filter(meta.db_id.like(self.regularized_id))
 
         # If we aren't going to one of the special tables for NAME or TEXT, we
         # need to filter by namespace.

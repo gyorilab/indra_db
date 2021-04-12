@@ -1599,7 +1599,7 @@ class HasAgent(Query):
                  agent_num=None):
         # NAME and AUTO namespaces apply to all agents, so without an ID there
         # is no constraint.
-        if agent_id is None and namespace in ['NAME', 'AUTO']:
+        if agent_id is None and namespace in ['NAME', 'AUTO', 'TEXT']:
             raise ValueError("Either an agent ID or a limiting namespace must "
                              "be specified.")
 

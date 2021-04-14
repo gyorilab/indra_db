@@ -52,21 +52,20 @@ class PrincipalSchema(Schema):
       7. :func:`raw_unique_links <raw_unique_links>`
       8. :func:`pa_support_links <pa_support_links>`
 
-    **Agent Tables**
+    **Statement Attribute Tables**
 
-    Then there are the agent tables, that for each raw and preassembled (pa)
-    Statement record information for the various agents. The set of tables is
-    more or less the same for the raw statements:
+    Then there are the tables that represent attributes of statements. The set
+    of tables is identical for the raw statements:
 
-      - :func:`raw_agents <raw_agents>`
       - :func:`raw_activity <raw_activity>`
+      - :func:`raw_agents <raw_agents>`
       - :func:`raw_muts <raw_muts>`
       - :func:`raw_mods <raw_mods>`
 
     and the preassembled statements:
 
-      - :func:`pa_agents <pa_agents>`
       - :func:`pa_activity <pa_activity>`
+      - :func:`pa_agents <pa_agents>`
       - :func:`pa_muts <pa_muts>`
       - :func:`pa_mods <pa_mods>`
 

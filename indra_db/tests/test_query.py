@@ -601,6 +601,16 @@ def test_get_agents():
     assert len(js['results']) == len(res.results)
 
 
+def test_has_agent_namespace_only():
+    ro = get_ro('primary')
+    query = HasAgent(namespace='HGNC') & HasType(["Inhibition"])
+    res = query.get_statements(ro, limit=100)
+    stmts = res.statements()
+    assert len(stmts) == 100
+    assert all(any('HGNC' in ag.db_refs for ag in s.agent_list())
+               for s in stmts)
+
+
 def test_evidence_filtering_has_only_source():
     ro = get_ro('primary')
     q1 = HasAgent('TP53')

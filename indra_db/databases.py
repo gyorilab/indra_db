@@ -30,7 +30,7 @@ from indra_db.config import CONFIG, build_db_url, is_db_testing
 from indra_db.schemas.mixins import IndraDBTableMetaClass
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
-from indra_db.schemas import principal_schema, readonly_schema
+from indra_db.schemas import PrincipalSchema, foreign_key_map, ReadonlySchema
 from indra_db.schemas.readonly_schema import CREATE_ORDER
 
 
@@ -1126,8 +1126,8 @@ class PrincipalDatabaseManager(DatabaseManager):
         self.__protected = self._DatabaseManager__protected
         self.__engine = self._DatabaseManager__engine
 
-        self.public = principal_schema.get_schema(self.Base)
-        self.readonly = readonly_schema.get_schema(self.Base)
+        self.public = PrincipalSchema(self.Base).build_table_dict()
+        self.readonly = ReadonlySchema(self.Base).build_table_dict()
         self.tables = {k: v for d in [self.public, self.readonly]
                        for k, v in d.items()}
 
@@ -1139,7 +1139,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             else:
                 setattr(self, tbl.__name__, tbl)
 
-        self._init_foreign_key_map(principal_schema.foreign_key_map)
+        self._init_foreign_key_map(foreign_key_map)
         return
 
     def __getattribute__(self, item):
@@ -1373,7 +1373,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
         self.__protected = self._DatabaseManager__protected
         self.__engine = self._DatabaseManager__engine
 
-        self.tables = readonly_schema.get_schema(self.Base)
+        self.tables = ReadonlySchema(self.Base).build_table_dict()
         for tbl in self.tables.values():
             if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl

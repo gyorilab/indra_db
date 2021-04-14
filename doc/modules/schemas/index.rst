@@ -7,9 +7,6 @@ as some useful mixin classes.
 Principal Database Schema (:py:mod:`indra_db.schemas.principal_schema`)
 -----------------------------------------------------------------------
 
-Defines the `get_schema` function for the principal database, which represents
-the "ground truth" of the knowledge we aggregate.
-
 .. automodule:: indra_db.schemas.principal_schema
    :members:
 

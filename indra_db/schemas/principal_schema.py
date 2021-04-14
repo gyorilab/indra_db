@@ -3,12 +3,8 @@ The Principal Schema
 ====================
 
 The Principal database is the core representation of our data, the ultimate
-authority on what we know. It is heavily optimized for the _input_ and
+authority on what we know. It is heavily optimized for the *input* and
 maintenance of our data.
-
-There are two broad categories of table: the core tables representing our data,
-and ancillary tables that track modifications to that data, such as updates,
-files processed, etc.
 """
 
 __all__ = ['PrincipalSchema', 'foreign_key_map']
@@ -38,7 +34,62 @@ logger = logging.getLogger(__name__)
 
 
 class PrincipalSchema(Schema):
-    """Principal schema class"""
+    """The Principal schema class organizes the table constructors.
+
+    The tables can be divided into various groups, with a clear order of
+    creation for many of them.
+
+    **Core Tables**
+
+    First are the core tables representing our knowledge:
+
+      1. :func:`text_ref <text_ref>`
+      2. :func:`text_content <text_content>`
+      3. :func:`reading <reading>`
+      4. :func:`db_info <db_info>`
+      5. :func:`raw_statements <raw_statements>`
+      6. :func:`pa_statements <pa_statements>`
+      7. :func:`raw_unique_links <raw_unique_links>`
+      8. :func:`pa_support_links <pa_support_links>`
+
+    **Agent Tables**
+
+    Then there are the agent tables, that for each raw and preassembled (pa)
+    Statement record information for the various agents. The set of tables is
+    more or less the same for the raw statements:
+
+      - :func:`raw_agents <raw_agents>`
+      - :func:`raw_activity <raw_activity>`
+      - :func:`raw_muts <raw_muts>`
+      - :func:`raw_mods <raw_mods>`
+
+    and the preassembled statements:
+
+      - :func:`pa_agents <pa_agents>`
+      - :func:`pa_activity <pa_activity>`
+      - :func:`pa_muts <pa_muts>`
+      - :func:`pa_mods <pa_mods>`
+
+    **Curation Table**
+
+    This table is where we record the curations submitted by ourselves and our
+    users, which we use to improve our results.
+
+      - :func:`curations <curations>`
+
+    **Ancillary Tables**
+
+    We also have several tables that we use to keep track of processing
+    metadata, and some artifacts useful in that processing.
+
+      - :func:`updates <updates>`
+      - :func:`source_file <source_file>`
+      - :func:`reading_updates <reading_updates>`
+      - :func:`preassembly_updates <preassembly_updates>`
+      - :func:`xdd_updates <xdd_updates>`
+      - :func:`rejected_statements <rejected_statements>`
+      - :func:`discarded_statements <discarded_statements>`
+    """
 
     def text_ref(self):
         """Represent a piece of text, as per its identifiers.
@@ -126,7 +177,7 @@ class PrincipalSchema(Schema):
             ``pmcid_in``, or ``doi_in`` for those specific IDs.
 
             A dictionary of references can be easily generated using the
-            ``get_ref_dict``.
+            ``get_ref_dict`` method.
             """
             __tablename__ = 'text_ref'
             _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
@@ -200,6 +251,7 @@ class PrincipalSchema(Schema):
         return TextRef
 
     def mesh_ref_annotations(self):
+        """Represent the MeSH annotations of papers provided by PubMed."""
         class MeshRefAnnotations(self.base, IndraDBTable):
             __tablename__ = 'mesh_ref_annotations'
             _always_disp = ['pmid_num', 'mesh_num', 'qual_num']
@@ -219,6 +271,7 @@ class PrincipalSchema(Schema):
         return MeshRefAnnotations
 
     def mti_ref_annotaions_test(self):
+        """Represent the MeSH annotations of abstracts as inferred by MTI."""
         class MtiRefAnnotationsTest(self.base, IndraDBTable):
             __tablename__ = 'mti_ref_annotations_test'
             _always_disp = ['pmid_num', 'mesh_num', 'qual_num']
@@ -238,6 +291,7 @@ class PrincipalSchema(Schema):
         return MtiRefAnnotationsTest
 
     def source_file(self):
+        """Record the pubmed source file that was processed."""
         class SourceFile(self.base, IndraDBTable):
             __tablename__ = 'source_file'
             _always_disp = ['source', 'name']
@@ -251,6 +305,7 @@ class PrincipalSchema(Schema):
         return SourceFile
 
     def updates(self):
+        """Record when text ref and content updates were performed."""
         class Updates(self.base, IndraDBTable):
             __tablename__ = 'updates'
             _skip_disp = ['unresolved_conflicts_file']
@@ -263,6 +318,7 @@ class PrincipalSchema(Schema):
         return Updates
 
     def text_content(self):
+        """Represent a piece of text."""
         class TextContent(self.base, IndraDBTable):
             __tablename__ = 'text_content'
             _skip_disp = ['content']
@@ -285,6 +341,7 @@ class PrincipalSchema(Schema):
         return TextContent
 
     def reading(self):
+        """Represent a reading of a piece of text."""
         class Reading(self.base, IndraDBTable):
             __tablename__ = 'reading'
             _skip_disp = ['bytes']
@@ -308,6 +365,7 @@ class PrincipalSchema(Schema):
         return Reading
 
     def reading_updates(self):
+        """Record runs of the readers on the content we have found."""
         class ReadingUpdates(self.base, IndraDBTable):
             __tablename__ = 'reading_updates'
             _always_disp = ['reader', 'reader_version', 'run_datetime']
@@ -321,6 +379,7 @@ class PrincipalSchema(Schema):
         return ReadingUpdates
 
     def xdd_updates(self):
+        """Record the times we process dumps from xDD."""
         class XddUpdates(self.base, IndraDBTable):
             __tablename__ = 'xdd_updates'
             _always_disp = ['day_str']
@@ -332,6 +391,12 @@ class PrincipalSchema(Schema):
         return XddUpdates
 
     def db_info(self):
+        """Represent the provenance and metadata for an external knowledge base.
+
+        INDRA DB takes content not just from our own readings but also merges
+        that with many pre-existing knowledge bases, many of them human
+        curated.
+        """
         class DBInfo(self.base, IndraDBTable):
             __tablename__ = 'db_info'
             _always_disp = ['id', 'db_name', 'source_api']
@@ -344,6 +409,7 @@ class PrincipalSchema(Schema):
         return DBInfo
 
     def raw_statements(self):
+        """Represent Statements exactly as extracted their sources."""
         class RawStatements(self.base, IndraDBTable):
             __tablename__ = 'raw_statements'
             _skip_disp = ['json']
@@ -371,6 +437,7 @@ class PrincipalSchema(Schema):
         return RawStatements
 
     def rejected_statements(self):
+        """Represent raw statements that were rejected."""
         class RejectedStatements(self.base, IndraDBTable):
             __tablename__ = 'rejected_statements'
             _skip_disp = ['json']
@@ -392,6 +459,7 @@ class PrincipalSchema(Schema):
         return RejectedStatements
 
     def discarded_statements(self):
+        """Record the reasons for which some statements were discarded."""
         class DiscardedStatements(self.base, IndraDBTable):
             __tablename__ = 'discarded_statements'
             _always_disp = ['stmt_id', 'reason']
@@ -403,6 +471,7 @@ class PrincipalSchema(Schema):
         return DiscardedStatements
 
     def raw_activity(self):
+        """Represent the activity of a raw statement (an ActiveForm)."""
         class RawActivity(self.base, IndraDBTable):
             __tablename__ = 'raw_activity'
             _always_disp = ['stmt_id', 'activity', 'is_active']
@@ -416,6 +485,7 @@ class PrincipalSchema(Schema):
         return RawActivity
 
     def raw_agents(self):
+        """Represent an identifier for an agent of a raw statement."""
         class RawAgents(self.base, IndraDBTable):
             __tablename__ = 'raw_agents'
             _always_disp = ['stmt_id', 'db_name', 'db_id', 'ag_num']
@@ -431,6 +501,7 @@ class PrincipalSchema(Schema):
         return RawAgents
 
     def raw_mods(self):
+        """Represent a modification of an agent of a raw statement."""
         class RawMods(self.base, IndraDBTable):
             __tablename__ = 'raw_mods'
             _always_disp = ['stmt_id', 'type', 'position', 'residue', 'modified',
@@ -447,6 +518,7 @@ class PrincipalSchema(Schema):
         return RawMods
 
     def raw_muts(self):
+        """Represent a mutation of an agent of a raw statement."""
         class RawMuts(self.base, IndraDBTable):
             __tablename__ = 'raw_muts'
             _always_disp = ['stmt_id', 'position', 'residue_from', 'residue_to',
@@ -462,6 +534,12 @@ class PrincipalSchema(Schema):
         return RawMuts
 
     def raw_unique_links(self):
+        """Represent links between raw statements and preassembled statements.
+
+        Each preassembled statement is constructed from multiple raw statements,
+        in general. This table is how the list of evidence can be built for
+        each preassembled statement.
+        """
         class RawUniqueLinks(self.base, IndraDBTable):
             __tablename__ = 'raw_unique_links'
             _always_disp = ['raw_stmt_id', 'pa_stmt_mk_hash']
@@ -482,6 +560,7 @@ class PrincipalSchema(Schema):
         return RawUniqueLinks
 
     def preassembly_updates(self):
+        """Record updates of the preassembled corpus."""
         class PreassemblyUpdates(self.base, IndraDBTable):
             __tablename__ = 'preassembly_updates'
             _always_disp = ['corpus_init', 'run_datetime']
@@ -492,6 +571,11 @@ class PrincipalSchema(Schema):
         return PreassemblyUpdates
 
     def pa_statements(self):
+        """Represent preassembled statements.
+
+         Preassmebled Statements are a cleaned up and unique corpus of
+         statements generated from the raw statements.
+         """
         class PAStatements(self.base, IndraDBTable):
             __tablename__ = 'pa_statements'
             _skip_disp = ['json']
@@ -508,6 +592,7 @@ class PrincipalSchema(Schema):
         return PAStatements
 
     def pa_activity(self):
+        """Represent the activity of a preassembled Statement."""
         class PAActivity(self.base, IndraDBTable):
             __tablename__ = 'pa_activity'
             __always_disp__ = ['stmt_mk_hash', 'activity', 'is_active']
@@ -521,6 +606,7 @@ class PrincipalSchema(Schema):
         return PAActivity
 
     def pa_agents(self):
+        """Represent an identifier for an agent of a preassembled statement."""
         class PAAgents(self.base, IndraDBTable):
             __tablename__ = 'pa_agents'
             _always_disp = ['stmt_mk_hash', 'db_name', 'db_id', 'ag_num']
@@ -537,6 +623,7 @@ class PrincipalSchema(Schema):
         return PAAgents
 
     def pa_mods(self):
+        """Represent a modification of an agent of a preassembled statement."""
         class PAMods(self.base, IndraDBTable):
             __tablename__ = 'pa_mods'
             _always_disp = ['stmt_mk_hash', 'type', 'position', 'residue',
@@ -554,6 +641,7 @@ class PrincipalSchema(Schema):
         return PAMods
 
     def pa_muts(self):
+        """Represent a mutation of an agent of a preassembled statement."""
         class PAMuts(self.base, IndraDBTable):
             __tablename__ = 'pa_muts'
             _always_disp = ['stmt_mk_hash', 'position', 'residue_from',
@@ -570,6 +658,12 @@ class PrincipalSchema(Schema):
         return PAMuts
 
     def pa_support_links(self):
+        """Represent the links of support calculated during preassembly.
+
+        In INDRA, we look for cases where more specific Statements may lend
+        support to more general Statements, and potentially vice versa, to
+        better gauge whether an extraction is reliable.
+        """
         class PASupportLinks(self.base, IndraDBTable):
             __tablename__ = 'pa_support_links'
             _always_disp = ['supporting_mk_hash', 'supported_mk_hash']
@@ -587,6 +681,7 @@ class PrincipalSchema(Schema):
         return PASupportLinks
 
     def curations(self):
+        """Represent the curations of our content."""
         class Curation(self.base, IndraDBTable):
             __tablename__ = 'curation'
             _always_disp = ['pa_hash', 'source_hash', 'tag', 'curator', 'date']

@@ -106,6 +106,7 @@ class ReadonlySchema(Schema):
     loaded into the readonly database.
 
     The following views must be built in this specific order (_temp_):
+
       1. raw_stmt_src
       2. fast_raw_pa_link
       3. pa_agent_counts
@@ -128,11 +129,13 @@ class ReadonlySchema(Schema):
       20. mesh_term_meta
       21. mesh_concept_meta
       22. agent_interactions
+
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
     """
 
     def belief(self):
+        """Represent the belief of preassembled statements, keyed by hash."""
         class Belief(self.base, IndraDBTable):
             __tablename__ = 'belief'
             __table_args__ = {'schema': 'readonly'}
@@ -143,6 +146,7 @@ class ReadonlySchema(Schema):
         return Belief
 
     def evidence_counts(self):
+        """Represent the evidence counts of pa statements, keyed by hash."""
         class EvidenceCounts(self.base, ReadonlyTable):
             __tablename__ = 'evidence_counts'
             __table_args__ = {'schema': 'readonly'}

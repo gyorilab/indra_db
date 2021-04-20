@@ -21,7 +21,7 @@ def main():
           include_package_data=True,
           install_requires=['indra', 'boto3', 'sqlalchemy', 'psycopg2',
                             'pgcopy', 'matplotlib', 'nltk', 'reportlab',
-                            'cachetools', 'termcolor'],
+                            'cachetools', 'termcolor', 'click'],
           extras_require=extras_require,
           entry_points="""
           [console_scripts]

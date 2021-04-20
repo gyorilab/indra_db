@@ -461,8 +461,6 @@ class TextContentSessionHandler(object):
             The dictionary should be keyed on id_types. The valid keys
             are 'PMID', 'PMCID', 'DOI', 'PII', 'URL', 'MANUSCRIPT_ID'.
 
-
-
         use_cache : Optional[bool]
             Whether or not to use cached results. Only relevant when
             querying the primary database. Will not work if primary

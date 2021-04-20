@@ -12,9 +12,17 @@ import click
 from benchmarker.util import benchmark, list_apis, list_stacks, save_results
 
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
 @click.group()
 def main():
-    """The benchmark CLI."""
+    """The benchmarker CLI.
+
+    The benchmarker tool allows stack deployments to be
+    compared based on the time taken to run existing test corpora that utilize
+    the web service.
+    """
 
 
 @main.command('list')
@@ -106,7 +114,7 @@ def run(location, stack_name, api_name, inner_runs, outer_runs):
 def view():
     """Run the web service to view results."""
     basic_env = os.environ.copy()
-    basic_env['FLASK_APP'] = "viewer_app/app.py:app"
+    basic_env['FLASK_APP'] = os.path.join(HERE, "viewer_app/app.py:app")
     print("Starting web server...")
     p = subprocess.Popen(['flask', 'run', '--port', '5280'],
                          env=basic_env, stdout=subprocess.PIPE,

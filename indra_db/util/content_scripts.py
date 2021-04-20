@@ -32,7 +32,7 @@ def get_pa_statements_for_pair(curie1, curie2):
        String of the form f'{namespace}:{identifier}' such as
        'HGNC:6091' or 'FPLX:PI3K'.
 
-    curie2: str
+    curie2 : str
         See above
     
     Returns

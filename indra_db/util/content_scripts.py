@@ -267,41 +267,6 @@ def get_stmts_with_agent_text_in(agent_texts, filter_genes=False, db=None):
     return dict(output)
 
 
-def get_text_content_from_stmt_ids(stmt_ids, db=None):
-    """Get text content for statements from a list of ids
-
-    Gets the fulltext if it is available, even if the statement came from an
-    abstract.
-
-    Parameters
-    ----------
-    stmt_ids : list of str
-
-    db : Optional[:py:class:`DatabaseManager`]
-        User has the option to pass in a database manager. If None
-        the primary database is used. Default: None
-
-    Returns
-    -------
-    ref_dict: dict
-        dict mapping statement ids to identifiers for pieces of content.
-        These identifiers take the form `<text_ref_id>/<source>/<text_type>'.
-        No entries exist for statements with no associated text content
-        (these typically come from databases)
-
-
-    text_dict: dict
-        dict mapping content identifiers used as values in the ref_dict
-        to best available text content. The order of preference is
-        fulltext xml > plaintext abstract > title
-    """
-    if db is None:
-        db = get_db('primary')
-    identifiers = get_content_identifiers_from_stmt_ids(stmt_ids)
-    content = _get_text_content(identifiers.values())
-    return identifiers, content
-
-
 def get_text_content_from_pmids(pmids, db=None):
     """Get best available text content for list of pmids
 
@@ -335,50 +300,6 @@ def get_text_content_from_pmids(pmids, db=None):
     identifiers = get_content_identifiers_from_pmids(pmids)
     content = _get_text_content(identifiers.values())
     return identifiers, content
-
-
-def get_content_identifiers_from_stmt_ids(stmt_ids, db=None):
-    """Get content identifiers for statements from a list of ids
-
-    An identifier is a triple containing a text_ref_id, source, and text_type
-    Gets the identifier for best piece of text content with priority
-    fulltext > abstract > title
-
-    Parameters
-    ----------
-    stmt_ids : list of str
-
-    db : Optional[:py:class:`DatabaseManager`]
-        User has the option to pass in a database manager. If None
-        the primary database is used. Default: None
-
-    Returns
-    -------
-    ref_dict: dict
-        dict mapping statement ids to identifiers for pieces of content.
-        These identifiers take the form `<text_ref_id>/<source>/<text_type>'.
-        No entries exist for statements with no associated text content
-        (these typically come from databases)
-    """
-    if db is None:
-        db = get_db('primary')
-    stmt_ids = tuple(set(stmt_ids))
-    query = """SELECT
-                   sub.stmt_id, tc.text_ref_id, tc.source,
-                   tc.format, tc.text_type
-               FROM
-                   text_content tc,
-                   (SELECT
-                        stmt_id, text_ref_id
-                    FROM
-                        raw_stmt_ref_link
-                    WHERE
-                        stmt_id IN :stmt_ids) sub
-                WHERE
-                    tc.text_ref_id = sub.text_ref_id
-            """
-    res = db.session.execute(text(query), {'stmt_ids': stmt_ids})
-    return _collect_content_identifiers(res)
 
 
 def get_content_identifiers_from_pmids(pmids, db=None):

@@ -128,7 +128,8 @@ def get_readings_for_reading_ids(reading_ids):
     """
     query = 'SELECT id, bytes FROM reading WHERE id IN :reading_ids'
     with managed_db() as db:
-        res = db.session.execute(query, {'reading_ids': tuple(set(reading_ids))})
+        res = db.session.execute(text(query),
+                                 {'reading_ids': tuple(set(reading_ids))})
     return {reading_id: json.loads(unpack(bytes_))
             for reading_id, bytes_ in res}
 
@@ -148,7 +149,8 @@ def get_raw_statement_jsons(stmt_ids):
     """
     query = 'SELECT id, json FROM raw_statements WHERE id in :stmt_ids'
     with managed_db() as db:
-        res = db.session.execute(query, {'stmt_ids': tuple(set(stmt_ids))})
+        res = db.session.execute(text(query),
+                                 {'stmt_ids': tuple(set(stmt_ids))})
     return {stmt_id: json.loads(json_.tobytes()) for stmt_id, json_ in res}
 
 

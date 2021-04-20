@@ -25,6 +25,7 @@ def main():
           extras_require=extras_require,
           entry_points="""
           [console_scripts]
+          indra_db=indra_db.cli:main
           indra_db_rest=rest_api.cli:main
           indra_db_benchmarker=benchmarker.cli:main
           """)

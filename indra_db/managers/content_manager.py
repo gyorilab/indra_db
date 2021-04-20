@@ -977,7 +977,7 @@ class PmcManager(_NihManager):
                     self.my_source,
                     formats.XML,
                     tc['text_type'],
-                    tc['content']
+                    tc['user_input']
                     )
                 )
         filtered_tc_records = [

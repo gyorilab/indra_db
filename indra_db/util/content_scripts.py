@@ -76,8 +76,8 @@ def get_pa_statements_for_pair(curie1, curie2):
             db_name2 == db_ns2 and id2 == db_id2}
 
 
-def get_support_for_pa_statements(stmt_mk_hashes):
-    """Return reading_ids and raw_stmt_ids for statements supporting the input
+def get_reach_support_for_pa_statements(stmt_mk_hashes):
+    """Return reading_ids and raw_stmt_ids of reach support for input
 
     Parameters
     ----------
@@ -89,6 +89,10 @@ def get_support_for_pa_statements(stmt_mk_hashes):
     generator of tuple
         yields tuples of the form 
         (stmt_mk_hash, raw_stmt_id, reading_id)
+        where stmt_mk_hash is the mk_hash of a preassembled statement in the
+        input, raw_stmt_id is a raw statement id for a raw statement from REACH
+        which supports the preassembled statement, and reading_id is that
+        associated reading id in the reading table.
     """
     query = """--
     SELECT rl.pa_stmt_mk_hash, rs.id, rs.reading_id

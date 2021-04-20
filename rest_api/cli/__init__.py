@@ -7,7 +7,7 @@ from .zappa_tools import fix_permissions, ZAPPA_CONFIG
 
 @click.group()
 def main():
-    """Run the indra db CLI."""
+    """Run the indra db rest service CLI."""
 
 
 @main.command()

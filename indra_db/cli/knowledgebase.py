@@ -51,6 +51,14 @@ class KnowledgebaseManager(object):
         insert_db_stmts(db, filtered_stmts, dbid)
         return
 
+    def get_last_update(self, db):
+        """Get the last time the row was updated or created."""
+        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.short_name)
+        if dbinfo.last_updated:
+            return dbinfo.last_updated
+        else:
+            return dbinfo.create_date
+
     def _check_reference(self, db, can_create=True):
         """Ensure that this database has an entry in the database."""
         dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.short_name)

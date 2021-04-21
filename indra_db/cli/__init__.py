@@ -19,6 +19,7 @@ def main():
 def knowledgebase(mode, sources):
     """Upload or update the knowledge bases used by the database.
 
+    \b
     Usage modes are:
      - upload: use if the knowledge bases have not yet been added.
      - update: if they have been added, but need to be updated.
@@ -53,9 +54,10 @@ def knowledgebase(mode, sources):
             print(f'Updating {kbm.name}...')
             kbm.update(db)
         elif mode == 'list':
-            rows.append([kbm.name, kbm.short_name])
+            rows.append([kbm.name, kbm.short_name, kbm.get_last_update(db)])
 
     if mode == 'list':
-        tbl = tabulate.tabulate(rows, headers=("Name", "Short Name"),
+        tbl = tabulate.tabulate(rows,
+                                headers=("Name", "Short Name", "Last Updated"),
                                 tablefmt="simple")
         print(tbl)

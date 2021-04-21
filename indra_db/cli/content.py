@@ -541,7 +541,7 @@ class Pubmed(_NihManager):
     """Manager for the pubmed/medline content."""
     my_path = 'pubmed'
     my_source = 'pubmed'
-    tr_cols = ('pmid', 'pmcid', 'doi', 'pii',)
+    tr_cols = ('pmid', 'pmcid', 'doi', 'pii', 'pub_year')
 
     def __init__(self, *args, categories=None, tables=None,
                  max_annotations=500000, **kwargs):
@@ -617,7 +617,7 @@ class Pubmed(_NihManager):
         return
 
     def load_text_refs(self, db, article_info, carefully=False):
-        "Sanitize, update old, and upload new text refs."
+        """Sanitize, update old, and upload new text refs."""
 
         # Remove PMID's listed as deleted.
         deleted_pmids = self.get_deleted_pmids()
@@ -639,16 +639,24 @@ class Pubmed(_NihManager):
 
         # Convert the article_info into a list of tuples for insertion into
         # the text_ref table
-
-        def get_val(data, id_type):
-            r = data.get(id_type)
-            if id_type == 'doi':
-                r = self.fix_doi(r)
-            return None if not r else r.strip().upper()
-
-        text_ref_records = {tuple([pmid]+[get_val(article_info[pmid], id_type)
-                                          for id_type in self.tr_cols[1:]])
-                            for pmid in valid_pmids}
+        text_ref_records = set()
+        for pmid in valid_pmids:
+            data = article_info[pmid]
+            row = []
+            for id_type in self.tr_cols[1:]:
+                val = None
+                if id_type == 'pub_year':
+                    r = data.get('publication_date')
+                    if 'year' in r:
+                        val = r['year']
+                else:
+                    r = data.get(id_type)
+                    if id_type == 'doi':
+                        r = self.fix_doi(r)
+                    if r:
+                        val = r.strip().upper()
+                row.append(val)
+            text_ref_records.add(tuple([pmid] + row))
 
         # Check the ids more carefully against what is already in the db.
         if carefully:

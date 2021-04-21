@@ -289,33 +289,6 @@ class PrincipalSchema(Schema):
             )
         return MtiRefAnnotationsTest
 
-    def source_file(self):
-        """Record the pubmed source file that was processed."""
-        class SourceFile(self.base, IndraDBTable):
-            __tablename__ = 'source_file'
-            _always_disp = ['source', 'name']
-            id = Column(Integer, primary_key=True)
-            source = Column(String(250), nullable=False)
-            name = Column(String(250), nullable=False)
-            load_date = Column(DateTime, default=func.now())
-            __table_args__ = (
-                UniqueConstraint('source', 'name', name='source-name'),
-            )
-        return SourceFile
-
-    def updates(self):
-        """Record when text ref and content updates were performed."""
-        class Updates(self.base, IndraDBTable):
-            __tablename__ = 'updates'
-            _skip_disp = ['unresolved_conflicts_file']
-            _always_disp = ['source', 'datetime']
-            id = Column(Integer, primary_key=True)
-            init_upload = Column(Boolean, nullable=False)
-            source = Column(String(250), nullable=False)
-            unresolved_conflicts_file = Column(BYTEA)
-            datetime = Column(DateTime, default=func.now())
-        return Updates
-
     def text_content(self):
         """Represent a piece of text."""
         class TextContent(self.base, IndraDBTable):
@@ -363,32 +336,6 @@ class PrincipalSchema(Schema):
             )
         return Reading
 
-    def reading_updates(self):
-        """Record runs of the readers on the content we have found."""
-        class ReadingUpdates(self.base, IndraDBTable):
-            __tablename__ = 'reading_updates'
-            _always_disp = ['reader', 'reader_version', 'run_datetime']
-            id = Column(Integer, primary_key=True)
-            complete_read = Column(Boolean, nullable=False)
-            reader = Column(String(250), nullable=False)
-            reader_version = Column(String(250), nullable=False)
-            run_datetime = Column(DateTime, default=func.now())
-            earliest_datetime = Column(DateTime)
-            latest_datetime = Column(DateTime, nullable=False)
-        return ReadingUpdates
-
-    def xdd_updates(self):
-        """Record the times we process dumps from xDD."""
-        class XddUpdates(self.base, IndraDBTable):
-            __tablename__ = 'xdd_updates'
-            _always_disp = ['day_str']
-            id = Column(Integer, primary_key=True)
-            reader_versions = Column(JSONB)
-            indra_version = Column(String)
-            day_str = Column(String, nullable=False, unique=True)
-            processed_date = Column(DateTime, default=func.now())
-        return XddUpdates
-
     def db_info(self):
         """Represent the provenance and metadata for an external knowledge base.
 
@@ -434,40 +381,6 @@ class PrincipalSchema(Schema):
                                  name='db_info_raw_statement_uniqueness'),
             )
         return RawStatements
-
-    def rejected_statements(self):
-        """Represent raw statements that were rejected."""
-        class RejectedStatements(self.base, IndraDBTable):
-            __tablename__ = 'rejected_statements'
-            _skip_disp = ['json']
-            _always_disp = ['id', 'db_info_id', 'reading_id', 'type']
-            id = Column(Integer, primary_key=True)
-            uuid = Column(String(40), unique=True, nullable=False)
-            batch_id = Column(Integer, nullable=False)
-            mk_hash = Column(BigInteger, nullable=False)
-            text_hash = Column(BigInteger)
-            source_hash = Column(BigInteger, nullable=False)
-            db_info_id = Column(Integer, ForeignKey('db_info.id'))
-            db_info = relationship(self.table_dict['db_info'])
-            reading_id = Column(BigInteger, ForeignKey('reading.id'))
-            reading = relationship(self.table_dict['reading'])
-            type = Column(String(100), nullable=False)
-            indra_version = Column(String(100), nullable=False)
-            json = Column(BYTEA, nullable=False)
-            create_date = Column(DateTime, default=func.now())
-        return RejectedStatements
-
-    def discarded_statements(self):
-        """Record the reasons for which some statements were discarded."""
-        class DiscardedStatements(self.base, IndraDBTable):
-            __tablename__ = 'discarded_statements'
-            _always_disp = ['stmt_id', 'reason']
-            id = Column(Integer, primary_key=True)
-            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
-                             nullable=False)
-            reason = Column(String, nullable=False)
-            insert_date = Column(DateTime, default=func.now())
-        return DiscardedStatements
 
     def raw_activity(self):
         """Represent the activity of a raw statement (an ActiveForm)."""
@@ -558,17 +471,6 @@ class PrincipalSchema(Schema):
             )
         return RawUniqueLinks
 
-    def preassembly_updates(self):
-        """Record updates of the preassembled corpus."""
-        class PreassemblyUpdates(self.base, IndraDBTable):
-            __tablename__ = 'preassembly_updates'
-            _always_disp = ['corpus_init', 'run_datetime']
-            id = Column(Integer, primary_key=True)
-            corpus_init = Column(Boolean, nullable=False)
-            run_datetime = Column(DateTime, default=func.now())
-            stmt_type = Column(String)
-        return PreassemblyUpdates
-
     def pa_statements(self):
         """Represent preassembled statements.
 
@@ -589,6 +491,29 @@ class PrincipalSchema(Schema):
             json = Column(BYTEA, nullable=False)
             create_date = Column(DateTime, default=func.now())
         return PAStatements
+
+    def pa_support_links(self):
+        """Represent the links of support calculated during preassembly.
+
+        In INDRA, we look for cases where more specific Statements may lend
+        support to more general Statements, and potentially vice versa, to
+        better gauge whether an extraction is reliable.
+        """
+        class PASupportLinks(self.base, IndraDBTable):
+            __tablename__ = 'pa_support_links'
+            _always_disp = ['supporting_mk_hash', 'supported_mk_hash']
+            id = Column(Integer, primary_key=True)
+            supporting_mk_hash = Column(BigInteger,
+                                        ForeignKey('pa_statements.mk_hash'),
+                                        nullable=False)
+            supported_mk_hash = Column(BigInteger,
+                                       ForeignKey('pa_statements.mk_hash'),
+                                       nullable=False)
+            __table_args__ = (
+                UniqueConstraint('supporting_mk_hash', 'supported_mk_hash',
+                                 name='pa_support_links_link_uniqueness'),
+            )
+        return PASupportLinks
 
     def pa_activity(self):
         """Represent the activity of a preassembled Statement."""
@@ -656,29 +581,6 @@ class PrincipalSchema(Schema):
             ag_num = Column(Integer, nullable=False)
         return PAMuts
 
-    def pa_support_links(self):
-        """Represent the links of support calculated during preassembly.
-
-        In INDRA, we look for cases where more specific Statements may lend
-        support to more general Statements, and potentially vice versa, to
-        better gauge whether an extraction is reliable.
-        """
-        class PASupportLinks(self.base, IndraDBTable):
-            __tablename__ = 'pa_support_links'
-            _always_disp = ['supporting_mk_hash', 'supported_mk_hash']
-            id = Column(Integer, primary_key=True)
-            supporting_mk_hash = Column(BigInteger,
-                                        ForeignKey('pa_statements.mk_hash'),
-                                        nullable=False)
-            supported_mk_hash = Column(BigInteger,
-                                       ForeignKey('pa_statements.mk_hash'),
-                                       nullable=False)
-            __table_args__ = (
-                UniqueConstraint('supporting_mk_hash', 'supported_mk_hash',
-                                 name='pa_support_links_link_uniqueness'),
-            )
-        return PASupportLinks
-
     def curations(self):
         """Represent the curations of our content."""
         class Curation(self.base, IndraDBTable):
@@ -704,3 +606,101 @@ class PrincipalSchema(Schema):
                                      'date', 'curator', 'source', 'pa_json',
                                      'ev_json']}
         return Curation
+
+    def source_file(self):
+        """Record the pubmed source file that was processed."""
+        class SourceFile(self.base, IndraDBTable):
+            __tablename__ = 'source_file'
+            _always_disp = ['source', 'name']
+            id = Column(Integer, primary_key=True)
+            source = Column(String(250), nullable=False)
+            name = Column(String(250), nullable=False)
+            load_date = Column(DateTime, default=func.now())
+            __table_args__ = (
+                UniqueConstraint('source', 'name', name='source-name'),
+            )
+        return SourceFile
+
+    def updates(self):
+        """Record when text ref and content updates were performed."""
+        class Updates(self.base, IndraDBTable):
+            __tablename__ = 'updates'
+            _skip_disp = ['unresolved_conflicts_file']
+            _always_disp = ['source', 'datetime']
+            id = Column(Integer, primary_key=True)
+            init_upload = Column(Boolean, nullable=False)
+            source = Column(String(250), nullable=False)
+            unresolved_conflicts_file = Column(BYTEA)
+            datetime = Column(DateTime, default=func.now())
+        return Updates
+
+    def reading_updates(self):
+        """Record runs of the readers on the content we have found."""
+        class ReadingUpdates(self.base, IndraDBTable):
+            __tablename__ = 'reading_updates'
+            _always_disp = ['reader', 'reader_version', 'run_datetime']
+            id = Column(Integer, primary_key=True)
+            complete_read = Column(Boolean, nullable=False)
+            reader = Column(String(250), nullable=False)
+            reader_version = Column(String(250), nullable=False)
+            run_datetime = Column(DateTime, default=func.now())
+            earliest_datetime = Column(DateTime)
+            latest_datetime = Column(DateTime, nullable=False)
+        return ReadingUpdates
+
+    def xdd_updates(self):
+        """Record the times we process dumps from xDD."""
+        class XddUpdates(self.base, IndraDBTable):
+            __tablename__ = 'xdd_updates'
+            _always_disp = ['day_str']
+            id = Column(Integer, primary_key=True)
+            reader_versions = Column(JSONB)
+            indra_version = Column(String)
+            day_str = Column(String, nullable=False, unique=True)
+            processed_date = Column(DateTime, default=func.now())
+        return XddUpdates
+
+    def rejected_statements(self):
+        """Represent raw statements that were rejected."""
+        class RejectedStatements(self.base, IndraDBTable):
+            __tablename__ = 'rejected_statements'
+            _skip_disp = ['json']
+            _always_disp = ['id', 'db_info_id', 'reading_id', 'type']
+            id = Column(Integer, primary_key=True)
+            uuid = Column(String(40), unique=True, nullable=False)
+            batch_id = Column(Integer, nullable=False)
+            mk_hash = Column(BigInteger, nullable=False)
+            text_hash = Column(BigInteger)
+            source_hash = Column(BigInteger, nullable=False)
+            db_info_id = Column(Integer, ForeignKey('db_info.id'))
+            db_info = relationship(self.table_dict['db_info'])
+            reading_id = Column(BigInteger, ForeignKey('reading.id'))
+            reading = relationship(self.table_dict['reading'])
+            type = Column(String(100), nullable=False)
+            indra_version = Column(String(100), nullable=False)
+            json = Column(BYTEA, nullable=False)
+            create_date = Column(DateTime, default=func.now())
+        return RejectedStatements
+
+    def discarded_statements(self):
+        """Record the reasons for which some statements were discarded."""
+        class DiscardedStatements(self.base, IndraDBTable):
+            __tablename__ = 'discarded_statements'
+            _always_disp = ['stmt_id', 'reason']
+            id = Column(Integer, primary_key=True)
+            stmt_id = Column(Integer, ForeignKey('raw_statements.id'),
+                             nullable=False)
+            reason = Column(String, nullable=False)
+            insert_date = Column(DateTime, default=func.now())
+        return DiscardedStatements
+
+    def preassembly_updates(self):
+        """Record updates of the preassembled corpus."""
+        class PreassemblyUpdates(self.base, IndraDBTable):
+            __tablename__ = 'preassembly_updates'
+            _always_disp = ['corpus_init', 'run_datetime']
+            id = Column(Integer, primary_key=True)
+            corpus_init = Column(Boolean, nullable=False)
+            run_datetime = Column(DateTime, default=func.now())
+            stmt_type = Column(String)
+        return PreassemblyUpdates

@@ -297,8 +297,10 @@ class PrincipalSchema(Schema):
             __tablename__ = 'mesh_ref_annotations'
             _always_disp = ['pmid_num', 'mesh_num', 'qual_num']
             _indices = [BtreeIndex('mesh_ref_annotations_pmid_idx', 'pmid_num'),
-                        BtreeIndex('mesh_ref_annotations_mesh_id_idx', 'mesh_num'),
-                        BtreeIndex('mesh_ref_annotations_qual_id_idx', 'qual_num')]
+                        BtreeIndex('mesh_ref_annotations_mesh_id_idx',
+                                   'mesh_num'),
+                        BtreeIndex('mesh_ref_annotations_qual_id_idx',
+                                   'qual_num')]
             id = Column(Integer, primary_key=True)
             pmid_num = Column(Integer, nullable=False)
             mesh_num = Column(Integer, nullable=False)
@@ -306,8 +308,8 @@ class PrincipalSchema(Schema):
             major_topic = Column(Boolean, default=False)
             is_concept = Column(Boolean, default=False)
             __table_args__ = (
-                UniqueConstraint('pmid_num', 'mesh_num', 'qual_num', 'is_concept',
-                                 name='mesh-uniqueness'),
+                UniqueConstraint('pmid_num', 'mesh_num', 'qual_num',
+                                 'is_concept', name='mesh-uniqueness'),
             )
         return MeshRefAnnotations
 
@@ -425,6 +427,7 @@ class PrincipalSchema(Schema):
             insert_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             preprint = Column(Boolean)
+            license = Column(String)
             __table_args__ = (
                 UniqueConstraint('text_ref_id', 'source', 'format',
                                  'text_type', name='content-uniqueness'),

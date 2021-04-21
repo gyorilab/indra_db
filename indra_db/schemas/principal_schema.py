@@ -129,10 +129,13 @@ class PrincipalSchema(Schema):
         In addition we also track some basic metadata about the entry and
         updates to the data in the table.
 
-        - create_date ``timestamp without time zone``: The date the record was
-          added.
-        - last_updated ``timestamp without time zone``: The most recent time
-          the record was edited.
+        - **create_date** ``timestamp without time zone``: The date the record
+          was added.
+        - **last_updated** ``timestamp without time zone``: The most recent
+          time the record was edited.
+        - **pub_year** ``integer``: The year the article was published, based
+          on the first report we find (in order of PubMed, PMC, then PMC
+          Manuscripts).
 
         **Constraints**
 
@@ -189,6 +192,7 @@ class PrincipalSchema(Schema):
                         BtreeIndex('text_ref_pmcid_num_idx', 'pmcid_num'),
                         BtreeIndex('text_ref_doi_ns_idx', 'doi_ns'),
                         BtreeIndex('text_ref_doi_id_idx', 'doi_id'),
+                        BtreeIndex('text_ref_pub_year', 'pub_year'),
                         StringIndex('text_ref_doi_idx', 'doi')]
 
             id = Column(Integer, primary_key=True)
@@ -200,6 +204,7 @@ class PrincipalSchema(Schema):
             doi = Column(String(100))
             doi_ns = Column(Integer)
             doi_id = Column(String)
+            pub_year = Column(Integer)
             pii = Column(String(250))
             url = Column(String, unique=True)
             manuscript_id = Column(String(100), unique=True)

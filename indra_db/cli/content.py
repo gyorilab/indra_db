@@ -525,6 +525,12 @@ class _NihManager(ContentManager):
     """
     my_path = NotImplemented
 
+    def update(self, db):
+        raise NotImplementedError
+
+    def populate(self, db):
+        raise NotImplementedError
+
     def __init__(self, *args, **kwargs):
         self.ftp = _NihFtpClient(self.my_path, *args, **kwargs)
         super(_NihManager, self).__init__()
@@ -532,7 +538,7 @@ class _NihManager(ContentManager):
 
 
 class Pubmed(_NihManager):
-    "Manager for the pubmed/medline content."
+    """Manager for the pubmed/medline content."""
     my_path = 'pubmed'
     my_source = 'pubmed'
     tr_cols = ('pmid', 'pmcid', 'doi', 'pii',)
@@ -585,8 +591,9 @@ class Pubmed(_NihManager):
         else:
             return article_info
 
-    def fix_doi(self, doi):
-        "Sometimes the doi is doubled (no idea why). Fix it."
+    @staticmethod
+    def fix_doi(doi):
+        """Sometimes the doi is doubled (no idea why). Fix it."""
         if doi is None:
             return
         L = len(doi)
@@ -598,7 +605,7 @@ class Pubmed(_NihManager):
         return doi[:L//2]
 
     def add_annotations(self, db, article_info):
-        "Load annotations into the database."
+        """Load annotations into the database."""
         for pmid, info_dict in article_info.items():
             self.annotations[pmid] = info_dict['mesh_annotations']
 
@@ -897,8 +904,12 @@ class PmcManager(_NihManager):
         self.tc_cols = ('text_ref_id', 'source', 'format', 'text_type',
                         'content',)
 
-    def get_missing_pmids(self, db, tr_data):
-        "Try to get missing pmids using the pmc client."
+    def update(self, db):
+        raise NotImplementedError
+
+    @staticmethod
+    def get_missing_pmids(db, tr_data):
+        """Try to get missing pmids using the pmc client."""
 
         logger.info("Getting missing pmids.")
 
@@ -939,7 +950,7 @@ class PmcManager(_NihManager):
         return
 
     def filter_text_content(self, db, tc_data):
-        'Filter the text content to identify pre-existing records.'
+        """Filter the text content to identify pre-existing records."""
         logger.info("Beginning to filter text content...")
         arc_pmcid_list = [tc['pmcid'] for tc in tc_data]
         if not len(tc_data):
@@ -988,7 +999,7 @@ class PmcManager(_NihManager):
         return list(set(filtered_tc_records))
 
     def upload_batch(self, db, tr_data, tc_data):
-        "Add a batch of text refs and text content to the database."
+        """Add a batch of text refs and text content to the database."""
 
         # Check for any pmids we can get from the pmc client (this is slow!)
         self.get_missing_pmids(db, tr_data)

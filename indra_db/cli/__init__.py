@@ -41,7 +41,7 @@ def knowledgebase(mode, sources):
         kbm = Manager()
 
         # Skip entries that were not listed.
-        if source_set and kbm.name not in source_set \
+        if source_set and kbm.name.lower() not in source_set \
                 and kbm.short_name not in source_set:
             continue
 

@@ -48,8 +48,8 @@ class PrincipalSchema(Schema):
       3. :func:`reading <reading>`
       4. :func:`db_info <db_info>`
       5. :func:`raw_statements <raw_statements>`
-      6. :func:`pa_statements <pa_statements>`
-      7. :func:`raw_unique_links <raw_unique_links>`
+      6. :func:`raw_unique_links <raw_unique_links>`
+      7. :func:`pa_statements <pa_statements>`
       8. :func:`pa_support_links <pa_support_links>`
 
     **Statement Attribute Tables**

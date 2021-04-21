@@ -538,7 +538,13 @@ class _NihManager(ContentManager):
 
 
 class Pubmed(_NihManager):
-    """Manager for the pubmed/medline content."""
+    """Manager for the pubmed/medline content.
+
+    For relevant updates from NCBI on the managemetn and upkeep of the PubMed
+    Abstract FTP server, see here:
+
+      https://www.nlm.nih.gov/databases/download/pubmed_medline.html
+    """
     my_path = 'pubmed'
     my_source = 'pubmed'
     tr_cols = ('pmid', 'pmcid', 'doi', 'pii', 'pub_year')
@@ -738,7 +744,7 @@ class Pubmed(_NihManager):
         return
 
     def upload_article(self, db, article_info, carefully=False):
-        "Process the content of an xml dataset and load into the database."
+        """Process the content of an xml dataset and load into the database."""
         logger.info("%d PMIDs in XML dataset" % len(article_info))
 
         self.add_annotations(db, article_info)
@@ -756,7 +762,7 @@ class Pubmed(_NihManager):
 
     def load_files(self, db, dirname, n_procs=1, continuing=False,
                    carefully=False, log_update=True):
-        """Load the files in subdirectory indicated by `dirname`."""
+        """Load the files in subdirectory indicated by ``dirname``."""
         if 'text_ref' not in self.tables:
             logger.info("Loading pmids from the database...")
             self.db_pmids = {pmid for pmid, in db.select_all(db.TextRef.pmid)}

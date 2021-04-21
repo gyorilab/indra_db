@@ -12,7 +12,7 @@ def main():
 
 @main.command()
 @click.argument('deployment', nargs=1)
-def push_service(deployment):
+def push(deployment):
     """Push a new deployment to the remote lambdas using zappa."""
     click.echo(f"Updating {deployment} deployment.")
     if ZAPPA_CONFIG not in os.listdir('.'):

@@ -250,7 +250,32 @@ class PrincipalSchema(Schema):
         return TextRef
 
     def mesh_ref_annotations(self):
-        """Represent the MeSH annotations of papers provided by PubMed."""
+        """Represent the MeSH annotations of papers provided by PubMed.
+
+        Each abstract/entry in PubMed is accompanied by human-curated
+        MeSH IDs indicating the topics of the paper. Each paper will have many
+        IDs in general, so a separate table is used, liked to the
+        :func:`text_ref <text_ref>` table by an un-constrained PMID. This make
+        insertion of the data easier because the custom TRIDs need not be
+        retrieved to dump the mesh refs.
+
+        **Columns**
+
+        - **id** [``integer PRIMARY KEY``]: The primary database-assigned ID of
+          the row.
+        - **pmid_num** [``integer NOT NULL``]: The int-ified pmid that is used
+          to link entries in this table with those in the
+          :func:`text_ref <text_ref>` table.
+        - **mesh_num** [```integer NOT NULL``]: The intified MeSH ID (with the
+          prefix removed). The **is_concept** column indicates whether the
+          prefix was D (False) or C (True).
+        - **qual_num** [``integer``]: The qualifier number that is sometimes
+          included with the annotation (Prefix Q).
+        - **major_topic** [``boolean DEFAULT false``]: The major topic flag
+          indicates whether the ID describes a primary purpose of the paper.
+        - **is_concept** [``boolean DEFAUL false``]: Indicate whether the prefix
+          was C (true) or D (false).
+        """
         class MeshRefAnnotations(self.base, IndraDBTable):
             __tablename__ = 'mesh_ref_annotations'
             _always_disp = ['pmid_num', 'mesh_num', 'qual_num']

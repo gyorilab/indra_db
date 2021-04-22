@@ -295,7 +295,29 @@ class PrincipalSchema(Schema):
         return MeshRefAnnotations
 
     def mti_ref_annotaions_test(self):
-        """Represent the MeSH annotations of abstracts as inferred by MTI."""
+        """Represent the MeSH annotations of abstracts as inferred by MTI.
+
+        MTI is a machine learned model that attempts to predict MeSH annotations
+        on new un-annotated abstracts after training on the existing
+        annotations.
+
+        **Columns**
+
+        - **id** [``integer PRIMARY KEY``]: The primary database-assigned ID of
+          the row.
+        - **pmid_num** [``integer NOT NULL``]: The int-ified pmid that is used
+          to link entries in this table with those in the
+          :func:`text_ref <text_ref>` table.
+        - **mesh_num** [```integer NOT NULL``]: The intified MeSH ID (with the
+          prefix removed). The **is_concept** column indicates whether the
+          prefix was D (False) or C (True).
+        - **qual_num** [``integer``]: The qualifier number that is sometimes
+          included with the annotation (Prefix Q).
+        - **major_topic** [``boolean DEFAULT false``]: The major topic flag
+          indicates whether the ID describes a primary purpose of the paper.
+        - **is_concept** [``boolean DEFAUL false``]: Indicate whether the prefix
+          was C (true) or D (false).
+        """
         class MtiRefAnnotationsTest(self.base, IndraDBTable):
             __tablename__ = 'mti_ref_annotations_test'
             _always_disp = ['pmid_num', 'mesh_num', 'qual_num']

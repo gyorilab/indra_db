@@ -395,6 +395,8 @@ class PrincipalSchema(Schema):
           "abstract" of "fulltext".
         - **preprint** ``boolean``: Indicate whether the content is from
           a preprint.
+        - **license** [``varchar``]: Record the license that applies to the
+          content.
         - **content** ``bytea``: The raw compressed bytes of the content.
 
         **Metadata Columns**

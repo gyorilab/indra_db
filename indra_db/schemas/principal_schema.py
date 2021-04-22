@@ -337,7 +337,42 @@ class PrincipalSchema(Schema):
         return MtiRefAnnotationsTest
 
     def text_content(self):
-        """Represent a piece of text."""
+        """Represent the content of a text retrieved from a particular source.
+
+        For each paper as a logical entity, there are many places where you can
+        acquire the actual article or parts of it. For example you can get an
+        abstract from PubMed for most content, and for a minority subset you can
+        get full text from PubMed Central, either their Open-Access corpus or
+        their author's Manuscripts.
+
+        Both the text itself and the metadata for the source of the text are
+        represented in this table.
+
+        **Basic Columns**
+
+        - **id** [``integer PRIMARY KEY``]: The auto-generated primary key of
+          the table. These are elsewhere called Text Content IDs, or TCIDs.
+        - **text_ref_id** [``integer NOT NULL``]: A foreign-key constrained
+          reference to the appropriate entry in the :func:`text_ref <text_ref>`
+          table.
+        - **source** [``varchar(250) NOT NULL``]: The name of the source, e.g.
+          "pubmed" or "pmc_oa". The list of content names can be found in the
+          class attributes in content managers.
+        - **format** [``varchar(250) NOT NULL``]: The file format of the
+          content, e.g. "XML" or "TEXT".
+        - **text_type** [``varchar(250) NOT NULL``]: The type of the text, e.g.
+          "abstract" of "fulltext".
+        - **preprint** [``boolean``]: Indicate whether the content is from
+          a preprint.
+        - **content** [``bytea``]: The raw compressed bytes of the content.
+
+        **Metadata Columns**
+
+        - **insert_data** [``timestamp without time zone``]: The date the record
+          was added.
+        - **last_updated** [``timestamp without time zone``]: The most recent
+          time the record was edited.
+        """
         class TextContent(self.base, IndraDBTable):
             __tablename__ = 'text_content'
             _skip_disp = ['content']

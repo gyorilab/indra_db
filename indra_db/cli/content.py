@@ -603,7 +603,7 @@ class Pubmed(_NihManager):
         if doi is None:
             return
         L = len(doi)
-        if L % 2 is not 0:
+        if L % 2 != 0:
             return doi
         if doi[:L//2] != doi[L//2:]:
             return doi
@@ -818,7 +818,7 @@ class Pubmed(_NihManager):
                 upload_and_record_next(True)
                 n_tot -= 1
 
-            while n_tot is not 0:
+            while n_tot != 0:
                 upload_and_record_next(False)
                 n_tot -= 1
         else:
@@ -933,7 +933,7 @@ class PmcManager(_NihManager):
                 missing_pmid_entries.append(tr_entry)
 
         num_missing = len(missing_pmid_entries)
-        if num_missing is 0:
+        if num_missing == 0:
             logger.debug("No missing pmids.")
             return
 
@@ -1030,7 +1030,7 @@ class PmcManager(_NihManager):
                           for cause, rec in flawed_tr_records
                           if cause in ['pmcid', 'over_match_input',
                                        'over_match_db']}
-        if len(pmcids_to_skip) is not 0:
+        if len(pmcids_to_skip) != 0:
             mod_tc_data = [
                 tc for tc in tc_data if tc['pmcid'] not in pmcids_to_skip
                 ]
@@ -1208,7 +1208,7 @@ class PmcManager(_NihManager):
         active_list = []
 
         def start_next_proc():
-            if len(wait_list) is not 0:
+            if len(wait_list) != 0:
                 archive, proc = wait_list.pop(0)
                 proc.start()
                 active_list.append((archive, proc))
@@ -1221,13 +1221,13 @@ class PmcManager(_NihManager):
         batch_log = path.join(THIS_DIR, '%s_batch_log.tmp' % self.my_source)
         batch_entry_fmt = '%s %d\n'
         open(batch_log, 'a+').close()
-        while len(active_list) is not 0:
+        while len(active_list) != 0:
             # Check for processes that have been unpacking archives to
             # complete, and when they do, add them to the source_file table.
             # If there are any more archives waiting to be processed, start
             # the next one.
             for a, p in [(a, p) for a, p in active_list if not p.is_alive()]:
-                if p.exitcode is 0:
+                if p.exitcode == 0:
                     sf_list = db.select_all(
                         db.SourceFile,
                         db.SourceFile.source == self.my_source,
@@ -1386,7 +1386,7 @@ class Manuscripts(PmcManager):
         file_list = self.ftp.get_csv_as_dict('filelist.csv', header=0)
         pmcid_mid_dict = {entry['PMCID']: entry['MID'] for entry in file_list}
         pmid_mid_dict = {entry['PMID']: entry['MID'] for entry in file_list
-                         if entry['PMID'] is not '0'}
+                         if entry['PMID'] != '0'}
         for tr in tr_list:
             if tr.pmcid is not None:
                 tr.manuscript_id = pmcid_mid_dict[tr.pmcid]
@@ -1543,7 +1543,7 @@ class Elsevier(ContentManager):
                     continue
 
                 tr_batch.add(tr)
-                if len(tr_batch) % 200 is 0:
+                if len(tr_batch) % 200 == 0:
                     batch_num += 1
                     logger.info('Beginning batch %d.' % batch_num)
                     self.__process_batch(db, tr_batch)

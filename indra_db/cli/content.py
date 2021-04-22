@@ -100,17 +100,31 @@ class _NihFtpClient(object):
         logger.info("Parsing XML metadata")
         return ET.XML(xml_bytes, parser=UTB())
 
-    def get_csv_as_dict(self, csv_file, cols=None, header=None):
-        "Get the content from a csv file as a list of dicts."
+    def get_csv_as_dict(self, csv_file, cols=None, infer_header=True):
+        """Get the content from a csv file as a list of dicts.
+
+        Parameters
+        ----------
+        csv_file : str
+            The name of the csv file within the target FTP directory.
+        cols : Iterable[str]
+            Pass in labels for the columns of the CSV.
+        infer_header : bool
+            If True, infer the cols from the first line. If False, the cols
+            will simply be indexed by integers.
+        """
         csv_str = self.get_file(csv_file)
-        lst = [row for row in csv.reader(csv_str.splitlines())]
-        if cols is None:
-            if header is not None:
-                cols = lst[header]
-                lst = lst[header+1:]
-            else:
-                cols = list(range(len(lst[0])))
-        return [dict(zip(cols, row)) for row in lst]
+        csv_lines = csv_str.splitlines()
+        result = []
+        for row in csv.reader(csv_lines):
+            if not cols:
+                if infer_header:
+                    cols = row[:]
+                    continue
+                else:
+                    cols = list(range(len(row)))
+            result.append(dict(zip(cols, row)))
+        return result
 
     def ret_file(self, f_path, buf):
         "Load the content of a file into the given buffer."

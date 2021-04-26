@@ -51,9 +51,10 @@ class KnowledgebaseManager(object):
         insert_db_stmts(db, filtered_stmts, dbid)
         return
 
-    def get_last_update(self, db):
+    @classmethod
+    def get_last_update(cls, db):
         """Get the last time the row was updated or created."""
-        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.short_name)
+        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == cls.short_name)
         if dbinfo.last_updated:
             return dbinfo.last_updated
         else:

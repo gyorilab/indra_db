@@ -101,7 +101,7 @@ def pipeline_stats(task):
 @click.argument("sources", nargs=-1,
                 type=click.Choice(["pubmed", "pmc_oa", "manuscripts"]),
                 required=False)
-@click.option("-n", "--num_procs", type=int, default=1,
+@click.option("-n", "--num_procs", type=int, default=None,
               help=('Select the number of processors to use during this '
                     'operation. Default is 1.'))
 @click.option('-c', '--continuing', is_flag=True,
@@ -142,12 +142,21 @@ def content_run(task, sources, num_procs, continuing, debug):
 
     # Perform the task.
     for ContentManager in selected_managers:
+        if ContentManager != Pubmed and num_procs is not None:
+            print("NOTE: Multiprocessing is only available in 'pubmed'.")
+
         if task == 'upload':
             print(f"Uploading {ContentManager.my_source}.")
-            ContentManager().populate(db, num_procs, continuing)
+            if ContentManager != Pubmed:
+                ContentManager().populate(db, continuing)
+            else:
+                ContentManager().populate(db, num_procs, continuing)
         elif task == 'update':
             print(f"Updating {ContentManager.my_source}")
-            ContentManager().update(db, num_procs)
+            if ContentManager != Pubmed:
+                ContentManager().update(db)
+            else:
+                ContentManager().update(db, num_procs)
 
 
 @main.command()

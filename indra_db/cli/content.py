@@ -1,6 +1,5 @@
 import re
 import csv
-import time
 import tarfile
 import zlib
 import logging
@@ -19,7 +18,7 @@ from indra.literature.crossref_client import get_publisher
 from indra.literature.pubmed_client import get_metadata_for_ids
 from indra.literature.elsevier_client import download_article_from_ids
 
-from indra.util import zip_string
+from indra.util import zip_string, batch_iter
 from indra.literature import pubmed_client
 from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
@@ -743,7 +742,7 @@ class Pubmed(_NihManager):
                     content_gz = zip_string(content)
                     text_content_records.append((tr_id, self.my_source,
                                                  formats.TEXT, cat,
-                                                 content_gz))
+                                                 content_gz, 'pubmed'))
         logger.info("Found %d new text content entries."
                     % len(text_content_records))
 
@@ -752,7 +751,7 @@ class Pubmed(_NihManager):
             'text_content',
             text_content_records,
             cols=('text_ref_id', 'source', 'format', 'text_type',
-                  'content')
+                  'content', 'license')
             )
         gatherer.add('content', len(text_content_records))
         return
@@ -1077,7 +1076,7 @@ class PmcManager(_NihManager):
         return
 
     def get_data_from_xml_str(self, xml_str, filename):
-        "Get the data out of the xml string."
+        """Get the data out of the xml string."""
         try:
             tree = ET.XML(xml_str.encode('utf8'))
         except ET.ParseError:
@@ -1104,200 +1103,134 @@ class PmcManager(_NihManager):
             }
         return tr_datum, tc_datum
 
-    def unpack_archive_path(self, archive_path, q=None, db=None,
-                            batch_size=10000):
-        """"Unpack the contents of an archive.
+    def download_archive(self, archive, continuing=False):
+        """Download the archive."""
+        # Download the archive if need be.
+        logger.info('Downloading archive %s.' % archive)
+        archive_local_path = None
+        try:
+            # This is a guess at the location of the archive.
+            archive_local_path = path.join(THIS_DIR, path.basename(archive))
 
-        If `q` is given, then the data is put into the que to be handed off for
-        upload by another process. Otherwise, if `db` is provided, upload the
-        batches of data on this process. One or the other MUST be provided.
+            if continuing and path.exists(archive_local_path):
+                logger.info('Archive %s found locally at %s, not loading again.'
+                            % (archive, archive_local_path))
+            else:
+                archive_local_path = self.ftp.download_file(archive,
+                                                            dest=THIS_DIR)
+                logger.debug("Download successfully completed for %s."
+                             % archive)
+        except BaseException:
+            if archive_local_path is not None:
+                logger.error(f"Failed to download {archive}, deleting "
+                             f"corrupted file.")
+                remove(archive_local_path)
+            raise
+        return archive_local_path
+
+    def iter_contents(self, archives=None, continuing=False):
+        """Iterate over the files in the archive, yielding ref and content data.
         """
-        with tarfile.open(archive_path, mode='r:gz') as tar:
-            xml_files = [m for m in tar.getmembers() if m.isfile()
-                         and m.name.endswith('xml')]
-            N_tot = len(xml_files)
-            logger.info('Loading %s which contains %d files.'
-                        % (path.basename(archive_path), N_tot))
-            N_batches = N_tot//batch_size + 1
-            for i in range(N_batches):
-                tr_data = []
-                tc_data = []
-                for xml_file in xml_files[i*batch_size:(i+1)*batch_size]:
+        # By default, iterate through all the archives.
+        if archives is None:
+            archives = set(self.get_all_archives())
+
+        # Yield the contents from each archive.
+        for archive in archives:
+            archive_path = self.download_archive(archive, continuing)
+            with tarfile.open(archive_path, mode='r:gz') as tar:
+
+                # Get names of all the XML files in the tar file, and report.
+                xml_files = [m for m in tar.getmembers() if m.isfile()
+                             and m.name.endswith('xml')]
+                if len(xml_files) > 1:
+                    logger.info(f'Iterating over {len(xml_files)} files in '
+                                f'{archive}.')
+                else:
+                    logger.info(f"Loading file from {archive}")
+
+                # Yield each XML file.
+                for n, xml_file in enumerate(xml_files):
                     xml_str = tar.extractfile(xml_file).read().decode('utf8')
                     res = self.get_data_from_xml_str(xml_str, xml_file.name)
                     if res is None:
                         continue
-                    else:
-                        tr, tc = res
-                    tr_data.append(tr)
-                    tc_data.append(tc)
+                    tr, tc = res
+                    yield (archive, n, len(xml_files)), tr, tc
 
-                if q is not None:
-                    label = (i+1, N_batches, path.basename(archive_path))
-                    logger.debug("Submitting batch %d/%d for %s to queue."
-                                 % label)
-                    q.put((label, tr_data[:], tc_data[:]))
-                elif db is not None:
-                    self.upload_batch(db, tr_data[:], tc_data[:])
-                else:
-                    raise UploadError(
-                        "unpack_archive_path must receive either a db instance"
-                        " or a queue instance."
-                        )
-        return
-
-    def process_archive(self, archive, q=None, db=None, continuing=False):
-        """Download an archive and begin unpacking it.
-
-        Either `q` or `db` must be specified. The uncompressed contents of the
-        archive will be loaded onto the database or placed on the queue in
-        batches.
-
-        Parameters
-        ----------
-        archive : str
-            The path of the archive beneath the head of this sources ftp
-            directory.
-        q : multiprocessing.Queue
-            When this method is called as a separate process, the contents of
-            the archive are posted to a queue in batches to be handled
-            externally.
-        db : indra.db.DatabaseManager
-            When not multprocessing, the contents of the archive are uploaded
-            to the database directly by this method.
-        continuing : bool
-            True if this method is being called to complete an earlier failed
-            attempt to execute this method; will not download the archive if an
-            archive of the same name is already downloaded locally. Default is
-            False.
-        """
-
-        # This is a guess at the location of the archive.
-        archive_local_path = path.join(THIS_DIR, path.basename(archive))
-
-        # Download the archive if need be.
-        if continuing and path.exists(archive_local_path):
-            logger.info('Archive %s found locally at %s, not loading again.'
-                        % (archive, archive_local_path))
-        else:
-            logger.info('Downloading archive %s.' % archive)
-            try:
-                archive_local_path = self.ftp.download_file(archive,
-                                                            dest=THIS_DIR)
-                logger.debug("Download succesfully completed for %s."
-                             % archive)
-            except BaseException:
-                logger.error("Failed to download %s. Deleting corrupt file."
-                             % archive)
-                remove(archive_local_path)
-                raise
-
-        # Now unpack the archive.
-        self.unpack_archive_path(archive_local_path, q=q, db=db)
-
-        # Assuming we completed correctly, remove the archive.
-        logger.info("Removing %s." % archive_local_path)
-        remove(archive_local_path)
-        return
+            # Remove it when we're done (unless there was an exception).
+            logger.info(f"Deleting {archive}.")
+            remove(archive_path)
 
     def is_archive(self, *args):
         raise NotImplementedError("is_archive must be defined by the child.")
 
-    def get_file_list(self):
+    def get_all_archives(self):
         return [k for k in self.ftp.ftp_ls() if self.is_archive(k)]
 
-    def upload_archives(self, db, archives, n_procs=1, continuing=False):
-        "Do the grunt work of downloading and processing a list of archives."
-        q = mp.Queue(len(archives))
-        wait_list = []
-        for archive in archives:
-            p = mp.Process(
-                target=self.process_archive,
-                args=(archive, ),
-                kwargs={'q': q, 'continuing': continuing},
-                daemon=True
-                )
-            wait_list.append((archive, p))
+    def upload_archives(self, db, archives=None, continuing=False):
+        """Do the grunt work of downloading and processing a list of archives.
 
-        active_list = []
+        Parameters
+        ----------
+        db : :py:class:`PrincipalDatabaseManager <indra_db.databases.PrincipalDatabaseManager>`
+            A handle to the principal database.
+        archives : Optional[Iterable[str]]
+            An iterable of archive names from the FTP server.
+        continuing : bool
+            If True, best effort will be made to avoid repeating work already
+            done using some cached files and downloaded archives. If False, it
+            is assumed the caches are empty.
+        """
+        # Form a generator over the content in batches.
+        batch_size = 10000
+        contents = self.iter_contents(archives, continuing)
+        batched_contents = batch_iter(contents, batch_size, lambda g: zip(*g))
 
-        def start_next_proc():
-            if len(wait_list) != 0:
-                archive, proc = wait_list.pop(0)
-                proc.start()
-                active_list.append((archive, proc))
+        # Upload each batch of content into the database.
+        for i, (lbls, trs, tcs) in enumerate(batched_contents):
 
-        # Start the processes running
-        for _ in range(min(n_procs, len(archives))):
-            start_next_proc()
+            # Figure out where we are in the list of archives.
+            archive_stats = {}
+            for archive_name, file_num, num_files in lbls:
+                if archive_name not in archive_stats:
+                    archive_stats[archive_name] = {'min': num_files, 'max': 0,
+                                           'tot': num_files}
+                if file_num < archive_stats[archive_name]['min']:
+                    archive_stats[archive_name]['min'] = file_num
+                elif file_num > archive_stats[archive_name]['max']:
+                    archive_stats[archive_name]['max'] = file_num
 
-        # Monitor the processes while any are still active.
-        batch_log = path.join(THIS_DIR, '%s_batch_log.tmp' % self.my_source)
-        batch_entry_fmt = '%s %d\n'
-        open(batch_log, 'a+').close()
-        while len(active_list) != 0:
-            # Check for processes that have been unpacking archives to
-            # complete, and when they do, add them to the source_file table.
-            # If there are any more archives waiting to be processed, start
-            # the next one.
-            for a, p in [(a, p) for a, p in active_list if not p.is_alive()]:
-                if p.exitcode == 0:
+            # Log where we are.
+            logger.info(f"Beginning batch {i}...")
+            for archive_name, info in archive_stats.items():
+                logger.info(f"  - {info['min']}-{info['max']}/{info['tot']} "
+                            f"of {archive_name}")
+
+            # Do the upload
+            self.upload_batch(db, trs, tcs)
+
+            # Check if we finished an archive
+            for archive_name, info in archive_stats.items():
+                if info['max'] == info['tot']:
                     sf_list = db.select_all(
                         db.SourceFile,
                         db.SourceFile.source == self.my_source,
-                        db.SourceFile.name == a
-                        )
+                        db.SourceFile.name == archive_name
+                    )
                     if not sf_list:
-                        db.insert('source_file', source=self.my_source, name=a)
-                else:
-                    logger.error("Process for %s exitted with exit code %d."
-                                 % (path.basename(a), p.exitcode))
-                active_list.remove((a, p))
-                start_next_proc()
-
-            # Wait for the next output from an archive unpacker.
-            try:
-                # This will not block until at least one is done
-                label, tr_data, tc_data = q.get_nowait()
-            except Exception:
-                continue
-            logger.info("Beginning to upload batch %d/%d from %s..." % label)
-            batch_id, _, arc_name = label
-            if continuing:
-                with open(batch_log, 'r') as f:
-                    if batch_entry_fmt % (arc_name, batch_id) in f.readlines():
-                        logger.info("Batch %d already completed: skipping..."
-                                    % batch_id)
-                        continue
-            self.upload_batch(db, tr_data, tc_data)
-            with open(batch_log, 'a+') as f:
-                f.write(batch_entry_fmt % (arc_name, batch_id))
-            logger.info("Finished batch %d/%d from %s..." % label)
-            time.sleep(0.1)
-
-        # Empty the queue.
-        while not q.empty():
-            try:
-                tr_data, tc_data = q.get(timeout=1)
-            except Exception:
-                break
-            self.upload_batch(db, tr_data, tc_data)
-
-        remove(batch_log)
-
-        return
+                        db.insert('source_file', source=self.my_source,
+                                  name=archive_name)
 
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer)
-    def populate(self, db, n_procs=1, continuing=False):
+    def populate(self, db, continuing=False):
         """Perform the initial population of the pmc content into the database.
 
         Parameters
         ----------
         db : indra.db.DatabaseManager instance
             The database to which the data will be uploaded.
-        n_procs : int
-            The number of processes to use when parsing xmls.
         continuing : bool
             If true, assume that we are picking up after an error, or
             otherwise continuing from an earlier process. This means we will
@@ -1312,7 +1245,7 @@ class PmcManager(_NihManager):
             at some earlier time.
         """
         gatherer.set_sub_label(self.my_source)
-        archives = set(self.get_file_list())
+        archives = set(self.get_all_archives())
 
         if continuing:
             sf_list = db.select_all(
@@ -1328,7 +1261,7 @@ class PmcManager(_NihManager):
                 logger.info("No archives to load. All done.")
                 return False
 
-        self.upload_archives(db, archives, n_procs, continuing=continuing)
+        self.upload_archives(db, archives, continuing=continuing)
         return True
 
 
@@ -1343,9 +1276,14 @@ class PmcOA(PmcManager):
     def is_archive(self, k):
         return k.startswith('articles') and k.endswith('.xml.tar.gz')
 
+    def get_file_data(self):
+        """Retrieve the metdata provided by the FTP server for files."""
+        files_metadata = self.ftp.get_csv_as_dict('oa_file_list.csv')
+        return files_metadata
+
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, 'pmc_oa')
-    def update(self, db, n_procs=1):
+    def update(self, db):
         min_datetime = self.get_latest_update(db)
 
         # Search down through the oa_package directory. Below the first level,
@@ -1353,8 +1291,8 @@ class PmcOA(PmcManager):
         # efficiently finding the latest files to update.
         logger.info("Getting list of articles that have been uploaded since "
                     "the last update.")
-        files = self.ftp.get_csv_as_dict('oa_file_list.csv', header=0)
-        fpath_set = {
+        files = self.ftp.get_csv_as_dict('oa_file_list.csv')
+        archive_set = {
             f['File'] for f in files
             if datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
                                  '%Y-%m-%d %H:%M:%S')
@@ -1363,11 +1301,11 @@ class PmcOA(PmcManager):
         done_sfs = db.select_all(db.SourceFile,
                                  db.SourceFile.source == self.my_source,
                                  db.SourceFile.load_date > min_datetime)
-        fpath_set -= {sf.name for sf in done_sfs}
+        archive_set -= {sf.name for sf in done_sfs}
 
         # Upload these archives.
-        logger.info("Updating the database with %d articles." % len(fpath_set))
-        self.upload_archives(db, fpath_set, n_procs=n_procs)
+        logger.info(f"Updating the database with {len(archive_set)} articles.")
+        self.upload_archives(db, archive_set)
         return True
 
 
@@ -1378,6 +1316,9 @@ class Manuscripts(PmcManager):
     """
     my_path = 'pub/pmc/manuscript'
     my_source = 'manuscripts'
+
+    def get_file_data(self):
+        return self.ftp.get_csv_as_dict("filelist.csv")
 
     def get_tarname_from_filename(self, fname):
         "Get the name of the tar file based on the file name (or a pmcid)."
@@ -1397,7 +1338,7 @@ class Manuscripts(PmcManager):
                                 db.TextContent.text_ref_id == db.TextRef.id,
                                 db.TextContent.source == self.my_source,
                                 db.TextRef.manuscript_id.is_(None))
-        file_list = self.ftp.get_csv_as_dict('filelist.csv', header=0)
+        file_list = self.ftp.get_csv_as_dict('filelist.csv')
         pmcid_mid_dict = {entry['PMCID']: entry['MID'] for entry in file_list}
         pmid_mid_dict = {entry['PMID']: entry['MID'] for entry in file_list
                          if entry['PMID'] != '0'}
@@ -1411,7 +1352,7 @@ class Manuscripts(PmcManager):
 
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, 'manuscripts')
-    def update(self, db, n_procs=1):
+    def update(self, db):
         """Add any new content found in the archives.
 
         Note that this is very much the same as populating for manuscripts,
@@ -1424,7 +1365,7 @@ class Manuscripts(PmcManager):
         The continuing feature isn't implemented yet.
         """
         logger.info("Getting list of manuscript content available.")
-        ftp_file_list = self.ftp.get_csv_as_dict('filelist.csv', header=0)
+        ftp_file_list = self.ftp.get_csv_as_dict('filelist.csv')
         ftp_pmcid_set = {entry['PMCID'] for entry in ftp_file_list}
 
         logger.info("Getting a list of text refs that already correspond to "
@@ -1444,7 +1385,7 @@ class Manuscripts(PmcManager):
                            for pmcid in load_pmcid_set}
 
         logger.info("Beginning to upload archives.")
-        self.upload_archives(db, update_archives, n_procs)
+        self.upload_archives(db, update_archives)
         return True
 
 

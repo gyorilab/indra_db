@@ -1274,7 +1274,11 @@ class PmcOA(PmcManager):
     my_source = 'pmc_oa'
 
     def is_archive(self, k):
-        return k.startswith('articles') and k.endswith('.xml.tar.gz')
+        return k.endswith('.xml.tar.gz')
+
+    def get_all_archives(self):
+        return [path.join('oa_bulk', k) for k in self.ftp.ftp_ls('oa_bulk')
+                if self.is_archive(k)]
 
     def get_file_data(self):
         """Retrieve the metdata provided by the FTP server for files."""

@@ -1145,9 +1145,8 @@ class PmcManager(_NihManager):
             raise
         return archive_local_path
 
-    def iter_contents(self, archives=None, continuing=False):
-        """Iterate over the files in the archive, yielding ref and content data.
-        """
+    def iter_xmls(self, archives=None, continuing=False):
+        """Iterate over the xmls in the given archives."""
         # By default, iterate through all the archives.
         if archives is None:
             archives = set(self.get_all_archives())
@@ -1170,15 +1169,21 @@ class PmcManager(_NihManager):
                 # Yield each XML file.
                 for n, xml_file in enumerate(xml_files):
                     xml_str = tar.extractfile(xml_file).read().decode('utf8')
-                    res = self.get_data_from_xml_str(xml_str, xml_file.name)
-                    if res is None:
-                        continue
-                    tr, tc = res
-                    yield (archive, n, len(xml_files)), tr, tc
+                    yield (archive, n, len(xml_files)), xml_file.name, xml_str
 
             # Remove it when we're done (unless there was an exception).
             logger.info(f"Deleting {archive}.")
             remove(archive_path)
+
+    def iter_contents(self, archives=None, continuing=False):
+        """Iterate over the files in the archive, yielding ref and content data.
+        """
+        for label, file_name, xml_str in self.iter_xmls(archives, continuing):
+            res = self.get_data_from_xml_str(xml_str, file_name)
+            if res is None:
+                continue
+            tr, tc = res
+            yield label, tr, tc
 
     def is_archive(self, *args):
         raise NotImplementedError("is_archive must be defined by the child.")

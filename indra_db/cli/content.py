@@ -924,7 +924,7 @@ class Pubmed(_NihManager):
 class PmcManager(_NihManager):
     """Abstract class for uploaders of PMC content: PmcOA and Manuscripts."""
     my_source = NotImplemented
-    tr_cols = ('pmid', 'pmcid', 'doi', 'manuscript_id',)
+    tr_cols = ('pmid', 'pmcid', 'doi', 'manuscript_id', 'year',)
 
     def __init__(self, *args, **kwargs):
         super(PmcManager, self).__init__(*args, **kwargs)
@@ -1077,11 +1077,14 @@ class PmcManager(_NihManager):
 
     def get_data_from_xml_str(self, xml_str, filename):
         """Get the data out of the xml string."""
+        # Load the XML
         try:
             tree = ET.XML(xml_str.encode('utf8'))
         except ET.ParseError:
             logger.info("Could not parse %s. Skipping." % filename)
             return None
+
+        # Get the ID information from the XML.
         id_data = {
             e.get('pub-id-type'): e.text for e in
             tree.findall('.//article-id')
@@ -1093,9 +1096,22 @@ class PmcManager(_NihManager):
             id_data['pmcid'] = 'PMC' + id_data['pmc']
         if 'manuscript' in id_data.keys():
             id_data['manuscript_id'] = id_data['manuscript']
+
+        # Get the year from the XML
+        year = None
+        for elem in tree.findall('.//article-meta/pub-date'):
+            year_elem = elem.find('year')
+            if year_elem:
+                year = int(year_elem.text)
+                break
+
+        # Format the text ref datum.
         tr_datum_raw = {k: id_data.get(k) for k in self.tr_cols}
         tr_datum = {k: val.strip().upper() if val is not None else None
                     for k, val in tr_datum_raw.items()}
+        tr_datum['year'] = year
+
+        # Format the text content datum.
         tc_datum = {
             'pmcid': id_data['pmcid'],
             'text_type': texttypes.FULLTEXT,

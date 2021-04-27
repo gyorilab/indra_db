@@ -1102,7 +1102,7 @@ class PmcManager(_NihManager):
         year = None
         for elem in tree.findall('.//article-meta/pub-date'):
             year_elem = elem.find('year')
-            if year_elem:
+            if year_elem is not None:
                 year = int(year_elem.text)
                 break
 
@@ -1153,13 +1153,14 @@ class PmcManager(_NihManager):
             archives = set(self.get_all_archives())
 
         # Yield the contents from each archive.
-        for archive in archives:
+        for archive in sorted(archives):
             archive_path = self.download_archive(archive, continuing)
             with tarfile.open(archive_path, mode='r:gz') as tar:
 
                 # Get names of all the XML files in the tar file, and report.
                 xml_files = [m for m in tar.getmembers() if m.isfile()
                              and m.name.endswith('xml')]
+                xml_files.sort(key=lambda m: m.name)
                 if len(xml_files) > 1:
                     logger.info(f'Iterating over {len(xml_files)} files in '
                                 f'{archive}.')
@@ -1212,7 +1213,7 @@ class PmcManager(_NihManager):
             for archive_name, file_num, num_files in lbls:
                 if archive_name not in archive_stats:
                     archive_stats[archive_name] = {'min': num_files, 'max': 0,
-                                           'tot': num_files}
+                                                   'tot': num_files}
                 if file_num < archive_stats[archive_name]['min']:
                     archive_stats[archive_name]['min'] = file_num
                 elif file_num > archive_stats[archive_name]['max']:
@@ -1303,7 +1304,7 @@ class PmcOA(PmcManager):
         return files_metadata
 
     @ContentManager._record_for_review
-    @DGContext.wrap(gatherer, 'pmc_oa')
+    @DGContext.wrap(gatherer, my_source)
     def update(self, db):
         min_datetime = self.get_latest_update(db)
 
@@ -1372,7 +1373,7 @@ class Manuscripts(PmcManager):
         return
 
     @ContentManager._record_for_review
-    @DGContext.wrap(gatherer, 'manuscripts')
+    @DGContext.wrap(gatherer, my_source)
     def update(self, db):
         """Add any new content found in the archives.
 

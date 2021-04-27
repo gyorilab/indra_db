@@ -316,6 +316,7 @@ class ContentManager(object):
             match_id_types = primary_id_types
         else:
             match_id_types = self.tr_cols
+
         # Get IDs from the tr_data_set that have one or more of the listed
         # id types.
         for id_type in match_id_types:
@@ -509,14 +510,14 @@ class ContentManager(object):
     @classmethod
     def get_latest_update(cls, db):
         """Get the date of the latest update."""
-        update_list = db.select_all(db.Updates,
-                                    db.Updates.source == cls.my_source)
-        if not len(update_list):
+        last_dt, = (db.session.query(sql_exp.func.max(db.Updates.datetime))
+                    .filter(db.Updates.source == cls.my_source).one())
+        if not last_dt:
             logger.error("The database has not had an initial upload, or else "
                          "the updates table has not been populated.")
-            return False
+            return None
 
-        return max([u.datetime for u in update_list])
+        return last_dt
 
     def populate(self, db):
         "A stub for the method used to initially populate the database."

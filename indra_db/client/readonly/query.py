@@ -563,6 +563,7 @@ class Query(object):
                 ev_counts[mk_hash] = ev_count
                 beliefs[mk_hash] = belief
                 stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
+                stmts_dict[mk_hash]['belief'] = belief
                 stmts_dict[mk_hash]['evidence'] = []
 
             # Add annotations if not present.

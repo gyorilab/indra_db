@@ -1308,23 +1308,23 @@ class PmcOA(PmcManager):
         files_metadata = self.ftp.get_csv_as_dict('oa_file_list.csv')
         return files_metadata
 
-    @ContentManager._record_for_review
-    @DGContext.wrap(gatherer, my_source)
-    def update(self, db):
-        min_datetime = self.get_latest_update(db)
-
-        # Search down through the oa_package directory. Below the first level,
-        # the files are timestamped, so we can filter down each level
-        # efficiently finding the latest files to update.
+    def get_archives_after_date(self, min_date):
+        """Get the names of all single-article archives after the given date."""
         logger.info("Getting list of articles that have been uploaded since "
                     "the last update.")
         files = self.ftp.get_csv_as_dict('oa_file_list.csv')
         archive_set = {
             f['File'] for f in files
             if datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
-                                 '%Y-%m-%d %H:%M:%S')
-            > min_datetime
-            }
+                                 '%Y-%m-%d %H:%M:%S') > min_date
+        }
+        return archive_set
+
+    @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, my_source)
+    def update(self, db):
+        min_datetime = self.get_latest_update(db)
+        archive_set = self.get_archives_after_date(min_datetime)
         done_sfs = db.select_all(db.SourceFile,
                                  db.SourceFile.source == self.my_source,
                                  db.SourceFile.load_date > min_datetime)

@@ -368,6 +368,7 @@ class IndraDBRefTable:
     @classmethod
     def has_ref(cls, id_type, id_list, filter_ids=False):
         """Get the appropriate constraint for the given ID list."""
+        id_type = id_type.lower()
         if id_type == 'pmid':
             return cls.pmid_in(id_list, filter_ids)
         elif id_type == 'pmcid':

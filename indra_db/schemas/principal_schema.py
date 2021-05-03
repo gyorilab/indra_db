@@ -600,9 +600,7 @@ class PrincipalSchema(Schema):
           "Phosphorylation".
         - **indra_version** ``varchar(100) NOT NULL``: The version of INDRA
           that was used to generate this Statement, specifically as returned by
-          >>>
-          >> from indra.util.get_version import get_version
-          >> indra_version = get_version()
+          ``indra.util.get_version.get_version()``.
         - **json** ``bytea NOT NULL``: The bytes of the Statement JSON
           (including exactly **one** Evidence JSON)
 

@@ -1859,6 +1859,10 @@ class FromPapers(_TextRefCore):
 class FromMeshIds(_TextRefCore):
     """Find Statements whose text sources were given one of a list of MeSH IDs.
 
+    This object can be constructed from a list of mixed "D" and "C" type mesh
+    IDs, but for reasons of querying, those IDs will be separated into two
+    separate classes and a :class:`Union <Union>` of the two classes returned.
+
     Parameters
     ----------
     mesh_ids : list
@@ -1867,9 +1871,11 @@ class FromMeshIds(_TextRefCore):
     Attributes
     ----------
     mesh_ids : tuple
-        The mesh IDs.
+        The immutable tuple of mesh IDs, on their original string form.
     _mesh_type : str
         "C" or "D" indicating which types of IDs are held in this object.
+    _mesh_nums : list[int]
+        The mesh IDs converted to integers, stripped of their prefix.
     """
     list_name = 'mesh_ids'
 
@@ -1901,7 +1907,6 @@ class FromMeshIds(_TextRefCore):
     def __init__(self, mesh_ids):
         self.mesh_ids = tuple(set(mesh_ids))
         self._mesh_nums = []
-        self._mesh_concept_nums = []
         self._mesh_type = None
         for mesh_id in self.mesh_ids:
             if self._mesh_type is None:

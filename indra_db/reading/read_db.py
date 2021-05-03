@@ -37,13 +37,10 @@ class ReadDBError(Exception):
 def generate_reading_id(tcid, reader_name, reader_version):
     """Generate the unique reading ID hash from content ID, reader, and version.
 
-    The format of the hash is:
-    >>>
-    >> AABBCCCCCCCCCC
-
-    Where ``A`` is the placeholder for the reader ID, ``B`` is the placeholder
-    for the reader version integer, and ``C`` is reserved for the text content
-    ID (it is loosely assumed we will not reach 10^10 pieces of text content).
+    The format of the hash is ``AABBCCCCCCCCCC``, where ``A`` is the placeholder
+    for the reader ID, ``B`` is the placeholder for the reader version integer,
+    and ``C`` is reserved for the text content ID (it is loosely assumed we will
+    not reach 10^10 pieces of text content).
 
     Parameters
     ----------

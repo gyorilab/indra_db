@@ -310,7 +310,7 @@ class DatabaseManager(object):
         return self.__engine.connect()
 
     def __del__(self, *args, **kwargs):
-        if not self.available:
+        if not hasattr(self, 'available') or self.available:
             return
         try:
             self.grab_session()

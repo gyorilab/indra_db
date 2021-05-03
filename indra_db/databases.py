@@ -142,6 +142,11 @@ class formats(_map_class):
 
 
 readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3, 'ISI': 4, 'EIDOS': 5, 'MTI': 6}
+"""A dict mapping each reader a unique integer ID.
+
+These ID's are used in creating the reading primary ID hashes. Thus, for a new
+reader to be fully integrated, it must be added to the above dictionary.
+"""
 
 
 # Specify versions of readers, and preference. Later in the list is better.
@@ -154,6 +159,17 @@ reader_versions = {
     'eidos': ['0.2.3-SNAPSHOT'],
     'mti': ['1.0'],
 }
+"""A dict of list values keyed by reader name, tracking reader versions.
+
+The oldest versions are to the left, and the newest to the right. We keep track
+of all past versions as it is often not practical nor necessary to re-run a
+reading on all content. Even in cases where it is, it is often useful to be
+able to compare results.
+
+As with the :data:`readers` variable above, this is used in the creation of
+the unique hash for a reading entry. For a new reader version to work, it must
+be added to the appropriate list.
+"""
 
 
 class IndraTableError(IndraDbException):

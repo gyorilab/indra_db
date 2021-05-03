@@ -104,6 +104,8 @@ class PrincipalSchema(Schema):
         (this often has to do with inconsistent versioning of a paper and mixups
         over what is IDed).
 
+        **Size**: medium
+
         **Basic Columns**
 
         These are the core columns representing the different IDs we use to
@@ -259,6 +261,8 @@ class PrincipalSchema(Schema):
         insertion of the data easier because the custom TRIDs need not be
         retrieved to dump the mesh refs.
 
+        **Size**: large
+
         **Columns**
 
         - **id** [``integer PRIMARY KEY``]: The primary database-assigned ID of
@@ -308,6 +312,8 @@ class PrincipalSchema(Schema):
         MTI is a machine learned model that attempts to predict MeSH annotations
         on new un-annotated abstracts after training on the existing
         annotations.
+
+        **Size**: medium
 
         **Columns**
 
@@ -363,6 +369,8 @@ class PrincipalSchema(Schema):
 
         Both the text itself and the metadata for the source of the text are
         represented in this table.
+
+        **Size**: large
 
         **Basic Columns**
 
@@ -435,6 +443,8 @@ class PrincipalSchema(Schema):
         reader in the :data:`reader_versions <indra_db.databases.reader_versions>`
         dictionary in the same module.
 
+        **Size**: very large
+
         **Basic Columns**
 
         - **id** [``bigint PRIMARY KEY``]: A hash ID constructed from a reader
@@ -504,6 +514,8 @@ class PrincipalSchema(Schema):
 
         No real data is contained in this column, simply records of which
         knowledge bases have been added, updated, and when.
+
+        **Size**: very small
 
         **Basic Columns**
 

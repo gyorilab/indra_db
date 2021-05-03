@@ -40,7 +40,7 @@ def generate_reading_id(tcid, reader_name, reader_version):
     The format of the hash is ``AABBCCCCCCCCCC``, where ``A`` is the placeholder
     for the reader ID, ``B`` is the placeholder for the reader version integer,
     and ``C`` is reserved for the text content ID (it is loosely assumed we will
-    not reach 10^10 pieces of text content).
+    not exceed 10^11 pieces of text content).
 
     Parameters
     ----------

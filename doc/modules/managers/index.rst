@@ -52,11 +52,12 @@ handling.
    :members:
 
 
-Readonly Manager (:py:mod:`indra_db.managers.readonly_manager`)
----------------------------------------------------------------
+Readonly Manager (:py:mod:`indra_db.managers.dump_manager`)
+-----------------------------------------------------------
 
-This handles the generation of the content for the readonly database from the
-principal database.
+This handles the generation of static dumps, including the readonly database 
+from the principal database.
 
-.. automodule:: indra_db.managers.readonly_manager
+.. automodule:: indra_db.managers.dump_manager
    :members:
+   :member-order: bysource

@@ -1,6 +1,6 @@
 """This module provides essential tools to run reading using indra's own
 database. This may also be run as a script; for details run:
-`python read_pmids_db --help`
+``python read_pmids_db --help``
 """
 
 import re

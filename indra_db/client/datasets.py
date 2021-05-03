@@ -26,9 +26,6 @@ def get_statement_essentials(clauses, count=1000, db=None, preassembled=True):
         list of sqlalchemy WHERE clauses to pass to the filter query.
     count : int
         Number of statements to retrieve and process in each batch.
-    do_stmt_count : bool
-        Whether or not to perform an initial statement counting step to give
-        more meaningful progress messages.
     db : :py:class:`DatabaseManager`
         Optionally specify a database manager that attaches to something
         besides the primary database, for example a local database instance.
@@ -148,18 +145,21 @@ def export_relation_dict_to_tsv(relation_dict, out_base, out_types=None):
     """Export a relation dict (from get_relation_dict) to a tsv.
 
     Available output types are:
+
     - "full_tsv" : get a tsv with directed pairs of entities (e.g. HGNC
-        symbols), the type of relation (e.g. Phosphorylation) and the hash
-        of the preassembled statement. Columns are agent_1, agent_2 (where
-        agent_1 affects agent_2), type, hash.
+      symbols), the type of relation (e.g. Phosphorylation) and the hash
+      of the preassembled statement. Columns are agent_1, agent_2 (where
+      agent_1 affects agent_2), type, hash.
+
     - "short_tsv" : like the above, but without the hashes, so only one
-        instance of each pair and type trio occurs. However, the information
-        cannot be traced. Columns are agent_1, agent_2, type, where agent_1
-        affects agent_2.
+      instance of each pair and type trio occurs. However, the information
+      cannot be traced. Columns are agent_1, agent_2, type, where agent_1
+      affects agent_2.
+
     - "pairs_tsv" : like the above, but without the relation type. Similarly,
-        each row is unique. In addition, the agents are undirected. Thus this
-        is purely a list of pairs of related entities. The columns are just
-        agent_1 and agent_2, where nothing is implied by the ordering.
+      each row is unique. In addition, the agents are undirected. Thus this
+      is purely a list of pairs of related entities. The columns are just
+      agent_1 and agent_2, where nothing is implied by the ordering.
 
     Parameters
     ----------

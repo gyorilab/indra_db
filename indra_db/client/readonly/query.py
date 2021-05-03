@@ -2971,20 +2971,17 @@ class EvidenceFilter:
     important cases:
 
     - ``HasSource(['reach']) & FromMeshIds(['D0001'])``: we might reasonably
-       want to filter evidence for the second subquery but not the first.
-
+      want to filter evidence for the second subquery but not the first.
     - ``HasOnlySource(['reach']) & FromMeshIds(['D00001'])``: Here we would
-       likely want to filter the evidence for both sub queries.
-
+      likely want to filter the evidence for both sub queries.
     - ``HasOnlySource(['reach']) | FromMeshIds(['D000001'])``: It is not clear
-       what this even means (its purpose) or what we'd do for evidence filtering
-       when the original statements are or'ed
-
+      what this even means (its purpose) or what we'd do for evidence filtering
+      when the original statements are or'ed
     - ``HasDatabases() & FromMeshIds(['D000001'])``: Here you COULDN'T perform
-       an & on the evidence, because the two sources are mutually exclusive
-       (only readings connect to mesh annotations). However it could make sense
-       you would want to do an "or" between the evidence, so the evidence is
-       either from a database or from a mesh annotated document.
+      an & on the evidence, because the two sources are mutually exclusive
+      (only readings connect to mesh annotations). However it could make sense
+      you would want to do an "or" between the evidence, so the evidence is
+      either from a database or from a mesh annotated document.
 
     Both "filter all the evidence" and "filter none of the evidence" should
     definitely be options. Although "Filter for all" might run into uses with

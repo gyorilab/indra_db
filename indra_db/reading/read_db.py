@@ -35,6 +35,28 @@ class ReadDBError(Exception):
 
 
 def generate_reading_id(tcid, reader_name, reader_version):
+    """Generate the unique reading ID hash from content ID, reader, and version.
+
+    The format of the hash is:
+    >>>
+    >> AABBCCCCCCCCCC
+
+    Where ``A`` is the placeholder for the reader ID, ``B`` is the placeholder
+    for the reader version integer, and ``C`` is reserved for the text content
+    ID (it is loosely assumed we will not reach 10^10 pieces of text content).
+
+    Parameters
+    ----------
+    tcid : str
+        The string-ified text content ID.
+    reader_name : str
+        The name of the reader. It must be one of the readers in
+        :data:`readers <indra_db.databases.readers>`.
+    reader_version : str
+        The version of the reader, which must be in the list of versions for the
+        given ``reader_name`` in
+        :data:`reader_versions <indra_db.databases.reader_versions>`.
+    """
     reading_id = readers[reader_name.upper()] * 10e12
     reading_id += (reader_versions[reader_name.lower()]
                    .index(reader_version[:20]) * 10e10)
@@ -565,7 +587,7 @@ class DatabaseReader(object):
         """Convert a list of ReadingData instances into ResultData instances."""
         rslt_data_list = []
 
-        if num_proc is 1:  # Don't use pool if not needed.
+        if num_proc == 1:  # Don't use pool if not needed.
             for reading_data in reading_data_list:
                 rslt_data_list += self.get_rslts_safely(reading_data)
         else:

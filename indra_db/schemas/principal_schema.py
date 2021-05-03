@@ -520,7 +520,7 @@ class PrincipalSchema(Schema):
         **Basic Columns**
 
         - **id** [``integer PRIMARY KEY``]: A database-assigned integer unique
-          ID for each database entry. These are elsewhere refered to as
+          ID for each database entry. These are elsewhere referred to as
           `db_info_ids` or `dbids`.
         - **db_name** [``varchar NOT NULL``]: A short lowercase string that is
           used internally to identify the knowledge base, e.g. "pc" for Pathway
@@ -549,7 +549,78 @@ class PrincipalSchema(Schema):
         return DBInfo
 
     def raw_statements(self):
-        """Represent Statements exactly as extracted their sources."""
+        """Represent Statements exactly as extracted by their source apis.
+
+        INDRA Defines several source APIs for different file types from which we
+        can extract INDRA Statements. The goal of these APIs is primarily to
+        accurately convey the contents of the files, and minimal fixes are made
+        at this stage (e.g. grounding is saved for preassembly).
+
+        Thus this table contains statements that are considered "messy" in two
+        key ways:
+
+        - they have a lot of repetition of information, and
+        - they have whatever grounding the original source gave them.
+
+        However these Statements also have the Evidence object JSON contained in
+        their **json** column, and this Evidence information is **NOT** copied
+        into the :func:`pa_statements <pa_statements>` table, which allows for
+        a flexible incremental updates. A "lateral join" on this table can be
+        used to get the first N evidence associated with each PA Statement.
+
+        **Size**: very large
+
+        **Basic Columns**
+
+        - **id** [``integer PRIMARY KEY``]: A database-assigned integer unique
+          ID for each database entry. These are elsewhere referred to as
+          "Statement ID"s, or "sid"s.
+        - **uuid** [``varchar UNIQUE NOT NULL``]: A UUID generated when a
+          Statement object is first created. This can be used for tracking
+          particular objects through the code.
+        - **batch_id** [``integer NOT NULL``]: A simple random integer (not
+          unique) that is assigned each batch of inserted Statements. It is used
+          in the moments after the insert to easily retrieve the content that
+          was just added, potentially plus some extra.
+        - **mk_hash** [``bigint NOT NULL``]: A hash of the ``matches_key`` of a
+          Statement. This should be unique for any statement containing the same
+          information.
+        - **text_hash** [``bigint``]: A hash of a the evidence text, used to
+          detect exact duplicate Statements (same information from the same
+          exact source, right down to the text) that sometimes occur due to bugs
+        - **source_hash** [``bigint NOT NULL``]: A hash of the source
+          information.
+        - **db_info_id** [``integer``]: A foreign key into the
+          :func:`db_info <db_info>` table, for those statements that come from
+          knowledge bases.
+        - **reading_id** [``bigint``]: A foreign key into the
+          :func:`reading <reading>` table, for those statements that come from a
+          reading.
+        - **type** [``varchar(100) NOT NULL``]: The type of the Statement, e.g.
+          "Phosphorylation".
+        - **indra_version** [``varchar(100) NOT NULL``]: The version of INDRA
+          that was used to generate this Statement, specifically as returned by
+          >>>
+          >> from indra.util.get_version import get_version
+          >> indra_version = get_version()
+        - **json** [``bytea NOT NULL``]: The bytes of the Statement JSON
+          (including exactly **one** Evidence JSON)
+
+        **Metadata Columns**
+
+        - **create_date** [``timestamp without time zone``]: The date the
+          Statement was added.
+
+        **Constraints**
+
+        Postgres is extremely efficient at detecting conflicts, and we use this
+        to help ensure our entries do not have any duplicates.
+
+        - **reading_raw_statement_uniqueness**: ``UNIQUE(mk_hash, text_hash,
+          reading_id)``
+        - **db_info_raw_statement_uniqueness**: ``UNIQUE(mk_hash, source_hash,
+          db_info_id)``
+        """
         class RawStatements(self.base, IndraDBTable):
             __tablename__ = 'raw_statements'
             _skip_disp = ['json']

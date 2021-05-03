@@ -150,12 +150,10 @@ def export_relation_dict_to_tsv(relation_dict, out_base, out_types=None):
       symbols), the type of relation (e.g. Phosphorylation) and the hash
       of the preassembled statement. Columns are agent_1, agent_2 (where
       agent_1 affects agent_2), type, hash.
-
     - "short_tsv" : like the above, but without the hashes, so only one
       instance of each pair and type trio occurs. However, the information
       cannot be traced. Columns are agent_1, agent_2, type, where agent_1
       affects agent_2.
-
     - "pairs_tsv" : like the above, but without the relation type. Similarly,
       each row is unique. In addition, the agents are undirected. Thus this
       is purely a list of pairs of related entities. The columns are just

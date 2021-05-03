@@ -458,7 +458,7 @@ class PrincipalSchema(Schema):
 
         **Metadata Columns**
 
-        - **create_data** [``timestamp without time zone``]: The date the record
+        - **create_date** [``timestamp without time zone``]: The date the record
           was added.
         - **last_updated** [``timestamp without time zone``]: The most recent
           time the record was edited.
@@ -498,7 +498,32 @@ class PrincipalSchema(Schema):
 
         INDRA DB takes content not just from our own readings but also merges
         that with many pre-existing knowledge bases, many of them human
-        curated.
+        curated. These knowledge bases are defined and managed by classes
+        contained in :mod:`knowledgebase_manager
+        <indra_db.managers.knowledgebase_manager>`.
+
+        No real data is contained in this column, simply records of which
+        knowledge bases have been added, updated, and when.
+
+        **Basic Columns**
+
+        - **id** [``integer PRIMARY KEY``]: A database-assigned integer unique
+          ID for each database entry. These are elsewhere refered to as
+          `db_info_ids` or `dbids`.
+        - **db_name** [``varchar NOT NULL``]: A short lowercase string that is
+          used internally to identify the knowledge base, e.g. "pc" for Pathway
+          Commons.
+        - **db_full_name** [``varchar NOT NULL``]: The full name of the
+          knowledge base, neatly formatted, e.g. "Pathway Commons".
+        - **source_api** [``varchar NOT NULL``]: The indra source API that was
+          used to extract Statements from the knowledge base, e.g. "biopax".
+
+        **Metadata Columns**
+
+        - **create_date** [``timestamp without time zone``]: The date the record
+          was added.
+        - **last_updated** [``timestamp without time zone``]: The most recent
+          time the record was edited.
         """
         class DBInfo(self.base, IndraDBTable):
             __tablename__ = 'db_info'

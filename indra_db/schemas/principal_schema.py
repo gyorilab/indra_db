@@ -712,8 +712,42 @@ class PrincipalSchema(Schema):
         """Represent links between raw statements and preassembled statements.
 
         Each preassembled statement is constructed from multiple raw statements,
-        in general. This table is how the list of evidence can be built for
-        each preassembled statement.
+        in general. This maps each :func:`pa_statement <pa_statements>` to the
+        :func:`raw statements <raw_statements>` that were merged to form it. It
+        is through this table that evidence can be gathered for pa_statements.
+
+        The astute reader may note that the
+        :func:`raw_statements <raw_statements>`-to
+        -:func:`pa_statement <pa_statements>` relationship is many-to-one, which
+        can be represented simply using a foreign-key in the "many" table, in
+        this case :func:`raw_statements <raw_statements>`. This is not done
+        because the :func:`pa_statement <pa_statements>` does not, in general,
+        exist when the :func:`raw_statement <raw_statements>` is added to the
+        database.
+
+        Constructed as it is, these links can be copied in bulk during
+        preassembly, as opposed to having to modify as many as a million entries
+        with a newly created foreign-key map.
+
+        **Size**: large
+
+        **Basic Columns**
+
+        - **id** ``integer PRIMARY KEY``: A database-assigned integer unique
+          ID for each database entry.
+        - **raw_stmt_id** ``integer NOT NULL REFERENCES raw_statements(id)``:
+          The Raw Statement ID foreign key to the :func:`raw_statements
+          <raw_statements>` table.
+        - **pa_stmt_mk_hash** ``bigint NOT NULL REFERENCES
+          pa_statements(mk_hash)``: The PA Statement matches-key hash foreign
+          key to the :func:`pa_statements <pa_statements>` table.
+
+        **Constraints**
+
+        Postgres is extremely efficient at detecting conflicts, and we use this
+        to help ensure our entries do not have any duplicates.
+
+        - **stmt-link-uniqueness**: ``UNIQUE(raw_stmt_id, pa_stmt_mk_hash)``
         """
         class RawUniqueLinks(self.base, IndraDBTable):
             __tablename__ = 'raw_unique_links'
@@ -737,9 +771,46 @@ class PrincipalSchema(Schema):
     def pa_statements(self):
         """Represent preassembled statements.
 
-         Preassmebled Statements are a cleaned up and unique corpus of
-         statements generated from the raw statements.
-         """
+         Preassmebled Statements are generated from Raw Statements using INDRA's
+         preassembly tools. Specifically:
+
+         - agents are grounded,
+         - agent groundings are disambiguated (using adeft),
+         - sites are fixed (using protmapper),
+         - and finally, repeated information is consolidated, for example
+           ``Phosphorylation(MEK(), ERK())`` is represented only once in this
+           corpus, with links to the many instances that information was
+           extracted, which are stored in the :func:`raw_statements
+           <raw_statements>` table.
+
+        Each entry is linked back to the (in general multiple) raw statements
+        it was derived from in the :func:`raw_unique_links <raw_unique_links>`
+        table.
+
+        **Size**: medium large
+
+        **Basic Columns**
+
+        - **mk_hash** ``bigint PRIMARY KEY``: a hash of the statement matches
+          key, which is unique for the _knowledge_ of the Statement.
+        - **matches_key** ``varchar NOT NULL``: The matches-key that was hashed.
+        - **uuid** ``varchar UNIQUE NOT NULL``: A UUID generated when a
+          Statement object is first created. This can be used for tracking
+          particular objects through the code. The UUID is distinct from any
+          of the raw statement UUIDs that compose this Statement.
+        - **type** ``varchar(100) NOT NULL``: The type of the Statement, e.g.
+          "Phosphorylation".
+        - **indra_version** ``varchar(100) NOT NULL``: The version of INDRA
+          that was used to generate this Statement, specifically as returned by
+          ``indra.util.get_version.get_version()``.
+        - **json** ``bytea NOT NULL``: The bytes of the Statement JSON
+          (including exactly **one** Evidence JSON)
+
+        **Metadata Columns**
+
+        - **create_date** ``timestamp without time zone``: The date the
+          Statement was added.
+        """
         class PAStatements(self.base, IndraDBTable):
             __tablename__ = 'pa_statements'
             _skip_disp = ['json']
@@ -761,6 +832,27 @@ class PrincipalSchema(Schema):
         In INDRA, we look for cases where more specific Statements may lend
         support to more general Statements, and potentially vice versa, to
         better gauge whether an extraction is reliable.
+
+        **Size**: large
+
+        **Basic Columns**
+
+        - **id** ``integer PRIMARY KEY``: A database-assigned integer unique
+          ID for each database entry.
+        - **supporting_mk_hash** ``bigint NOT NULL REFERENCES
+          pa_statements(mk_hash)``: A foreign key to the PA Statement that is
+          giving the support (that is, the more specific Statement).
+        - **supported_mk_hash** ``bigint NOT NULL REFERENCES
+          pa_statements(mk_hash)``: A foreign key to the PA Statement that is
+          given the support (that is, the more generic Statement).
+
+        **Constraints**
+
+        Postgres is extremely efficient at detecting conflicts, and we use this
+        to help ensure our entries do not have any duplicates.
+
+        - **pa_support_links_link_uniqueness**: ``UNIQUE(supporting_mk_hash,
+          supported_mk_hash)``
         """
         class PASupportLinks(self.base, IndraDBTable):
             __tablename__ = 'pa_support_links'
@@ -845,7 +937,40 @@ class PrincipalSchema(Schema):
         return PAMuts
 
     def curations(self):
-        """Represent the curations of our content."""
+        """Represent the curations of our content.
+
+        At various points in our APIs and UIs it is possible to curate the
+        content we have extracted, recording whether it is an accurate
+        extraction from the source text, and if not the reason why.
+
+        **Size**: small
+
+        **Basic Columns**
+
+        - **id** ``integer PRIMARY KEY``: A database-assigned integer unique
+          ID for each database entry.
+        - **pa_hash** ``bigint REFERENCES pa_statements(mk_hash)``: A reference
+          into the :func:`pa_statements <pa_statements>` table to the the
+          pa statement whose evidence was curated.
+        - **source_hash** ``bigint``: A hash that represents the source of this
+          Statement (e.g. reader and piece of content).
+        - **tag** ``varchar``: A text code indicating the type of error curated.
+          The domain of these strings is regulated in code elsewhere.
+        - **text** ``varchar``: A free-form text description by the curator of
+          what they think went wrong (or right).
+        - **curator** ``varchar NOT NULL``: The identity of the curator. This
+          has elsewhere been standardized to be their email.
+        - **auth_id** ``varchar``: [deprecated]
+        - **source** ``varchar``: A string indicating where this curation
+          originated, e.g. "DB REST API" for the INDRA Database REST service.
+        - **ip** ``inet``: The IP address from which the curation was submitted.
+        - **date** ``timestamp without time zone``: The date the curation was
+          added.
+        - **pa_json** ``jsonb``: the preassembled Statement JSON that was
+          curated.
+        - **ev_json** ``jsonb``: the Evidence JSON that was curated (including
+          the text).
+        """
         class Curation(self.base, IndraDBTable):
             __tablename__ = 'curation'
             _always_disp = ['pa_hash', 'source_hash', 'tag', 'curator', 'date']

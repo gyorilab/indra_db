@@ -111,17 +111,17 @@ class PrincipalSchema(Schema):
         These are the core columns representing the different IDs we use to
         represent a paper.
 
-        - **id** [``integer PRIMARY KEY``]: The primary key of the TextRef
+        - **id** ``integer PRIMARY KEY``: The primary key of the TextRef
           entry. Elsewhere this is often referred to as a "text ref ID" or
           "trid" for short.
-        - **pmid** [``varchar(20)``]: The identifier from pubmed.
-        - **pmcid** [``varchar(20)``]: The identifier from PubMed Central (e.g.
+        - **pmid** ``varchar(20)``: The identifier from pubmed.
+        - **pmcid** ``varchar(20)``: The identifier from PubMed Central (e.g.
           "PMC12345")
-        - **doi** [``varchar(100)``]: The ideally universal identifier.
-        - **pii** [``varchar(250)``]: The identifier used by Springer.
-        - **url** [``varchar UNIQUE``]: For sources found exclusively online
+        - **doi** ``varchar(100)``: The ideally universal identifier.
+        - **pii** ``varchar(250)``: The identifier used by Springer.
+        - **url** ``varchar UNIQUE``: For sources found exclusively online
           (e.g. wikipedia) use their URL.
-        - **manuscript_id** [``varchar(100) UNIQUE``]: The ID assigned documents
+        - **manuscript_id** ``varchar(100) UNIQUE``: The ID assigned documents
           given to PMC author manuscripts.
 
         **Metadata Columns**
@@ -129,9 +129,9 @@ class PrincipalSchema(Schema):
         In addition we also track some basic metadata about the entry and
         updates to the data in the table.
 
-        - create_date [``timestamp without time zone``]: The date the record was
+        - create_date ``timestamp without time zone``: The date the record was
           added.
-        - last_updated [``timestamp without time zone``]: The most recent time
+        - last_updated ``timestamp without time zone``: The most recent time
           the record was edited.
 
         **Constraints**
@@ -149,17 +149,17 @@ class PrincipalSchema(Schema):
         format, so they are processed and broken down into integer parts, as
         far as possible.
 
-        - **pmid_num** [``integer``]: the int-ified pmid, faster for lookup.
-        - **pmcid_num** [``integer``]: the int-portion of the PMCID, so
+        - **pmid_num** ``integer``: the int-ified pmid, faster for lookup.
+        - **pmcid_num** ``integer``: the int-portion of the PMCID, so
           "PMC12345" would here be 12345.
-        - **pmcid_version** [``integer``]: although rarely used, occasionally a
+        - **pmcid_version** ``integer``: although rarely used, occasionally a
           PMC ID will have a version, indicated by a dot, e.g. PMC12345.3, in
           which case the "3" would be stored in this column.
-        - **doi_ns** [``integer``]: The DOI system works by assigning
+        - **doi_ns** ``integer``: The DOI system works by assigning
           organizations (such as a journal) namespace IDs, and that organization
           is then responsible for maintaining a unique ID system internally.
           These namespaces are always numbers, and are stored here as such.
-        - **doi_id** [``varchar``]: The custom ID given by the publishing
+        - **doi_id** ``varchar``: The custom ID given by the publishing
           organization.
         """
         class TextRef(self.base, IndraDBTable, IndraDBRefTable):
@@ -265,19 +265,19 @@ class PrincipalSchema(Schema):
 
         **Columns**
 
-        - **id** [``integer PRIMARY KEY``]: The primary database-assigned ID of
+        - **id** ``integer PRIMARY KEY``: The primary database-assigned ID of
           the row.
-        - **pmid_num** [``integer NOT NULL``]: The int-ified pmid that is used
+        - **pmid_num** ``integer NOT NULL``: The int-ified pmid that is used
           to link entries in this table with those in the
           :func:`text_ref <text_ref>` table.
-        - **mesh_num** [```integer NOT NULL``]: The intified MeSH ID (with the
+        - **mesh_num** ```integer NOT NULL``: The intified MeSH ID (with the
           prefix removed). The **is_concept** column indicates whether the
           prefix was D (False) or C (True).
-        - **qual_num** [``integer``]: The qualifier number that is sometimes
+        - **qual_num** ``integer``: The qualifier number that is sometimes
           included with the annotation (Prefix Q).
-        - **major_topic** [``boolean DEFAULT false``]: The major topic flag
+        - **major_topic** ``boolean DEFAULT false``: The major topic flag
           indicates whether the ID describes a primary purpose of the paper.
-        - **is_concept** [``boolean DEFAUL false``]: Indicate whether the prefix
+        - **is_concept** ``boolean DEFAUL false``: Indicate whether the prefix
           was C (true) or D (false).
 
         **Constraints**
@@ -317,19 +317,19 @@ class PrincipalSchema(Schema):
 
         **Columns**
 
-        - **id** [``integer PRIMARY KEY``]: The primary database-assigned ID of
+        - **id** ``integer PRIMARY KEY``: The primary database-assigned ID of
           the row.
-        - **pmid_num** [``integer NOT NULL``]: The int-ified pmid that is used
+        - **pmid_num** ``integer NOT NULL``: The int-ified pmid that is used
           to link entries in this table with those in the
           :func:`text_ref <text_ref>` table.
-        - **mesh_num** [```integer NOT NULL``]: The intified MeSH ID (with the
+        - **mesh_num** ```integer NOT NULL``: The intified MeSH ID (with the
           prefix removed). The **is_concept** column indicates whether the
           prefix was D (False) or C (True).
-        - **qual_num** [``integer``]: The qualifier number that is sometimes
+        - **qual_num** ``integer``: The qualifier number that is sometimes
           included with the annotation (Prefix Q).
-        - **major_topic** [``boolean DEFAULT false``]: The major topic flag
+        - **major_topic** ``boolean DEFAULT false``: The major topic flag
           indicates whether the ID describes a primary purpose of the paper.
-        - **is_concept** [``boolean DEFAUL false``]: Indicate whether the prefix
+        - **is_concept** ``boolean DEFAUL false``: Indicate whether the prefix
           was C (true) or D (false).
 
         **Constraints**
@@ -374,27 +374,27 @@ class PrincipalSchema(Schema):
 
         **Basic Columns**
 
-        - **id** [``integer PRIMARY KEY``]: The auto-generated primary key of
+        - **id** ``integer PRIMARY KEY``: The auto-generated primary key of
           the table. These are elsewhere called Text Content IDs, or TCIDs.
-        - **text_ref_id** [``integer NOT NULL``]: A foreign-key constrained
+        - **text_ref_id** ``integer NOT NULL``: A foreign-key constrained
           reference to the appropriate entry in the :func:`text_ref <text_ref>`
           table.
-        - **source** [``varchar(250) NOT NULL``]: The name of the source, e.g.
+        - **source** ``varchar(250) NOT NULL``: The name of the source, e.g.
           "pubmed" or "pmc_oa". The list of content names can be found in the
           class attributes in content managers.
-        - **format** [``varchar(250) NOT NULL``]: The file format of the
+        - **format** ``varchar(250) NOT NULL``: The file format of the
           content, e.g. "XML" or "TEXT".
-        - **text_type** [``varchar(250) NOT NULL``]: The type of the text, e.g.
+        - **text_type** ``varchar(250) NOT NULL``: The type of the text, e.g.
           "abstract" of "fulltext".
-        - **preprint** [``boolean``]: Indicate whether the content is from
+        - **preprint** ``boolean``: Indicate whether the content is from
           a preprint.
-        - **content** [``bytea``]: The raw compressed bytes of the content.
+        - **content** ``bytea``: The raw compressed bytes of the content.
 
         **Metadata Columns**
 
-        - **insert_data** [``timestamp without time zone``]: The date the record
+        - **insert_data** ``timestamp without time zone``: The date the record
           was added.
-        - **last_updated** [``timestamp without time zone``]: The most recent
+        - **last_updated** ``timestamp without time zone``: The most recent
           time the record was edited.
 
         **Constraints**
@@ -447,30 +447,30 @@ class PrincipalSchema(Schema):
 
         **Basic Columns**
 
-        - **id** [``bigint PRIMARY KEY``]: A hash ID constructed from a reader
+        - **id** ``bigint PRIMARY KEY``: A hash ID constructed from a reader
           number, reader version number, and the text content ID of the content
           that was read.
-        - **text_content_id** [``integer NOT NULL``]: A foreign-key constrained
+        - **text_content_id** ``integer NOT NULL``: A foreign-key constrained
           reference to the appropriate entry in the :func:`text_content
           <text_content>` table.
-        - **batch_id** [``integer NOT NULL``]: A simple random integer (not
+        - **batch_id** ``integer NOT NULL``: A simple random integer (not
           unique) that is assigned each batch of inserted readings. It is used
           in the moments after the insert to easily retrieve the content that
           was just added, potentially plus some extra.
-        - **reader** [``varchar(20) NOT NULL``]: The name of the reader, e.g.
+        - **reader** ``varchar(20) NOT NULL``: The name of the reader, e.g.
           "REACH" or "SPARSER".
-        - **reader_version** [``varchar(20) NOT NULL``]: The version of the
+        - **reader_version** ``varchar(20) NOT NULL``: The version of the
           reader, which may be any arbitrary string in principle. This allows
           each reader to define its own versioning scheme.
-        - **format** [``varchar(20) NOT NULL``]: The file format of the
+        - **format** ``varchar(20) NOT NULL``: The file format of the
           reading result, e.g. "XML" or "JSON".
-        - **bytes** [``bytea``]: The raw compressed bytes of the reading result.
+        - **bytes** ``bytea``: The raw compressed bytes of the reading result.
 
         **Metadata Columns**
 
-        - **create_date** [``timestamp without time zone``]: The date the record
+        - **create_date** ``timestamp without time zone``: The date the record
           was added.
-        - **last_updated** [``timestamp without time zone``]: The most recent
+        - **last_updated** ``timestamp without time zone``: The most recent
           time the record was edited.
 
         **Constraints**
@@ -519,22 +519,22 @@ class PrincipalSchema(Schema):
 
         **Basic Columns**
 
-        - **id** [``integer PRIMARY KEY``]: A database-assigned integer unique
+        - **id** ``integer PRIMARY KEY``: A database-assigned integer unique
           ID for each database entry. These are elsewhere referred to as
           `db_info_ids` or `dbids`.
-        - **db_name** [``varchar NOT NULL``]: A short lowercase string that is
+        - **db_name** ``varchar NOT NULL``: A short lowercase string that is
           used internally to identify the knowledge base, e.g. "pc" for Pathway
           Commons.
-        - **db_full_name** [``varchar NOT NULL``]: The full name of the
+        - **db_full_name** ``varchar NOT NULL``: The full name of the
           knowledge base, neatly formatted, e.g. "Pathway Commons".
-        - **source_api** [``varchar NOT NULL``]: The indra source API that was
+        - **source_api** ``varchar NOT NULL``: The indra source API that was
           used to extract Statements from the knowledge base, e.g. "biopax".
 
         **Metadata Columns**
 
-        - **create_date** [``timestamp without time zone``]: The date the record
+        - **create_date** ``timestamp without time zone``: The date the record
           was added.
-        - **last_updated** [``timestamp without time zone``]: The most recent
+        - **last_updated** ``timestamp without time zone``: The most recent
           time the record was edited.
         """
         class DBInfo(self.base, IndraDBTable):
@@ -572,43 +572,43 @@ class PrincipalSchema(Schema):
 
         **Basic Columns**
 
-        - **id** [``integer PRIMARY KEY``]: A database-assigned integer unique
+        - **id** ``integer PRIMARY KEY``: A database-assigned integer unique
           ID for each database entry. These are elsewhere referred to as
           "Statement ID"s, or "sid"s.
-        - **uuid** [``varchar UNIQUE NOT NULL``]: A UUID generated when a
+        - **uuid** ``varchar UNIQUE NOT NULL``: A UUID generated when a
           Statement object is first created. This can be used for tracking
           particular objects through the code.
-        - **batch_id** [``integer NOT NULL``]: A simple random integer (not
+        - **batch_id** ``integer NOT NULL``: A simple random integer (not
           unique) that is assigned each batch of inserted Statements. It is used
           in the moments after the insert to easily retrieve the content that
           was just added, potentially plus some extra.
-        - **mk_hash** [``bigint NOT NULL``]: A hash of the ``matches_key`` of a
+        - **mk_hash** ``bigint NOT NULL``: A hash of the ``matches_key`` of a
           Statement. This should be unique for any statement containing the same
           information.
-        - **text_hash** [``bigint``]: A hash of a the evidence text, used to
+        - **text_hash** ``bigint``: A hash of a the evidence text, used to
           detect exact duplicate Statements (same information from the same
           exact source, right down to the text) that sometimes occur due to bugs
-        - **source_hash** [``bigint NOT NULL``]: A hash of the source
+        - **source_hash** ``bigint NOT NULL``: A hash of the source
           information.
-        - **db_info_id** [``integer``]: A foreign key into the
+        - **db_info_id** ``integer``: A foreign key into the
           :func:`db_info <db_info>` table, for those statements that come from
           knowledge bases.
-        - **reading_id** [``bigint``]: A foreign key into the
+        - **reading_id** ``bigint``: A foreign key into the
           :func:`reading <reading>` table, for those statements that come from a
           reading.
-        - **type** [``varchar(100) NOT NULL``]: The type of the Statement, e.g.
+        - **type** ``varchar(100) NOT NULL``: The type of the Statement, e.g.
           "Phosphorylation".
-        - **indra_version** [``varchar(100) NOT NULL``]: The version of INDRA
+        - **indra_version** ``varchar(100) NOT NULL``: The version of INDRA
           that was used to generate this Statement, specifically as returned by
           >>>
           >> from indra.util.get_version import get_version
           >> indra_version = get_version()
-        - **json** [``bytea NOT NULL``]: The bytes of the Statement JSON
+        - **json** ``bytea NOT NULL``: The bytes of the Statement JSON
           (including exactly **one** Evidence JSON)
 
         **Metadata Columns**
 
-        - **create_date** [``timestamp without time zone``]: The date the
+        - **create_date** ``timestamp without time zone``: The date the
           Statement was added.
 
         **Constraints**

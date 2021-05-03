@@ -275,6 +275,14 @@ class PrincipalSchema(Schema):
           indicates whether the ID describes a primary purpose of the paper.
         - **is_concept** [``boolean DEFAUL false``]: Indicate whether the prefix
           was C (true) or D (false).
+
+        **Constraints**
+
+        Postgres is extremely efficient at detecting conflicts, and we use this
+        to help ensure our entries do not have any duplicates.
+
+        - **mesh-uniqueness**: ``UNIQUE(pmid_num, mesh_num, qual_num,
+          is_concept)``
         """
         class MeshRefAnnotations(self.base, IndraDBTable):
             __tablename__ = 'mesh_ref_annotations'
@@ -317,6 +325,14 @@ class PrincipalSchema(Schema):
           indicates whether the ID describes a primary purpose of the paper.
         - **is_concept** [``boolean DEFAUL false``]: Indicate whether the prefix
           was C (true) or D (false).
+
+        **Constraints**
+
+        Postgres is extremely efficient at detecting conflicts, and we use this
+        to help ensure our entries do not have any duplicates.
+
+        - **mesh-uniqueness**: ``UNIQUE(pmid_num, mesh_num, qual_num,
+          is_concept)``
         """
         class MtiRefAnnotationsTest(self.base, IndraDBTable):
             __tablename__ = 'mti_ref_annotations_test'
@@ -372,6 +388,14 @@ class PrincipalSchema(Schema):
           was added.
         - **last_updated** [``timestamp without time zone``]: The most recent
           time the record was edited.
+
+        **Constraints**
+
+        Postgres is extremely efficient at detecting conflicts, and we use this
+        to help ensure our entries do not have any duplicates.
+
+        - **content-uniqueness**: ``UNIQUE(text_ref_id, source, format,
+          text_type)``
         """
         class TextContent(self.base, IndraDBTable):
             __tablename__ = 'text_content'
@@ -395,7 +419,58 @@ class PrincipalSchema(Schema):
         return TextContent
 
     def reading(self):
-        """Represent a reading of a piece of text."""
+        """Represent a reading of a piece of text.
+
+        We have multiple readers and of course many thousands of pieces of text
+        content. Each entry in this table applies to a given reader applied to
+        a given pieces of content.
+
+        As such, the primary ID is a hash constructed from the text content ID
+        prepended with integers that are assigned to each reader-reader version
+        pair. The function
+        :func:`generate_reading_id <indra_db.reading.read_db.generate_reading_id>`
+        implements the particular process used. The reader numbers are assigned
+        in the :data:`readers <indra_db.databases.readers>` global, and the
+        reader version number is the index of the version listed for the given
+        reader in the :data:`reader_versions <indra_db.databases.reader_versions>`
+        dictionary in the same module.
+
+        **Basic Columns**
+
+        - **id** [``bigint PRIMARY KEY``]: A hash ID constructed from a reader
+          number, reader version number, and the text content ID of the content
+          that was read.
+        - **text_content_id** [``integer NOT NULL``]: A foreign-key constrained
+          reference to the appropriate entry in the :func:`text_content
+          <text_content>` table.
+        - **batch_id** [``integer NOT NULL``]: A simple random integer (not
+          unique) that is assigned each batch of inserted readings. It is used
+          in the moments after the insert to easily retrieve the content that
+          was just added, potentially plus some extra.
+        - **reader** [``varchar(20) NOT NULL``]: The name of the reader, e.g.
+          "REACH" or "SPARSER".
+        - **reader_version** [``varchar(20) NOT NULL``]: The version of the
+          reader, which may be any arbitrary string in principle. This allows
+          each reader to define its own versioning scheme.
+        - **format** [``varchar(20) NOT NULL``]: The file format of the
+          reading result, e.g. "XML" or "JSON".
+        - **bytes** [``bytea``]: The raw compressed bytes of the reading result.
+
+        **Metadata Columns**
+
+        - **create_data** [``timestamp without time zone``]: The date the record
+          was added.
+        - **last_updated** [``timestamp without time zone``]: The most recent
+          time the record was edited.
+
+        **Constraints**
+
+        Postgres is extremely efficient at detecting conflicts, and we use this
+        to help ensure our entries do not have any duplicates.
+
+        - **reading-uniqeness**: ``UNIQUE(text_content_id, reader,
+          reader_version)``
+        """
         class Reading(self.base, IndraDBTable):
             __tablename__ = 'reading'
             _skip_disp = ['bytes']

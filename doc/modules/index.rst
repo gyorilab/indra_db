@@ -8,6 +8,7 @@ INDRA Database modules
    util/index.rst
    managers/index.rst
    reading/index.rst
+   preassembly/index.rst
    schemas/index.rst
    misc.rst
 

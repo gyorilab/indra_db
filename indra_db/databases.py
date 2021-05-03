@@ -90,7 +90,7 @@ def _copy_method(get_null_return=lambda: None):
                                    "available.")
             if obj.is_protected():
                 raise RuntimeError("Attempt to copy while in protected mode!")
-            if len(data) is 0:
+            if len(data) == 0:
                 return get_null_return()  # Nothing to do....
 
             res = meth(obj, tbl_name, data, cols, commit, *args, **kwargs)
@@ -235,22 +235,24 @@ class DatabaseManager(object):
         The database to which you want to interface.
     label : OPTIONAL[str]
         A short string to indicate the purpose of the db instance. Set as
-        `db_label` when initialized with `get_db(db_label)`.
+        ``db_label`` when initialized with ``get_db(db_label)``.
 
     Example
     -------
     If you wish to access the primary database and find the the metadata for a
     particular pmid, 1234567:
 
-    >> from indra.db import get_db
-    >> db = get_db('primary')
-    >> res = db.select_all(db.TextRef, db.TextRef.pmid == '1234567')
+    .. code-block:: python
+
+        from indra.db import get_db
+        db = get_db('primary')
+        res = db.select_all(db.TextRef, db.TextRef.pmid == '1234567')
 
     You will get a list of objects whose attributes give the metadata contained
     in the columns of the table.
 
     For more sophisticated examples, several use cases can be found in
-    `indra.tests.test_db`.
+    ``indra.tests.test_db``.
     """
     _instance_type = NotImplemented
     _instance_name_fmt = NotImplemented

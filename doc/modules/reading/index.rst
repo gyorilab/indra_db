@@ -30,13 +30,13 @@ AWS Lambda function.
    :member-order: bysource
 
 
-A Class to Manage and Monitor AWS Batch Jobs (:py:mod:`indra_db.reading.submit_reading_pipeline`)
--------------------------------------------------------------------------------------------------
+A Class to Manage and Monitor AWS Batch Jobs (:py:mod:`indra_db.reading.submitter`)
+-----------------------------------------------------------------------------------
 
 Allow a manager to monitor the Batch jobs to prevent runaway jobs, and smooth
 out job runs and submissions.
 
-.. automodule:: indra_db.reading.submit_reading_pipeline
+.. automodule:: indra_db.reading.submitter
    :members:
    :member-order: bysource
 

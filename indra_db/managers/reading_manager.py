@@ -8,7 +8,7 @@ from indra_reading.readers import get_reader_class
 
 from indra_db.reading import read_db as rdb
 from indra_db.util import get_db
-from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
+from indra_db.reading.submitter import DbReadingSubmitter
 
 logger = logging.getLogger(__name__)
 THIS_DIR = path.dirname(path.abspath(__file__))

@@ -52,8 +52,8 @@ handling.
    :members:
 
 
-Readonly Manager (:py:mod:`indra_db.managers.dump_manager`)
------------------------------------------------------------
+Static Dump Manager (:py:mod:`indra_db.managers.dump_manager`)
+--------------------------------------------------------------
 
 This handles the generation of static dumps, including the readonly database 
 from the principal database.

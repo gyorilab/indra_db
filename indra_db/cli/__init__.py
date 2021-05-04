@@ -146,3 +146,69 @@ def content(task, sources, num_procs, continuing, debug):
         elif task == 'update':
             print(f"Updating {ContentManager.my_source}")
             ContentManager().update(db, num_procs)
+
+
+@main.command('dump-build')
+@click.option('-P', '--principal', default="primary",
+              help="Specify which principal database to use.")
+@click.option('-R', '--readonly', default="primary",
+              help="Specify which readonly database to use.")
+@click.option('-a', '--allow-continue', is_flag=True,
+              help="Indicate whether you want the job to continue building an "
+                   "existing dump corpus, or if you want to start a new one.")
+@click.option('-d', '--delete-existing', is_flag=True,
+              help="Delete and restart an existing readonly schema in "
+                   "principal.")
+@click.option('-u', '--dump-only', is_flag=True,
+              help='Only generate the dumps on s3.')
+@click.option('-l', '--load-only', is_flag=True,
+              help='Only load a readonly dump from s3 into the given readonly '
+                   'database.')
+def build_dumps(principal, readonly, allow_continue, delete_existing, load_only,
+                dump_only):
+    """Generate new dumps and list existing dumps."""
+    from indra_db import get_ro
+    from indra_db.cli.dump import dump
+    dump(get_db(principal, protected=False),
+         get_ro(readonly, protected=False), delete_existing,
+         allow_continue, load_only, dump_only)
+
+
+@main.command('dump-list')
+@click.argument("state", type=click.Choice(["started", "done", "unfinished"]),
+                required=False)
+def list_dumps_cli(state):
+    """List existing dumps and their s3 paths.
+
+    \b
+    State options:
+     - "started": get all dumps that have started (have "start.json" in them).
+     - "done": get all dumps that have finished (have "end.json" in them).
+     - "unfinished": get all dumps that have started but not finished.
+
+    If no option is given, all dumps will be listed.
+    """
+    import boto3
+    from indra_db.cli.dump import list_dumps
+    s3 = boto3.client('s3')
+
+    # Set the parameters of the list_dumps function.
+    if state == 'started':
+        s = True
+        e = None
+    elif state == 'done':
+        s = True
+        e = True
+    elif state == 'unfinished':
+        s = True
+        e = False
+    else:
+        s = None
+        e = None
+
+    # List the dump paths and their contents.
+    for s3_path in list_dumps(s, e):
+        print()
+        print(s3_path)
+        for el in s3_path.list_objects(s3):
+            print('   ', str(el).replace(str(s3_path), ''))

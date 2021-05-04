@@ -102,40 +102,83 @@ class ReadonlySchema(Schema):
     through sqlalchemy: instead they are generated and updated manually
     (or by other non-sqlalchemy scripts).
 
-    Before building these tables, the `belief` table must already have been
-    loaded into the readonly database.
+    Before building these tables, the :func:`belief <belief>` table must already
+    have been loaded into the readonly database.
 
-    The following views must be built in this specific order (_temp_):
+    The following views must be built in this specific order (temp):
 
-      1. raw_stmt_src
-      2. fast_raw_pa_link
-      3. pa_agent_counts
-      4. _pa_stmt_src_
-      5. evidence_counts
-      6. reading_ref_link
-      7. _pa_ref_link_
-      8. _mesh_terms_
-      9. _mesh_concepts_
-      10. _hash_pmid_counts_
-      11. mesh_term_ref_counts
-      12. mesh_concept_ref_counts
-      13. raw_stmt_mesh_terms
-      14. raw_stmt_mesh_concepts
-      15. _pa_meta_
-      16. source_meta
-      17. text_meta
-      18. name_meta
-      19. other_meta
-      20. mesh_term_meta
-      21. mesh_concept_meta
-      22. agent_interactions
+      1. :func:`raw_stmt_src <raw_stmt_src>`
+      2. :func:`fast_raw_pa_link <fast_raw_pa_link>`
+      3. :func:`pa_agent_counts <pa_agent_counts>`
+      4. (:func:`pa_stmt_src <pa_stmt_src>`)
+      5. :func:`evidence_counts <evidence_counts>`
+      6. :func:`reading_ref_link <reading_ref_link>`
+      7. (:func:`pa_ref_link <pa_ref_link>`)
+      8. (:func:`mesh_terms <mesh_terms>`)
+      9. (:func:`mesh_concepts <mesh_concepts>`)
+      10. (:func:`hash_pmid_counts <hash_pmid_counts>`)
+      11. :func:`mesh_term_ref_counts <mesh_term_ref_counts>`
+      12. :func:`mesh_concept_ref_counts <mesh_concept_ref_counts>`
+      13. :func:`raw_stmt_mesh_terms <raw_stmt_mesh_terms>`
+      14. :func:`raw_stmt_mesh_concepts <raw_stmt_mesh_concepts>`
+      15. (:func:`pa_meta <pa_meta>`)
+      16. :func:`source_meta <source_meta>`
+      17. :func:`text_meta <text_meta>`
+      18. :func:`name_meta <name_meta>`
+      19. :func:`other_meta <other_meta>`
+      20. :func:`mesh_term_meta <mesh_term_meta>`
+      21. :func:`mesh_concept_meta <mesh_concept_meta>`
+      22. :func:`agent_interaction <agent_interaction>`
 
     Note that the order of views below is determined not by the above
     order but by constraints imposed by use-case.
+
+    **Meta Tables**
+
+    Any table that has "meta" in the name is intended as a primary lookup table.
+    This means it will have both the data indicated in the name of the table,
+    such at (agent) "text", (agent) "name", or "source", but also a collection
+    of columns with metadata essential for sorting and grouping of hashes:
+
+    - Sorting:
+
+      - **belief**
+      - **ev_count**
+      - **agent_count**
+
+    - Grouping:
+
+      - **type_num**
+      - **activity**
+      - **is_active**
+
+
+    **Temporary Tables**
+
+    There are some intermediate results that it is worthwhile to calculate and
+    store for future table construction. Sometimes these were once permanent
+    tables but are no longer used for their own sake, and it was simply simpler
+    to delete them after their derivatives were completed. In other cases the
+    temporary tables are more principled: created because many future tables
+    draw on them and using a "with" clause for each one would be impractical.
+
+    Whatever the reason, deleting the temporary tables greatly reduces the
+    size of the readonly database. Such tables are marked in with "(temp)" at
+    the beginning of their doc string.
     """
 
     def belief(self):
-        """Represent the belief of preassembled statements, keyed by hash."""
+        """The belief of preassembled statements, keyed by hash.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **belief** ``real``
+
+        **Indices**
+
+        - **mk_hash**
+        """
         class Belief(self.base, IndraDBTable):
             __tablename__ = 'belief'
             __table_args__ = {'schema': 'readonly'}
@@ -146,7 +189,17 @@ class ReadonlySchema(Schema):
         return Belief
 
     def evidence_counts(self):
-        """Represent the evidence counts of pa statements, keyed by hash."""
+        """The evidence counts of pa statements, keyed by hash.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **ev_count** ``integer``
+
+        **Indices**
+
+        - **mk_hash**
+        """
         class EvidenceCounts(self.base, ReadonlyTable):
             __tablename__ = 'evidence_counts'
             __table_args__ = {'schema': 'readonly'}
@@ -159,6 +212,41 @@ class ReadonlySchema(Schema):
         return EvidenceCounts
 
     def reading_ref_link(self):
+        """The source metadata for readings, keyed by reading ID.
+
+        **Columns**
+
+        - **trid** ``integer``
+        - **pmid** ``varchar(20)``
+        - **pmid_num** ``integer``
+        - **pmcid** ``varchar(20)``
+        - **pmcid_num** ``integer``
+        - **pmcid_version** ``integer``
+        - **doi** ``varchar(100)``
+        - **doi_ns** ``integer``
+        - **doi_id** ``varchar``
+        - **pii** ``varchar(250)``
+        - **url** ``varchar(250)``
+        - **manuscript_id** ``varchar(100)``
+        - **tcid** ``integer``
+        - **source** ``varchar(250)``
+        - **rid** ``integer``
+        - **reader** ``varchar(20)``
+
+        **Indices**
+
+        - **rid**
+        - **pmid**
+        - **pmid_num**
+        - **pmcid**
+        - **pmcid_num**
+        - **doi**
+        - **doi_ns**
+        - **doi_id**
+        - **manuscript_id**
+        - **tcid**
+        - **trid**
+        """
         class ReadingRefLink(self.base, ReadonlyTable, IndraDBRefTable):
             __tablename__ = 'reading_ref_link'
             __table_args__ = {'schema': 'readonly'}
@@ -201,6 +289,26 @@ class ReadonlySchema(Schema):
         return ReadingRefLink
 
     def fast_raw_pa_link(self):
+        """Join of PA JSONs and Raw JSONs for faster lookup.
+
+        **Columns**
+
+        - **id** ``integer``
+        - **raw_json** ``bytea``
+        - **reading_id** ``bigint``
+        - **db_info_id** ``integer``
+        - **mk_hash** ``bigint``
+        - **pa_json** ``bytea``
+        - **type_num** ``smallint``
+        - **src** ``varchar``
+
+        **Indices**
+
+        - **mk_hash**
+        - **reading_id**
+        - **db_info_id**
+        - **src**
+        """
         class FastRawPaLink(self.base, ReadonlyTable):
             __tablename__ = 'fast_raw_pa_link'
             __table_args__ = {'schema': 'readonly'}
@@ -239,10 +347,22 @@ class ReadonlySchema(Schema):
             mk_hash = Column(BigInteger)
             pa_json = Column(BYTEA)
             type_num = Column(SmallInteger)
+            src = Column(String)
 
         return FastRawPaLink
 
     def pa_agent_counts(self):
+        """The number of agents for each Statement, keyed by hash.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **agent_count** ``integer``
+
+        **Indices**
+
+        - **mk_hash**
+        """
         class PAAgentCounts(self.base, ReadonlyTable):
             __tablename__ = 'pa_agent_counts'
             __table_args__ = {'schema': 'readonly'}
@@ -255,6 +375,18 @@ class ReadonlySchema(Schema):
         return PAAgentCounts
 
     def raw_stmt_src(self):
+        """The source (e.g. reach, pc) of each raw statement, keyed by SID.
+
+        **Columns**
+
+        - **sid** ``integer``
+        - **src** ``varchar``
+
+        **Indices**
+
+        - **sid**
+        - **src**
+        """
         class RawStmtSrc(self.base, ReadonlyTable):
             __tablename__ = 'raw_stmt_src'
             __table_args__ = {'schema': 'readonly'}
@@ -274,6 +406,20 @@ class ReadonlySchema(Schema):
         return RawStmtSrc
 
     def pa_stmt_src(self):
+        """(temp) The number of evidence from each source for a PA Statement.
+
+        This table is constructed by forming a column for every source short
+        name present in the :func:`raw_stmt_src <raw_stmt_src>`.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - ...one column for each source... ``integer``
+
+        **Indices**
+
+        - **mk_hash**
+        """
         class _PaStmtSrc(self.base, SpecialColumnTable):
             __tablename__ = 'pa_stmt_src'
             __table_args__ = {'schema': 'readonly'}
@@ -323,6 +469,23 @@ class ReadonlySchema(Schema):
         return _PaStmtSrc
 
     def pa_ref_link(self):
+        """(temp) A quick-lookup from mk_hash to basic text ref data.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **trid** ``integer``
+        - **pmid_num** ``varchar``
+        - **pmcid_num** ``varchar``
+        - **source** ``varchar``
+        - **reader** ``varchar``
+
+        **Indices**
+
+        - **mk_hash**
+        - **trid**
+        - **pmid_num**
+        """
         class _PaRefLink(self.base, ReadonlyTable):
             __tablename__ = 'pa_ref_link'
             __table_args__ = {'schema': 'readonly'}
@@ -344,6 +507,17 @@ class ReadonlySchema(Schema):
         return _PaRefLink
 
     def mesh_terms(self):
+        """(temp) All mesh annotations with D prefix, keyed by PMID int.
+
+        **Columns**
+
+        - **mesh_num** ``integer``
+        - **pmid_num** ``integer``
+
+        **Indices**
+
+        - **pmid_num**
+        """
         class _MeshTerms(self.base, ReadonlyTable):
             __tablename__ = 'mesh_terms'
             __table_args__ = {'schema': 'readonly'}
@@ -361,6 +535,17 @@ class ReadonlySchema(Schema):
         return _MeshTerms
 
     def mesh_concepts(self):
+        """(temp) All mesh annotations with C prefix, keyed by PMID int.
+
+        **Columns**
+
+        - **mesh_num** ``integer``
+        - **pmid_num** ``integer``
+
+        **Indices**
+
+        - **pmid_num**
+        """
         class _MeshConcepts(self.base, ReadonlyTable):
             __tablename__ = 'mesh_concepts'
             __table_args__ = {'schema': 'readonly'}
@@ -378,6 +563,17 @@ class ReadonlySchema(Schema):
         return _MeshConcepts
 
     def hash_pmid_counts(self):
+        """(temp) The number of pmids for each PA Statement, keyed by hash.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **pmid_count** ``integer``
+
+        **Indices**
+
+        - **mk_hash**
+        """
         class _HashPmidCounts(self.base, ReadonlyTable):
             __tablename__ = 'hash_pmid_counts'
             __table_args__ = {'schema': 'readonly'}
@@ -392,6 +588,20 @@ class ReadonlySchema(Schema):
         return _HashPmidCounts
 
     def mesh_term_ref_counts(self):
+        """The D-type mesh IDs with pmid and ref counts, keyed by hash and mesh.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **mesh_num** ``integer``
+        - **ref_count** ``integer``
+        - **pmid_count** ``integer``
+
+        **Indices**
+
+        - **mesh_num**
+        - **mk_hash**
+        """
         class MeshTermRefCounts(self.base, ReadonlyTable):
             __tablename__ = 'mesh_term_ref_counts'
             __table_args__ = {'schema': 'readonly'}
@@ -425,6 +635,20 @@ class ReadonlySchema(Schema):
         return MeshTermRefCounts
 
     def mesh_concept_ref_counts(self):
+        """The C-type mesh IDs with pmid and ref counts, keyed by hash and mesh.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **mesh_num** ``integer``
+        - **ref_count** ``integer``
+        - **pmid_count** ``integer``
+
+        **Indices**
+
+        - **mesh_num**
+        - **mk_hash**
+        """
         class MeshConceptRefCounts(self.base, ReadonlyTable):
             __tablename__ = 'mesh_concept_ref_counts'
             __table_args__ = {'schema': 'readonly'}
@@ -455,6 +679,18 @@ class ReadonlySchema(Schema):
         return MeshConceptRefCounts
 
     def raw_stmt_mesh_terms(self):
+        """The D-type mesh number raw statement ID mapping.
+
+        **Columns**
+
+        - **sid** ``integer``
+        - **mesh_num** ``integer``
+
+        **Indices**
+
+        - **sid**
+        - **mesh_num**
+        """
         class RawStmtMeshTerms(self.base, ReadonlyTable):
             __tablename__ = 'raw_stmt_mesh_terms'
             __table_args__ = {'schema': 'readonly'}
@@ -477,6 +713,18 @@ class ReadonlySchema(Schema):
         return RawStmtMeshTerms
 
     def raw_stmt_mesh_concepts(self):
+        """The C-type mesh number raw statement ID mapping.
+
+        **Columns**
+
+        - **sid** ``integer``
+        - **mesh_num** ``integer``
+
+        **Indices**
+
+        - **sid**
+        - **mesh_num**
+        """
         class RawStmtMeshConcepts(self.base, ReadonlyTable):
             __tablename__ = 'raw_stmt_mesh_concepts'
             __table_args__ = {'schema': 'readonly'}
@@ -499,6 +747,34 @@ class ReadonlySchema(Schema):
         return RawStmtMeshConcepts
 
     def pa_meta(self):
+        """(temp) The metadata most valuable for querying PA Statements.
+
+        This table is used to generate the more scope-limited
+        :func:`name_meta <name_meta>`, :func:`text_meta <text_meta>`, and
+        :func:`other_meta <other_meta>`. The reason is that NAME and TEXT (in
+        particular) agent groundings are vastly overrepresented.
+
+        **Columns**
+
+        - **ag_id** ``integer``
+        - **ag_num** ``integer``
+        - **db_name** ``varchar``
+        - **db_id** ``varchar``
+        - **role_num** ``smallint``
+        - **type_num** ``smallint``
+        - **mk_hash** ``bigint``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+        - **is_complex_dup** ``boolean``
+
+        **Indices**
+
+        - **db_name**
+        - **mk_hash**
+        """
         class _PaMeta(self.base, ReadonlyTable):
             __tablename__ = 'pa_meta'
             __table_args__ = {'schema': 'readonly'}
@@ -569,6 +845,31 @@ class ReadonlySchema(Schema):
         return _PaMeta
 
     def source_meta(self):
+        """All the source-related metadata condensed using JSONB, keyed by hash.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **num_srcs** ``integer``
+        - **src_json** ``json``
+        - **only_src** ``varchar``
+        - **has_rd** ``boolean``
+        - **has_db** ``boolean``
+        - **type_num** ``smallint``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+
+        **Indices**
+
+        - **mk_hash**
+        - **only_src**
+        - **activity**
+        - **type_num**
+        - **num_srcs**
+        """
         class SourceMeta(self.base, SpecialColumnTable):
             __tablename__ = 'source_meta'
             __table_args__ = {'schema': 'readonly'}
@@ -662,6 +963,35 @@ class ReadonlySchema(Schema):
         return SourceMeta
 
     def text_meta(self):
+        """The metadata most valuable for querying PA Statements by agent TEXT.
+
+        This table is generated from :func:`pa_meta <pa_meta>`, because TEXT
+        is extremely overrepresented among agent groundings. Removing these and
+        NAMEs from the "OTHER" efficiently narrows the search very rapidly, and
+        for the larger sets of NAME and TEXT removes an index-search.
+
+        **Columns**
+
+        - **ag_id** ``integer``
+        - **ag_num** ``integer``
+        - **db_id** ``varchar``
+        - **role_num** ``smallint``
+        - **type_num** ``smallint``
+        - **mk_hash** ``bigint``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+        - **is_complex_dup** ``boolean``
+
+        **Indices**
+
+        - **mk_hash**
+        - **db_id**
+        - **type_num**
+        - **activity**
+        """
         class TextMeta(self.base, NamespaceLookup):
             __tablename__ = 'text_meta'
             __table_args__ = {'schema': 'readonly'}
@@ -685,6 +1015,35 @@ class ReadonlySchema(Schema):
         return TextMeta
 
     def name_meta(self):
+        """The metadata most valuable for querying PA Statements by agent NAME.
+
+        This table is generated from :func:`pa_meta <pa_meta>`, because NAME
+        is overrepresented among agent groundings. Removing these and NAMEs from
+        the "OTHER" efficiently narrows the search very rapidly, and for the
+        larger sets of NAME and TEXT removes an index-search.
+
+        **Columns**
+
+        - **ag_id** ``integer``
+        - **ag_num** ``integer``
+        - **db_id** ``varchar``
+        - **role_num** ``smallint``
+        - **type_num** ``smallint``
+        - **mk_hash** ``bigint``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+        - **is_complex_dup** ``boolean``
+
+        **Indices**
+
+        - **mk_hash**
+        - **db_id**
+        - **type_num**
+        - **activity**
+        """
         class NameMeta(self.base, NamespaceLookup):
             __tablename__ = 'name_meta'
             __table_args__ = {'schema': 'readonly'}
@@ -708,6 +1067,35 @@ class ReadonlySchema(Schema):
         return NameMeta
 
     def other_meta(self):
+        """The metadata most valuable for querying PA Statements.
+
+        This table is a copy of :func:`pa_meta <pa_meta>` with rows with agent
+        groundings besides NAME and TEXT removed.
+
+        **Columns**
+
+        - **ag_id** ``integer``
+        - **ag_num** ``integer``
+        - **db_name** ``varchar``
+        - **db_id** ``varchar``
+        - **role_num** ``smallint``
+        - **type_num** ``smallint``
+        - **mk_hash** ``bigint``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+        - **is_complex_dup** ``boolean``
+
+        **Indices**
+
+        - **mk_hash**
+        - **db_name**
+        - **db_id**
+        - **type_num**
+        - **activity**
+        """
         class OtherMeta(self.base, ReadonlyTable):
             __tablename__ = 'other_meta'
             __table_args__ = {'schema': 'readonly'}
@@ -738,6 +1126,26 @@ class ReadonlySchema(Schema):
         return OtherMeta
 
     def mesh_term_meta(self):
+        """A lookup for hashes by D-type mesh IDs.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **mesh_num** ``integer``
+        - **tr_count** ``integer``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **type_num** ``smallint``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+
+        **Indices**
+
+        - **mk_hash**
+        - **type_num**
+        - **activity**
+        """
         class MeshTermMeta(self.base, ReadonlyTable):
             __tablename__ = 'mesh_term_meta'
             __table_args__ = {'schema': 'readonly'}
@@ -766,6 +1174,26 @@ class ReadonlySchema(Schema):
         return MeshTermMeta
 
     def mesh_concept_meta(self):
+        """A lookup for hashes by C-type mesh IDs.
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **mesh_num** ``integer``
+        - **tr_count** ``integer``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **type_num** ``smallint``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+
+        **Indices**
+
+        - **mk_hash**
+        - **type_num**
+        - **activity**
+        """
         class MeshConceptMeta(self.base, ReadonlyTable):
             __tablename__ = 'mesh_concept_meta'
             __table_args__ = {'schema': 'readonly'}
@@ -793,6 +1221,31 @@ class ReadonlySchema(Schema):
         return MeshConceptMeta
 
     def agent_interactions(self):
+        """Agent and type data in simple JSONs for rapid lookup, keyed by hash.
+
+        This table is used for retrieving interactions, agent pairs, and
+        relations (any kind of return that is more generic than full
+        Statements).
+
+        **Columns**
+
+        - **mk_hash** ``bigint``
+        - **ev_count** ``integer``
+        - **belief** ``real``
+        - **type_num** ``smallint``
+        - **activity** ``varchar``
+        - **is_active** ``boolean``
+        - **agent_count** ``integer``
+        - **agent_json** ``jsonb``
+        - **src_json** ``jsonb``
+        - **is_complex_dup** ``boolean``
+
+        **Indices**
+
+        - **mk_hash**
+        - **agent_json**
+        - **type_num**
+        """
         class AgentInteractions(self.base, ReadonlyTable):
             __tablename__ = 'agent_interactions'
             __table_args__ = {'schema': 'readonly'}
@@ -901,3 +1354,12 @@ SOURCE_GROUPS = {'databases': ['phosphosite', 'cbn', 'pc11', 'biopax',
                                'lincs_drug', 'hprd', 'trrust'],
                  'reading': ['geneways', 'tees', 'isi', 'trips', 'rlimsp',
                              'medscan', 'sparser', 'reach', 'eidos', 'mti']}
+"""The source short-names grouped by "database" or "reading".
+
+It is worth noting that "database" and "knowledge base" are not equivalent here.
+There are several entries in the "reading" category that we gather from other
+knowledge bases, but are based on machine readers.
+
+This is used in the formation of the sources table, as well as in the display
+of content retrieved from the readonly database.
+"""

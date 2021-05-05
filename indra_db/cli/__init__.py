@@ -1,4 +1,5 @@
 import click
+from datetime import datetime
 
 from indra_db import get_db
 
@@ -11,6 +12,12 @@ def main():
     managing and updating the content of that physical database. This CLI
     is used for executing these management commands.
     """
+
+
+def format_date(dt):
+    if not isinstance(dt, datetime):
+        return dt
+    return dt.strftime("%Y %b %d %I:%M%p")
 
 
 @main.command()
@@ -212,3 +219,56 @@ def list_dumps_cli(state):
         print(s3_path)
         for el in s3_path.list_objects(s3):
             print('   ', str(el).replace(str(s3_path), ''))
+
+
+@main.command()
+@click.argument('task', type=click.Choice(['create', 'update']),
+                required=True)
+@click.argument('project-name', required=False)
+def preassembly_run(task, project_name):
+    """Manage the indra_db preassembly.
+
+    \b
+    Tasks:
+     - "create": populate the pa_statements table for the first time (this
+       requires that the table be empty).
+     - "update": update the existing content in pa_statements with the latest
+       from raw statements.
+
+    A project name is required to tag the AWS instances with a "project" tag.
+    """
+    from indra_db.cli.preassembly import run_preassembly
+    run_preassembly(task, project_name)
+
+
+@main.command()
+@click.option('-r', '--with-raw', is_flag=True,
+              help="Include the latest datetimes for raw statements of each "
+                   "type. This will take much longer.")
+def preassembly_list(with_raw):
+    """List the latest updates for each type of Statement."""
+    import tabulate
+    from indra_db.cli.preassembly import list_last_updates, \
+        list_latest_raw_stmts
+
+    db = get_db('primary')
+    rows = [(st, lu) for st, lu in list_last_updates(db).items()]
+    header = ('Statement Type', 'Last Update')
+    if with_raw:
+        print("This may take a while...", end='', flush=True)
+        raw_stmt_dates = list_latest_raw_stmts(db)
+        print("\r", end='')
+        new_rows = []
+        for st, lu in rows:
+            raw_date = raw_stmt_dates.get(st)
+            if raw_date is None:
+                new_rows.append((st, format_date(lu), "[None]", "No"))
+            else:
+                new_rows.append((st, format_date(lu), format_date(raw_date),
+                                 "Yes" if raw_date > lu else "No"))
+        rows = new_rows
+        header += ('Latest Raw Stmt', 'Needs Update?')
+    else:
+        rows = [(st, format_date(lu)) for st, lu in rows]
+    rows.sort()
+    print(tabulate.tabulate(rows, header))

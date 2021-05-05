@@ -21,16 +21,15 @@ def format_date(dt):
 
 
 @main.command()
-@click.argument("task", type=click.Choice(["upload", "update", "list"]))
+@click.argument("task", type=click.Choice(["upload", "update"]))
 @click.argument("sources", nargs=-1, type=click.STRING, required=False)
-def knowledgebase(task, sources):
+def kb_run(task, sources):
     """Upload/update the knowledge bases used by the database.
 
     \b
     Usage tasks are:
      - upload: use if the knowledge bases have not yet been added.
      - update: if they have been added, but need to be updated.
-     - list: list the current knowledge sources that have been implemented.
 
     Specify which knowledge base sources to update by their name, e.g. "Pathway
     Commons" or "pc". If not specified, all sources will be updated.
@@ -48,11 +47,6 @@ def knowledgebase(task, sources):
 
     # Handle the list option.
     if task == 'list':
-        import tabulate
-        rows = [(M.name, M.short_name, M.get_last_update(db))
-                for M in selected_kbs]
-        print(tabulate.tabulate(rows, ('Name', 'Short Name', 'Last Updated'),
-                                tablefmt='simple'))
         return
 
     # Handle the other tasks.
@@ -66,6 +60,18 @@ def knowledgebase(task, sources):
         elif task == 'update':
             print(f'Updating {kbm.name}...')
             kbm.update(db)
+
+
+@main.command()
+def kb_list():
+    """List the knowledge sources and their status."""
+    import tabulate
+    from .knowledgebase import KnowledgebaseManager
+    db = get_db('primary')
+    rows = [(M.name, M.short_name, format_date(M.get_last_update(db)))
+            for M in KnowledgebaseManager.__subclasses__()]
+    print(tabulate.tabulate(rows, ('Name', 'Short Name', 'Last Updated'),
+                            tablefmt='simple'))
 
 
 @main.command()
@@ -91,7 +97,7 @@ def pipeline_stats(task):
 
 
 @main.command()
-@click.argument("task", type=click.Choice(["upload", "update", "list"]))
+@click.argument("task", type=click.Choice(["upload", "update"]))
 @click.argument("sources", nargs=-1,
                 type=click.Choice(["pubmed", "pmc_oa", "manuscripts"]),
                 required=False)
@@ -103,14 +109,13 @@ def pipeline_stats(task):
                     'off.'))
 @click.option('-d', '--debug', is_flag=True,
               help='Run with debugging level output.')
-def content(task, sources, num_procs, continuing, debug):
+def content_run(task, sources, num_procs, continuing, debug):
     """Upload/update text refs and content on the database.
 
     \b
     Usage tasks are:
      - upload: use if the knowledge bases have not yet been added.
      - update: if they have been added, but need to be updated.
-     - list: list the current knowledge sources that have been implemented.
 
     The currently available sources are "pubmed", "pmc_oa", and "manuscripts".
     """
@@ -135,16 +140,6 @@ def content(task, sources, num_procs, continuing, debug):
     selected_managers = (CM for CM in content_managers
                          if CM.my_source in sources)
 
-    # Handle the list option.
-    if task == 'list':
-        import tabulate
-        rows = []
-        for cm in selected_managers:
-            rows.append((cm.my_source, cm.get_latest_update(db)))
-        print(tabulate.tabulate(rows, ('Source', 'Last Updated'),
-                                tablefmt='simple'))
-        return
-
     # Perform the task.
     for ContentManager in selected_managers:
         if task == 'upload':
@@ -155,7 +150,23 @@ def content(task, sources, num_procs, continuing, debug):
             ContentManager().update(db, num_procs)
 
 
-@main.command('dump-build')
+@main.command()
+def content_list():
+    """List the current knowledge sources and their status."""
+    # Import what is needed.
+    import tabulate
+    from .content import Pubmed, PmcOA, Manuscripts
+    content_managers = [Pubmed, PmcOA, Manuscripts]
+    db = get_db('primary')
+
+    # Generate the rows.
+    rows = [(cm.my_source, format_date(cm.get_latest_update(db)))
+            for cm in content_managers]
+    print(tabulate.tabulate(rows, ('Source', 'Last Updated'),
+                            tablefmt='simple'))
+
+
+@main.command()
 @click.option('-P', '--principal', default="primary",
               help="Specify which principal database to use.")
 @click.option('-R', '--readonly', default="primary",
@@ -171,8 +182,8 @@ def content(task, sources, num_procs, continuing, debug):
 @click.option('-l', '--load-only', is_flag=True,
               help='Only load a readonly dump from s3 into the given readonly '
                    'database.')
-def build_dumps(principal, readonly, allow_continue, delete_existing, load_only,
-                dump_only):
+def dump_run(principal, readonly, allow_continue, delete_existing, load_only,
+             dump_only):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
     from indra_db.cli.dump import dump
@@ -181,10 +192,10 @@ def build_dumps(principal, readonly, allow_continue, delete_existing, load_only,
          allow_continue, load_only, dump_only)
 
 
-@main.command('dump-list')
+@main.command()
 @click.argument("state", type=click.Choice(["started", "done", "unfinished"]),
                 required=False)
-def list_dumps_cli(state):
+def dump_list(state):
     """List existing dumps and their s3 paths.
 
     \b

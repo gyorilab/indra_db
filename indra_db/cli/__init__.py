@@ -352,3 +352,11 @@ def reading_list():
             for rn, lu in ReadingManager.get_latest_updates(db).items()]
     headers = ('Reader', 'Last Updated')
     print(tabulate.tabulate(rows, headers))
+
+
+@main.command()
+def xdd_run():
+    """Process the latest outputs from xDD."""
+    from indra_db.cli.xdd import XddManager
+    db = get_db('primary')
+    XddManager().run(db)

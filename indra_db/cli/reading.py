@@ -4,6 +4,8 @@ from functools import wraps
 from datetime import datetime, timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from sqlalchemy import func
+
 from indra_reading.readers import get_reader_class
 
 from indra_db.reading import read_db as rdb
@@ -80,19 +82,23 @@ class ReadingManager(object):
     def get_version(self, reader_name):
         return get_reader_class(reader_name).get_version()
 
-    def _get_latest_updatetime(self, db, reader_name):
+    @staticmethod
+    def get_latest_updates(db):
         """Get the date of the latest update."""
-        update_list = db.select_all(
-            db.ReadingUpdates,
-            db.ReadingUpdates.reader == reader_name
-            )
-        if not len(update_list):
+        res = (db.session.query(db.ReadingUpdates.reader,
+                                func.max(db.ReadingUpdates.latest_datetime))
+               .group_by(db.ReadingUpdates.reader))
+        return {reader: last_updated for reader, last_updated in res}
+
+    @classmethod
+    def _get_latest_updatetime(cls, db, reader_name):
+        latest_updates = cls.get_latest_updates(db)
+        if reader_name not in latest_updates:
             logger.warning("The database has not had an initial upload "
                            "for %s, or else the updates table has not "
                            "been populated." % reader_name)
             return None
-
-        return max([u.latest_datetime for u in update_list])
+        return latest_updates[reader_name]
 
     def read_all(self, db, reader_name):
         """Perform an initial reading all content in the database (populate).

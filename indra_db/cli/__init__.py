@@ -283,3 +283,72 @@ def pa_list(with_raw):
         rows = [(st, format_date(lu)) for st, lu in rows]
     rows.sort()
     print(tabulate.tabulate(rows, header))
+
+
+@main.command()
+@click.argument('task', type=click.Choice(["all", "new"]))
+@click.option('-b', '--buffer', type=int, default=1,
+              help='Set the number of buffer days to read prior to the most '
+                   'recent update. The default is 1 day.')
+@click.option('--project-name', type=str,
+              help="Set the project name to be different from the config "
+                   "default.")
+def reading_run(task, buffer, project_name):
+    """Manage the the reading of text content on AWS.
+
+    \b
+    Tasks:
+    - "all": Read all the content available.
+    - "new": Read only the new content that has not been read.
+    """
+    from indra_db.cli.reading import BulkAwsReadingManager
+    db = get_db('primary')
+    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
+    bulk_manager = BulkAwsReadingManager(readers,
+                                         buffer_days=buffer,
+                                         project_name=project_name)
+    if task == 'all':
+        bulk_manager.read_all(db)
+    elif task == 'new':
+        bulk_manager.read_new(db)
+
+
+@main.command()
+@click.argument('task', type=click.Choice(["all", "new"]))
+@click.option('-b', '--buffer', type=int, default=1,
+              help='Set the number of buffer days to read prior to the most '
+                   'recent update. The default is 1 day.')
+@click.option('-n', '--num-procs', type=int,
+              help="Select the number of processors to use.")
+def reading_run_local(task, buffer, num_procs):
+    """Run reading locally, save the results on the database.
+
+    \b
+    Tasks:
+    - "all": Read all the content available.
+    - "new": Read only the new content that has not been read.
+    """
+    from indra_db.cli.reading import BulkLocalReadingManager
+    db = get_db('primary')
+
+    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
+    bulk_manager = BulkLocalReadingManager(readers,
+                                           buffer_days=buffer,
+                                           n_procs=num_procs)
+    if task == 'all':
+        bulk_manager.read_all(db)
+    elif task == 'new':
+        bulk_manager.read_new(db)
+
+
+@main.command()
+def reading_list():
+    """List the readers and their most recent runs."""
+    import tabulate
+    from indra_db.cli.reading import ReadingManager
+
+    db = get_db('primary')
+    rows = [(rn, format_date(lu))
+            for rn, lu in ReadingManager.get_latest_updates(db).items()]
+    headers = ('Reader', 'Last Updated')
+    print(tabulate.tabulate(rows, headers))

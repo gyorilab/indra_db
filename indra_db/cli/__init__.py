@@ -236,7 +236,7 @@ def dump_list(state):
 @click.argument('task', type=click.Choice(['create', 'update']),
                 required=True)
 @click.argument('project-name', required=False)
-def preassembly_run(task, project_name):
+def pa_run(task, project_name):
     """Manage the indra_db preassembly.
 
     \b
@@ -256,7 +256,7 @@ def preassembly_run(task, project_name):
 @click.option('-r', '--with-raw', is_flag=True,
               help="Include the latest datetimes for raw statements of each "
                    "type. This will take much longer.")
-def preassembly_list(with_raw):
+def pa_list(with_raw):
     """List the latest updates for each type of Statement."""
     import tabulate
     from indra_db.cli.preassembly import list_last_updates, \

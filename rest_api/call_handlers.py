@@ -606,7 +606,6 @@ class FromAgentsApiCall(StatementApiCall):
                  for i, ag in enumerate(self.web_query.poplist('agent'))}
             )
             db_query = self._db_query_from_web_query(
-                require_any={'HasAgent', 'FromPapers', 'FromMeshIds'},
                 empty_web_query=True
             )
         except Exception as e:

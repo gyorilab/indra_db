@@ -2292,6 +2292,18 @@ class HasType(IntrusiveQuery):
         inv = 'do not ' if self._inverted else ''
         return f"{inv}have type {_join_list(self.stmt_types)}"
 
+    def _run_meta_sql(self, ms, ro, limit, offset, sort_by, with_hashes=None):
+        ms.filter(self._get_clause(ro.AgentInteractions))
+        kwargs = {'sort_by': sort_by}
+        if with_hashes is not None:
+            kwargs['with_hashes'] = with_hashes
+        order_params = ms.agg(ro, **kwargs)
+        ms = self._apply_limits(ms, order_params, limit, offset)
+        if self._print_only:
+            ms.print()
+            return
+        return ms.run()
+
     def _get_query_values(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
 

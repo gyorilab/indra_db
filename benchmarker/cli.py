@@ -54,7 +54,7 @@ def print_list(list_scope):
 
 
 @main.command()
-@click.argument("location")
+@click.argument("test_corpus")
 @click.argument("stack_name")
 @click.argument("api_name")
 @click.option("-r", "--inner-runs", default=1,
@@ -64,8 +64,23 @@ def print_list(list_scope):
               type=click.IntRange(1, 100),
               help=("Select the number of times to repeat the entire suite of "
                     "tests."))
-def run(location, stack_name, api_name, inner_runs, outer_runs):
-    """Run the benchmarker and save the aggregate the results."""
+def run(test_corpus, stack_name, api_name, inner_runs, outer_runs):
+    """Run the benchmarker and save the aggregate the results.
+
+    \b
+    The TEST_CORPUS should be a path to a python test file that tests the INDRA
+    Database REST service, using the standard convention:
+
+        "path/to/test_file.py:test_function"
+
+    The STACK_NAME should name a readonly-build stack (database and service
+    deployment) that are being tested. You can get a list of existing
+    (previously tested) stacks using `indra_db_benchmarker list`.
+
+    The API_NAME should give a name for the test corpus that is being used. You
+    can get a list of existing (previously used) corpora using the `list`
+    feature.
+    """
     start_time = datetime.utcnow()
 
     # Run the benchmarker. Run it `outer_run` times, and we will aggregate
@@ -73,7 +88,7 @@ def run(location, stack_name, api_name, inner_runs, outer_runs):
     result_list = []
     test_names = []
     for i in range(outer_runs):
-        run_result = benchmark(location, num_runs=inner_runs)
+        run_result = benchmark(test_corpus, num_runs=inner_runs)
         if not test_names:
             test_names = list(run_result.keys())
         result_list.append(run_result)

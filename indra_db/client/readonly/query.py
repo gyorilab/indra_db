@@ -761,10 +761,6 @@ class Query(object):
             return QueryResult.empty({}, limit, offset, self.to_json(),
                                      'relations')
 
-        if ro is None:
-            return self._rest_get('relations', limit, offset, sort_by,
-                                  with_hashes=with_hashes)
-
         r_sql = RelationSQL(ro)
         result_tuple = self._run_meta_sql(r_sql, ro, limit, offset, sort_by,
                                           with_hashes)

@@ -75,19 +75,3 @@ def run_preassembly(mode, project_name):
     ps = PreassemblySubmitter(basename, mode, project_name=project_name)
     ps.set_max_jobs(4)
     ps.run(need_to_update, 100000, True, stagger=600, poll_interval=120)
-
-
-def get_parser():
-    parser = ArgumentParser('Manage Database preassembly jobs.')
-    parser.add_argument(
-        '--project-name',
-        help=("The name of the project tag to be applied to the various "
-              "resources used.")
-    )
-    return parser
-
-
-if __name__ == '__main__':
-    parser = get_parser()
-    args = parser.parse_args()
-    run_preassembly(args.project_name)

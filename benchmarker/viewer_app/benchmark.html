@@ -41,7 +41,7 @@
                      placeholder="Select API..."></multiselect>
       </div>
     </div>
-    <div v-for="(cols, api_name) in available_cols" :key="api_name">
+    <div class="card-body" v-for="(cols, api_name) in available_cols" :key="api_name">
       <api-display :name="api_name" :cols="cols"></api-display>
     </div>
   </div>

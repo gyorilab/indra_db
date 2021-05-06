@@ -127,19 +127,32 @@
     `,
     methods: {
 
-      loadTest: async function(test_label) {
-        console.log(`Loading test for ${this.name}: ${test_label}`);
+      // loadTest(corpus_label)
+      //   Load the results from a test (stack, api, and date) from the API.
+      loadTest: async function(corpus_label) {
+        // Record the test label.
+        console.log(`Loading test for ${this.name}: ${corpus_label}`);
+
+        // Indicate we are loading.
         this.is_loading = true;
-        let ref = this.cols[test_label];
+
+        // Get the test data using the ref info.
+        let ref = this.cols[corpus_label];
         const resp = await fetch(`/fetch/${this.name}/${ref.stack}/${ref.test}`);
         const data = await resp.json();
         console.log('Results:', data);
-        this.tests[test_label] = data.tests;
+
+        // Add the tests to the corpus.
+        this.tests[corpus_label] = data.tests;
+
+        // Add any new test names.
         for (let test_name in data.tests) {
           if (this.test_names.includes(test_name))
             continue
           this.test_names.push(test_name);
         }
+
+        // Indicate we are done loading.
         this.is_loading = false;
       },
 

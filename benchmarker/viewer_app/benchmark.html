@@ -72,8 +72,9 @@
     }
   });
 
-  app.component('Multiselect', VueformMultiselect)
+  app.component('Multiselect', VueformMultiselect);
   app.component('ApiDisplay', {
+    name: 'ApiDisplay',
     props: ['name', 'cols'],
     data: function () {
       return {

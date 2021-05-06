@@ -69,7 +69,7 @@
       },
 
       dropAPI: async function(api_name) {
-        Vue.delete(this.available_cols, api_name);
+        delete this.available_cols[api_name];
       },
     }
   });
@@ -156,10 +156,8 @@
         this.is_loading = false;
       },
 
-      dropTest: function(test_label) {
-        console.log(`Removing test for ${this.name}: ${test_label}`);
-        Vue.delete(this.tests, test_label);
-        Vue.delete(this.selected_tests, test_label)
+      dropTest: function(corpus_label) {
+        delete this.tests[corpus_label];
       },
 
       getColor: function(test_res) {

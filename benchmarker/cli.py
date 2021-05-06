@@ -81,6 +81,7 @@ def run(test_corpus, stack_name, api_name, inner_runs, outer_runs):
     can get a list of existing (previously used) corpora using the `list`
     feature.
     """
+    import tabulate
     start_time = datetime.utcnow()
 
     # Run the benchmarker. Run it `outer_run` times, and we will aggregate
@@ -120,8 +121,10 @@ def run(test_corpus, stack_name, api_name, inner_runs, outer_runs):
         # Add this test's aggregated results to the results object.
         results[test_name] = test_results
 
-    for test, stats in results.items():
-        print(test, stats['passed'], stats['duration'], stats['deviation'])
+    rows = [(test, st['passed'], st['duration'], st['deviation'])
+            for test, st in results.items()]
+    headers = ('Test', 'Fraction Passed', 'Ave. Duration', 'Std. Deviation')
+    print(tabulate.tabulate(rows, headers))
     save_results(start_time, api_name, stack_name, results)
 
 

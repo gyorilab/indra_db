@@ -37,7 +37,7 @@
                      :clear-on-select="false"
                      :close-on-select="false"
                      @select="loadAPI"
-                     @remove="dropAPI"
+                     @deselect="dropAPI"
                      placeholder="Select API..."></multiselect>
       </div>
     </div>
@@ -100,7 +100,7 @@
                        :close-on-select="false"
                        placeholder="Select stack..."
                        @select="loadTest"
-                       @remove="dropTest"></multiselect>
+                       @deselect="dropTest"></multiselect>
         </div>
       </div>
       <div class="row">

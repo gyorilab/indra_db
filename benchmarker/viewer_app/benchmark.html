@@ -29,7 +29,9 @@
       <div class="col-6">
         <multiselect v-model="selected_apis"
                      :options="apis"
-                     :multiple="true"
+                     mode="tags"
+                     :searchable="true"
+                     :createTag="true"
                      :loading="is_loading_api"
                      :hide-selected="true"
                      :clear-on-select="false"
@@ -91,7 +93,7 @@
           <h3>{{ name }}</h3>
           <multiselect v-model="selected_tests"
                        :options="Object.keys(cols)"
-                       :multiple="true"
+                       mode="tags"
                        :loading="is_loading"
                        :hide-selected="true"
                        :clear-on-select="false"

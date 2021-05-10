@@ -772,7 +772,55 @@ class Pubmed(_NihManager):
             self.load_text_content(db, article_info, valid_pmids, carefully)
         return True
 
-    def load_files(self, db, dirname, n_procs=1, continuing=False,
+    def iter_contents(self, archives=None):
+        """Iterate over the contents."""
+        from indra.literature.pubmed_client import get_metadata_from_xml_tree
+
+        if archives is None:
+            archives = self.get_file_list('baseline') \
+                       + self.get_file_list('updatefiles')
+
+        invalid_pmids = set(self.get_deleted_pmids())
+
+        for xml_file in sorted(archives):
+            # Parse the XML file.
+            tree = self.ftp.get_xml_file(xml_file)
+            article_info = get_metadata_from_xml_tree(tree, get_abstracts=True,
+                                                      prepend_title=False)
+
+            # Filter out any PMIDs that have been deleted.
+            valid_article_pmids = set(article_info.keys()) - invalid_pmids
+
+            # Yield results for each PMID.
+            for pmid in valid_article_pmids:
+                data = article_info[pmid]
+
+                # Extract the ref data.
+                tr = {'pmid': pmid}
+                for id_type in self.tr_cols[1:]:
+                    val = None
+                    if id_type == 'pub_year':
+                        r = data.get('publication_date')
+                        if 'year' in r:
+                            val = r['year']
+                    else:
+                        r = data.get(id_type)
+                        if id_type == 'doi':
+                            r = self.fix_doi(r)
+                        if r:
+                            val = r.strip().upper()
+                    tr[id_type] = val
+                    tr['annotations'] = data['mesh_annotations']
+
+                # Extract the content data
+                for text_type in self.categories:
+                    content = article_info[pmid].get(text_type)
+                    if content and content.strip():
+                        tc = {'pmid': pmid, 'text_type': text_type,
+                              'content': zip_string(content)}
+                        yield (xml_file, pmid, text_type), tr, tc
+
+    def load_files(self, db, files, n_procs=1, continuing=False,
                    carefully=False, log_update=True):
         """Load the files in subdirectory indicated by ``dirname``."""
         if 'text_ref' not in self.tables:

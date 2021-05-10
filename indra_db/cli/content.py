@@ -923,7 +923,7 @@ class Pubmed(_NihManager):
 class PmcManager(_NihManager):
     """Abstract class for uploaders of PMC content: PmcOA and Manuscripts."""
     my_source = NotImplemented
-    tr_cols = ('pmid', 'pmcid', 'doi', 'manuscript_id', 'year',)
+    tr_cols = ('pmid', 'pmcid', 'doi', 'manuscript_id', 'pub_year',)
 
     def __init__(self, *args, **kwargs):
         super(PmcManager, self).__init__(*args, **kwargs)
@@ -1108,7 +1108,7 @@ class PmcManager(_NihManager):
         tr_datum_raw = {k: id_data.get(k) for k in self.tr_cols}
         tr_datum = {k: val.strip().upper() if val is not None else None
                     for k, val in tr_datum_raw.items()}
-        tr_datum['year'] = year
+        tr_datum['pub_year'] = year
 
         # Format the text content datum.
         tc_datum = {

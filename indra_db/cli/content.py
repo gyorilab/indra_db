@@ -1143,11 +1143,19 @@ class PmcManager(_NihManager):
             raise
         return archive_local_path
 
-    def iter_xmls(self, archives=None, continuing=False):
+    def iter_xmls(self, archives=None, continuing=False, pmcid_set=None):
         """Iterate over the xmls in the given archives."""
         # By default, iterate through all the archives.
         if archives is None:
             archives = set(self.get_all_archives())
+
+        # Load the pmcid-to-file-name dict.
+        # Note: if a pmcid isn't in the file dict it isn't in the corpus, so
+        # it is appropriate to just drop it.
+        if pmcid_set is not None:
+            file_dict = self.get_pmcid_file_dict()
+            desired_files = {file_dict.get(pmcid, '~') for pmcid in pmcid_set}
+            desired_files -= {'~'}
 
         # Yield the contents from each archive.
         for archive in sorted(archives):
@@ -1166,6 +1174,9 @@ class PmcManager(_NihManager):
 
                 # Yield each XML file.
                 for n, xml_file in enumerate(xml_files):
+                    # Skip the files we don't need.
+                    if pmcid_set is not None and xml_file not in desired_files:
+                        continue
                     xml_str = tar.extractfile(xml_file).read().decode('utf8')
                     yield (archive, n, len(xml_files)), xml_file.name, xml_str
 
@@ -1173,10 +1184,11 @@ class PmcManager(_NihManager):
             logger.info(f"Deleting {archive}.")
             remove(archive_path)
 
-    def iter_contents(self, archives=None, continuing=False):
+    def iter_contents(self, archives=None, continuing=False, pmcid_set=None):
         """Iterate over the files in the archive, yielding ref and content data.
         """
-        for label, file_name, xml_str in self.iter_xmls(archives, continuing):
+        xml_iter = self.iter_xmls(archives, continuing, pmcid_set)
+        for label, file_name, xml_str in xml_iter:
             res = self.get_data_from_xml_str(xml_str, file_name)
             if res is None:
                 continue
@@ -1189,7 +1201,8 @@ class PmcManager(_NihManager):
     def get_all_archives(self):
         return [k for k in self.ftp.ftp_ls() if self.is_archive(k)]
 
-    def upload_archives(self, db, archives=None, continuing=False):
+    def upload_archives(self, db, archives=None, continuing=False,
+                        pmcid_set=None):
         """Do the grunt work of downloading and processing a list of archives.
 
         Parameters
@@ -1202,10 +1215,12 @@ class PmcManager(_NihManager):
             If True, best effort will be made to avoid repeating work already
             done using some cached files and downloaded archives. If False, it
             is assumed the caches are empty.
+        pmcid_set : set[str]
+            A set of PMC Ids to include from this list of archives.
         """
         # Form a generator over the content in batches.
         batch_size = 10000
-        contents = self.iter_contents(archives, continuing)
+        contents = self.iter_contents(archives, continuing, pmcid_set)
         batched_contents = batch_iter(contents, batch_size, lambda g: zip(*g))
 
         # Upload each batch of content into the database.
@@ -1285,6 +1300,10 @@ class PmcManager(_NihManager):
         self.upload_archives(db, archives, continuing=continuing)
         return True
 
+    def get_pmcid_file_dict(self):
+        """Get a dict keyed by PMCID mapping them to file names."""
+        raise NotImplementedError()
+
 
 class PmcOA(PmcManager):
     """ContentManager for the pmc open access content.
@@ -1306,6 +1325,10 @@ class PmcOA(PmcManager):
         files_metadata = self.ftp.get_csv_as_dict('oa_file_list.csv')
         return files_metadata
 
+    def get_pmcid_file_dict(self):
+        file_data = self.get_file_data()
+        return {d['Accession ID']: d['File'] for d in file_data}
+
     def get_archives_after_date(self, min_date):
         """Get the names of all single-article archives after the given date."""
         logger.info("Getting list of articles that have been uploaded since "
@@ -1323,9 +1346,12 @@ class PmcOA(PmcManager):
     def update(self, db):
         min_datetime = self.get_latest_update(db)
         archive_set = self.get_archives_after_date(min_datetime)
+        logger.info(f"There are {len(archive_set)} new articles since last "
+                    f"full update.")
         done_sfs = db.select_all(db.SourceFile,
                                  db.SourceFile.source == self.my_source,
                                  db.SourceFile.load_date > min_datetime)
+        logger.info(f"Of those, {len(done_sfs)} have already been done.")
         archive_set -= {sf.name for sf in done_sfs}
 
         # Upload these archives.
@@ -1344,6 +1370,9 @@ class Manuscripts(PmcManager):
 
     def get_file_data(self):
         return self.ftp.get_csv_as_dict("filelist.csv")
+
+    def get_pmcid_file_dict(self):
+        return {d['PMCID']: d['File'] for d in self.get_file_data()}
 
     def get_tarname_from_filename(self, fname):
         "Get the name of the tar file based on the file name (or a pmcid)."
@@ -1410,7 +1439,7 @@ class Manuscripts(PmcManager):
                            for pmcid in load_pmcid_set}
 
         logger.info("Beginning to upload archives.")
-        self.upload_archives(db, update_archives)
+        self.upload_archives(db, update_archives, pmcid_set=load_pmcid_set)
         return True
 
 

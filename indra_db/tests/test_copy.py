@@ -25,25 +25,25 @@ def test_vanilla_copy():
     assert False, "Copy of duplicate data succeeded."
 
 
-def test_lazy_copy():
-    db = get_temp_db(True)
+def _do_init_copy(db):
     inps_1 = {('a', '1'), ('b', '2')}
-    inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
-
     db.copy('text_ref', inps_1, COLS)
     _assert_set_equal(inps_1, _ref_set(db))
+    return inps_1
 
+
+def test_lazy_copy():
+    db = get_temp_db(True)
+    inps_1 = _do_init_copy(db)
+    inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
     db.copy_lazy('text_ref', inps_2, COLS)
     _assert_set_equal(inps_1 | inps_2, _ref_set(db))
 
 
 def test_lazy_report_copy():
     db = get_temp_db(True)
-    inps_1 = {('a', '1'), ('b', '2')}
+    inps_1 = _do_init_copy(db)
     inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
-
-    db.copy('text_ref', inps_1, COLS)
-    _assert_set_equal(inps_1, _ref_set(db))
 
     left_out = db.copy_report_lazy('text_ref', inps_2, COLS)
     _assert_set_equal(inps_1 | inps_2, _ref_set(db))
@@ -52,11 +52,9 @@ def test_lazy_report_copy():
 
 def test_push_copy():
     db = get_temp_db(True)
-    inps_1 = {('a', '1'), ('b', '2')}
+    inps_1 = _do_init_copy(db)
     inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
 
-    db.copy('text_ref', inps_1, COLS)
-    _assert_set_equal(inps_1, _ref_set(db))
     original_date = db.select_one(db.TextRef.create_date,
                                   db.TextRef.pmid == 'b')
 
@@ -69,11 +67,9 @@ def test_push_copy():
 
 def test_push_report_copy():
     db = get_temp_db(True)
-    inps_1 = {('a', '1'), ('b', '2')}
+    inps_1 = _do_init_copy(db)
     inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
 
-    db.copy('text_ref', inps_1, COLS)
-    _assert_set_equal(inps_1, _ref_set(db))
     original_date = db.select_one(db.TextRef.create_date,
                                   db.TextRef.pmid == 'b')
 
@@ -83,3 +79,32 @@ def test_push_report_copy():
     new_date = db.select_one(db.TextRef.create_date,
                              db.TextRef.pmid == 'b')
     assert new_date != original_date, 'PMID b was not updated.'
+
+
+def test_returning_copy():
+    db = get_temp_db(True)
+    inps_1 = _do_init_copy(db)
+    inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
+
+    exiting_ids = {trid for trid, in db.select_all(db.TextRef.id)}
+
+    ids, skipped = db.copy_report_and_return_lazy('text_ref', inps_2, COLS)
+    _assert_set_equal(inps_1 | inps_2, _ref_set(db))
+    _assert_set_equal(inps_1 & inps_2, {t[:2] for t in skipped})
+    assert {trid for trid, in ids} != exiting_ids
+
+
+def test_returning_copy_pmid_and_id():
+    db = get_temp_db(True)
+    inps_1 = _do_init_copy(db)
+    inps_2 = {('b', '2'), ('c', '1'), ('d', '3')}
+
+    existing_id_dict = {pmid: trid for trid, pmid
+                        in db.select_all([db.TextRef.id, db.TextRef.pmid])}
+
+    ids, skipped = db.copy_report_and_return_lazy('text_ref', inps_2, COLS,
+                                                  ('pmid', 'id'))
+    new_id_dict = {pmid: trid for pmid, trid in ids}
+    _assert_set_equal(inps_1 | inps_2, _ref_set(db))
+    _assert_set_equal(inps_1 & inps_2, {t[:2] for t in skipped})
+    assert set(existing_id_dict.keys()) != set(new_id_dict.keys())

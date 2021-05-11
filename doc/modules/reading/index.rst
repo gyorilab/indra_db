@@ -15,7 +15,8 @@ to a standard interface, which then allows readers to be run in a plug-and-play
 manner.
 
 .. automodule:: indra_db.reading.read_db
-    :members:
+   :members:
+   :member-order: bysource
 
 
 The Database Script for Running on AWS (:py:mod:`indra_db.reading.read_db_aws`)
@@ -25,23 +26,17 @@ This is the script used to run reading on AWS Batch, generally run from an
 AWS Lambda function.
 
 .. automodule:: indra_db.reading.read_db_aws
-    :members:
+   :members:
+   :member-order: bysource
 
-The Database Reporter (:py:mod:`indra_db.reading.report_db_aws`)
-----------------------------------------------------------------
 
-Create an object that is used to aggregate and report on the reading process,
-allowing for effective monitoring.
-
-.. automodule:: indra_db.reading.report_db_aws
-    :members:
-
-A Class to Manage and Monitor AWS Batch Jobs (:py:mod:`indra_db.reading.submit_reading_pipeline`)
--------------------------------------------------------------------------------------------------
+A Class to Manage and Monitor AWS Batch Jobs (:py:mod:`indra_db.reading.submitter`)
+-----------------------------------------------------------------------------------
 
 Allow a manager to monitor the Batch jobs to prevent runaway jobs, and smooth
 out job runs and submissions.
 
-.. automodule:: indra_db.reading.submit_reading_pipeline
-    :members:
+.. automodule:: indra_db.reading.submitter
+   :members:
+   :member-order: bysource
 

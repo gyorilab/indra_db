@@ -691,8 +691,8 @@ class Query(object):
                          sort_by='ev_count') -> Optional[QueryResult]:
         """Get the simple interaction information from the Statements metadata.
 
-       Each entry in the result corresponds to a single preassembled Statement,
-       distinguished by its hash.
+        Each entry in the result corresponds to a single preassembled Statement,
+        distinguished by its hash.
 
         Parameters
         ----------
@@ -1859,6 +1859,10 @@ class FromPapers(_TextRefCore):
 class FromMeshIds(_TextRefCore):
     """Find Statements whose text sources were given one of a list of MeSH IDs.
 
+    This object can be constructed from a list of mixed "D" and "C" type mesh
+    IDs, but for reasons of querying, those IDs will be separated into two
+    separate classes and a :class:`Union <Union>` of the two classes returned.
+
     Parameters
     ----------
     mesh_ids : list
@@ -1867,9 +1871,11 @@ class FromMeshIds(_TextRefCore):
     Attributes
     ----------
     mesh_ids : tuple
-        The mesh IDs.
+        The immutable tuple of mesh IDs, on their original string form.
     _mesh_type : str
         "C" or "D" indicating which types of IDs are held in this object.
+    _mesh_nums : list[int]
+        The mesh IDs converted to integers, stripped of their prefix.
     """
     list_name = 'mesh_ids'
 
@@ -1901,7 +1907,6 @@ class FromMeshIds(_TextRefCore):
     def __init__(self, mesh_ids):
         self.mesh_ids = tuple(set(mesh_ids))
         self._mesh_nums = []
-        self._mesh_concept_nums = []
         self._mesh_type = None
         for mesh_id in self.mesh_ids:
             if self._mesh_type is None:
@@ -2965,29 +2970,24 @@ class EvidenceFilter:
     We need to be able to perform logical operations between evidence to handle
     important cases:
 
-    HasSource(['reach']) & FromMeshIds(['D0001'])
-    -> we might reasonably want to filter evidence for the second subquery but
-       not the first.
+    - ``HasSource(['reach']) & FromMeshIds(['D0001'])``: we might reasonably
+      want to filter evidence for the second subquery but not the first.
+    - ``HasOnlySource(['reach']) & FromMeshIds(['D00001'])``: Here we would
+      likely want to filter the evidence for both sub queries.
+    - ``HasOnlySource(['reach']) | FromMeshIds(['D000001'])``: It is not clear
+      what this even means (its purpose) or what we'd do for evidence filtering
+      when the original statements are or'ed
+    - ``HasDatabases() & FromMeshIds(['D000001'])``: Here you COULDN'T perform
+      an & on the evidence, because the two sources are mutually exclusive
+      (only readings connect to mesh annotations). However it could make sense
+      you would want to do an "or" between the evidence, so the evidence is
+      either from a database or from a mesh annotated document.
 
-    HasOnlySource(['reach']) & FromMeshIds(['D00001'])
-    -> Here we would likely want to filter the evidence for both sub queries.
-
-    HasOnlySource(['reach']) | FromMeshIds(['D000001'])
-    -> Not sure what this even means (its purpose)....not sure what we'd do for
-       evidence filtering when the original statements are or'ed
-
-    HasDatabases() & FromMeshIds(['D000001'])
-    -> Here you COULDN'T perform an & on the evidence, because the two sources
-       are mutually exclusive (only readings connect to mesh annotations).
-       However it could make sense you would want to do an "or" between the
-       evidence, so the evidence is either from a database or from a mesh
-       annotated document.
-
-    "filter all the evidence" and "filter none of the evidence" should
-    definitely be options. Although "Filter for all" might run into usues with
-    the "HasDatabase and FromMeshIds" scenario. I think no evidence filter should
-    be the default, and if you attempt a bogus "filter all evidence" (as with
-    that scenario) you get an error.
+    Both "filter all the evidence" and "filter none of the evidence" should
+    definitely be options. Although "Filter for all" might run into uses with
+    the "HasDatabase and FromMeshIds" scenario. I think no evidence filter
+    should be the default, and if you attempt a bogus "filter all evidence" (as
+    with that scenario) you get an error.
     """
 
     def __init__(self, filters=None, joiner='and'):

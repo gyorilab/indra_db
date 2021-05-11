@@ -12,24 +12,13 @@ our database to access it even as we perform daily updates on the principal
 database, without worrying about queries interfering.
 
 
-Get Pre-Assembled Statements (:py:mod:`indra_db.client.readonly.pa_statements`)
+Construct composable queries (:py:mod:`indra_db.client.readonly.query`)
 -------------------------------------------------------------------------------
 
-Here are the tools used to get PA Statements from the readonly database, with
-the goal of retrieving at least 1,000 Statements with 10 evidence each in under
-30 seconds.
+This is a sophisticated system of classes that can be used to form queires
+for preassembled statements from the readonly database.
 
-.. automodule:: indra_db.client.readonly.pa_statements
+.. automodule:: indra_db.client.readonly.query
    :members:
+   :member-order: bysource
 
-
-Get Simple Interactions from Metadata (:py:mod:`indra_db.client.readonly.interactions`)
----------------------------------------------------------------------------------------
-
-This provides an API to get somewhat less detailed data than above, using just
-the metadata of the database (not looking into the Statement JSONs), but is
-much faster. These tools can be sufficient if, for example, all that is needed
-is an interactome.
-
-.. automodule::indra_db.client.readonly.interactions
-   :memebrs:

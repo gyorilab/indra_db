@@ -15,7 +15,7 @@ from indra_reading.readers import get_reader_classes
 
 from indra_db.reading import read_db as rdb
 from indra_db.tests.util import get_db_with_pubmed_content, get_temp_db
-from indra_db.reading.submit_reading_pipeline import DbReadingSubmitter
+from indra_db.reading.submitter import DbReadingSubmitter
 
 
 # ==============================================================================

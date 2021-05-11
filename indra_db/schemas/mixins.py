@@ -387,3 +387,20 @@ class IndraDBRefTable:
         ref_dict['TRID'] = self.id
         return ref_dict
 
+
+class Schema:
+    """General class for schemas"""
+    def __init__(self, Base):
+        self.base = Base
+        self.table_dict = {}
+
+    def iter_child_methods(self):
+        for attr_key, attr_val in self.__class__.__dict__.items():
+            if callable(attr_val) and not attr_key.startswith('_'):
+                yield attr_val
+
+    def build_table_dict(self):
+        for tbl_builder in self.iter_child_methods():
+            tbl = tbl_builder(self)
+            self.table_dict[tbl.__tablename__] = tbl
+        return self.table_dict

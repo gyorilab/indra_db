@@ -30,7 +30,7 @@ from indra_db.config import CONFIG, build_db_url, is_db_testing
 from indra_db.schemas.mixins import IndraDBTableMetaClass
 from indra_db.util import S3Path
 from indra_db.exceptions import IndraDbException
-from indra_db.schemas import principal_schema, readonly_schema
+from indra_db.schemas import PrincipalSchema, foreign_key_map, ReadonlySchema
 from indra_db.schemas.readonly_schema import CREATE_ORDER
 
 
@@ -90,7 +90,7 @@ def _copy_method(get_null_return=lambda: None):
                                    "available.")
             if obj.is_protected():
                 raise RuntimeError("Attempt to copy while in protected mode!")
-            if len(data) is 0:
+            if len(data) == 0:
                 return get_null_return()  # Nothing to do....
 
             res = meth(obj, tbl_name, data, cols, commit, *args, **kwargs)
@@ -142,6 +142,11 @@ class formats(_map_class):
 
 
 readers = {'REACH': 1, 'SPARSER': 2, 'TRIPS': 3, 'ISI': 4, 'EIDOS': 5, 'MTI': 6}
+"""A dict mapping each reader a unique integer ID.
+
+These ID's are used in creating the reading primary ID hashes. Thus, for a new
+reader to be fully integrated, it must be added to the above dictionary.
+"""
 
 
 # Specify versions of readers, and preference. Later in the list is better.
@@ -154,6 +159,17 @@ reader_versions = {
     'eidos': ['0.2.3-SNAPSHOT'],
     'mti': ['1.0'],
 }
+"""A dict of list values keyed by reader name, tracking reader versions.
+
+The oldest versions are to the left, and the newest to the right. We keep track
+of all past versions as it is often not practical nor necessary to re-run a
+reading on all content. Even in cases where it is, it is often useful to be
+able to compare results.
+
+As with the :data:`readers` variable above, this is used in the creation of
+the unique hash for a reading entry. For a new reader version to work, it must
+be added to the appropriate list.
+"""
 
 
 class IndraTableError(IndraDbException):
@@ -219,22 +235,24 @@ class DatabaseManager(object):
         The database to which you want to interface.
     label : OPTIONAL[str]
         A short string to indicate the purpose of the db instance. Set as
-        `db_label` when initialized with `get_db(db_label)`.
+        ``db_label`` when initialized with ``get_db(db_label)``.
 
     Example
     -------
     If you wish to access the primary database and find the the metadata for a
     particular pmid, 1234567:
 
-    >> from indra.db import get_db
-    >> db = get_db('primary')
-    >> res = db.select_all(db.TextRef, db.TextRef.pmid == '1234567')
+    .. code-block:: python
+
+        from indra.db import get_db
+        db = get_db('primary')
+        res = db.select_all(db.TextRef, db.TextRef.pmid == '1234567')
 
     You will get a list of objects whose attributes give the metadata contained
     in the columns of the table.
 
     For more sophisticated examples, several use cases can be found in
-    `indra.tests.test_db`.
+    ``indra.tests.test_db``.
     """
     _instance_type = NotImplemented
     _instance_name_fmt = NotImplemented
@@ -294,7 +312,7 @@ class DatabaseManager(object):
         return self.__engine.connect()
 
     def __del__(self, *args, **kwargs):
-        if not self.available:
+        if not hasattr(self, 'available') or self.available:
             return
         try:
             self.grab_session()
@@ -1126,8 +1144,8 @@ class PrincipalDatabaseManager(DatabaseManager):
         self.__protected = self._DatabaseManager__protected
         self.__engine = self._DatabaseManager__engine
 
-        self.public = principal_schema.get_schema(self.Base)
-        self.readonly = readonly_schema.get_schema(self.Base)
+        self.public = PrincipalSchema(self.Base).build_table_dict()
+        self.readonly = ReadonlySchema(self.Base).build_table_dict()
         self.tables = {k: v for d in [self.public, self.readonly]
                        for k, v in d.items()}
 
@@ -1139,7 +1157,7 @@ class PrincipalDatabaseManager(DatabaseManager):
             else:
                 setattr(self, tbl.__name__, tbl)
 
-        self._init_foreign_key_map(principal_schema.foreign_key_map)
+        self._init_foreign_key_map(foreign_key_map)
         return
 
     def __getattribute__(self, item):
@@ -1373,7 +1391,7 @@ class ReadonlyDatabaseManager(DatabaseManager):
         self.__protected = self._DatabaseManager__protected
         self.__engine = self._DatabaseManager__engine
 
-        self.tables = readonly_schema.get_schema(self.Base)
+        self.tables = ReadonlySchema(self.Base).build_table_dict()
         for tbl in self.tables.values():
             if tbl.__name__ == '_PaStmtSrc':
                 self.__PaStmtSrc = tbl

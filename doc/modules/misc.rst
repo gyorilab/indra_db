@@ -14,6 +14,7 @@ access to SQLAlchemy's API.
 
 .. automodule:: indra_db.databases
    :members:
+   :member-order: bysource
 
 
 Belief Calculator (:py:mod:`indra_db.belief`)

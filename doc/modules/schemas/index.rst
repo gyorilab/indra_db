@@ -7,11 +7,9 @@ as some useful mixin classes.
 Principal Database Schema (:py:mod:`indra_db.schemas.principal_schema`)
 -----------------------------------------------------------------------
 
-Defines the `get_schema` function for the principal database, which represents
-the "ground truth" of the knowledge we aggregate.
-
 .. automodule:: indra_db.schemas.principal_schema
    :members:
+   :member-order: bysource
 
 Readonly Database Schema (:py:mod:`indra_db.schemas.readonly_schema`)
 ---------------------------------------------------------------------
@@ -21,6 +19,7 @@ external services to access the Statement knowledge we acquire.
 
 .. automodule:: indra_db.schemas.readonly_schema
    :members:
+   :member-order: bysource
 
 Class Mix-ins (:py:mod:`indra_db.schemas.mixins`)
 -------------------------------------------------
@@ -30,6 +29,7 @@ table objects via multiple inheritance.
 
 .. automodule:: indra_db.schemas.mixins
    :members:
+   :member-order: bysource
 
 Indexes (:py:mod:`indra_db.schemas.indexes`)
 --------------------------------------------
@@ -40,3 +40,4 @@ class mixin definition.
 
 .. automodule:: indra_db.schemas.indexes
    :members:
+   :member-order: bysource

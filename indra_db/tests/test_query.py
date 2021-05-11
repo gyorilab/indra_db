@@ -5,7 +5,8 @@ from itertools import combinations, permutations, product
 
 from indra.statements import Agent, get_statement_by_name, get_all_descendants, \
     Complex
-from indra_db.client.readonly.query import QueryResult
+from indra.sources.indra_db_rest.query_results import QueryResult, \
+    StatementQueryResult
 from indra_db.schemas.readonly_schema import ro_type_map, ro_role_map, \
     SOURCE_GROUPS
 from indra_db.util import extract_agent_data, get_ro
@@ -416,8 +417,8 @@ def test_query_set_behavior():
             "Somehow thoroughly reconstituted query IS original query."
 
         # Test actually running the query
-        res = query.get_hashes(db)
-        return res.results
+        res = query.get_hashes(db, with_src_counts=False)
+        return set(res.results)
 
     queries = [
         HasAgent('TP53', role='SUBJECT'),
@@ -600,6 +601,16 @@ def test_get_agents():
     assert len(js['results']) == len(res.results)
 
 
+def test_has_agent_namespace_only():
+    ro = get_ro('primary')
+    query = HasAgent(namespace='HGNC') & HasType(["Inhibition"])
+    res = query.get_statements(ro, limit=100)
+    stmts = res.statements()
+    assert len(stmts) == 100
+    assert all(any('HGNC' in ag.db_refs for ag in s.agent_list())
+               for s in stmts)
+
+
 def test_evidence_filtering_has_only_source():
     ro = get_ro('primary')
     q1 = HasAgent('TP53')
@@ -757,6 +768,26 @@ def test_evidence_count_is_0():
     assert res.returned_evidence == 0, res.returned_evidence
     assert sum(res.evidence_counts.values()) > 20, \
         sum(res.evidence_counts.values())
+
+
+def test_evidence_bounds_null_cases():
+    ro = get_ro('primary')
+    query = HasAgent('MEK') & HasEvidenceBound(["< 1"])
+    res = query.get_hashes(ro, limit=10)
+    assert len(res.results) == 0
+
+    query = HasAgent('MEK') & HasEvidenceBound(["== 0"])
+    res = query.get_hashes(ro, limit=10)
+    assert len(res.results) == 0
+
+
+def test_evidence_bounds_basic_case():
+    ro = get_ro("primary")
+
+    query = HasAgent('MEK') & HasAgent('ERK') \
+        & HasEvidenceBound(["<= 10", " > 5"])
+    res = query.get_hashes(ro)
+    assert all(5 < c <= 10 for c in res.evidence_counts.values())
 
 
 def test_real_world_examples():

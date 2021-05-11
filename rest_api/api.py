@@ -18,12 +18,15 @@ from indra.assemblers.html.assembler import loader as indra_loader
 
 from indra_db.exceptions import BadHashError
 from indra_db.client.principal.curation import *
-from indra_db.client.readonly import AgentJsonExpander
+from indra_db.client.readonly import AgentJsonExpander, Query
 from indra_db.util.constructors import get_ro_host
 
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indralab_auth_tools.log import note_in_log, set_log_service_name, \
     user_log_endpoint
+from rest_api.call_handlers import pop_request_bool
+from rest_api.errors import HttpUserError, ResultTypeError, InvalidCredentials, \
+    InsufficientPermission
 
 from rest_api.config import *
 from rest_api.call_handlers import *
@@ -269,12 +272,22 @@ def get_statements(result_type, method):
         call.web_query['hash'] = method[len('from_hash/'):]
     elif method == 'from_papers' and request.method == 'POST':
         call = FromPapersApiCall(env)
+    elif method.startswith('from_paper/') and request.method == 'GET':
+        try:
+            _, id_type, id_val = method.split('/')
+        except Exception as e:
+            logger.error(f"Failed to parse paper ID: {method}")
+            logger.exception(e)
+            return abort(Response('Page not found.', 404))
+        call = FromPapersApiCall(env)
+        call.web_query['paper_ids'] = [{'type': id_type, 'id': id_val}]
     elif method == 'from_agent_json' and request.method == 'POST':
         call = FromAgentJsonApiCall(env)
-    elif method == 'from_query_json' and request.method == 'POST':
-        call = FromQueryJsonApiCall(env)
+    elif method == 'from_simple_json' and request.method == 'POST':
+        call = FromSimpleJsonApiCall(env)
     else:
-        return abort(Response('Page not found.', 404))
+        logger.error(f'Invalid URL: {request.url}')
+        return abort(404)
 
     return call.run(result_type=result_type)
 
@@ -287,7 +300,7 @@ def expand_meta_row():
     agent_json = request.json.get('agent_json')
     if not agent_json:
         logger.error("No agent_json provided!")
-        return abort(Response("No agent_json in request!", 400))
+        return Response("No agent_json in request!", 400)
     stmt_type = request.json.get('stmt_type')
     hashes = request.json.get('hashes')
     logger.info(f"Expanding on agent_json={agent_json}, stmt_type={stmt_type}, "
@@ -375,7 +388,24 @@ def expand_meta_row():
 @user_log_endpoint
 def get_statements_by_query_json(result_type):
     note_in_log(result_type=result_type)
-    return FallbackQueryApiCall(env).run(result_type)
+    try:
+        return DirectQueryApiCall(env).run(result_type)
+    except ResultTypeError as e:
+        return Response(f"Invalid result type: {e.result_type}", 400)
+
+
+@app.route('/compile/<fmt>', methods=['POST'])
+def compile_query(fmt):
+    if pop_request_bool(dict(request.args), 'simple', True):
+        q = Query.from_simple_json(request.json)
+    else:
+        q = Query.from_json(request.json)
+    if fmt == 'json':
+        return jsonify(q.to_json())
+    elif fmt == 'string':
+        return str(q)
+    else:
+        return Response(f"Invalid format name: {fmt}!", 400)
 
 
 @app.route('/curation', methods=['GET'])
@@ -383,22 +413,36 @@ def describe_curation():
     return redirect('/statements', code=302)
 
 
+def auth_curation():
+    if not TESTING['status']:
+        failure_reason = {}
+        user, roles = resolve_auth(request.args.copy(), failure_reason)
+        if failure_reason:
+            raise InvalidCredentials(failure_reason['auth_attempted'])
+    else:
+        api_key = request.args.get('api_key', None)
+        if api_key is None:  # any key will do for testing.
+            raise InvalidCredentials("API key")
+        user = None
+
+        class MockRole:
+            permissions = {"get_curations": api_key == 'GET_CURATIONS'}
+
+        roles = [MockRole()]
+    return user, roles
+
+
 @app.route('/curation/submit/<hash_val>', methods=['POST'])
 @jwt_nontest_optional
-def submit_curation_endpoint(hash_val, **kwargs):
-    user, roles = resolve_auth(dict(request.args))
-    if not roles and not user:
-        res_dict = {"result": "failure", "reason": "Invalid Credentials"}
-        return jsonify(res_dict), 401
-
+@user_log_endpoint
+def submit_curation_endpoint(hash_val):
+    user, _ = auth_curation()
     if user:
         email = user.email
     else:
         email = request.json.get('email')
         if not email:
-            res_dict = {"result": "failure",
-                        "reason": "POST with API key requires a user email."}
-            return jsonify(res_dict), 400
+            raise HttpUserError("POST with API key requires a user email.")
 
     logger.info("Adding curation for statement %s." % hash_val)
     ev_hash = request.json.get('ev_hash')
@@ -406,14 +450,16 @@ def submit_curation_endpoint(hash_val, **kwargs):
     tag = request.json.get('tag')
     ip = request.remote_addr
     text = request.json.get('text')
+    pa_json = request.json.get('pa_json')
+    ev_json = request.json.get('ev_json')
     is_test = 'test' in request.args
     if not is_test:
         assert tag is not 'test'
         try:
             dbid = submit_curation(hash_val, tag, email, ip, text, ev_hash,
-                                   source_api)
+                                   source_api, pa_json, ev_json)
         except BadHashError as e:
-            abort(Response("Invalid hash: %s." % e.mk_hash, 400))
+            raise HttpUserError(f"Invalid hash: {e.mk_hash}")
         res = {'result': 'success', 'ref': {'id': dbid}}
     else:
         res = {'result': 'test passed', 'ref': None}
@@ -421,10 +467,47 @@ def submit_curation_endpoint(hash_val, **kwargs):
     return jsonify(res)
 
 
+@app.route('/curation/list', methods=['GET'],
+           defaults={"stmt_hash": None, "src_hash": None})
+@app.route('/curation/list/<stmt_hash>', methods=['GET'],
+           defaults={"src_hash": None})
 @app.route('/curation/list/<stmt_hash>/<src_hash>', methods=['GET'])
+@jwt_nontest_optional
+@user_log_endpoint
 def list_curations(stmt_hash, src_hash):
-    curations = get_curations(pa_hash=stmt_hash, source_hash=src_hash)
-    return jsonify(curations)
+    # In order of priority: we need a hash, and then we can look for a src_hash.
+    params = {}
+    if stmt_hash is not None:
+        params["pa_hash"] = stmt_hash
+        if src_hash is not None:
+            params["source_hash"] = src_hash
+    else:
+        assert src_hash is None, "Somehow someone broke our URL system."
+
+    # The user needs to have an account to get curations at all.
+    user, roles = auth_curation()
+
+    # The user needs extra permission to load all curations.
+    if not params:
+        can_load = False
+        for role in roles:
+            can_load |= role.permissions.get('get_curations', False)
+        if not can_load:
+            raise InsufficientPermission("get all curations")
+
+    # Get the curations.
+    curations = get_curations(**params)
+    return jsonify(curations), 200
+
+
+# =====================
+# Define Error Handlers
+# =====================
+
+@app.errorhandler(HttpUserError)
+def handle_user_error(error):
+    logger.error(f"Got user error ({error.err_code}): {error.msg}")
+    return error.response()
 
 
 def main():

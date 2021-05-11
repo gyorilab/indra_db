@@ -7,7 +7,7 @@ from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey, \
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB
 
-from indra_db.schemas.mixins import IndraDBTable
+from indra_db.schemas.mixins import IndraDBTable, IndraDBRefTable
 from indra_db.schemas.indexes import StringIndex, BtreeIndex
 
 foreign_key_map = [
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def get_schema(Base):
     table_dict = {}
 
-    class TextRef(Base, IndraDBTable):
+    class TextRef(Base, IndraDBTable, IndraDBRefTable):
         __tablename__ = 'text_ref'
         _ref_cols = ['pmid', 'pmcid', 'doi', 'pii', 'url', 'manuscript_id']
         _always_disp = ['id', 'pmid', 'pmcid']
@@ -93,127 +93,6 @@ def get_schema(Base):
                 else:
                     setattr(self, id_type, id_val)
             return
-
-        @staticmethod
-        def process_pmid(pmid):
-            if not pmid:
-                return None, None
-
-            if not pmid.isdigit():
-                return pmid, None
-
-            return pmid, int(pmid)
-
-        @staticmethod
-        def process_pmcid(pmcid):
-            if not pmcid:
-                return None, None, None
-
-            if not pmcid.startswith('PMC'):
-                return pmcid, None, None
-
-            if '.' in pmcid:
-                pmcid, version_number_str = pmcid.split('.')
-                if version_number_str.isdigit():
-                    version_number = int(version_number_str)
-                else:
-                    version_number = None
-            else:
-                version_number = None
-
-            if not pmcid[3:].isdigit():
-                return pmcid, None, version_number
-
-            return pmcid, int(pmcid[3:]), version_number
-
-        @staticmethod
-        def process_doi(doi):
-            # Check for invalid DOIs
-            if not doi:
-                return None, None, None
-
-            # Regularize case.
-            doi = doi.upper()
-
-            if not doi.startswith('10.'):
-                return doi, None, None
-
-            # Split up the parts of the DOI
-            parts = doi[3:].split('/')
-            if len(parts) < 2:
-                return doi, None, None
-
-            # Check the namespace number, make it an integer.
-            namespace_str = parts[0]
-            if not namespace_str.isdigit():
-                return doi, None, None
-            namespace = int(namespace_str)
-
-            # Join the res of the parts together.
-            group_id = '/'.join(parts[1:])
-
-            return doi, namespace, group_id
-
-        @classmethod
-        def pmid_in(cls, pmid_list, filter_ids=False):
-            """Get sqlalchemy clauses for a list of pmids."""
-            pmid_num_set = set()
-            for pmid in pmid_list:
-                _, pmid_num = cls.process_pmid(pmid)
-                if pmid_num is None:
-                    if filter_ids:
-                        logger.warning('"%s" is not a valid pmid. Skipping.'
-                                       % pmid)
-                        continue
-                    else:
-                        ValueError('"%s" is not a valid pmid.' % pmid)
-                pmid_num_set.add(pmid_num)
-            return cls.pmid_num.in_(pmid_num_set)
-
-        @classmethod
-        def pmcid_in(cls, pmcid_list, filter_ids=False):
-            """Get the sqlalchemy clauses for a list of pmcids."""
-            pmcid_num_set = set()
-            for pmcid in pmcid_list:
-                _, pmcid_num, _ = cls.process_pmcid(pmcid)
-                if not pmcid_num:
-                    if filter_ids:
-                        logger.warning('"%s" does not look like a valid '
-                                       'pmcid. Skipping.' % pmcid)
-                        continue
-                    else:
-                        raise ValueError('"%s" is not a valid pmcid.' % pmcid)
-                else:
-                    pmcid_num_set.add(pmcid_num)
-
-            return cls.pmcid_num.in_(pmcid_num_set)
-
-        @classmethod
-        def doi_in(cls, doi_list, filter_ids=False):
-            """Get clause for looking up a list of dois."""
-            doi_tuple_set = set()
-            for doi in doi_list:
-                doi, doi_ns, doi_id = cls.process_doi(doi)
-                if not doi_ns:
-                    if filter_ids:
-                        logger.warning('"%s" does not look like a normal doi. '
-                                       'Skipping.' % doi)
-                        continue
-                    else:
-                        raise ValueError('"%s" is not a valid doi.' % doi)
-                else:
-                    doi_tuple_set.add((doi_ns, doi_id))
-
-            return tuple_(cls.doi_ns, cls.doi_id).in_(doi_tuple_set)
-
-        def get_ref_dict(self):
-            ref_dict = {}
-            for ref in self._ref_cols:
-                val = getattr(self, ref, None)
-                if val:
-                    ref_dict[ref.upper()] = val
-            ref_dict['TRID'] = self.id
-            return ref_dict
 
     table_dict[TextRef.__tablename__] = TextRef
 

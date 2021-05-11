@@ -1,255 +1,30 @@
-__all__ = ['StatementQueryResult', 'Query', 'Intersection', 'Union',
-           'MergeQuery', 'HasAgent', 'FromMeshIds', 'HasHash',
-           'HasSources', 'HasOnlySource', 'HasReadings', 'HasDatabases',
-           'SourceQuery', 'SourceIntersection', 'HasType', 'IntrusiveQuery',
-           'HasNumAgents', 'HasNumEvidence', 'FromPapers', 'EvidenceFilter',
-           'AgentJsonExpander', 'FromAgentJson', 'EmptyQuery']
+__all__ = ['Query', 'Intersection', 'Union', 'MergeQuery', 'HasAgent',
+           'FromMeshIds', 'HasHash', 'HasSources', 'HasOnlySource',
+           'HasReadings', 'HasDatabases', 'SourceQuery', 'SourceIntersection',
+           'HasType', 'IntrusiveQuery', 'HasNumAgents', 'HasNumEvidence',
+           'FromPapers', 'EvidenceFilter', 'AgentJsonExpander', 'FromAgentJson',
+           'EmptyQuery', 'HasEvidenceBound', 'Bound']
 
+import re
 import json
 import logging
-import requests
 from itertools import combinations
-from typing import Union as TypeUnion, Optional, Iterable as TypeIterable
-from collections import OrderedDict, Iterable, defaultdict
+from typing import Optional, Iterable
+from typing import Union as TypeUnion
+from collections import OrderedDict, defaultdict
 from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
     String, union, intersect
 
-from indra import get_config
-from indra.statements import stmts_from_json, get_statement_by_name, \
-    get_all_descendants
+from indra.sources.indra_db_rest.query_results import QueryResult, \
+    StatementQueryResult, AgentQueryResult
+from indra.statements import get_statement_by_name, \
+    get_all_descendants, make_statement_camel
 
 from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
     SOURCE_GROUPS
 from indra_db.util import regularize_agent_id, get_ro
 
 logger = logging.getLogger(__name__)
-
-
-class QueryResult(object):
-    """The generic result of a query.
-
-    This class standardizes the results of queries to the readonly database.
-
-    Parameters
-    ----------
-    results : Iterable
-        The results of the query keyed by unique IDs (mk_hash for PA Statements,
-        IDs for Raw Statements, etc.)
-    limit : int
-        The limit that was applied to this query.
-    offset_comp : int
-        The next offset that would be appropriate if this is a paging query.
-    evidence_counts : dict
-        The count of evidence for each element.
-    belief_scores : dict
-        The belief score of each element.
-    query_json : dict
-        A description of the query that was used.
-
-    Attributes
-    ----------
-    results : Iterable
-        The results of the query keyed by unique IDs (mk_hash for PA Statements,
-        IDs for Raw Statements, etc.)
-    limit : int
-        The limit that was applied to this query.
-    next_offset : int
-        The next offset that would be appropriate if this is a paging query.
-    evidence_counts : dict
-        The count of evidence for each element.
-    belief_scores : dict
-        The belief score of each element.
-    query_json : dict
-        A description of the query that was used.
-    """
-    def __init__(self, results: TypeIterable, limit: int, offset: int,
-                 offset_comp: int, evidence_counts: dict, belief_scores: dict,
-                 query_json: dict, result_type: str):
-        if not isinstance(results, Iterable) or isinstance(results, str):
-            raise ValueError("Input `results` is expected to be an iterable, "
-                             "and not a string.")
-        self.results = results
-        self.evidence_counts = evidence_counts
-        self.belief_scores = belief_scores
-        self.total_evidence = sum(self.evidence_counts.values())
-        if self.belief_scores:
-            self.max_belief = max(self.belief_scores.values())
-        else:
-            self.max_belief = None
-        self.limit = limit
-        self.offset = offset
-        self.result_type = result_type
-        self.offset_comp = offset_comp
-        if limit is None or offset_comp < limit:
-            self.next_offset = None
-        else:
-            self.next_offset = (0 if offset is None else offset) + offset_comp
-        self.query_json = query_json
-
-    @classmethod
-    def empty(cls, empty_res, limit, offset, query_json, result_type):
-        return cls(empty_res, limit, offset, 0, {}, {}, query_json, result_type)
-
-    @classmethod
-    def from_json(cls, json_dict) \
-            -> TypeUnion['QueryResult', 'StatementQueryResult',
-                         'AgentQueryResult']:
-        # Build a StatementQueryResult or AgentQueryResult if appropriate
-        if json_dict['result_type'] == 'statements':
-            return StatementQueryResult.from_json(json_dict)
-        elif json_dict['result_type'] == 'agents':
-            return AgentQueryResult.from_json(json_dict)
-        return cls._parse_json(json_dict)
-
-    @classmethod
-    def _parse_json(cls, json_dict):
-        # Filter out some calculated values.
-        next_offset = json_dict.pop('next_offset', None)
-        total_evidence = json_dict.pop('total_evidence', None)
-
-        # Build the class
-        nc = cls(**json_dict)
-
-        # Convert result keys into integers, if appropriate
-        if isinstance(nc.results, dict):
-            if nc.result_type in ['statements', 'interactions']:
-                nc.evidence_counts = {int(k): v
-                                      for k, v in nc.evidence_counts.items()}
-                nc.belief_scores = {int(k): v
-                                    for k, v in nc.belief_scores.items()}
-                nc.results = {int(k): v for k, v in nc.results.items()}
-
-        # Check calculated values.
-        if nc.next_offset is None:
-            nc.next_offset = next_offset
-        else:
-            assert nc.next_offset == next_offset, "Offsets don't match."
-        assert nc.total_evidence == total_evidence,\
-            "Evidence counts don't match."
-        return nc
-
-    def json(self) -> dict:
-        """Return the JSON representation of the results."""
-        if not isinstance(self.results, dict) \
-                and not isinstance(self.results, list):
-            json_results = list(self.results)
-        elif isinstance(self.results, dict):
-            json_results = {str(k): v for k, v in self.results.items()}
-        else:
-            json_results = self.results
-        return {'results': json_results, 'limit': self.limit,
-                'offset': self.offset, 'next_offset': self.next_offset,
-                'query_json': self.query_json,
-                'evidence_counts': self.evidence_counts,
-                'belief_scores': self.belief_scores,
-                'total_evidence': self.total_evidence,
-                'result_type': self.result_type,
-                'offset_comp': self.offset_comp}
-
-
-class StatementQueryResult(QueryResult):
-    """The result of a query to retrieve Statements.
-
-    This class encapsulates the results of a search for statements in the
-    database. This standardizes the results of such searches.
-
-    Parameters
-    ----------
-    results : dict
-        The results of the query.
-    limit : int
-        The content limit that was used in making the query.
-    offset : int
-        The offset that was used in making the query.
-    evidence_counts : dict
-        The count of evidence available for each element.
-    belief_scores : dict
-        The score for each element.
-    returned_evidence : int
-        The count of evidence that was returned in this query.
-    source_counts : dict
-        The counts of evidence from each source for each element.
-    query_json : dict
-        The JSON representation of the query that was used.
-
-    Attributes
-    ----------
-    results : dict
-        The results of the query keyed by unique IDs (mk_hash for PA Statements,
-        IDs for Raw Statements, etc.)
-    limit : int
-        The limit that was applied to this query.
-    query_json : dict
-        A description of the query that was used.
-    """
-    def __init__(self, results: dict, limit: int, offset: int,
-                 evidence_counts: dict, belief_scores: dict,
-                 returned_evidence: int, source_counts: dict, query_json: dict):
-        super(StatementQueryResult, self).__init__(results, limit,
-                                                   offset, len(results),
-                                                   evidence_counts,
-                                                   belief_scores, query_json,
-                                                   'statements')
-        self.returned_evidence = returned_evidence
-        self.source_counts = source_counts
-
-    @classmethod
-    def empty(cls, limit: int, offset: int, query_json: dict):
-        return cls({}, limit, offset, {}, {}, 0, {}, query_json)
-
-    def json(self) -> dict:
-        """Get the JSON dump of the results."""
-        json_dict = super(StatementQueryResult, self).json()
-        json_dict.update({'returned_evidence': self.returned_evidence,
-                          'source_counts': self.source_counts})
-        return json_dict
-
-    @classmethod
-    def from_json(cls, json_dict):
-        json_dict = json_dict.copy()
-        result_type = json_dict.pop('result_type')
-        json_dict.pop('offset_comp', None)
-        if result_type != 'statements':
-            raise ValueError(f'Invalid result type {result_type} for this '
-                             f'result class {cls}')
-        nc = super(StatementQueryResult, cls)._parse_json(json_dict)
-        nc.source_counts = {int(k): v for k, v in nc.source_counts.items()}
-        return nc
-
-    def statements(self) -> list:
-        """Get a list of Statements from the results."""
-        assert isinstance(self.results, dict), "Results must be a dictionary."
-        return stmts_from_json(list(self.results.values()))
-
-
-class AgentQueryResult(QueryResult):
-    """The result of a query for agent JSONs."""
-    def __init__(self, results: dict, limit: int, offset: int, num_rows: int,
-                 complexes_covered: set, evidence_counts: dict,
-                 belief_scores: dict, query_json: dict):
-        super(AgentQueryResult, self).__init__(results, limit, offset, num_rows,
-                                               evidence_counts, belief_scores,
-                                               query_json, 'agents')
-        self.complexes_covered = complexes_covered
-
-    @classmethod
-    def empty(cls, limit, offset, query_json):
-        return cls({}, limit, offset, 0, set(), {}, {}, query_json)
-
-    def json(self) -> dict:
-        json_dict = super(AgentQueryResult, self).json()
-        json_dict['complexes_covered'] = [str(h) for h in self.complexes_covered]
-        return json_dict
-
-    @classmethod
-    def from_json(cls, json_dict):
-        json_dict = json_dict.copy()
-        result_type = json_dict.pop('result_type')
-        if result_type != 'agents':
-            raise ValueError(f'Invalid result type {result_type} for this '
-                             f'result class {cls}')
-        nc = super(AgentQueryResult, cls)._parse_json(json_dict)
-        nc.complexes_covered = {int(h) for h in nc.complexes_covered}
 
 
 def _make_agent_dict(ag_dict):
@@ -328,8 +103,9 @@ class InteractionSQL(AgentJsonSQL):
         names = self.agg_q.all()
         results = {}
         ev_totals = {}
-        bel_maxes = {}
-        for h, ag_json, type_num, n_ag, n_ev, bel, act, is_act, src_json in names:
+        src_counts = {}
+        beliefs = {}
+        for h, ag_json, type_num, n_ag, n_ev, bel, act, is_act, sj in names:
             results[h] = {
                 'hash': h,
                 'id': str(h),
@@ -337,12 +113,13 @@ class InteractionSQL(AgentJsonSQL):
                 'type': ro_type_map.get_str(type_num),
                 'activity': act,
                 'is_active': is_act,
-                'source_counts': src_json,
+                'source_counts': sj,
             }
-            ev_totals[h] = sum(src_json.values())
-            bel_maxes[h] = max([bel, bel_maxes.get(h, 0)])
-            assert ev_totals[h] == n_ev
-        return results, ev_totals, bel_maxes, len(names)
+            ev_totals[h] = n_ev
+            beliefs[h] = bel
+            src_counts[h] = sj
+            assert ev_totals[h] == sum(sj.values())
+        return results, ev_totals, beliefs, src_counts, len(names)
 
 
 class RelationSQL(AgentJsonSQL):
@@ -386,6 +163,7 @@ class RelationSQL(AgentJsonSQL):
         results = {}
         ev_totals = {}
         bel_maxes = {}
+        src_counts = {}
         for ag_json, type_num, n_ag, n_ev, bel, act, is_act, srcs, hashes in names:
             # Build the unique key for this relation.
             ordered_agents = [ag_json.get(str(n))
@@ -402,19 +180,22 @@ class RelationSQL(AgentJsonSQL):
             for src_json in srcs:
                 for src, cnt in src_json.items():
                     source_counts[src] += cnt
+            source_counts = dict(source_counts)
 
             # Add this relation to the results and ev_totals.
-            results[key] = {'id': key, 'source_counts': dict(source_counts),
+            results[key] = {'id': key, 'source_counts': source_counts,
                             'agents': _make_agent_dict(ag_json),
                             'type': stmt_type, 'activity': act,
                             'is_active': is_act, 'hashes': hashes}
-            ev_totals[key] = sum(source_counts.values())
+            ev_totals[key] = int(n_ev)
             bel_maxes[key] = max([bel_maxes.get(key, 0), bel])
+            src_counts[key] = source_counts.copy()
 
             # Do a quick sanity check. If this fails, something went VERY wrong.
-            assert ev_totals[key] == n_ev, "Evidence totals don't add up."
+            assert ev_totals[key] == sum(source_counts.values()),\
+                "Evidence totals don't add up."
 
-        return results, ev_totals, bel_maxes, len(names)
+        return results, ev_totals, bel_maxes, src_counts, len(names)
 
 
 class _AgentHashes:
@@ -500,6 +281,7 @@ class AgentSQL(AgentJsonSQL):
         results = {}
         ev_totals = {}
         bel_maxes = {}
+        src_counts = {}
         if self.complexes_covered is None:
             self.complexes_covered = set()
         num_entries = 0
@@ -528,9 +310,10 @@ class AgentSQL(AgentJsonSQL):
                 for src_json in src_jsons:
                     for src, cnt in src_json.items():
                         source_counts[src] += cnt
+                source_counts = dict(source_counts)
 
                 # Add this entry to the results.
-                results[key] = {'id': key, 'source_counts': dict(source_counts),
+                results[key] = {'id': key, 'source_counts': source_counts,
                                 'agents': _make_agent_dict(ag_json)}
                 if self._return_hashes:
                     results[key]['hashes'] = my_hashes.hashes
@@ -538,6 +321,7 @@ class AgentSQL(AgentJsonSQL):
                     results[key]['hashes'] = None
                 ev_totals[key] = sum(source_counts.values())
                 bel_maxes[key] = max([bel, bel_maxes.get(key, 0)])
+                src_counts[key] = source_counts.copy()
 
                 # Sanity check. Only a coding error could cause this to fail.
                 assert n_ev == ev_totals[key], "Evidence counts don't add up."
@@ -552,7 +336,7 @@ class AgentSQL(AgentJsonSQL):
             if not names:
                 break
 
-        return results, ev_totals, bel_maxes, num_rows
+        return results, ev_totals, bel_maxes, src_counts, num_rows
 
     def print(self):
         print(self.__get_next_query())
@@ -629,22 +413,6 @@ class Query(object):
         """
         self._print_only = print_only
 
-    def _rest_get(self, result_type, limit=None, offset=None,
-                  sort_by='ev_count', **other_params):
-        """Retrieve results from the remote API."""
-        logger.info("Using remote API to resolve query.")
-        url = get_config('INDRA_DB_REST_URL', failure_ok=False)
-        params = {'json': json.dumps(self.to_json()), 'limit': limit,
-                  'offset': offset, 'sort_by': sort_by}
-        params.update(other_params)
-        resp = requests.get(f'{url}/query/{result_type}',
-                            params=params)
-        if resp.status_code != 200:
-            raise ApiError(f"REST API failed with ({resp.status_code}): "
-                           f"{resp.json()}")
-
-        return QueryResult.from_json(resp.json())
-
     def get_statements(self, ro=None, limit=None, offset=None,
                        sort_by='ev_count', ev_limit=None, evidence_filter=None) \
             -> Optional[StatementQueryResult]:
@@ -682,15 +450,6 @@ class Query(object):
         # If the result is by definition empty, save ourselves time and work.
         if self.empty:
             return StatementQueryResult.empty(limit, offset, self.to_json())
-
-        # If the database isn't available, route through the web service.
-        if ro is None:
-            if evidence_filter:
-                logger.warning("No direct R.O. access available, but passing "
-                               "of evidence filter through API not yet "
-                               "implemented.")
-            return self._rest_get('statements', limit, offset, sort_by,
-                                  ev_limit=ev_limit)
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
@@ -804,6 +563,7 @@ class Query(object):
                 ev_counts[mk_hash] = ev_count
                 beliefs[mk_hash] = belief
                 stmts_dict[mk_hash] = json.loads(pa_json_bts.decode('utf-8'))
+                stmts_dict[mk_hash]['belief'] = belief
                 stmts_dict[mk_hash]['evidence'] = []
 
             # Add annotations if not present.
@@ -844,7 +604,8 @@ class Query(object):
                                     beliefs, returned_evidence, source_counts,
                                     self.to_json())
 
-    def get_hashes(self, ro=None, limit=None, offset=None, sort_by='ev_count') \
+    def get_hashes(self, ro=None, limit=None, offset=None, sort_by='ev_count',
+                   with_src_counts=True) \
             -> Optional[QueryResult]:
         """Get the hashes of statements that satisfy this query.
 
@@ -862,6 +623,10 @@ class Query(object):
         sort_by : str
             'ev_count' or 'belief': select the parameter by which results are
             sorted.
+        with_src_counts : bool
+            Choose whether source counts are included with the result or not.
+            The default is True (included), but the query may be marginally
+            faster with source counts excluded (False).
 
         Returns
         -------
@@ -877,10 +642,6 @@ class Query(object):
             return QueryResult.empty(set(), limit, offset, self.to_json(),
                                      'hashes')
 
-        # If the database isn't directly available, route through the web API.
-        if ro is None:
-            return self._rest_get('hashes', limit, offset, sort_by)
-
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
         mk_hashes_q = self.build_hash_query(ro)
@@ -892,23 +653,39 @@ class Query(object):
             sort_list = [desc(belief_obj)]
         mk_hashes_q = self._apply_limits(mk_hashes_q, sort_list, limit, offset)
 
+        # Get the source counts if they are requested
+        if with_src_counts:
+            sub_q = mk_hashes_q.subquery().alias('hashes')
+            q = ro.session.query(ro.SourceMeta.mk_hash, ro.SourceMeta.src_json,
+                                 ro.SourceMeta.ev_count, ro.SourceMeta.belief)\
+                .filter(ro.SourceMeta.mk_hash == sub_q.c.mk_hash)
+        else:
+            q = mk_hashes_q
+
         if self._print_only:
-            print(mk_hashes_q)
+            print(q)
             return
 
         # Make the query, and package the results.
-        logger.debug(f"Executing query (get_hashes):\n{mk_hashes_q}")
-        result = mk_hashes_q.all()
+        logger.debug(f"Executing query (get_hashes):\n{q}")
+        result = q.all()
         evidence_counts = {}
         belief_scores = {}
-        hashes = set()
-        for h, n_ev, belief in result:
-            hashes.add(h)
+        source_counts = {}
+        hashes = []
+        for row in result:
+            if with_src_counts:
+                h, src_json, n_ev, belief = row
+                source_counts[h] = src_json
+            else:
+                h, n_ev, belief = row
+            hashes.append(h)
             evidence_counts[h] = n_ev
             belief_scores[h] = belief
 
         return QueryResult(hashes, limit, offset, len(result), evidence_counts,
-                           belief_scores, self.to_json(), 'hashes')
+                           belief_scores, source_counts, self.to_json(),
+                           'hashes')
 
     def get_interactions(self, ro=None, limit=None, offset=None,
                          sort_by='ev_count') -> Optional[QueryResult]:
@@ -942,16 +719,14 @@ class Query(object):
             return QueryResult.empty({}, limit, offset, self.to_json(),
                                      'interactions')
 
-        if ro is None:
-            return self._rest_get('interactions', limit, offset, sort_by)
-
         il = InteractionSQL(ro)
         result_tuple = self._run_meta_sql(il, ro, limit, offset, sort_by)
         if result_tuple is None:
             return
-        results, ev_counts, belief_scores, off_comp = result_tuple
+        results, ev_counts, belief_scores, src_counts, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_counts,
-                           belief_scores, self.to_json(), il.meta_type)
+                           belief_scores, src_counts, self.to_json(),
+                           il.meta_type)
 
     def get_relations(self, ro=None, limit=None, offset=None,
                       sort_by='ev_count', with_hashes=False) \
@@ -986,19 +761,16 @@ class Query(object):
             return QueryResult.empty({}, limit, offset, self.to_json(),
                                      'relations')
 
-        if ro is None:
-            return self._rest_get('relations', limit, offset, sort_by,
-                                  with_hashes=with_hashes)
-
         r_sql = RelationSQL(ro)
         result_tuple = self._run_meta_sql(r_sql, ro, limit, offset, sort_by,
                                           with_hashes)
         if result_tuple is None:
             return None
 
-        results, ev_counts, belief_scores, off_comp = result_tuple
+        results, ev_counts, belief_scores, src_counts, off_comp = result_tuple
         return QueryResult(results, limit, offset, off_comp, ev_counts,
-                           belief_scores, self.to_json(), r_sql.meta_type)
+                           belief_scores, src_counts, self.to_json(),
+                           r_sql.meta_type)
 
     def get_agents(self, ro=None, limit=None, offset=None, sort_by='ev_count',
                    with_hashes=False, complexes_covered=None) \
@@ -1035,11 +807,6 @@ class Query(object):
         if self.empty:
             return AgentQueryResult.empty(limit, offset, self.to_json())
 
-        if ro is None:
-            return self._rest_get('agents', limit, offset, sort_by,
-                                  with_hashes=with_hashes,
-                                  complexes_covered=complexes_covered)
-
         ag_sql = AgentSQL(ro, with_complex_dups=True,
                           complexes_covered=complexes_covered)
         result_tuple = self._run_meta_sql(ag_sql, ro, limit, offset, sort_by,
@@ -1047,10 +814,10 @@ class Query(object):
         if result_tuple is None:
             return
 
-        results, ev_counts, belief_scores, off_comp = result_tuple
+        results, ev_counts, belief_scores, src_counts, off_comp = result_tuple
         return AgentQueryResult(results, limit, offset, off_comp,
                                 ag_sql.complexes_covered, ev_counts,
-                                belief_scores, self.to_json())
+                                belief_scores, src_counts, self.to_json())
 
     def _run_meta_sql(self, ms, ro, limit, offset, sort_by, with_hashes=None):
         mk_hashes_sq = self.build_hash_query(ro).subquery('mk_hashes')
@@ -1101,13 +868,33 @@ class Query(object):
         return obj
 
     @classmethod
+    def from_simple_json(cls, json_dict):
+        """Generate a proper query from a simplified JSON."""
+        def make_query(jd):
+            if jd['class'] == 'And':
+                q = EmptyQuery()
+                for qj in jd['constraint']['queries']:
+                    q &= make_query(qj)
+            elif jd['class'] == 'Or':
+                q = EmptyQuery()
+                for qj in jd['constraint']['queries']:
+                    q |= make_query(qj)
+            else:
+                q = Query.from_json(jd)
+            return q
+        return make_query(json_dict)
+
+    @classmethod
     def _from_constraint_json(cls, constraint_json):
         return cls(** {k: v for k, v in constraint_json.items()
                        if not k.startswith('_')})
 
     def list_component_queries(self) -> list:
         """Get a list of the query elements included, in no particular order."""
-        return [self.__class__.__name__]
+        return [q.__class__.__name__ for q in self.iter_component_queries()]
+
+    def iter_component_queries(self):
+        yield self
 
     def _get_table(self, ro):
         raise NotImplementedError()
@@ -1321,9 +1108,10 @@ class AgentJsonExpander(AgentInteractionMeta):
         meta.q = self._apply_constraints(ro, meta.q)
         order_param = meta.agg(ro, sort_by=sort_by)
         meta.agg_q = meta.agg_q.order_by(*order_param)
-        results, ev_counts, belief_scores, off_comp = meta.run()
+        results, ev_counts, belief_scores, src_counts, off_comp = meta.run()
         return QueryResult(results, None, None, off_comp, ev_counts,
-                           belief_scores, self.to_json(), meta.meta_type)
+                           belief_scores, src_counts, self.to_json(),
+                           meta.meta_type)
 
     def to_json(self):
         return {'class': self.__class__.__name__,
@@ -1512,9 +1300,10 @@ class SourceIntersection(Query):
                       for qj in constraint_json['source_queries']]
         return cls(query_list)
 
-    def list_component_queries(self) -> list:
-        return [q.__class__.__name__ for q in self.source_queries] \
-               + [self.__class__.__name__]
+    def iter_component_queries(self):
+        for q in self.source_queries:
+            yield q
+        yield self
 
     def _get_table(self, ro):
         return ro.SourceMeta
@@ -1786,27 +1575,58 @@ def gilda_ground(agent_text):
 class HasAgent(Query):
     """Get Statements that have a particular agent in a particular role.
 
+    **NOTE:** At this time 2 agent queries do NOT necessarily imply that the 2
+    agents are different. E.g. ```HasAgent("MEK") & HasAgent("MEK")``` will get
+    any Statements that have agent with name MEK, not Statements with two agents
+    called MEK. This may change in the future, however in the meantime you can
+    get around this fairly well by specifying the roles:
+
+    >>> HasAgent("MEK", role="SUBJECT") & HasAgent("MEK", role="OBJECT")
+
+    Or for a more complicated case, consider a query for Statements where one
+    agent is MEK and the other has namespace FPLX. Naturally any agent labeled
+    as MEK will also have a namespace FPLX (MEK is a famplex identifier), and
+    in general you will not want to constrain which role is MEK and which is the
+    "other" agent. To accomplish this you need to use ```|```:
+
+    >>> (
+    >>>   HasAgent("MEK", role="SUBJECT")
+    >>>   & HasAgent(namespace="FPLX", role="OBJECT")
+    >>> ) | (
+    >>>   HasAgent("MEK", role="OBJECT")
+    >>>   & HasAgent(namespace="FPLX", role="SUBJECT")
+    >>> )
+
     Parameters
     ----------
-    agent_id : str
+    agent_id : Optional[str]
         The ID string naming the agent, for example 'ERK' (FPLX or NAME) or
-        'plx' (TEXT), and so on.
-    namespace : str
-        (optional) By default, this is NAME, indicating the canonical name of
+        'plx' (TEXT), and so on. If None, the query must then be constrained by
+        the namespace. (Default is None)
+    namespace : Optional[str]
+        By default, this is NAME, indicating the canonical name of
         the agent. Other options for namespace include FPLX (FamPlex), CHEBI,
         CHEMBL, HGNC, UP (UniProt), TEXT (for raw text mentions), and many more.
-        If you use the namespace "AUTO", GILDA will be used to try and guess the
-        proper namespace and agent ID.
-    role : str or None
-        (optional) None by default. Options are "SUBJECT", "OBJECT", or "OTHER".
-    agent_num : int or None
-        (optional) None by default. The regularized position of the agent in the
-        Statement's list of agents.
+        If you use the namespace AUTO, GILDA will be used to try and guess the
+        proper namespace and agent ID. If `agent_id` is None, namespace must be
+        specified and must not be NAME, TEXT, or AUTO.
+    role : Optional[str]
+        Options are "SUBJECT", "OBJECT", or "OTHER". (Default is None)
+    agent_num : Optional[int]
+        The regularized position of the agent in the Statement's list of agents.
+        (Default is None)
     """
-    def __init__(self, agent_id, namespace='NAME', role=None, agent_num=None):
+    def __init__(self, agent_id=None, namespace='NAME', role=None,
+                 agent_num=None):
+        # NAME and AUTO namespaces apply to all agents, so without an ID there
+        # is no constraint.
+        if agent_id is None and namespace in ['NAME', 'AUTO', 'TEXT']:
+            raise ValueError("Either an agent ID or a limiting namespace must "
+                             "be specified.")
+
         # If the user sends the namespace "auto", use gilda to guess the
         # true ID and namespace.
-        if namespace == 'AUTO':
+        if namespace == 'AUTO' and agent_id is not None:
             res = gilda_ground(agent_id)
             if not res:
                 raise NoGroundingFound(f"Could not resolve {agent_id} with "
@@ -1827,7 +1647,10 @@ class HasAgent(Query):
         self.agent_num = agent_num
 
         # Regularize ID based on Database optimization (e.g. striping prefixes)
-        self.regularized_id = regularize_agent_id(agent_id, namespace)
+        if agent_id is not None:
+            self.regularized_id = regularize_agent_id(agent_id, namespace)
+        else:
+            self.regularized_id = None
         super(HasAgent, self).__init__()
 
     def _copy(self):
@@ -1836,7 +1659,10 @@ class HasAgent(Query):
 
     def __str__(self):
         s = 'do not ' if self._inverted else ''
-        s += f"have an agent where {self.namespace}={self.agent_id}"
+        if self.agent_id is not None:
+            s += f"have an agent where {self.namespace}={self.agent_id}"
+        else:
+            s += f"have an agent in namespace {self.namespace}"
         if self.role is not None:
             s += f" with role={self.role}"
         elif self.agent_num is not None:
@@ -1861,7 +1687,9 @@ class HasAgent(Query):
     def _get_hash_query(self, ro, inject_queries=None):
         # Get the base query and filter by regularized ID.
         meta = self._get_table(ro)
-        qry = self._base_query(ro).filter(meta.db_id.like(self.regularized_id))
+        qry = self._base_query(ro)
+        if self.regularized_id is not None:
+            qry = qry.filter(meta.db_id.like(self.regularized_id))
 
         # If we aren't going to one of the special tables for NAME or TEXT, we
         # need to filter by namespace.
@@ -1952,7 +1780,8 @@ class FromPapers(_TextRefCore):
     list_name = 'paper_list'
 
     def __init__(self, paper_list):
-        self.paper_list = tuple({tuple(pair) for pair in paper_list})
+        self.paper_list = tuple({(id_type.lower(), id_val)
+                                 for id_type, id_val in paper_list})
         super(FromPapers, self).__init__(len(self.paper_list) == 0)
 
     def __str__(self) -> str:
@@ -1984,11 +1813,14 @@ class FromPapers(_TextRefCore):
                 if id_type in ['trid', 'tcid']:
                     conditions.append(tbl_attr == int(paper_id))
                 else:
-                    conditions.append(tbl_attr.like(str(paper_id)))
+                    constraint = ro.ReadingRefLink.has_ref(id_type,
+                                                           [str(paper_id)])
+                    conditions.append(constraint)
             else:
                 if id_type in ['trid', 'tcid']:
                     conditions.append(tbl_attr != int(paper_id))
                 else:
+                    # Note that this is a highly non-optimized approach.
                     conditions.append(tbl_attr.notlike(str(paper_id)))
         return conditions
 
@@ -2218,16 +2050,28 @@ class IntrusiveQuery(Query):
     def _get_clause(self, meta):
         q_values = self._get_query_values()
         col = getattr(meta, self.col_name)
-        if len(q_values) == 1:
-            if not self._inverted:
-                clause = col == q_values[0]
+        if self.item_type == Bound:
+            if len(q_values) == 1:
+                if not self._inverted:
+                    clause = q_values[0].clause(col)
+                else:
+                    clause = q_values[0].invert().clause(col)
             else:
-                clause = col != q_values[0]
+                if not self._inverted:
+                    clause = and_(val.clause(col) for val in q_values)
+                else:
+                    clause = or_(val.invert().clause(col) for val in q_values)
         else:
-            if not self._inverted:
-                clause = col.in_(q_values)
+            if len(q_values) == 1:
+                if not self._inverted:
+                    clause = col == q_values[0]
+                else:
+                    clause = col != q_values[0]
             else:
-                clause = col.notin_(q_values)
+                if not self._inverted:
+                    clause = col.in_(q_values)
+                else:
+                    clause = col.notin_(q_values)
         return clause
 
     def _apply_filter(self, meta, query):
@@ -2311,6 +2155,106 @@ class HasNumEvidence(IntrusiveQuery):
         return f"{inv}have {_join_list(self.evidence_nums)} evidence"
 
 
+class Bound:
+    _patt = re.compile("([<>=]{1,2})[ \t]*([0-9]+)")
+    _opposites = [('<', '>='), ('>', '<='), ('==', '!=')]
+    _rev_dict = {k: v for a, b in _opposites for k, v in [(a, b), (b, a)]}
+
+    def __init__(self, bound):
+        if isinstance(bound, str):
+            m = self._patt.match(bound.strip())
+            if m is None:
+                raise ValueError(f"invalid literal for type Bound: \'{bound}\'")
+            self.relation, value = m.groups()
+            self.num = int(value)
+        elif isinstance(bound, tuple):
+            self.relation, value = bound
+            self.num = int(value)
+        elif isinstance(bound, Bound):
+            self.relation = bound.relation
+            self.num = bound.num
+        else:
+            raise TypeError(f"Bound() argument must be string, tuple, or "
+                            f"Bound, not \'{type(bound)}\'")
+
+        if self.relation not in ['>', '<', '>=', '<=', '==', '!=']:
+            raise ValueError(f"invalid relation: \'{self.relation}\'")
+
+        return
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(\'{self.relation} {self.num}\')"
+
+    def __str__(self):
+        return f"{self.relation} {self.num}"
+
+    def __invert__(self):
+        return Bound((self._rev_dict[self.relation], self.num))
+
+    def __lt__(self, other):
+        symbol_order = ["<", "<=", "==", "!=", ">", ">="]
+        return (self.num, symbol_order.index(self.relation)) \
+               < (other.num, symbol_order.index(other.relation))
+
+    def __eq__(self, other):
+        return self.num == other.num and self.relation == other.relation
+
+    def clause(self, col):
+        if self.relation == '<':
+            return col < self.num
+        elif self.relation == '>':
+            return col > self.num
+        elif self.relation == '<=':
+            return col <= self.num
+        elif self.relation == '>=':
+            return col >= self.num
+        elif self.relation == '!=':
+            return col != self.num
+        else:
+            return col == self.num
+
+
+class HasEvidenceBound(IntrusiveQuery):
+    """Find Statements that fit given evidence bounds.
+
+    A list of bounds will be combined using the logic of "or", so ["<1", ">3"]
+    will return Statements that are _either_ less than 1 OR greater than 3.
+
+    Parameters
+    ----------
+    evidence_bounds :
+        An iterable containing bounds for the evidence support of Statements to
+        be returned, such as `Bound("< 10")` or simply "< 10" (the string will
+        be parsed into a Bound object, if possible).
+
+    """
+    name = 'has_evidence_bounds'
+    list_name = 'evidence_bounds'
+    item_type = Bound
+    col_name = 'ev_count'
+
+    def __init__(self, evidence_bounds: Iterable[TypeUnion[str, Bound]]):
+        super(HasEvidenceBound, self).__init__(evidence_bounds)
+
+    def __str__(self):
+        if self._inverted:
+            effective_bounds = [bound.invert()
+                                for bound in self.evidence_bounds]
+            joiner = 'or'
+        else:
+            effective_bounds = self.evidence_bounds
+            joiner = 'and'
+        return f"have {_join_list(effective_bounds, joiner)} evidence"
+
+    def _get_constraint_json(self) -> dict:
+        return {'evidence_bounds': sorted(str(bound)
+                                          for bound in self.evidence_bounds)}
+
+    @classmethod
+    def _from_constraint_json(cls, constraint_json):
+        return cls(constraint_json["evidence_bounds"])
+
+
 class HasType(IntrusiveQuery):
     """Find Statements that are one of a collection of types.
 
@@ -2336,7 +2280,7 @@ class HasType(IntrusiveQuery):
 
     def __init__(self, stmt_types, include_subclasses=False):
         # Do the expansion of sub classes, if requested.
-        st_set = set(stmt_types)
+        st_set = {make_statement_camel(t) for t in stmt_types}
         if include_subclasses:
             for stmt_type in stmt_types:
                 stmt_class = get_statement_by_name(stmt_type)
@@ -2347,6 +2291,18 @@ class HasType(IntrusiveQuery):
     def __str__(self):
         inv = 'do not ' if self._inverted else ''
         return f"{inv}have type {_join_list(self.stmt_types)}"
+
+    def _run_meta_sql(self, ms, ro, limit, offset, sort_by, with_hashes=None):
+        ms.filter(self._get_clause(ro.AgentInteractions))
+        kwargs = {'sort_by': sort_by}
+        if with_hashes is not None:
+            kwargs['with_hashes'] = with_hashes
+        order_params = ms.agg(ro, **kwargs)
+        ms = self._apply_limits(ms, order_params, limit, offset)
+        if self._print_only:
+            ms.print()
+            return
+        return ms.run()
 
     def _get_query_values(self):
         return [ro_type_map.get_int(st) for st in self.stmt_types]
@@ -2427,11 +2383,14 @@ class MergeQuery(Query):
                       for qj in constraint_json['query_list']]
         return cls(query_list)
 
-    def list_component_queries(self) -> list:
-        type_list = []
+    def iter_component_queries(self):
         for q in self.queries:
-            type_list += q.list_component_queries()
-        return type_list + [self.__class__.__name__]
+            if isinstance(q, MergeQuery) or isinstance(q, SourceIntersection):
+                for sub_q in q.iter_component_queries():
+                    yield sub_q
+            else:
+                yield q
+        yield self
 
     def _get_core_cols(self, ro) -> tuple:
         mk_hashes_al = self._get_table(ro)

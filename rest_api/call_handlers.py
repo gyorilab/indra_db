@@ -1,6 +1,6 @@
 __all__ = ['ApiCall', 'FromAgentsApiCall', 'FromHashApiCall',
-           'FromHashesApiCall', 'FromPapersApiCall', 'FromQueryJsonApiCall',
-           'FromAgentJsonApiCall', 'FallbackQueryApiCall']
+           'FromHashesApiCall', 'FromPapersApiCall', 'FromSimpleJsonApiCall',
+           'FromAgentJsonApiCall', 'DirectQueryApiCall']
 
 import sys
 import json
@@ -23,12 +23,17 @@ from indralab_auth_tools.log import note_in_log, is_log_running
 from indralab_auth_tools.src.models import UserDatabaseError
 
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
-    jwt_nontest_optional
+    jwt_nontest_optional, MAX_LIST_LEN
+from rest_api.errors import HttpUserError, ResultTypeError
 from rest_api.util import LogTracker, sec_since, get_source, process_agent, \
     process_mesh_term, DbAPIError, iter_free_agents, _make_english_from_meta, \
     get_html_source_info
 
 logger = logging.getLogger('call_handlers')
+
+
+def pop_request_bool(args, key, default):
+    return args.pop(key, str(default).lower()).lower() == 'true'
 
 
 class ApiCall:
@@ -59,7 +64,7 @@ class ApiCall:
         else:
             self.sort_by = None
 
-        # Gather other miscillaneous options
+        # Gather other miscellaneous options
         self.fmt = self._pop('format', 'json')
         self.w_english = self._pop('with_english', False, bool)
         self.w_cur_counts = self._pop('with_cur_counts', False, bool)
@@ -72,11 +77,11 @@ class ApiCall:
         # Figure out authorization.
         self.has = dict.fromkeys(['elsevier', 'medscan'], False)
         if not TESTING['status']:
-            try:
-                self.user, roles = resolve_auth(self.web_query)
-            except UserDatabaseError:
-                abort(Response("Invalid credentials.", 401))
-                return
+            failure_reason = {}
+            self.user, roles = resolve_auth(self.web_query, failure_reason)
+            if failure_reason:
+                logger.info(f"Auth error ({failure_reason['auth_attempted']}): "
+                            f"{failure_reason['reason']}")
             for role in roles:
                 for resource in self.has.keys():
                     self.has[resource] |= role.permissions.get(resource, False)
@@ -135,7 +140,7 @@ class ApiCall:
         elif result_type == 'hashes':
             res = self.get_db_query().get_hashes(**params)
         else:
-            raise ValueError(f"Invalid result type: {result_type}")
+            raise ResultTypeError(result_type)
         logger.info(f"Got results from query after "
                     f"{sec_since(self.start_time)} seconds.")
         self.process_entries(res)
@@ -144,7 +149,7 @@ class ApiCall:
 
     def _pop(self, key, default=None, type_cast=None):
         if isinstance(default, bool):
-            val = self.web_query.pop(key, str(default).lower()).lower() == 'true'
+            val = pop_request_bool(self.web_query, key, default)
         else:
             val = self.web_query.pop(key, default)
 
@@ -173,8 +178,32 @@ class ApiCall:
             if is_log_running():
                 note_in_log(query=self.db_query.to_json())
 
-        logger.info(f"Constructed query \"{self.db_query}\":\n"
-                    f"{json.dumps(self.db_query.to_json(), indent=2)}")
+            logger.info(f"Constructed query \"{self.db_query}\":\n"
+                        f"{json.dumps(self.db_query.to_json(), indent=2)}")
+
+            # Prevent someone from breaking the database by querying too many
+            # hashes, paper IDs, or MeshIds.
+            query_set = set(self.db_query.list_component_queries())
+            if {'HasHash', 'FromPapers', 'FromMeshIds'} & query_set:
+                for q in self.db_query.iter_component_queries():
+                    if isinstance(q, HasHash):
+                        list_len = len(q.stmt_hashes)
+                        lbl = 'hashes'
+                    elif isinstance(q, FromPapers):
+                        list_len = len(q.paper_list)
+                        lbl = 'paper IDs'
+                    elif isinstance(q, FromMeshIds):
+                        list_len = len(q.mesh_ids)
+                        lbl = 'MeSH IDs'
+                    else:
+                        list_len = 0
+                        lbl = None
+
+                    if list_len > MAX_LIST_LEN:
+                        logger.error(f"Length exceeded: {list_len} > "
+                                     f"{MAX_LIST_LEN}")
+                        raise HttpUserError(f"Too many {lbl}! Only "
+                                            f"{MAX_LIST_LEN} {lbl} allowed.")
         return self.db_query
 
     def _build_db_query(self):
@@ -185,12 +214,10 @@ class ApiCall:
         content = json.dumps(res_json)
 
         resp = Response(content, mimetype='application/json')
-        logger.info("Exiting with %d results that have %d total evidence, "
-                    "with size %f MB after %s seconds."
-                    % (len(res_json['results']),
-                       res_json['total_evidence'],
-                       sys.getsizeof(resp.data) / 1e6,
-                       sec_since(self.start_time)))
+        logger.info(f"Exiting with {len(result.results)} results "
+                    f"of type {result.result_type}, "
+                    f"with size {sys.getsizeof(resp.data) / 1e6} MB "
+                    f"after {sec_since(self.start_time)} seconds.")
         return resp
 
     def process_entries(self, result):
@@ -579,7 +606,6 @@ class FromAgentsApiCall(StatementApiCall):
                  for i, ag in enumerate(self.web_query.poplist('agent'))}
             )
             db_query = self._db_query_from_web_query(
-                require_any={'HasAgent', 'FromPapers', 'FromMeshIds'},
                 empty_web_query=True
             )
         except Exception as e:
@@ -595,12 +621,6 @@ class FromHashesApiCall(StatementApiCall):
         if not hashes:
             logger.error("No hashes provided!")
             return abort(Response("No hashes given!", 400))
-        if len(hashes) > MAX_STMTS:
-            logger.error("Too many hashes given!")
-            return abort(
-                Response(f"Too many hashes given, {MAX_STMTS} allowed.",
-                         400)
-            )
 
         self.web_query['hashes'] = hashes
         return self._db_query_from_web_query()
@@ -617,13 +637,17 @@ class FromHashApiCall(StatementApiCall):
 class FromPapersApiCall(StatementApiCall):
     def _build_db_query(self):
         # Get the paper id.
-        ids = request.json.get('ids')
-        if not ids:
-            logger.error("No ids provided!")
-            return abort(Response("No ids in request!", 400))
-        mesh_ids = request.json.get('mesh_ids', [])
-        self.web_query['paper_ids'] = ids
-        self.web_query['mesh_ids'] = mesh_ids
+        if 'paper_ids' not in self.web_query:
+            ids = request.json.get('ids')
+            if not ids:
+                logger.error("No ids provided!")
+                return abort(Response("No ids in request!", 400))
+            self.web_query['paper_ids'] = ids
+
+        # Extract mesh IDs.
+        if 'mesh_ids' not in self.web_query:
+            mesh_ids = request.json.get('mesh_ids', [])
+            self.web_query['mesh_ids'] = mesh_ids
         return self._db_query_from_web_query()
 
 
@@ -639,38 +663,52 @@ class FromAgentJsonApiCall(StatementApiCall):
         return db_query
 
 
-def _check_query(query):
-    required_queries = {'HasAgent', 'FromPapers', 'FromMeshIds'}
-    if not required_queries & set(query.list_component_queries()):
-        abort(Response(f"Query must contain at least one of "
-                       f"{required_queries}."), 400)
-    if query.full:
-        abort(Response("Query would retrieve all statements. "
-                       "Please constrain further.", 400))
-    return
-
-
-class FromQueryJsonApiCall(StatementApiCall):
+class FromSimpleJsonApiCall(StatementApiCall):
     def __init__(self, env):
-        super(FromQueryJsonApiCall, self).__init__(env)
+        super(FromSimpleJsonApiCall, self).__init__(env)
         self.web_query['complexes_covered'] = \
             request.json.get('complexes_covered')
 
     def _build_db_query(self):
         query_json = request.json['query']
+        logger.info('Simple JSON:\n' + json.dumps(query_json, indent=2))
         try:
-            q = Query.from_json(query_json)
+            q = Query.from_simple_json(query_json)
             if self.filter_ev:
                 self.ev_filter = q.ev_filter()
         except (KeyError, ValueError):
-            abort(Response("Invalid JSON.", 400))
-        _check_query(q)
+            raise HttpUserError("Invalid JSON.")
         return q
 
 
-class FallbackQueryApiCall(ApiCall):
+class DirectQueryApiCall(ApiCall):
+    def __init__(self, env):
+        super(DirectQueryApiCall, self).__init__(env)
+        self.is_simple = self._pop('simple', False, bool)
+        if request.method == 'POST':
+            kwargs = request.json.get('kwargs', {})
+            self.filter_ev = kwargs.pop('filter_ev', True)
+            self.web_query['complexes_covered'] = \
+                request.json.get('complexes_covered')
+            self.web_query.update(kwargs)
+            self.query_json = request.json.get('query', {})
+        elif request.method == 'GET':
+            self.filter_ev = self._pop('filter_ev', True, bool)
+            self.web_query.update(json.loads(self._pop('json_kwargs', '{}')))
+            self.query_json = json.loads(self._pop('json', '{}'))
+        else:
+            raise HttpUserError(f"Invalid method: {request.method}")
+
     def _build_db_query(self):
-        query_json = json.loads(self._pop('json', '{}'))
-        q = Query.from_json(query_json)
-        _check_query(q)
+        try:
+            if self.is_simple:
+                logger.info("Simple JSON:\n"
+                            + json.dumps(self.query_json, indent=2))
+                q = Query.from_simple_json(self.query_json)
+            else:
+                q = Query.from_json(self.query_json)
+            if self.filter_ev:
+                self.ev_filter = q.ev_filter()
+        except (KeyError, ValueError):
+            raise HttpUserError("Invalid JSON.")
         return q

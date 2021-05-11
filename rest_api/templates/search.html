@@ -65,7 +65,7 @@
     Vue.prototype.$relation_url = "{{ url_for('expand_meta_row') }}";
     Vue.prototype.$agent_url = "{{ url_for('get_statements',
                                            result_type='agents',
-                                           method='from_query_json') }}";
+                                           method='from_simple_json') }}";
     Vue.prototype.$stmt_url = "{{ url_for('get_statements',
                                           result_type='statements',
                                           method='from_agent_json') }}";

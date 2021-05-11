@@ -16,8 +16,9 @@ from indra.databases import hgnc_client
 from indra.statements import stmts_from_json
 from indra_db import get_db
 
-from indra_db.client.readonly.query import QueryResult
-from indra_db.client import HasAgent, HasType, StatementQueryResult, FromMeshIds
+from indra.sources.indra_db_rest.query_results import QueryResult, \
+    StatementQueryResult
+from indra_db.client import HasAgent, HasType, FromMeshIds
 
 from rest_api.util import get_source
 from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TESTING
@@ -54,6 +55,14 @@ def _check_stmt_agents(resp, agents):
 
 # Change this flag to choose to test a remote deployment.
 TEST_DEPLOYMENT = False
+
+
+def test_secret():
+    import os
+    print("SECRET:", os.environ)
+    print("The Secret: it is secret")
+    assert False, "Oh no!"
+    return
 
 
 class TestDbApi(unittest.TestCase):
@@ -444,8 +453,8 @@ class TestDbApi(unittest.TestCase):
         return
 
     def test_get_big_statement_by_single_hash_query(self):
-        resp, dt, size = self.__time_query('get',
-            'statements/from_hash/-29396420431585282')
+        resp, dt, size =\
+            self.__time_query('get', 'statements/from_hash/-29396420431585282')
         assert resp.status_code == 200, \
             '%s: %s' % (resp.status_code, resp.data.decode())
         resp_dict = json.loads(resp.data)
@@ -453,6 +462,20 @@ class TestDbApi(unittest.TestCase):
         assert len(resp_dict['statements']) == 1, len(resp_dict['statements'])
         self.__check_time(dt, time_goal=1)
         return
+
+    def test_paper_link_pmid(self):
+        resp, dt, size = \
+            self.__time_query('get', 'statements/from_paper/pmid/27014235')
+        assert resp.status_code == 200, str(resp)
+        assert dt < 10, f"Took too long: {dt}"
+        assert len(resp.json['results'])
+
+    def test_paper_link_trid(self):
+        resp, dt, size = \
+            self.__time_query('get', 'statements/from_paper/trid/19649148')
+        assert resp.status_code == 200, str(resp)
+        assert dt < 10, f"Took too long: {dt}"
+        assert len(resp.json['results'])
 
     def __test_basic_paper_query(self, id_val, id_type, min_num_results=1):
         id_list = [{'id': id_val, 'type': id_type}]
@@ -539,8 +562,75 @@ class TestDbApi(unittest.TestCase):
 
     def test_curation_submission(self):
         # This can only test the surface layer endpoint.
-        self.__time_query('post', 'curation/submit/12345?test', tag='test',
-                          curator='tester', text='This is text.')
+        resp, _, _ = self.__time_query('post', 'curation/submit/12345?test',
+                                       tag='test', email='tester',
+                                       text='This is text.', with_auth=True)
+        assert resp.status_code == 200
+
+    def test_curation_submission_wo_api_key(self):
+        resp, _, _ = self.__time_query('post', 'curation/submit/12345?test',
+                                       tag='test', email='tester',
+                                       text='This is text.')
+        assert resp.status_code == 401
+
+    def test_get_curation(self):
+        pa_hash = -15396645825529833
+        src_hash = -6540587366662950154
+        resp, _, _ = self.__time_query('get',
+                                       f'curation/list/{pa_hash}/{src_hash}',
+                                       with_auth=True)
+        assert resp.status_code == 200
+        assert isinstance(resp.json, list)
+        assert len(resp.json) > 0
+        assert all(c['pa_hash'] == pa_hash and c['source_hash'] == src_hash
+                   for c in resp.json)
+
+    def test_get_curation_no_auth(self):
+        pa_hash = -15396645825529833
+        src_hash = -6540587366662950154
+        resp, _, _ = self.__time_query('get',
+                                       f'curation/list/{pa_hash}/{src_hash}')
+        assert resp.status_code == 401
+
+    def test_get_curations_stmt_hash_only(self):
+        pa_hash = -15396645825529833
+        resp, _, _ = self.__time_query('get', f'curation/list/{pa_hash}',
+                                       with_auth=True)
+        assert resp.status_code == 200
+        assert isinstance(resp.json, list)
+        assert len(resp.json) > 0
+        assert all(c['pa_hash'] == pa_hash for c in resp.json)
+
+    def test_get_curation_stmt_hash_only_no_auth(self):
+        pa_hash = -15396645825529833
+        resp, _, _ = self.__time_query('get', f'curation/list/{pa_hash}')
+        assert resp.status_code == 401
+
+    def test_get_all_curations(self):
+        if TEST_DEPLOYMENT:
+            raise SkipTest("Cannot test particular auth with single API key.")
+        resp = self.app.get('curation/list?api_key=GET_CURATIONS')
+        assert resp.status_code == 200
+        assert isinstance(resp.json, list)
+        assert len(resp.json) > 100
+
+    def test_get_all_curations_no_auth(self):
+        if TEST_DEPLOYMENT:
+            raise SkipTest("Cannot test particular auth with single API key.")
+        resp = self.app.get('curation/list')
+        assert resp.status_code == 401
+        reason = resp.json['reason']
+        assert 'invalid credentials' in reason.lower()
+        assert 'api key' in reason.lower()
+
+    def test_get_all_curations_wrong_auth(self):
+        if TEST_DEPLOYMENT:
+            raise SkipTest("Cannot test particular auth with single API key.")
+        resp = self.app.get('curation/list?api_key=OTHER_API_KEY')
+        assert resp.status_code == 403
+        reason = resp.json['reason']
+        assert 'insufficient permissions' in reason.lower()
+        assert 'get all curations' in reason.lower()
 
     def test_interaction_query(self):
         self.__time_query('get', 'metadata/relations/from_agents',
@@ -643,7 +733,7 @@ class TestDbApi(unittest.TestCase):
                 for rel in rels:
                     drill_down(rel, 'statements')
 
-        url_base = "agents/from_query_json"
+        url_base = "agents/from_simple_json"
         query = HasAgent('MEK')
         query_str = ("limit=50&with_cur_counts=true&with_english=true"
                      "&with_hashes=true")
@@ -690,7 +780,7 @@ class TestDbApi(unittest.TestCase):
     def test_IL6_agents_with_creds(self):
         """Test the timing of a query for agents with text=IL-6, "signed in"."""
         query = HasAgent('IL-6', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=True)
@@ -698,7 +788,7 @@ class TestDbApi(unittest.TestCase):
     def test_IL6_agents_no_creds(self):
         """Test timing of a query for agents with text=IL-6, "signed out"."""
         query = HasAgent('IL-6', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=False)
@@ -718,7 +808,7 @@ class TestDbApi(unittest.TestCase):
     def test_ROS_agents_with_creds(self):
         """Test the timing of a query for agents with text=ROS, "signed in"."""
         query = HasAgent('ROS', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=True)
@@ -726,7 +816,7 @@ class TestDbApi(unittest.TestCase):
     def test_ROS_agents_no_creds(self):
         """Test timing of a query for agents with text=ROS, "signed out"."""
         query = HasAgent('ROS', 'TEXT')
-        self.__simple_time_test('post', 'agents/from_query_json',
+        self.__simple_time_test('post', 'agents/from_simple_json',
                                 'format=json-js&with_english=true',
                                 query=query.to_json(),
                                 with_auth=False)
@@ -739,7 +829,7 @@ class TestDbApi(unittest.TestCase):
         """
         db = get_db('primary')
         q = HasAgent('ACE2') & FromMeshIds(['C000657245'])
-        resp, dt, size = self.__time_query('post', 'statements/from_query_json',
+        resp, dt, size = self.__time_query('post', 'statements/from_simple_json',
                                            'limit=50&ev_limit=6',
                                            query=q.to_json(), with_auth=True)
         assert resp.status_code == 200, f"Query failed: {resp.data.decode()}"

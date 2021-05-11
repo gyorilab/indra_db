@@ -1,4 +1,5 @@
-__all__ = ['CopyManager', 'LazyCopyManager', 'PushCopyManager']
+__all__ = ['CopyManager', 'LazyCopyManager', 'PushCopyManager',
+           'ReturningCopyManager']
 
 import logging
 import tempfile

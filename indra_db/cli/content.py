@@ -12,9 +12,9 @@ from ftplib import FTP
 from functools import wraps
 from datetime import datetime, timedelta
 from os import path, remove, rename, listdir
+from typing import Tuple
 
 from indra.literature.crossref_client import get_publisher
-from indra.literature.pubmed_client import get_metadata_for_ids
 from indra.literature.elsevier_client import download_article_from_ids
 
 from indra.util import zip_string, batch_iter
@@ -211,8 +211,10 @@ class ContentManager(object):
     This abstract class provides the api required for any object that is
     used to manage content between the database and the content.
     """
-    my_source = NotImplemented
-    tr_cols = NotImplemented
+    my_source: str = NotImplemented
+    tr_cols: Tuple = NotImplemented
+    tc_cols: Tuple = NotImplemented
+    primary_col: str = NotImplemented
     err_patt = re.compile('.*?constraint "(.*?)".*?Key \((.*?)\)=\((.*?)\).*?',
                           re.DOTALL)
 
@@ -220,55 +222,52 @@ class ContentManager(object):
         self.review_fname = None
         return
 
-    def copy_into_db(self, db, tbl_name, data, cols=None):
-        """Wrapper around the db.copy feature, pickles args upon exception.
+    def upload_text_refs(self, db, ref_data):
+        logger.info("Processing text ref rows.")
+        new_cols = []
+        for id_type in self.tr_cols:
+            if id_type == 'pmid':
+                new_cols += ['pmid', 'pmid_num']
+            elif id_type == 'pmcid':
+                new_cols += ['pmcid', 'pmcid_num', 'pmcid_version']
+            elif id_type == 'doi':
+                new_cols += ['doi', 'doi_ns', 'doi_id']
+            else:
+                new_cols.append(id_type)
+        cols = tuple(new_cols)
 
-        This function also regularizes any text ref data put into the database.
-        """
-
-        # Handle the breaking of text ref IDs into smaller more searchable bits
-        if tbl_name == 'text_ref':
-            logger.info("Processing text ref rows.")
-            # Create new cols
-            if cols is not None and cols != self.tr_cols:
-                raise ValueError("Invalid `cols` passed for text_ref.")
-
-            new_cols = []
-            for id_type in self.tr_cols:
+        # Process all the rows.
+        new_data = []
+        for row in ref_data:
+            if len(row) != len(self.tr_cols):
+                raise ValueError("Row length does not match column length "
+                                 "of labels.")
+            new_row = []
+            for id_type, id_val in zip(self.tr_cols, row):
                 if id_type == 'pmid':
-                    new_cols += ['pmid', 'pmid_num']
+                    pmid, pmid_num = db.TextRef.process_pmid(id_val)
+                    new_row += [pmid, pmid_num]
                 elif id_type == 'pmcid':
-                    new_cols += ['pmcid', 'pmcid_num', 'pmcid_version']
+                    pmcid, pmcid_num, pmcid_version = \
+                        db.TextRef.process_pmcid(id_val)
+                    new_row += [pmcid, pmcid_num, pmcid_version]
                 elif id_type == 'doi':
-                    new_cols += ['doi', 'doi_ns', 'doi_id']
+                    doi, doi_ns, doi_id = db.TextRef.process_doi(id_val)
+                    new_row += [doi, doi_ns, doi_id]
                 else:
-                    new_cols.append(id_type)
-            cols = tuple(new_cols)
+                    new_row.append(id_val)
+            new_data.append(tuple(new_row))
+        ref_data = new_data
 
-            # Process all the rows.
-            new_data = []
-            for row in data:
-                if len(row) != len(self.tr_cols):
-                    raise ValueError("Row length does not match column length "
-                                     "of labels.")
-                new_row = []
-                for id_type, id_val in zip(self.tr_cols, row):
-                    if id_type == 'pmid':
-                        pmid, pmid_num = db.TextRef.process_pmid(id_val)
-                        new_row += [pmid, pmid_num]
-                    elif id_type == 'pmcid':
-                        pmcid, pmcid_num, pmcid_version = \
-                            db.TextRef.process_pmcid(id_val)
-                        new_row += [pmcid, pmcid_num, pmcid_version]
-                    elif id_type == 'doi':
-                        doi, doi_ns, doi_id = db.TextRef.process_doi(id_val)
-                        new_row += [doi, doi_ns, doi_id]
-                    else:
-                        new_row.append(id_val)
-                new_data.append(tuple(new_row))
-            data = new_data
+        ret_cols = (self.primary_col, 'id')
+        id_tuples, skipped = \
+            db.copy_report_and_return_lazy('text_ref', ref_data, cols, ret_cols)
+        id_dict = dict(id_tuples)
+        return id_dict, skipped
 
-        return db.copy_report_lazy(tbl_name, data, cols)
+    def upload_text_content(self, db, data):
+        """Insert text content into the database using COPY."""
+        return db.copy_report_lazy('text_content', data, self.tc_cols)
 
     def make_text_ref_str(self, tr):
         """Make a string from a text ref using tr_cols."""
@@ -560,6 +559,8 @@ class Pubmed(_NihManager):
     my_path = 'pubmed'
     my_source = 'pubmed'
     tr_cols = ('pmid', 'pmcid', 'doi', 'pii', 'pub_year')
+    tc_cols = ('text_ref_id', 'source', 'format', 'text_type', 'content',
+               'license')
 
     def __init__(self, *args, categories=None, tables=None,
                  max_annotations=500000, **kwargs):
@@ -634,71 +635,44 @@ class Pubmed(_NihManager):
 
         return
 
-    def load_text_refs(self, db, article_info, carefully=False):
+    def load_text_refs(self, db, tr_data, update_existing=False):
         """Sanitize, update old, and upload new text refs."""
-
-        # Remove PMID's listed as deleted.
-        deleted_pmids = self.get_deleted_pmids()
-        valid_pmids = set(article_info.keys()) - set(deleted_pmids)
-        logger.info("%d valid PMIDs" % len(valid_pmids))
 
         # Remove existing pmids if we're not being careful (this suffices for
         # filtering in the initial upload).
-        if not carefully:
-            existing_pmids = set(db.get_values(db.select_all(
-                db.TextRef,
-                db.TextRef.pmid.in_(valid_pmids)
-                ), 'pmid'))
-            logger.info(
-                "%d valid PMIDs already in text_refs." % len(existing_pmids)
-                )
-            valid_pmids -= existing_pmids
-            logger.info("%d PMIDs to add to text_refs" % len(valid_pmids))
+        if not update_existing:
+            existing_pmids = {pmid for pmid, in db.select_all(db.TextRef.pmid)}
+        else:
+            existing_pmids = set()
 
         # Convert the article_info into a list of tuples for insertion into
         # the text_ref table
-        text_ref_records = set()
-        for pmid in valid_pmids:
-            data = article_info[pmid]
-            row = []
-            for id_type in self.tr_cols[1:]:
-                val = None
-                if id_type == 'pub_year':
-                    r = data.get('publication_date')
-                    if 'year' in r:
-                        val = r['year']
-                else:
-                    r = data.get(id_type)
-                    if id_type == 'doi':
-                        r = self.fix_doi(r)
-                    if r:
-                        val = r.strip().upper()
-                row.append(val)
-            text_ref_records.add(tuple([pmid] + row))
+        tr_records = set()
+        pmids = set()
+        for tr in tr_data:
+            if tr['pmid'] in existing_pmids:
+                continue
+            pmids.add(tr['pmid'])
+            row = tuple(tr.get(col) for col in self.tr_cols)
+            tr_records.add(row)
 
         # Check the ids more carefully against what is already in the db.
-        if carefully:
-            text_ref_records, flawed_refs = \
-                self.filter_text_refs(db, text_ref_records,
+        if update_existing:
+            tr_records, flawed_refs = \
+                self.filter_text_refs(db, tr_records,
                                       primary_id_types=['pmid', 'pmcid'])
             logger.info('%d new records to add to text_refs.'
-                        % len(text_ref_records))
-            valid_pmids -= {ref[self.tr_cols.index('pmid')]
-                            for cause, ref in flawed_refs
-                            if cause in ['pmid', 'over_match']}
+                        % len(tr_records))
+            pmids -= {ref[self.tr_cols.index('pmid')]
+                      for cause, ref in flawed_refs
+                      if cause in ['pmid', 'over_match']}
             logger.info('Only %d valid for potential content upload.'
-                        % len(valid_pmids))
+                        % len(pmids))
 
         # Remove the pmids from any data entries that failed to copy.
-        vile_data = self.copy_into_db(db, 'text_ref', text_ref_records,
-                                      self.tr_cols)
-        gatherer.add('refs', len(text_ref_records) - len(vile_data))
-        if not vile_data:
-            valid_pmids -= {d[self.tr_cols.index('pmid')] for d in vile_data}
-        return valid_pmids
-
-    def load_text_content(self, db, article_info, valid_pmids,
-                          carefully=False):
+        id_map, vile_data = self.upload_text_refs(db, tr_records)
+        gatherer.add('refs', len(tr_records) - len(vile_data))
+        return id_map
 
         # Build a dict mapping PMIDs to text_ref IDs
         tr_qry = db.filter_query(db.TextRef, db.TextRef.pmid.in_(valid_pmids))

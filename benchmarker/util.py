@@ -54,32 +54,46 @@ def run_test(test_name, test_func, num_runs):
     return test_results
 
 
-def benchmark(loc, base_name=None, num_runs=1):
+def benchmark(test_selection=None, base_name=None, num_runs=1):
+    """Run a benchmark of the REST service using a given test corpus.
+
+    Parameters
+    ----------
+    test_selection : Optional[str]
+        Specify the location of the test or tests you wish to run, using the
+        standard formalism: "path/to/test.py:specific_test", where any less
+        specification will result in a search for things that start with "test_"
+        recursively, as usual.
+    base_name : Optional[str]
+        Give this benchmark a base name.
+    num_runs : Optional[int]
+        Specify how many times the tests should be run.
+    """
     # By default, just run in this directory
-    if loc is None:
-        loc = os.path.abspath('.')
+    if test_selection is None:
+        test_selection = os.path.abspath('.')
 
     # Extract a function name, if it was included.
-    if loc.count(':') == 0:
+    if test_selection.count(':') == 0:
         func_name = None
-    elif loc.count(':') == 1:
-        loc, func_name = loc.split(':')
+    elif test_selection.count(':') == 1:
+        test_selection, func_name = test_selection.split(':')
     else:
-        raise ValueError(f"Invalid loc: {loc}")
-    mod_name = os.path.basename(loc).replace('.py', '')
+        raise ValueError(f"Invalid loc: {test_selection}")
+    mod_name = os.path.basename(test_selection).replace('.py', '')
     if base_name:
         mod_name = base_name + '.' + mod_name
 
     # Check if the location exists, and whether it is a directory or file.
     # Handle the file case by recursively calling this function for each file.
     results = {}
-    if not os.path.exists(loc):
-        raise ValueError(f"No such file or directory: {loc}")
-    elif os.path.isdir(loc):
+    if not os.path.exists(test_selection):
+        raise ValueError(f"No such file or directory: {test_selection}")
+    elif os.path.isdir(test_selection):
         if func_name is not None:
             raise ValueError("To specify function, location must be a file.")
-        for file in os.listdir(loc):
-            new_path = os.path.join(loc, file)
+        for file in os.listdir(test_selection):
+            new_path = os.path.join(test_selection, file)
             if ('test' in file and os.path.isfile(new_path)
                     and new_path.endswith('.py')):
                 results.update(benchmark(new_path, base_name=mod_name,
@@ -87,19 +101,19 @@ def benchmark(loc, base_name=None, num_runs=1):
         return results
 
     # Handle the case a file is specified.
-    if not loc.endswith('.py'):
-        raise ValueError(f"Location {loc} is not a python file.")
-    print("="*len(loc))
-    print(loc)
-    print('-'*len(loc))
-    spec = spec_from_file_location(mod_name, loc)
+    if not test_selection.endswith('.py'):
+        raise ValueError(f"Location {test_selection} is not a python file.")
+    print("=" * len(test_selection))
+    print(test_selection)
+    print('-' * len(test_selection))
+    spec = spec_from_file_location(mod_name, test_selection)
     test_module = module_from_spec(spec)
     try:
         spec.loader.exec_module(test_module)
     except KeyboardInterrupt:
         raise
     except Exception as err:
-        logger.error(f"Failed to load {loc}, skipping...")
+        logger.error(f"Failed to load {test_selection}, skipping...")
         logger.exception(err)
         return results
 

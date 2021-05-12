@@ -51,6 +51,15 @@ class KnowledgebaseManager(object):
         insert_db_stmts(db, filtered_stmts, dbid)
         return
 
+    @classmethod
+    def get_last_update(cls, db):
+        """Get the last time the row was updated or created."""
+        dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == cls.short_name)
+        if dbinfo.last_updated:
+            return dbinfo.last_updated
+        else:
+            return dbinfo.create_date
+
     def _check_reference(self, db, can_create=True):
         """Ensure that this database has an entry in the database."""
         dbinfo = db.select_one(db.DBInfo, db.DBInfo.db_name == self.short_name)
@@ -501,20 +510,3 @@ class ConibManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(filtered_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
-
-
-if __name__ == '__main__':
-    import sys
-    from indra_db.util import get_db
-    mode = sys.argv[1]
-    db = get_db('primary')
-    for Manager in KnowledgebaseManager.__subclasses__():
-        kbm = Manager()
-        print(kbm.name, '...')
-        if mode == 'upload':
-            kbm.upload(db)
-        elif mode == 'update':
-            kbm.update(db)
-        else:
-            print("Invalid mode: %s" % mode)
-            sys.exit(1)

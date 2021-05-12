@@ -493,10 +493,11 @@ class ContentManager(object):
             return completed
         return take_action
 
-    def _get_latest_update(self, db):
+    @classmethod
+    def get_latest_update(cls, db):
         """Get the date of the latest update."""
         update_list = db.select_all(db.Updates,
-                                    db.Updates.source == self.my_source)
+                                    db.Updates.source == cls.my_source)
         if not len(update_list):
             logger.error("The database has not had an initial upload, or else "
                          "the updates table has not been populated.")
@@ -977,7 +978,7 @@ class PmcManager(_NihManager):
                     self.my_source,
                     formats.XML,
                     tc['text_type'],
-                    tc['content']
+                    tc['user_input']
                     )
                 )
         filtered_tc_records = [
@@ -1306,7 +1307,7 @@ class PmcOA(PmcManager):
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, 'pmc_oa')
     def update(self, db, n_procs=1):
-        min_datetime = self._get_latest_update(db)
+        min_datetime = self.get_latest_update(db)
 
         # Search down through the oa_package directory. Below the first level,
         # the files are timestamped, so we can filter down each level
@@ -1561,7 +1562,7 @@ class Elsevier(ContentManager):
         # There is the possibility that elsevier content will lag behind pubmed
         # updates, so we go back a bit before the last update to make sure we
         # didn't miss anything
-        latest_updatetime = self._get_latest_update(db)
+        latest_updatetime = self.get_latest_update(db)
         start_datetime = latest_updatetime - timedelta(days=buffer_days)
 
         # Construct a query for recently added (as defined above) text refs
@@ -1581,116 +1582,3 @@ class Elsevier(ContentManager):
         tr_query = new_trs.except_(tr_w_pmc_q)
 
         return self._get_elsevier_content(db, tr_query, False)
-
-
-def _make_parser():
-    parser = ArgumentParser(
-        description='Manage content on INDRA\'s database.'
-    )
-    parser.add_argument(
-        choices=['upload', 'update'],
-        dest='task',
-        help=('Choose whether you want to perform an initial upload or update '
-              'the existing content on the database.')
-    )
-    parser.add_argument(
-        '-c', '--continue',
-        dest='continuing',
-        action='store_true',
-        help='Continue uploading or updating, picking up where you left off.'
-    )
-    parser.add_argument(
-        '-n', '--num_procs',
-        dest='num_procs',
-        type=int,
-        default=1,
-        help=('Select the number of processors to use during this operation. '
-              'Default is 1.')
-    )
-    parser.add_argument(
-        '-d', '--debug',
-        dest='debug',
-        action='store_true',
-        help='Run with debugging level output.'
-    )
-    parser.add_argument(
-        '-t', '--test',
-        action='store_true',
-        help='Run tests using one of the designated test databases.'
-    )
-    parser.add_argument(
-        '-s', '--sources',
-        nargs='+',
-        choices=['pubmed', 'pmc_oa', 'manuscripts', 'elsevier'],
-        default=['pubmed', 'pmc_oa', 'manuscripts'],
-        help=('Specify which sources are to be uploaded. Defaults are pubmed, '
-              'pmc_oa, and manuscripts.')
-    )
-    parser.add_argument(
-        '-D', '--database',
-        default='primary',
-        help=('Choose a database from the names given in the config or '
-              'environment, for example primary is INDRA_DB_PRIMAY in the '
-              'config file and INDRADBPRIMARY in the environment. The default '
-              'is \'primary\'. Note that this is overwridden by use of the '
-              '--test flag if \'test\' is not a part of the name given.')
-    )
-    return parser
-
-
-def _main():
-    import sys
-    parser = _make_parser()
-    args = parser.parse_args()
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-        from indra_db.databases import logger as db_logger
-        db_logger.setLevel(logging.DEBUG)
-
-    if not args.continuing and args.task == 'upload':
-        print("#"*63)
-        print(
-            "# You are about to wipe the database completely clean and     #\n"
-            "# load it from scratch, which could take hours, and eliminate #\n"
-            "# any updates, and potentially interfere with other users.    #\n"
-            "#                                                             #\n"
-            "# If you wish to continue an earlier upload, add the -c       #\n"
-            "# option, and if you wish to update the database, specify     #\n"
-            "# `update` in your command. For mor details, use --help.      #"
-        )
-        print("#"*63)
-        resp = input("Are you sure you want to continue? [yes/no]: ")
-        if resp not in ('yes', 'y'):
-            print("Aborting...")
-            sys.exit()
-
-    if args.test:
-        from indra_db.tests.util import get_temp_db
-        if 'test' not in args.database:
-            db = get_temp_db()
-        else:
-            db = get_db(args.database)
-    else:
-        db = get_db(args.database)
-
-    logger.info("Performing %s." % args.task)
-    if args.task == 'upload':
-        if not args.continuing:
-            logger.info("Clearing TextContent and TextRef tables.")
-            clear_succeeded = db._clear([db.TextContent, db.TextRef,
-                                         db.SourceFile, db.Updates])
-            if not clear_succeeded:
-                sys.exit()
-        for Updater in [Pubmed, PmcOA, Manuscripts, Elsevier]:
-            if Updater.my_source in args.sources:
-                logger.info("Populating %s." % Updater.my_source)
-                Updater().populate(db, args.num_procs, args.continuing)
-    elif args.task == 'update':
-        for Updater in [Pubmed, PmcOA, Manuscripts, Elsevier]:
-            if Updater.my_source in args.sources:
-                logger.info("Updating %s." % Updater.my_source)
-                Updater().update(db, args.num_procs)
-
-
-if __name__ == '__main__':
-    _main()

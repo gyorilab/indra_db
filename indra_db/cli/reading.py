@@ -4,6 +4,8 @@ from functools import wraps
 from datetime import datetime, timedelta
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from sqlalchemy import func
+
 from indra_reading.readers import get_reader_class
 
 from indra_db.reading import read_db as rdb
@@ -80,19 +82,23 @@ class ReadingManager(object):
     def get_version(self, reader_name):
         return get_reader_class(reader_name).get_version()
 
-    def _get_latest_updatetime(self, db, reader_name):
+    @staticmethod
+    def get_latest_updates(db):
         """Get the date of the latest update."""
-        update_list = db.select_all(
-            db.ReadingUpdates,
-            db.ReadingUpdates.reader == reader_name
-            )
-        if not len(update_list):
+        res = (db.session.query(db.ReadingUpdates.reader,
+                                func.max(db.ReadingUpdates.latest_datetime))
+               .group_by(db.ReadingUpdates.reader))
+        return {reader: last_updated for reader, last_updated in res}
+
+    @classmethod
+    def _get_latest_updatetime(cls, db, reader_name):
+        latest_updates = cls.get_latest_updates(db)
+        if reader_name not in latest_updates:
             logger.warning("The database has not had an initial upload "
                            "for %s, or else the updates table has not "
                            "been populated." % reader_name)
             return None
-
-        return max([u.latest_datetime for u in update_list])
+        return latest_updates[reader_name]
 
     def read_all(self, db, reader_name):
         """Perform an initial reading all content in the database (populate).
@@ -324,119 +330,3 @@ class BulkLocalReadingManager(BulkReadingManager):
         rdb.run_reading(readers, tcids, db=db, batch_size=ids_per_job,
                         verbose=self.verbose)
         return
-
-
-def get_parser():
-    parser = ArgumentParser(
-        description='Manage content on INDRA\'s database.'
-    )
-    parent_read_parser = ArgumentParser(add_help=False)
-    parent_read_parser.add_argument(
-        choices=['read_all', 'read_new'],
-        dest='task',
-        help=('Choose whether you want to try to read everything, or only '
-              'read the content added since the last update. Note that '
-              'content from one day before the latests update will also be '
-              'checked, to avoid content update overlap errors. Note also '
-              'that no content will be re-read in either case.')
-    )
-    parent_read_parser.add_argument(
-        '-t', '--test',
-        action='store_true',
-        help='Run tests using one of the designated test databases.'
-    )
-    parent_read_parser.add_argument(
-        '-b', '--buffer',
-        type=int,
-        default=1,
-        help=('Set the number number of buffer days read prior to the most '
-              'recent update. The default is 1 day.')
-    )
-    parent_read_parser.add_argument(
-        '-u', '--only-unread',
-        action='store_true',
-        help="Only read content that has no prior readings."
-    )
-    local_read_parser = ArgumentParser(add_help=False)
-    local_read_parser.add_argument(
-        '-n', '--num_procs',
-        dest='num_procs',
-        type=int,
-        default=1,
-        help=('Select the number of processors to use during this operation. '
-              'Default is 1.')
-    )
-    parser.add_argument(
-        '--database',
-        default='primary',
-        help=('Choose a database from the names given in the config or '
-              'environment, for example primary is INDRA_DB_PRIMAY in the '
-              'config file and INDRADBPRIMARY in the environment. The default '
-              'is \'primary\'. Note that this is overwridden by use of the '
-              '--test flag if \'test\' is not a part of the name given.')
-    )
-    aws_read_parser = ArgumentParser(add_help=False)
-    aws_read_parser.add_argument(
-        '--project_name',
-        help=('For use with --use_batch. Set the name of the project for '
-              'which this reading is being done. This is used to label jobs '
-              'on aws batch for monitoring and accounting purposes.')
-    )
-    subparsers = parser.add_subparsers(title='Method')
-    subparsers.required = True
-    subparsers.dest = 'method'
-
-    local_desc = 'Run the reading for the update locally.'
-    subparsers.add_parser(
-        'local',
-        parents=[parent_read_parser, local_read_parser],
-        help=local_desc,
-        description=local_desc,
-        formatter_class=ArgumentDefaultsHelpFormatter
-    )
-    aws_desc = 'Run the reading for the update on amazon batch.'
-    subparsers.add_parser(
-        'aws',
-        parents=[parent_read_parser, aws_read_parser],
-        help=aws_desc,
-        description=aws_desc,
-        formatter_class=ArgumentDefaultsHelpFormatter
-    )
-    return parser
-
-
-def main():
-    parser = get_parser()
-    args = parser.parse_args()
-    if args.test:
-        if 'test' not in args.database:
-            from indra_db.tests.util import get_temp_db
-            db = get_temp_db()
-        else:
-            db = get_db(args.database)
-    else:
-        db = get_db(args.database)
-
-    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
-    if args.method == 'local':
-        bulk_manager = BulkLocalReadingManager(readers,
-                                               buffer_days=args.buffer,
-                                               n_procs=args.num_procs,
-                                               only_unread=args.only_unread)
-    elif args.method == 'aws':
-        bulk_manager = BulkAwsReadingManager(readers,
-                                             buffer_days=args.buffer,
-                                             project_name=args.project_name,
-                                             only_unread=args.only_unread)
-    else:
-        assert False, "This shouldn't be allowed."
-
-    if args.task == 'read_all':
-        bulk_manager.read_all(db)
-    elif args.task == 'read_new':
-        bulk_manager.read_new(db)
-    return
-
-
-if __name__ == '__main__':
-    main()

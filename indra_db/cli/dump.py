@@ -232,25 +232,30 @@ class Start(Dumper):
                 return
 
             latest_dump = max(dumps)
-            manifest = latest_dump.list_objects(s3)
-            start = None
-            end = None
-            for obj in manifest:
-                if Start.name in obj.key:
-                    start = obj
-                elif End.name in obj.key:
-                    end = obj
-
-            if end or not start:
-                self._mark_start(s3)
-                return
-
-            # Set up to continue where a previous job left off.
-            res = start.get(s3)
-            start_json = json.loads(res['Body'].read())
-            self.date_stamp = start_json['date_stamp']
-            self.manifest = manifest
+            self.load(latest_dump)
         return
+
+    def load(self, dump_path):
+        """Load manifest from the Start of the given dump path."""
+        s3 = boto3.client('s3')
+        manifest = dump_path.list_objects(s3)
+        start = None
+        end = None
+        for obj in manifest:
+            if Start.name in obj.key:
+                start = obj
+            elif End.name in obj.key:
+                end = obj
+
+        if end or not start:
+            self._mark_start(s3)
+            return
+
+        # Set up to continue where a previous job left off.
+        res = start.get(s3)
+        start_json = json.loads(res['Body'].read())
+        self.date_stamp = start_json['date_stamp']
+        self.manifest = manifest
 
 
 class End(Dumper):
@@ -466,6 +471,28 @@ dumpers = {dumper.name: dumper for dumper in get_all_descendants(Dumper)}
 
 def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
          load_only=False, dump_only=False):
+    """Run the suite of dumps in the specified order.
+
+    Parameters
+    ----------
+    principal_db : :class:`indra_db.databases.PrincipalDatabaseManager`
+        A handle to the principal database.
+    readonly_db : :class:`indra_db.databases.ReadonlyDatabaseManager`
+        A handle to the readonly database.
+    delete_existing : bool
+        If True, clear out the existing readonly build from the principal
+        database. Otherwise it will be continued. (Default is False)
+    allow_continue : bool
+        If True, each step will assume that it may already have been done, and
+        where possible the work will be picked up where it was left off.
+        (Default is True)
+    load_only : bool
+        No new dumps will be created, but an existing dump will be used to
+        populate the given readonly database. (Default is False)
+    dump_only : bool
+        Do not load a new readonly database, only produce the dump files on s3.
+        (Default is False)
+    """
     if delete_existing and 'readonly' in principal_db.get_schemas():
         principal_db.drop_schema('readonly')
 
@@ -553,60 +580,3 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         principal_db.session.close()
         principal_db.grab_session()
         principal_db.drop_schema('readonly')
-
-
-def parse_args():
-    parser = ArgumentParser(
-        description='Manage the materialized views.'
-    )
-    parser.add_argument(
-        '-D', '--database',
-        default='primary',
-        help=('Choose a database from the names given in the config or '
-              'environment, for example primary is [primary] in the '
-              'config file and INDRADBPRIMARY in the environment. The default '
-              'is \'primary\'.')
-    )
-    parser.add_argument(
-        '-R', '--readonly',
-        default='primary',
-        help=('Choose a readonly database from the names given in the config '
-              'file, or INDRARO... in the env (e.g. INDRAROPRIMARY for the '
-              '"primary" database.')
-    )
-    parser.add_argument(
-        '-a', '--allow_continue',
-        action='store_true',
-        help=("Indicate whether you want to job to continue building atop an "
-              "existing readonly schema, or if you want it to give up if the "
-              "schema already exists.")
-    )
-    parser.add_argument(
-        '-d', '--delete_existing',
-        action='store_true',
-        help=("Add this flag to delete an existing schema if it exists. "
-              "Selecting this option makes -a/--allow_continue moot.")
-    )
-    parser.add_argument(
-        '-u', '--dump_only',
-        action='store_true',
-        help=('Use this flag to only generate and dump the readonly database '
-              'image to s3.')
-    )
-    parser.add_argument(
-        '-l', '--load_only',
-        action='store_true',
-        help=('Use this flag to only load the latest s3 file onto the '
-              'readonly database.')
-    )
-
-    args = parser.parse_args()
-    return args
-
-
-if __name__ == '__main__':
-    # Collect args and run the top-level dump script
-    args = parse_args()
-    dump(get_db(args.database, protected=False),
-         get_ro(args.readonly, protected=False), args.delete_existing,
-         args.allow_continue, args.load_only, args.dump_only)

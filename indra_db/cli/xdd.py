@@ -204,14 +204,3 @@ def _get_trids_from_dois(db, dois):
 
     # Make the full mapping table.
     return {tr.doi.upper(): tr.id for tr in tr_list}
-
-
-def main():
-    db = get_db('primary')
-
-    m = XddManager()
-    m.run(db)
-
-
-if __name__ == '__main__':
-    main()

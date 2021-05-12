@@ -1,6 +1,7 @@
 import os
 import subprocess
 import webbrowser
+from time import sleep
 
 from numpy import array
 from datetime import datetime
@@ -137,6 +138,7 @@ def view():
     p = subprocess.Popen(['flask', 'run', '--port', '5280'],
                          env=basic_env, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
+    sleep(2)
     print("Opening browser...")
     webbrowser.open("http://localhost:5280")
     print("Press Ctrl-C to exit.")

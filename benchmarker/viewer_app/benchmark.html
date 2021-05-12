@@ -5,19 +5,17 @@
   <title>INDRA DB Benchmark</title>
 
   <!-- Vue dev CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+  <script src="https://unpkg.com/vue@next"></script>
 
   <!-- Vue Multi-Select -->
-  <script src="https://unpkg.com/vue-multiselect@2.1.0"></script>
-  <link rel="stylesheet" href="https://unpkg.com/vue-multiselect@2.1.0/dist/vue-multiselect.min.css">
+  <script src="https://unpkg.com/@vueform/multiselect@1.4.0/dist/multiselect.global.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/@vueform/multiselect@1.4.0/themes/default.css">
 
   <!-- CSS only -->
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-wEmeIV1mKuiNpC+IOBjI7aAzPcEZeedi5yW5f2yOq55WWLwNGmvvx4Um1vskeMj0" crossorigin="anonymous">
 
   <!-- JS, Popper.js, and jQuery -->
-  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
-  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-p34f1UUtsS3wqzfto5wAAmdvj+osOnFyQFpp4Ua3gs/ZVWx6oOypYoCJhGGScy+8" crossorigin="anonymous"></script>
 
 </head>
 <body>
@@ -31,26 +29,54 @@
       <div class="col-6">
         <multiselect v-model="selected_apis"
                      :options="apis"
-                     :multiple="true"
+                     mode="tags"
+                     :searchable="true"
+                     :createTag="true"
                      :loading="is_loading_api"
                      :hide-selected="true"
                      :clear-on-select="false"
                      :close-on-select="false"
                      @select="loadAPI"
-                     @remove="dropAPI"
+                     @deselect="dropAPI"
                      placeholder="Select API..."></multiselect>
       </div>
     </div>
-    <div v-for="(cols, api_name) in available_cols" :key="api_name">
+    <div class="card-body" v-for="(cols, api_name) in available_cols" :key="api_name">
       <api-display :name="api_name" :cols="cols"></api-display>
     </div>
   </div>
 </div>
 
 <script>
+  const { createApp } = Vue;
+  const app = createApp({
+    data: () => {
+      return {
+        available_cols: {},
+        selected_apis: [],
+        apis: {{ apis }},
+        is_loading_api: false,
+      }
+    },
+    methods: {
+      loadAPI: async function(api_name) {
+        console.log(`Adding api: ${api_name}`);
+        this.is_loading_api = true;
+        const resp = await fetch(`/list/${api_name}`);
+        const data = await resp.json();
+        this.available_cols[api_name] = data.options;
+        this.is_loading_api = false;
+      },
 
-  Vue.component('api-display', {
-    components: {Multiselect: window.VueMultiselect.default},
+      dropAPI: async function(api_name) {
+        delete this.available_cols[api_name];
+      },
+    }
+  });
+
+  app.component('Multiselect', VueformMultiselect);
+  app.component('ApiDisplay', {
+    name: 'ApiDisplay',
     props: ['name', 'cols'],
     data: function () {
       return {
@@ -67,23 +93,23 @@
           <h3>{{ name }}</h3>
           <multiselect v-model="selected_tests"
                        :options="Object.keys(cols)"
-                       :multiple="true"
+                       mode="tags"
                        :loading="is_loading"
                        :hide-selected="true"
                        :clear-on-select="false"
                        :close-on-select="false"
                        placeholder="Select stack..."
                        @select="loadTest"
-                       @remove="dropTest"></multiselect>
+                       @deselect="dropTest"></multiselect>
         </div>
       </div>
       <div class="row">
         <div class="col-3">
           <h4>Tests</h4>
         </div>
-        <div class="col-1" v-for="test_label in Object.keys(tests)" :key="test_label">
-          <h5>{{ cols[test_label].stack }}</h5>
-          {{ cols[test_label].test.split('.')[0] }}
+        <div class="col-1" v-for="corpus_label in selected_tests" :key="corpus_label">
+          <h5>{{ cols[corpus_label].stack }}</h5>
+          {{ cols[corpus_label].test.split('.')[0] }}
         </div>
       </div>
       <div v-for="test_name in test_names" class="row" :key="test_name">
@@ -91,41 +117,60 @@
           <b>{{ minTestNameMap[test_name] }}</b>
         </div>
         <div class="col-1"
-             v-for="test_label in Object.keys(tests)"
-             :key="test_label"
-             :style="getColor(tests[test_label][test_name])"
-             v-html="genNumber(tests[test_label][test_name])">
+             v-for="corpus_label in selected_tests"
+             :key="corpus_label"
+             :style="getColor(corpus_label, test_name)"
+             v-html="genNumber(corpus_label, test_name)">
         </div>
       </div>
       </div>
     `,
     methods: {
 
-      loadTest: async function(test_label) {
-        console.log(`Loading test for ${this.name}: ${test_label}`);
+      // loadTest(corpus_label)
+      //   Load the results from a test (stack, api, and date) from the API.
+      loadTest: async function(corpus_label) {
+        // Record the test label.
+        console.log(`Loading test for ${this.name}: ${corpus_label}`);
+
+        // Indicate we are loading.
         this.is_loading = true;
-        let ref = this.cols[test_label];
+
+        // Get the test data using the ref info.
+        let ref = this.cols[corpus_label];
         const resp = await fetch(`/fetch/${this.name}/${ref.stack}/${ref.test}`);
         const data = await resp.json();
         console.log('Results:', data);
-        this.tests[test_label] = data.tests;
+
+        // Add the tests to the corpus.
+        this.tests[corpus_label] = data.tests;
+
+        // Add any new test names.
         for (let test_name in data.tests) {
           if (this.test_names.includes(test_name))
             continue
           this.test_names.push(test_name);
         }
+
+        // Indicate we are done loading.
         this.is_loading = false;
       },
 
-      dropTest: function(test_label) {
-        console.log(`Removing test for ${this.name}: ${test_label}`);
-        Vue.delete(this.tests, test_label);
-        Vue.delete(this.selected_tests, test_label)
+      dropTest: function(corpus_label) {
+        delete this.tests[corpus_label];
       },
 
-      getColor: function(test_res) {
+      getColor: function(corpus_label, test_name) {
         let text_color = 'black';
-        let color = this.genColor(test_res.passed, test_res.error_type);
+        let color = '#999999ff';
+        if (corpus_label in this.tests) {
+          let corpus = this.tests[corpus_label]
+          if (test_name in corpus) {
+            let test = corpus[test_name]
+            color = this.genColor(test.passed, test.error_type);
+          }
+        }
+
         return `background-color: ${color}; color: ${text_color};`
       },
 
@@ -165,7 +210,13 @@
         return `#${red}${green}00${alpha}`;
       },
 
-      genNumber: function(test_run) {
+      genNumber: function(corpus_label, test_name) {
+        if (!(corpus_label in this.tests))
+          return "~"
+        let corpus = this.tests[corpus_label]
+        if (!(test_name in corpus))
+          return "~"
+        let test_run = corpus[test_name]
         let x = Math.round( (test_run.duration + Number.EPSILON) * 10 ) / 10;
         if (test_run.deviation !== undefined) {
           let S = test_run.deviation / Math.sqrt(test_run.error_type.length);
@@ -198,30 +249,7 @@
 
   })
 
-  app = new Vue({
-    el: '#app',
-    components: {Multiselect: window.VueMultiselect.default},
-    data: {
-      available_cols: {},
-      selected_apis: [],
-      apis: {{ apis }},
-      is_loading_api: false,
-    },
-    methods: {
-      loadAPI: async function(api_name) {
-        console.log(`Adding api: ${api_name}`);
-        this.is_loading_api = true;
-        const resp = await fetch(`/list/${api_name}`);
-        const data = await resp.json();
-        this.available_cols[api_name] = data.options;
-        this.is_loading_api = false;
-      },
-
-      dropAPI: async function(api_name) {
-        Vue.delete(this.available_cols, api_name);
-      },
-    }
-  });
+  app.mount('#app');
 </script>
 
 </body>

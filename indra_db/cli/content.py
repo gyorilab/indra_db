@@ -867,11 +867,11 @@ class PmcManager(_NihManager):
     """Abstract class for uploaders of PMC content: PmcOA and Manuscripts."""
     my_source = NotImplemented
     tr_cols = ('pmid', 'pmcid', 'doi', 'manuscript_id', 'pub_year',)
+    tc_cols = ('text_ref_id', 'source', 'format', 'text_type',
+               'content', 'license')
 
     def __init__(self, *args, **kwargs):
         super(PmcManager, self).__init__(*args, **kwargs)
-        self.tc_cols = ('text_ref_id', 'source', 'format', 'text_type',
-                        'content',)
 
     def update(self, db):
         raise NotImplementedError

@@ -698,23 +698,6 @@ class Pubmed(_NihManager):
         gatherer.add('content', len(text_content_records))
         return
 
-    def upload_article(self, db, article_info, carefully=False):
-        """Process the content of an xml dataset and load into the database."""
-        logger.info("%d PMIDs in XML dataset" % len(article_info))
-
-        self.add_annotations(db, article_info)
-
-        # Process and load the text refs, updating where appropriate.
-        if 'text_ref' in self.tables:
-            valid_pmids = self.load_text_refs(db, article_info, carefully)
-        else:
-            valid_pmids = set(article_info.keys()) & self.db_pmids
-            logger.info("%d pmids are valid." % len(valid_pmids))
-
-        if 'text_content' in self.tables:
-            self.load_text_content(db, article_info, valid_pmids, carefully)
-        return True
-
     def iter_contents(self, archives=None):
         """Iterate over the contents."""
         from indra.literature.pubmed_client import get_metadata_from_xml_tree
@@ -764,79 +747,59 @@ class Pubmed(_NihManager):
                               'content': zip_string(content)}
                         yield (xml_file, idx, num_records), tr, tc
 
-    def load_files(self, db, files, n_procs=1, continuing=False,
-                   carefully=False, log_update=True):
+    def load_files(self, db, files, continuing=False, carefully=False,
+                   log_update=True):
         """Load the files in subdirectory indicated by ``dirname``."""
         if 'text_ref' not in self.tables:
             logger.info("Loading pmids from the database...")
             self.db_pmids = {pmid for pmid, in db.select_all(db.TextRef.pmid)}
 
-        xml_files = set(self.get_file_list(dirname))
+        # If we are picking up where we left off, look for prior files.
         if continuing or log_update:
             sf_list = db.select_all(
                 db.SourceFile,
                 db.SourceFile.source == self.my_source
                 )
-            existing_files = {sf.name for sf in sf_list if dirname in sf.name}
-
-            if continuing and xml_files == existing_files:
-                logger.info("All files have been loaded. Nothing to do.")
-                return False
+            existing_files = {sf.name for sf in sf_list}
+            logger.info(f"Found {len(existing_files)} existing files.")
         else:
             existing_files = set()
 
-        logger.info('Beginning upload with %d processes...' % n_procs)
-        if n_procs > 1:
-            # Download the XML files in parallel
-            q = mp.Queue()
-            proc_list = []
-            for xml_file in sorted(xml_files):
-                if continuing and xml_file in existing_files:
-                    logger.info("Skipping %s. Already uploaded." % xml_file)
-                    continue
-                p = mp.Process(
-                    target=self.get_article_info,
-                    args=(xml_file, q)
-                    )
-                proc_list.append(p)
-            n_tot = len(proc_list)
-
-            for _ in range(n_procs):
-                if len(proc_list):
-                    p = proc_list.pop(0)
-                    p.start()
-
-            def upload_and_record_next(start_new):
-                # Wait until at least one article is done.
-                xml_file, article_info = q.get()
-                if start_new:
-                    proc_list.pop(0).start()
-                logger.info("Beginning to upload %s." % xml_file)
-                self.upload_article(db, article_info, carefully)
-                logger.info("Completed %s." % xml_file)
-                if log_update and xml_file not in existing_files:
-                    db.insert('source_file', source=self.my_source,
-                              name=xml_file)
-
-            while len(proc_list):
-                upload_and_record_next(True)
-                n_tot -= 1
-
-            while n_tot != 0:
-                upload_and_record_next(False)
-                n_tot -= 1
+        # Remove prior files, and quit if there is nothing left to do.
+        files = set(files) - existing_files
+        if not files:
+            logger.info("No files to process, nothing to do.")
+            return False
         else:
-            for xml_file in sorted(xml_files):
-                if continuing and xml_file in existing_files:
-                    logger.info("Skipping %s. Already uploaded." % xml_file)
-                    continue
-                article_info = self.get_article_info(xml_file)
-                logger.info("Beginning to upload %s." % xml_file)
-                self.upload_article(db, article_info, carefully)
-                logger.info("Completed %s." % xml_file)
-                if log_update and xml_file not in existing_files:
-                    db.insert('source_file', source=self.my_source,
-                              name=xml_file)
+            logger.info(f"{len(files)} new files to process.")
+
+        batch_size = 10000
+        contents = self.iter_contents(files)
+        batched_contents = batch_iter(contents, batch_size, lambda g: zip(*g))
+        for i, (label_batch, tr_batch, tc_batch) in enumerate(batched_contents):
+
+            # Figure out where we are in the list of archives.
+            archive_stats = summarize_content_labels(label_batch)
+
+            # Log where we are.
+            logger.info(f"Beginning batch {i}...")
+            for file_name, info in archive_stats.items():
+                logger.info(f"  - {info['min']}-{info['max']}/{info['tot']} "
+                            f"of {file_name}")
+
+            # Update the database records.
+            self.load_annotations(db, tr_batch)
+            id_map = self.load_text_refs(db, tr_batch,
+                                         update_existing=carefully)
+            self.load_text_content(db, tc_batch, id_map)
+
+            # Check if we finished an xml file.
+            for file_name, info in archive_stats.items():
+                if info['max'] == info['tot']:
+                    if log_update and file_name not in existing_files:
+                        db.insert('source_file', source=self.my_source,
+                                  name=file_name)
+        self.dump_annotations(db)
 
         return True
 
@@ -873,43 +836,31 @@ class Pubmed(_NihManager):
                       'qual_num'))
         return True
 
-    def load_files_and_annotations(self, db, *args, **kwargs):
-        """Thin wrapper around load_files that also loads annotations."""
-        try:
-            ret = self.load_files(db, *args, **kwargs)
-        finally:
-            self.dump_annotations(db)
-        return ret
-
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, 'pubmed')
-    def populate(self, db, n_procs=1, continuing=False):
+    def populate(self, db, continuing=False):
         """Perform the initial input of the pubmed content into the database.
 
         Parameters
         ----------
         db : indra.db.DatabaseManager instance
             The database to which the data will be uploaded.
-        n_procs : int
-            The number of processes to use when parsing xmls.
         continuing : bool
             If true, assume that we are picking up after an error, or otherwise
             continuing from an earlier process. This means we will skip over
             source files contained in the database. If false, all files will be
             read and parsed.
         """
-        return self.load_files_and_annotations(db, 'baseline', n_procs,
-                                               continuing, False)
+        files = self.get_file_list('baseline')
+        return self.load_files(db, files, continuing, False)
 
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, 'pubmed')
-    def update(self, db, n_procs=1):
+    def update(self, db):
         """Update the contents of the database with the latest articles."""
-        did_base = self.load_files_and_annotations(db, 'baseline', n_procs,
-                                                   True, True)
-        did_update = self.load_files_and_annotations(db, 'updatefiles',
-                                                     n_procs, True, True)
-        return did_base or did_update
+        files = self.get_file_list('baseline') \
+            + self.get_file_list('updatefiles')
+        return self.load_files(db, files, True, True)
 
 
 class PmcManager(_NihManager):

@@ -638,10 +638,10 @@ class Pubmed(_NihManager):
         logger.info("Fixing doubled doi: %s" % doi)
         return doi[:L//2]
 
-    def add_annotations(self, db, article_info):
+    def load_annotations(self, db, tr_data):
         """Load annotations into the database."""
-        for pmid, info_dict in article_info.items():
-            self.annotations[pmid] = info_dict['mesh_annotations']
+        for tr_dict in tr_data:
+            self.annotations[tr_dict['pmid']] = tr_dict['annotations']
 
         # Add mesh annotations to the db in batches.
         if len(self.annotations) > self.max_annotations:

@@ -731,10 +731,15 @@ class DatabaseManager(object):
         process will not catch foreign key constraints, which may not even
         apply.
         """
-        if constraint:
-            return constraint
-
+        # Get the table object.
         tbl = self.tables[tbl_name]
+
+        # If a constraint was given, just return it, ensuring it is the object
+        # and not just the name.
+        if constraint:
+            if isinstance(constraint, str):
+                constraint = tbl.get_constraint(constraint)
+            return constraint
 
         constraints = [c.name for c in tbl.iter_constraints(cols)]
 
@@ -767,6 +772,8 @@ class DatabaseManager(object):
             constraint_cols = [tuple(c.columns.keys())
                                for c in tbl.iter_constraints(cols)]
         else:
+            if isinstance(constraint, str):
+                constraint = tbl.get_constraint(constraint)
             constraint_cols = [constraint.columns.keys()]
         return constraint_cols
 
@@ -779,7 +786,6 @@ class DatabaseManager(object):
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         # Guess parameters.
-        constraint = self._infer_copy_constraint(constraint, tbl_name, cols)
         order_by = self._infer_copy_order_by(order_by, tbl_name)
 
         # Do the copy.
@@ -794,9 +800,9 @@ class DatabaseManager(object):
 
         return ret
 
-    def copy_report_and_return_lazy(self, tbl_name, data, inp_cols=None,
-                                    ret_cols=None, commit=True, constraint=None,
-                                    skipped_cols=None, order_by=None):
+    def copy_detailed_report_lazy(self, tbl_name, data, inp_cols=None,
+                                  ret_cols=None, commit=True, constraint=None,
+                                  skipped_cols=None, order_by=None):
         """Copy lazily, returning data from some of the columns such as IDs."""
         # General overhead.
         if not self._precheck_copy(tbl_name, data,
@@ -805,15 +811,17 @@ class DatabaseManager(object):
         inp_cols, data_bts = self._prep_copy(tbl_name, data, inp_cols)
 
         # Handle guessed-parameters
-        constraint = self._infer_copy_constraint(constraint, tbl_name, inp_cols)
         order_by = self._infer_copy_order_by(order_by, tbl_name)
+        constraint_cols = self._get_constraint_cols(constraint, tbl_name,
+                                                    inp_cols)
         if ret_cols is None:
             ret_cols = (self.get_primary_key(tbl_name).name,)
 
         # Do the copy.
         mngr = ReturningCopyManager(self._conn, tbl_name, inp_cols, ret_cols,
                                     constraint=constraint)
-        ret = mngr.report_copy(data_bts, order_by, skipped_cols)
+        ret = mngr.detailed_report_copy(data_bts, constraint_cols, skipped_cols,
+                                        order_by)
 
         # Commit
         if commit:

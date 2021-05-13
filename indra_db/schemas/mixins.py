@@ -51,6 +51,13 @@ class IndraDBTable(metaclass=IndraDBTableMetaClass):
                     yield tbl_arg
 
     @classmethod
+    def get_constraint(cls, name):
+        for constraint in cls.iter_constraints():
+            if constraint.name == name:
+                return constraint
+        return None
+
+    @classmethod
     def create_index(cls, db, index, commit=True):
         full_name = cls.full_name(force_schema=True)
         sql = (f"CREATE INDEX {index.name} ON {full_name} "

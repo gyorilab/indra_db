@@ -735,7 +735,8 @@ class Pubmed(_NihManager):
             valid_article_pmids = set(article_info.keys()) - invalid_pmids
 
             # Yield results for each PMID.
-            for pmid in valid_article_pmids:
+            num_records = len(valid_article_pmids)
+            for idx, pmid in enumerate(valid_article_pmids):
                 data = article_info[pmid]
 
                 # Extract the ref data.
@@ -761,7 +762,7 @@ class Pubmed(_NihManager):
                     if content and content.strip():
                         tc = {'pmid': pmid, 'text_type': text_type,
                               'content': zip_string(content)}
-                        yield (xml_file, pmid, text_type), tr, tc
+                        yield (xml_file, idx, num_records), tr, tc
 
     def load_files(self, db, files, n_procs=1, continuing=False,
                    carefully=False, log_update=True):

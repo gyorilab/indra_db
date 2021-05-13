@@ -260,10 +260,10 @@ class ContentManager(object):
         ref_data = new_data
 
         ret_cols = (self.primary_col, 'id')
-        id_tuples, skipped = \
-            db.copy_report_and_return_lazy('text_ref', ref_data, cols, ret_cols)
-        id_dict = dict(id_tuples)
-        return id_dict, skipped
+        existing_tuples, new_tuples, skipped_rows = \
+            db.copy_detailed_report_lazy('text_ref', ref_data, cols, ret_cols)
+        id_dict = dict(new_tuples + existing_tuples)
+        return id_dict, skipped_rows
 
     def upload_text_content(self, db, data):
         """Insert text content into the database using COPY."""

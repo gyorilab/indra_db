@@ -121,6 +121,27 @@ class ReturningCopyManager(LazyCopyManager):
         sql += f"\nRETURNING \"{self._stringify_cols(self.return_cols)}\";\n"
         return sql
 
+    def _get_existing(self, compare_cols):
+        cursor = self.conn.cursor()
+
+        ret_col_str = '", "'.join(f't"."{col}' for col in self.return_cols)
+        comparisons = []
+        for col_pair in compare_cols:
+            tmp_inp_cols = '", "'.join(f'tmp_t"."{col}' for col in col_pair)
+            t_inp_cols = '", "'.join(f't"."{col}' for col in col_pair)
+            comparisons.append(f'("{tmp_inp_cols}") = ("{t_inp_cols}")')
+        where_clause = ' OR '.join(comparisons)
+        sql = (
+            f'SELECT "{ret_col_str}" '
+            f'FROM "tmp_{self.table}" AS tmp_t,\n'
+            f'     "{self.table}" AS t\n'
+            f'WHERE {where_clause}\n'
+        )
+        logger.debug(sql)
+        cursor.execute(sql)
+        res = cursor.fetchall()
+        return res
+
     def _insert_with_return(self):
         cursor = self.conn.cursor()
         sql = self._get_insert_sql()

@@ -148,19 +148,35 @@ def content_run(task, sources, continuing, debug):
 
 
 @main.command()
-def content_list():
+@click.option('-l', '--long', is_flag=True,
+              help="Include a list of the most recently added content for all "
+                   "source types.")
+def content_list(long):
     """List the current knowledge sources and their status."""
     # Import what is needed.
     import tabulate
+    from sqlalchemy import func
     from .content import Pubmed, PmcOA, Manuscripts
+
     content_managers = [Pubmed, PmcOA, Manuscripts]
     db = get_db('primary')
 
     # Generate the rows.
-    rows = [(cm.my_source, format_date(cm.get_latest_update(db)))
-            for cm in content_managers]
-    print(tabulate.tabulate(rows, ('Source', 'Last Updated'),
-                            tablefmt='simple'))
+    source_updates = {cm.my_source: format_date(cm.get_latest_update(db))
+                      for cm in content_managers}
+    if long:
+        print("This may take a while...", end='', flush=True)
+        q = (db.session.query(db.TextContent.source,
+                              func.max(db.TextContent.insert_date))
+                       .group_by(db.TextContent.source))
+        rows = [(src, source_updates.get(src, '-'), format_date(last_insert))
+                for src, last_insert in q.all()]
+        headers = ('Source', 'Last Updated', 'Latest Insert')
+        print("\r", end='')
+    else:
+        rows = [(k, v) for k, v in source_updates.items()]
+        headers = ('Source', 'Last Updated')
+    print(tabulate.tabulate(rows, headers, tablefmt='simple'))
 
 
 @main.command()

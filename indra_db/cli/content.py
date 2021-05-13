@@ -677,58 +677,24 @@ class Pubmed(_NihManager):
         gatherer.add('refs', len(tr_records) - len(skipped_rows))
         return id_map
 
-        # Build a dict mapping PMIDs to text_ref IDs
-        tr_qry = db.filter_query(db.TextRef, db.TextRef.pmid.in_(valid_pmids))
-        tref_list = tr_qry.all()
-        if not carefully:
-            # This doesn't check if there are any existing refs.
-            logger.info('There are %d content entries that will be uploaded.'
-                        % len(tref_list))
-            cat_valid_pmids = {cat: valid_pmids.copy()
-                               for cat in self.categories}
-        else:
-            cat_valid_pmids = {}
-            for cat in self.categories:
-                # This does...
-                tr_to_avoid_qry = tr_qry.filter(
-                    db.TextRef.id == db.TextContent.text_ref_id,
-                    db.TextContent.source == self.my_source,
-                    db.TextContent.text_type == cat
-                    )
-                cat_valid_pmids[cat] = \
-                    valid_pmids - {tr.pmid for tr in tr_to_avoid_qry.all()}
-                logger.info("Only %d entries without pre-existing content for "
-                            "%s." % (len(cat_valid_pmids[cat]), cat))
-        pmid_tr_dict = {pmid: trid for (pmid, trid) in
-                        db.get_values(tref_list, ['pmid', 'id'])}
-
+    def load_text_content(self, db, tc_data, pmid_map):
         # Add the text_ref IDs to the content to be inserted
-        text_content_records = []
-        for cat in self.categories:
-            for pmid in cat_valid_pmids[cat]:
-                if pmid not in pmid_tr_dict.keys():
-                    logger.warning("Found content marked to be uploaded which "
-                                   "does not have a text ref. Skipping pmid "
-                                   "%s..." % pmid)
-                    continue
-                tr_id = pmid_tr_dict[pmid]
+        text_content_records = set()
+        for tc in tc_data:
+            pmid = tc['pmid']
+            if pmid not in pmid_map.keys():
+                logger.warning("Found content marked to be uploaded which "
+                               "does not have a text ref. Skipping pmid "
+                               "%s..." % pmid)
+                continue
+            trid = pmid_map[pmid]
+            text_content_records.add((trid, self.my_source, formats.TEXT,
+                                      tc['text_type'], tc['content'], 'pubmed'))
 
-                content = article_info[pmid].get(cat)
-                if content and content.strip():
-                    content_gz = zip_string(content)
-                    text_content_records.append((tr_id, self.my_source,
-                                                 formats.TEXT, cat,
-                                                 content_gz, 'pubmed'))
         logger.info("Found %d new text content entries."
                     % len(text_content_records))
 
-        self.copy_into_db(
-            db,
-            'text_content',
-            text_content_records,
-            cols=('text_ref_id', 'source', 'format', 'text_type',
-                  'content', 'license')
-            )
+        self.upload_text_content(db, text_content_records)
         gatherer.add('content', len(text_content_records))
         return
 

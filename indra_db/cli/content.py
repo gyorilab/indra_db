@@ -952,20 +952,13 @@ class PmcManager(_NihManager):
                 logger.warning("Found pmcid (%s) among text content data, but "
                                "not in the database. Skipping." % tc['pmcid'])
                 continue
-            tc_records.append(
-                (
-                    pmcid_trid_dict[tc['pmcid']],
-                    self.my_source,
-                    formats.XML,
-                    tc['text_type'],
-                    tc['user_input']
-                    )
-                )
-        filtered_tc_records = [
-            rec for rec in tc_records if rec[:-1] not in existing_tc_records
-            ]
+            tc_records.append((pmcid_trid_dict[tc['pmcid']], self.my_source,
+                               formats.XML, tc['text_type'], tc['content'],
+                               tc['license']))
+        filtered_tc_records = {rec for rec in tc_records
+                               if rec[:-2] not in existing_tc_records}
         logger.info("Finished filtering the text content.")
-        return list(set(filtered_tc_records))
+        return filtered_tc_records
 
     def upload_batch(self, db, tr_data, tc_data):
         """Add a batch of text refs and text content to the database."""

@@ -652,22 +652,10 @@ class Pubmed(_NihManager):
 
     def load_text_refs(self, db, tr_data, update_existing=False):
         """Sanitize, update old, and upload new text refs."""
-
-        # Remove existing pmids if we're not being careful (this suffices for
-        # filtering in the initial upload).
-        if not update_existing:
-            existing_pmids = {pmid for pmid, in db.select_all(db.TextRef.pmid)}
-        else:
-            existing_pmids = set()
-
         # Convert the article_info into a list of tuples for insertion into
         # the text_ref table
         tr_records = set()
-        pmids = set()
         for tr in tr_data:
-            if tr['pmid'] in existing_pmids:
-                continue
-            pmids.add(tr['pmid'])
             row = tuple(tr.get(col) for col in self.tr_cols)
             tr_records.add(row)
 

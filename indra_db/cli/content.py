@@ -550,6 +550,19 @@ class _NihManager(ContentManager):
         return
 
 
+def summarize_content_labels(label_list):
+    archive_stats = {}
+    for archive_name, file_num, num_files in label_list:
+        if archive_name not in archive_stats:
+            archive_stats[archive_name] = {'min': num_files, 'max': 0,
+                                           'tot': num_files}
+        if file_num < archive_stats[archive_name]['min']:
+            archive_stats[archive_name]['min'] = file_num
+        elif file_num > archive_stats[archive_name]['max']:
+            archive_stats[archive_name]['max'] = file_num
+    return archive_stats
+
+
 class Pubmed(_NihManager):
     """Manager for the pubmed/medline content.
 
@@ -1241,15 +1254,7 @@ class PmcManager(_NihManager):
         for i, (lbls, trs, tcs) in enumerate(batched_contents):
 
             # Figure out where we are in the list of archives.
-            archive_stats = {}
-            for archive_name, file_num, num_files in lbls:
-                if archive_name not in archive_stats:
-                    archive_stats[archive_name] = {'min': num_files, 'max': 0,
-                                                   'tot': num_files}
-                if file_num < archive_stats[archive_name]['min']:
-                    archive_stats[archive_name]['min'] = file_num
-                elif file_num > archive_stats[archive_name]['max']:
-                    archive_stats[archive_name]['max'] = file_num
+            archive_stats = summarize_content_labels(lbls)
 
             # Log where we are.
             logger.info(f"Beginning batch {i}...")

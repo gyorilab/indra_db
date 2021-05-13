@@ -1073,14 +1073,9 @@ class PmcManager(_NihManager):
         else:
             mod_tc_data = tc_data
 
-        # Upload the text content data.
+        # Upload the text ref data.
         logger.info('Adding %d new text refs...' % len(filtered_tr_records))
-        self.copy_into_db(
-            db,
-            'text_ref',
-            filtered_tr_records,
-            self.tr_cols
-            )
+        self.upload_text_refs(db, filtered_tr_records)
         gatherer.add('refs', len(filtered_tr_records))
 
         # Process the text content data
@@ -1089,12 +1084,7 @@ class PmcManager(_NihManager):
         # Upload the text content data.
         logger.info('Adding %d more text content entries...' %
                     len(filtered_tc_records))
-        self.copy_into_db(
-            db,
-            'text_content',
-            filtered_tc_records,
-            self.tc_cols
-            )
+        self.upload_text_content(db, filtered_tc_records)
         gatherer.add('content', len(filtered_tc_records))
         return
 

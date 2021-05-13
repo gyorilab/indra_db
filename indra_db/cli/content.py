@@ -1047,9 +1047,14 @@ class PmcManager(_NihManager):
         tc_datum = {
             'pmcid': id_data['pmcid'],
             'text_type': texttypes.FULLTEXT,
+            'license': self.get_license(id_data['pmcid']),
             'content': zip_string(xml_str)
             }
         return tr_datum, tc_datum
+
+    def get_license(self, pmcid):
+        """Get the license for this pmcid."""
+        raise NotImplementedError()
 
     def download_archive(self, archive, continuing=False):
         """Download the archive."""
@@ -1238,6 +1243,14 @@ class PmcOA(PmcManager):
     my_path = 'pub/pmc'
     my_source = 'pmc_oa'
 
+    def __init__(self, *args, **kwargs):
+        super(PmcOA, self).__init__(*args, **kwargs)
+        self.licenses = {d['Accession ID']: d['License']
+                         for d in self.get_file_data()}
+
+    def get_license(self, pmcid):
+        return self.licenses[pmcid]
+
     def is_archive(self, k):
         return k.endswith('.xml.tar.gz')
 
@@ -1292,6 +1305,9 @@ class Manuscripts(PmcManager):
     """
     my_path = 'pub/pmc/manuscript'
     my_source = 'manuscripts'
+
+    def get_license(self, pmcid):
+        return 'manuscripts'
 
     def get_file_data(self):
         return self.ftp.get_csv_as_dict("filelist.csv")

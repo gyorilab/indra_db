@@ -461,9 +461,11 @@ class ContentManager(object):
 
         # Apply ID updates to TextRefs with unique matches in tr_data_set
         logger.info("Applying %d updates." % len(update_dict))
+        updated_id_map = {}
         for tr, id_updates, record in update_dict.values():
             if record not in multi_match_records:
                 tr.update(**id_updates)
+                updated_id_map[tr.pmid] = tr.id
             else:
                 logger.warning("Skipping update of text ref %d with %s due "
                                "to multiple matches to record %s."
@@ -479,7 +481,7 @@ class ContentManager(object):
 
         logger.debug("Filtering complete! %d records remaining."
                      % len(filtered_tr_records))
-        return filtered_tr_records, flawed_tr_data
+        return filtered_tr_records, flawed_tr_data, updated_id_map
 
     @classmethod
     def _record_for_review(cls, func):
@@ -658,20 +660,20 @@ class Pubmed(_NihManager):
 
         # Check the ids more carefully against what is already in the db.
         if update_existing:
-            tr_records, flawed_refs = \
+            tr_records, flawed_refs, id_map = \
                 self.filter_text_refs(db, tr_records,
                                       primary_id_types=['pmid', 'pmcid'])
             logger.info('%d new records to add to text_refs.'
                         % len(tr_records))
-            pmids -= {ref[self.tr_cols.index('pmid')]
-                      for cause, ref in flawed_refs
-                      if cause in ['pmid', 'over_match']}
-            logger.info('Only %d valid for potential content upload.'
-                        % len(pmids))
+        else:
+            id_map = {}
 
         # Remove the pmids from any data entries that failed to copy.
-        id_map, vile_data = self.upload_text_refs(db, tr_records)
-        gatherer.add('refs', len(tr_records) - len(vile_data))
+        upload_id_map, skipped_rows = self.upload_text_refs(db, tr_records)
+        logger.info(f"{len(skipped_rows)} rows skipped due to constraint "
+                    f"violation.")
+        id_map.update(upload_id_map)
+        gatherer.add('refs', len(tr_records) - len(skipped_rows))
         return id_map
 
         # Build a dict mapping PMIDs to text_ref IDs
@@ -1056,7 +1058,7 @@ class PmcManager(_NihManager):
         tr_data_set = {tuple([entry[id_type] for id_type in self.tr_cols])
                        for entry in tr_data}
 
-        filtered_tr_records, flawed_tr_records = \
+        filtered_tr_records, flawed_tr_records, updated_id_map = \
             self.filter_text_refs(db, tr_data_set,
                                   primary_id_types=['pmid', 'pmcid',
                                                     'manuscript_id'])

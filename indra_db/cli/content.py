@@ -1481,6 +1481,8 @@ class Elsevier(ContentManager):
 
     def __select_elsevier_refs(self, tr_set, max_retries=2):
         """Try to check if this content is available on Elsevier."""
+        from indra.literature.pubmed_client import get_metadata_for_ids
+
         elsevier_tr_set = set()
         for tr in tr_set.copy():
             if tr.doi is not None:

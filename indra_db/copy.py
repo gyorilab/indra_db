@@ -103,12 +103,13 @@ class ReturningCopyManager(LazyCopyManager):
         self.return_cols = return_cols
         return
 
-    def report_copy(self, data, order_by=None, return_cols=None,
-                    fobject_factory=tempfile.TemporaryFile):
+    def detailed_report_copy(self, data, compare_cols, return_cols, order_by,
+                             fobject_factory=tempfile.TemporaryFile):
         self.copy(data, fobject_factory)
+        ex_cols = self._get_existing(compare_cols)
         ret_cols = self._insert_with_return()
         skipped_rows = self._get_skipped(len(data), order_by, return_cols)
-        return ret_cols, skipped_rows
+        return ex_cols, ret_cols, skipped_rows
 
     def _get_sql(self):
         return self._get_copy_sql()

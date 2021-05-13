@@ -1,7 +1,8 @@
 import logging
 from termcolor import colored
 from psycopg2.errors import DuplicateTable
-from sqlalchemy import inspect, Column, BigInteger, tuple_, and_
+from sqlalchemy import inspect, Column, BigInteger, tuple_, and_, \
+    UniqueConstraint
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
@@ -41,6 +42,13 @@ class IndraDBTable(metaclass=IndraDBTableMetaClass):
     _skip_disp = []
     _always_disp = ['id']
     _default_insert_order_by = 'id'
+
+    @classmethod
+    def iter_constraints(cls, cols=None):
+        for tbl_arg in cls.__table_args__:
+            if isinstance(tbl_arg, UniqueConstraint):
+                if cols is None or set(tbl_arg.columns.keys()) < set(cols):
+                    yield tbl_arg
 
     @classmethod
     def create_index(cls, db, index, commit=True):

@@ -736,9 +736,7 @@ class DatabaseManager(object):
 
         tbl = self.tables[tbl_name]
 
-        constraints = [c.name for c in tbl.__table_args__
-                       if isinstance(c, UniqueConstraint)
-                       and set(c.columns.keys()) < set(cols)]
+        constraints = [c.name for c in tbl.iter_constraints(cols)]
 
         # Include the primary key in the list, if applicable.
         if inspect(tbl).primary_key[0].name in cols:
@@ -761,6 +759,16 @@ class DatabaseManager(object):
                              "cannot guess a foreign key "
                              "constraint.")
         return constraint
+
+    def _get_constraint_cols(self, constraint, tbl_name, cols):
+        """Get the column pairs in cols involved in unique constraints."""
+        tbl = self.tables[tbl_name]
+        if constraint is None:
+            constraint_cols = [tuple(c.columns.keys())
+                               for c in tbl.iter_constraints(cols)]
+        else:
+            constraint_cols = [constraint.columns.keys()]
+        return constraint_cols
 
     def copy_report_lazy(self, tbl_name, data, cols=None, commit=True,
                          constraint=None, return_cols=None, order_by=None):

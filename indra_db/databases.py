@@ -637,7 +637,7 @@ class DatabaseManager(object):
         """
         return random.randint(-2**30, 2**30)
 
-    def _precheck_copy(self, data, tbl_name, meth_name):
+    def _precheck_copy(self, tbl_name, data, meth_name):
         logger.info(f"Received request to '{meth_name}' {len(data)} entries "
                     f"into table '{tbl_name}'.")
         if not CAN_COPY:

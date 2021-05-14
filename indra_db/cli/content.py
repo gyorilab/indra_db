@@ -744,12 +744,14 @@ class Pubmed(_NihManager):
                     tr['annotations'] = data['mesh_annotations']
 
                 # Extract the content data
+                tc_list = []
                 for text_type in self.categories:
                     content = article_info[pmid].get(text_type)
                     if content and content.strip():
                         tc = {'pmid': pmid, 'text_type': text_type,
                               'content': zip_string(content)}
-                        yield (xml_file, idx, num_records), tr, tc
+                        tc_list.append(tc)
+                yield (xml_file, idx, num_records), tr, tc_list
 
     def load_files(self, db, files, continuing=False, carefully=False,
                    log_update=True):
@@ -795,7 +797,8 @@ class Pubmed(_NihManager):
             self.load_annotations(db, tr_batch)
             id_map = self.load_text_refs(db, tr_batch,
                                          update_existing=carefully)
-            self.load_text_content(db, tc_batch, id_map)
+            expanded_tcs = (tc for tc_list in tc_batch for tc in tc_list)
+            self.load_text_content(db, expanded_tcs, id_map)
 
             # Check if we finished an xml file.
             for file_name, info in archive_stats.items():

@@ -807,7 +807,7 @@ class DatabaseManager(object):
         # General overhead.
         if not self._precheck_copy(tbl_name, data,
                                    'copy_report_and_return_lazy'):
-            return [], []
+            return [], [], []
         inp_cols, data_bts = self._prep_copy(tbl_name, data, inp_cols)
 
         # Handle guessed-parameters

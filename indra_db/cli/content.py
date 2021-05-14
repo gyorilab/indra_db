@@ -595,6 +595,7 @@ class Pubmed(_NihManager):
 
         self.db_pmids = None
         self.max_annotations = max_annotations
+        self.num_annotations = 0
         self.annotations = {}
         return
 
@@ -643,11 +644,13 @@ class Pubmed(_NihManager):
         """Load annotations into the database."""
         for tr_dict in tr_data:
             self.annotations[tr_dict['pmid']] = tr_dict['annotations']
+            self.num_annotations += len(tr_dict['annotations'])
 
         # Add mesh annotations to the db in batches.
-        if len(self.annotations) > self.max_annotations:
+        if self.num_annotations > self.max_annotations:
             self.dump_annotations(db)
             self.annotations = {}
+            self.num_annotations = 0
 
         return
 

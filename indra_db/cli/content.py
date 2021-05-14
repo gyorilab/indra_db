@@ -573,6 +573,7 @@ class Pubmed(_NihManager):
     """
     my_path = 'pubmed'
     my_source = 'pubmed'
+    primary_col = 'pmid'
     tr_cols = ('pmid', 'pmcid', 'doi', 'pii', 'pub_year')
     tc_cols = ('text_ref_id', 'source', 'format', 'text_type', 'content',
                'license')
@@ -866,6 +867,7 @@ class Pubmed(_NihManager):
 class PmcManager(_NihManager):
     """Abstract class for uploaders of PMC content: PmcOA and Manuscripts."""
     my_source = NotImplemented
+    primary_col = 'pmcid'
     tr_cols = ('pmid', 'pmcid', 'doi', 'manuscript_id', 'pub_year',)
     tc_cols = ('text_ref_id', 'source', 'format', 'text_type',
                'content', 'license')

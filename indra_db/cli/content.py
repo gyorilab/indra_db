@@ -838,8 +838,8 @@ class Pubmed(_NihManager):
                 copy_rows.append(copy_row)
 
         # Copy the results into the database
-        db.copy_lazy(db, 'mesh_ref_annotations', copy_rows,
-                     ('pmid_num', 'mesh_num', 'major_topic','is_concept',
+        db.copy_lazy('mesh_ref_annotations', copy_rows,
+                     ('pmid_num', 'mesh_num', 'major_topic', 'is_concept',
                       'qual_num'))
         return True
 

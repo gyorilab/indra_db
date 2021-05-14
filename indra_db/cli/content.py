@@ -1114,7 +1114,8 @@ class PmcManager(_NihManager):
                 # Yield each XML file.
                 for n, xml_file in enumerate(xml_files):
                     # Skip the files we don't need.
-                    if pmcid_set is not None and xml_file not in desired_files:
+                    if pmcid_set is not None \
+                            and xml_file.name not in desired_files:
                         continue
                     xml_str = tar.extractfile(xml_file).read().decode('utf8')
                     yield (archive, n, len(xml_files)), xml_file.name, xml_str

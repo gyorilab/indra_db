@@ -668,8 +668,8 @@ class Pubmed(_NihManager):
             tr_records, flawed_refs, id_map = \
                 self.filter_text_refs(db, tr_records,
                                       primary_id_types=['pmid', 'pmcid'])
-            logger.info('%d new records to add to text_refs.'
-                        % len(tr_records))
+            logger.info(f"Found {len(tr_records)} refs to add, {len(id_map)} "
+                        f"refs updated.")
         else:
             id_map = {}
 

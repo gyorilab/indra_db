@@ -558,8 +558,8 @@ def summarize_content_labels(label_list):
                                            'tot': num_files}
         if file_num < archive_stats[archive_name]['min']:
             archive_stats[archive_name]['min'] = file_num
-        elif file_num > archive_stats[archive_name]['max']:
-            archive_stats[archive_name]['max'] = file_num
+        if (file_num + 1) > archive_stats[archive_name]['max']:
+            archive_stats[archive_name]['max'] = file_num + 1
     return archive_stats
 
 
@@ -1099,12 +1099,21 @@ class PmcManager(_NihManager):
         # Yield the contents from each archive.
         for archive in sorted(archives):
             archive_path = self.download_archive(archive, continuing)
+            num_yielded = 0
             with tarfile.open(archive_path, mode='r:gz') as tar:
 
                 # Get names of all the XML files in the tar file, and report.
-                xml_files = [m for m in tar.getmembers() if m.isfile()
-                             and m.name.endswith('xml')]
-                xml_files.sort(key=lambda m: m.name)
+                try:
+                    xml_files = [m for m in tar.getmembers() if m.isfile()
+                                 and m.name.endswith('xml')]
+                    xml_files.sort(key=lambda m: m.name)
+                except zlib.error:
+                    logger.warning(f"Failed to parse archive {archive}, likely "
+                                   f"fault in FTP download.")
+                    logger.info(f"Deleting {archive} before yielding any XMLs.")
+                    remove(archive_path)
+                    continue
+
                 if len(xml_files) > 1:
                     logger.info(f'Iterating over {len(xml_files)} files in '
                                 f'{archive}.')
@@ -1119,9 +1128,11 @@ class PmcManager(_NihManager):
                         continue
                     xml_str = tar.extractfile(xml_file).read().decode('utf8')
                     yield (archive, n, len(xml_files)), xml_file.name, xml_str
+                    num_yielded += 1
 
             # Remove it when we're done (unless there was an exception).
-            logger.info(f"Deleting {archive}.")
+            logger.info(f"Deleting {archive} after yielding {num_yielded} "
+                        f"XMLs.")
             remove(archive_path)
 
     def iter_contents(self, archives=None, continuing=False, pmcid_set=None):

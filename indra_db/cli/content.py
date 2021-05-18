@@ -1393,7 +1393,9 @@ class Manuscripts(PmcManager):
                            for pmcid in load_pmcid_set}
 
         logger.info("Beginning to upload archives.")
-        self.upload_archives(db, update_archives, pmcid_set=load_pmcid_set)
+        for archive in update_archives:
+            self.upload_archives(db, [archive],
+                                 pmcid_set=load_pmcid_set)
         return True
 
 

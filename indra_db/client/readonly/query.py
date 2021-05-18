@@ -503,14 +503,17 @@ class Query(object):
                     json_content_al.c.raw_json, json_content_al.c.pa_json]
 
         # Join up with other tables to pull metadata.
-        stmts_q = (stmts_q
-                   .outerjoin(ro.ReadingRefLink,
-                              ro.ReadingRefLink.rid == json_content_al.c.rid))
+        if ev_limit != 0:
+            stmts_q = (stmts_q
+                       .outerjoin(ro.ReadingRefLink,
+                                  ro.ReadingRefLink.rid == json_content_al.c.rid))
 
-        ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
-                         if not k.startswith('_')]
+            ref_link_keys = [k for k in ro.ReadingRefLink.__dict__.keys()
+                             if not k.startswith('_')]
 
-        cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
+            cols += [getattr(ro.ReadingRefLink, k) for k in ref_link_keys]
+        else:
+            ref_link_keys = None
 
         # Put it all together.
         selection = select(cols).select_from(stmts_q)
@@ -546,7 +549,8 @@ class Query(object):
             belief = next(row_gen)
             raw_json_bts = next(row_gen)
             pa_json_bts = next(row_gen)
-            ref_dict = dict(zip(ref_link_keys, row_gen))
+            if ref_link_keys is not None:
+                ref_dict = dict(zip(ref_link_keys, row_gen))
 
             if pa_json_bts is None:
                 logger.warning("Row returned without pa_json. This likely "

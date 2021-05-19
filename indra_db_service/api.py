@@ -3,7 +3,6 @@ import json
 import logging
 from os import path
 from datetime import datetime
-from argparse import ArgumentParser
 from collections import defaultdict
 
 from flask_cors import CORS
@@ -24,13 +23,13 @@ from indra_db.util.constructors import get_ro_host
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indralab_auth_tools.log import note_in_log, set_log_service_name, \
     user_log_endpoint
-from rest_api.call_handlers import pop_request_bool
-from rest_api.errors import HttpUserError, ResultTypeError, InvalidCredentials, \
-    InsufficientPermission
+from indra_db_service.call_handlers import pop_request_bool
+from indra_db_service.errors import HttpUserError, ResultTypeError,\
+    InvalidCredentials, InsufficientPermission
 
-from rest_api.config import *
-from rest_api.call_handlers import *
-from rest_api.util import sec_since, get_s3_client, gilda_ground, \
+from indra_db_service.config import *
+from indra_db_service.call_handlers import *
+from indra_db_service.util import sec_since, get_s3_client, gilda_ground, \
     _make_english_from_meta, get_html_source_info
 
 
@@ -508,14 +507,3 @@ def list_curations(stmt_hash, src_hash):
 def handle_user_error(error):
     logger.error(f"Got user error ({error.err_code}): {error.msg}")
     return error.response()
-
-
-def main():
-    parser = ArgumentParser()
-    parser.add_argument('-p', '--port', default=5000)
-    args = parser.parse_args()
-    app.run(port=args.port)
-
-
-if __name__ == '__main__':
-    main()

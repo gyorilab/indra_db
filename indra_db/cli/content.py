@@ -1,3 +1,4 @@
+import ftplib
 import re
 import csv
 import tarfile
@@ -1142,7 +1143,13 @@ class PmcManager(_NihManager):
 
         # Yield the contents from each archive.
         for archive in sorted(archives):
-            archive_path = self.download_archive(archive, continuing)
+            try:
+                archive_path = self.download_archive(archive, continuing)
+            except ftplib.Error as e:
+                logger.warning(f"Failed to download {archive}: {e}")
+                logger.info(f"Skipping {archive}...")
+                continue
+
             num_yielded = 0
             with tarfile.open(archive_path, mode='r:gz') as tar:
 

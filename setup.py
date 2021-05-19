@@ -27,7 +27,7 @@ def main():
           entry_points="""
           [console_scripts]
           indra-db=indra_db.cli:main
-          indra-db-service=rest_api.cli:main
+          indra-db-service=indra_db_service.cli:main
           indra-db-benchmarker=benchmarker.cli:main
           """)
 

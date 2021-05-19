@@ -20,14 +20,13 @@ from indra.assemblers.html.assembler import HtmlAssembler, _format_stmt_text, \
 from indra_db.client.readonly import *
 from indra_db.client.principal.curation import *
 from indralab_auth_tools.log import note_in_log, is_log_running
-from indralab_auth_tools.src.models import UserDatabaseError
 
-from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
+from indra_db_service.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
     jwt_nontest_optional, MAX_LIST_LEN
-from rest_api.errors import HttpUserError, ResultTypeError
-from rest_api.util import LogTracker, sec_since, get_source, process_agent, \
-    process_mesh_term, DbAPIError, iter_free_agents, _make_english_from_meta, \
-    get_html_source_info
+from indra_db_service.errors import HttpUserError, ResultTypeError
+from indra_db_service.util import LogTracker, sec_since, get_source,\
+    process_agent,  process_mesh_term, DbAPIError, iter_free_agents, \
+    _make_english_from_meta, get_html_source_info
 
 logger = logging.getLogger('call_handlers')
 

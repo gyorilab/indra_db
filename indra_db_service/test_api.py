@@ -20,12 +20,12 @@ from indra.sources.indra_db_rest.query_results import QueryResult, \
     StatementQueryResult
 from indra_db.client import HasAgent, HasType, FromMeshIds
 
-from rest_api.util import get_source
-from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TESTING
+from indra_db_service.util import get_source
+from indra_db_service.config import MAX_STMTS, REDACT_MESSAGE, TESTING
 
 logger = logging.getLogger('db_api_unit_tests')
 try:
-    from rest_api.api import app
+    from indra_db_service.api import app
 except Exception as e:
     logger.warning(f"Could not load app: {e}")
     app = None

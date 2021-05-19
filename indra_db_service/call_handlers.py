@@ -1,6 +1,6 @@
 __all__ = ['ApiCall', 'FromAgentsApiCall', 'FromHashApiCall',
            'FromHashesApiCall', 'FromPapersApiCall', 'FromSimpleJsonApiCall',
-           'FromAgentJsonApiCall', 'DirectQueryApiCall']
+           'FromAgentJsonApiCall', 'DirectQueryApiCall', 'pop_request_bool']
 
 import sys
 import json

@@ -23,7 +23,6 @@ from indra_db.util.constructors import get_ro_host
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indralab_auth_tools.log import note_in_log, set_log_service_name, \
     user_log_endpoint
-from indra_db_service.call_handlers import pop_request_bool
 from indra_db_service.errors import HttpUserError, ResultTypeError,\
     InvalidCredentials, InsufficientPermission
 
@@ -42,7 +41,45 @@ logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
 # Set the name of this service for the usage logs.
-set_log_service_name(f"db-rest-api-{DEPLOYMENT if DEPLOYMENT else 'stable'}")
+if not TESTING['status']:
+    set_log_service_name(f"db-rest-api-{DEPLOYMENT if DEPLOYMENT else 'stable'}")
+else:
+    from functools import wraps
+    from werkzeug.exceptions import HTTPException
+    logger.warning("TESTING: No logging will be performed.")
+
+    def note_in_log(*args, **kwargs):
+        logger.info(f"Faux noting in the log: {args}, {kwargs}")
+
+    def end_log(status):
+        logger.info(f"Faux ending log with status {status}")
+
+    def user_log_endpoint(func):
+
+        @wraps(func)
+        def run_logged(*args, **kwargs):
+            logger.info(f"Faux running logged: {args}, {kwargs}")
+            try:
+                resp = func(*args, **kwargs)
+                if isinstance(resp, str):
+                    status = 200
+                elif isinstance(resp, tuple) and isinstance(resp[1], int):
+                    status = resp[1]
+                else:
+                    status = resp.status_code
+            except HTTPException as e:
+                end_log(e.code)
+                raise e
+            except Exception as e:
+                logger.warning("Request experienced internal error. "
+                               "Returning 500.")
+                logger.exception(e)
+                end_log(500)
+                raise
+            end_log(status)
+            return resp
+
+        return run_logged
 
 
 # Define a custom flask class to handle the deployment name prefix.

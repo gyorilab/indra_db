@@ -6,6 +6,7 @@ import logging
 import pickle
 import multiprocessing as mp
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 
 from io import BytesIO
 from ftplib import FTP
@@ -1126,6 +1127,8 @@ class PmcManager(_NihManager):
                     if pmcid_set is not None \
                             and xml_file.name not in desired_files:
                         continue
+                    logger.info(f"Extracting {xml_file.name} "
+                                f"({n}/{len(xml_files)}).")
                     xml_str = tar.extractfile(xml_file).read().decode('utf8')
                     yield (archive, n, len(xml_files)), xml_file.name, xml_str
                     num_yielded += 1
@@ -1140,10 +1143,12 @@ class PmcManager(_NihManager):
         """
         xml_iter = self.iter_xmls(archives, continuing, pmcid_set)
         for label, file_name, xml_str in xml_iter:
+            logger.info(f"Getting data from {file_name}")
             res = self.get_data_from_xml_str(xml_str, file_name)
             if res is None:
                 continue
             tr, tc = res
+            logger.info(f"Yielding ref and content for {file_name}.")
             yield label, tr, tc
 
     def is_archive(self, *args):
@@ -1153,7 +1158,7 @@ class PmcManager(_NihManager):
         return [k for k in self.ftp.ftp_ls() if self.is_archive(k)]
 
     def upload_archives(self, db, archives=None, continuing=False,
-                        pmcid_set=None):
+                        pmcid_set=None, batch_size=10000):
         """Do the grunt work of downloading and processing a list of archives.
 
         Parameters
@@ -1168,9 +1173,11 @@ class PmcManager(_NihManager):
             is assumed the caches are empty.
         pmcid_set : set[str]
             A set of PMC Ids to include from this list of archives.
+        batch_size : Optional[int]
+            Default is 10,000. The number of pieces of content to submit to the
+            database at a time.
         """
         # Form a generator over the content in batches.
-        batch_size = 10000
         contents = self.iter_contents(archives, continuing, pmcid_set)
         batched_contents = batch_iter(contents, batch_size, lambda g: zip(*g))
 
@@ -1307,7 +1314,7 @@ class PmcOA(PmcManager):
 
         # Upload these archives.
         logger.info(f"Updating the database with {len(archive_set)} articles.")
-        self.upload_archives(db, archive_set)
+        self.upload_archives(db, archive_set, batch_size=5000)
         return True
 
 
@@ -1389,13 +1396,16 @@ class Manuscripts(PmcManager):
                     % (len(load_pmcid_set)))
 
         logger.info("Determining which archives need to be laoded.")
-        update_archives = {'PMC00%sXXXXXX.xml.tar.gz' % pmcid[3]
-                           for pmcid in load_pmcid_set}
+        update_archives = defaultdict(set)
+        for pmcid in load_pmcid_set:
+            update_archives[f'PMC00{pmcid[3]}XXXXXX.xml.tar.gz'].add(pmcid)
 
         logger.info("Beginning to upload archives.")
-        for archive in update_archives:
-            self.upload_archives(db, [archive],
-                                 pmcid_set=load_pmcid_set)
+        for archive, pmcid_set in sorted(update_archives.items()):
+            logging.info(f"Extracting {len(pmcid_set)} articles from "
+                         f"{archive}.")
+            self.upload_archives(db, [archive], pmcid_set=pmcid_set,
+                                 batch_size=500)
         return True
 
 

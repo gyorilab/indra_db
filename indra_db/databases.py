@@ -9,7 +9,6 @@ import logging
 import string
 from io import BytesIO
 from numbers import Number
-from functools import wraps
 from datetime import datetime
 from time import sleep
 
@@ -77,30 +76,6 @@ try:
 except ImportError as e:
     logger.warning("Copy utilities unavailable: %s" % str(e))
     CAN_COPY = False
-
-
-def _copy_method(get_null_return=lambda: None):
-    def super_wrapper(meth):
-        @wraps(meth)
-        def wrapper(obj, tbl_name, data, cols=None, commit=True, *args, **kwargs):
-            logger.info("Received request to %s %d entries into %s."
-                        % (meth.__name__, len(data), tbl_name))
-            if not CAN_COPY:
-                raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
-                                   "available.")
-            if obj.is_protected():
-                raise RuntimeError("Attempt to copy while in protected mode!")
-            if len(data) == 0:
-                return get_null_return()  # Nothing to do....
-
-            res = meth(obj, tbl_name, data, cols, commit, *args, **kwargs)
-
-            if commit:
-                obj.commit_copy('Failed to commit %s.' % meth.__name__)
-
-            return res
-        return wrapper
-    return super_wrapper
 
 
 def _isiterable(obj):
@@ -662,10 +637,21 @@ class DatabaseManager(object):
         """
         return random.randint(-2**30, 2**30)
 
+    def _precheck_copy(self, tbl_name, data, meth_name):
+        logger.info(f"Received request to '{meth_name}' {len(data)} entries "
+                    f"into table '{tbl_name}'.")
+        if not CAN_COPY:
+            raise RuntimeError("Cannot use copy methods. `pg_copy` is not "
+                               "available.")
+        if self.is_protected():
+            raise RuntimeError("Attempt to copy while in protected mode!")
+        if len(data) == 0:
+            return False
+        return True
+
     def _prep_copy(self, tbl_name, data, cols):
-        if self.__protected:
-            logger.error("Manager is in protected mode, no writes allowed!")
-            return
+        assert not self.__protected,\
+            "This should not be called if db in protected mode."
 
         # If cols is not specified, use all the cols in the table, else check
         # to make sure the names are valid.
@@ -726,35 +712,16 @@ class DatabaseManager(object):
 
         return cols, data_bts
 
-    @_copy_method(list)
-    def copy_report_lazy(self, tbl_name, data, cols=None, commit=True,
-                         constraint=None, return_cols=None, order_by=None):
-        """Copy lazily, and report what rows were skipped."""
-        cols, data_bts = self._prep_copy(tbl_name, data, cols)
-
+    def _infer_copy_order_by(self, order_by, tbl_name):
         if not order_by:
             order_by = getattr(self.tables[tbl_name],
                                '_default_insert_order_by')
             if not order_by:
                 raise ValueError("%s does not have an `order_by` attribute, "
                                  "and no `order_by` was specified." % tbl_name)
+        return order_by
 
-        mngr = LazyCopyManager(self._conn, tbl_name, cols,
-                               constraint=constraint)
-        return mngr.report_copy(data_bts, order_by, return_cols, BytesIO)
-
-    @_copy_method()
-    def copy_lazy(self, tbl_name, data, cols=None, commit=True,
-                  constraint=None):
-        "Copy lazily, skip any rows that violate constraints."
-        cols, data_bts = self._prep_copy(tbl_name, data, cols)
-
-        mngr = LazyCopyManager(self._conn, tbl_name, cols,
-                               constraint=constraint)
-        mngr.copy(data_bts, BytesIO)
-        return
-
-    def _infer_constraint(self, tbl_name, cols):
+    def _infer_copy_constraint(self, constraint, tbl_name, cols):
         """Try to infer a single constrain for a given table and columns.
 
         Look for table arguments that are constraints, and moreover that
@@ -764,11 +731,17 @@ class DatabaseManager(object):
         process will not catch foreign key constraints, which may not even
         apply.
         """
+        # Get the table object.
         tbl = self.tables[tbl_name]
 
-        constraints = [c.name for c in tbl.__table_args__
-                       if isinstance(c, UniqueConstraint)
-                       and set(c.columns.keys()) < set(cols)]
+        # If a constraint was given, just return it, ensuring it is the object
+        # and not just the name.
+        if constraint:
+            if isinstance(constraint, str):
+                constraint = tbl.get_constraint(constraint)
+            return constraint
+
+        constraints = [c.name for c in tbl.iter_constraints(cols)]
 
         # Include the primary key in the list, if applicable.
         if inspect(tbl).primary_key[0].name in cols:
@@ -792,46 +765,142 @@ class DatabaseManager(object):
                              "constraint.")
         return constraint
 
-    @_copy_method()
-    def copy_push(self, tbl_name, data, cols=None, commit=True,
-                  constraint=None):
-        "Copy, pushing any changes to constraint violating rows."
+    def _get_constraint_cols(self, constraint, tbl_name, cols):
+        """Get the column pairs in cols involved in unique constraints."""
+        tbl = self.tables[tbl_name]
+        if constraint is None:
+            constraint_cols = [tuple(c.columns.keys())
+                               for c in tbl.iter_constraints(cols)]
+        else:
+            if isinstance(constraint, str):
+                constraint = tbl.get_constraint(constraint)
+            constraint_cols = [constraint.columns.keys()]
+        return constraint_cols
+
+    def copy_report_lazy(self, tbl_name, data, cols=None, commit=True,
+                         constraint=None, return_cols=None, order_by=None):
+        """Copy lazily, and report what rows were skipped."""
+        # General overhead.
+        if not self._precheck_copy(tbl_name, data, 'copy_report_lazy'):
+            return []
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
-        if constraint is None:
-            constraint = self._infer_constraint(tbl_name, cols)
+        # Guess parameters.
+        order_by = self._infer_copy_order_by(order_by, tbl_name)
 
+        # Do the copy.
+        mngr = LazyCopyManager(self._conn, tbl_name, cols,
+                               constraint=constraint)
+        ret = mngr.report_copy(data_bts, order_by, return_cols, BytesIO)
+
+        # Commit the copy.
+        if commit:
+            self.commit_copy(f'Failed to commit copy_report_lazy to '
+                             f'{tbl_name}.')
+
+        return ret
+
+    def copy_detailed_report_lazy(self, tbl_name, data, inp_cols=None,
+                                  ret_cols=None, commit=True, constraint=None,
+                                  skipped_cols=None, order_by=None):
+        """Copy lazily, returning data from some of the columns such as IDs."""
+        # General overhead.
+        if not self._precheck_copy(tbl_name, data,
+                                   'copy_report_and_return_lazy'):
+            return [], [], []
+        inp_cols, data_bts = self._prep_copy(tbl_name, data, inp_cols)
+
+        # Handle guessed-parameters
+        order_by = self._infer_copy_order_by(order_by, tbl_name)
+        constraint_cols = self._get_constraint_cols(constraint, tbl_name,
+                                                    inp_cols)
+        if ret_cols is None:
+            ret_cols = (self.get_primary_key(tbl_name).name,)
+
+        # Do the copy.
+        mngr = ReturningCopyManager(self._conn, tbl_name, inp_cols, ret_cols,
+                                    constraint=constraint)
+        ret = mngr.detailed_report_copy(data_bts, constraint_cols, skipped_cols,
+                                        order_by)
+
+        # Commit
+        if commit:
+            self.commit_copy(f'Failed to commit copy_report_and_return_lazy to '
+                             f'{tbl_name}.')
+
+        return ret
+
+    def copy_lazy(self, tbl_name, data, cols=None, commit=True,
+                  constraint=None):
+        """Copy lazily, skip any rows that violate constraints."""
+        # General overhead.
+        if not self._precheck_copy(tbl_name, data, 'copy_lazy'):
+            return
+        cols, data_bts = self._prep_copy(tbl_name, data, cols)
+
+        # Handle guessed-parameters
+        constraint = self._infer_copy_constraint(constraint, tbl_name, cols)
+
+        # Do the copy.
+        mngr = LazyCopyManager(self._conn, tbl_name, cols,
+                               constraint=constraint)
+        mngr.copy(data_bts, BytesIO)
+
+        # Commit
+        if commit:
+            self.commit_copy(f'Failed to commit copy_lazy to {tbl_name}.')
+
+        return
+
+    def copy_push(self, tbl_name, data, cols=None, commit=True,
+                  constraint=None):
+        """Copy, pushing any changes to constraint violating rows."""
+        # General overhead.
+        if not self._precheck_copy(tbl_name, data, 'copy_push'):
+            return
+        cols, data_bts = self._prep_copy(tbl_name, data, cols)
+
+        # Handle guessed-parameters
+        constraint = self._infer_copy_constraint(constraint, tbl_name, cols)
+
+        # Do the copy.
         mngr = PushCopyManager(self._conn, tbl_name, cols,
                                constraint=constraint)
         mngr.copy(data_bts, BytesIO)
+
+        # Commit
+        if commit:
+            self.commit_copy(f'Failed to commit copy_push to {tbl_name}.')
         return
 
-    @_copy_method(list)
     def copy_report_push(self, tbl_name, data, cols=None, commit=True,
                          constraint=None, return_cols=None, order_by=None):
         """Report on the rows skipped when pushing and copying."""
+        if not self._precheck_copy(tbl_name, data, 'copy_report_push'):
+            return
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
-        if constraint is None:
-            constraint = self._infer_constraint(tbl_name, cols)
-
-        if not order_by:
-            order_by = self.tables[tbl_name]._default_insert_order_by
-            if not order_by:
-                raise ValueError("Table %s have no `_default_insert_order_by` "
-                                 "attribute, and no `order_by` was specified."
-                                 % tbl_name)
+        constraint = self._infer_copy_constraint(constraint, tbl_name, cols)
+        order_by = self._infer_copy_order_by(order_by, tbl_name)
 
         mngr = PushCopyManager(self._conn, tbl_name, cols,
                                constraint=constraint)
-        return mngr.report_copy(data_bts, order_by, return_cols, BytesIO)
+        ret = mngr.report_copy(data_bts, order_by, return_cols, BytesIO)
 
-    @_copy_method()
+        if commit:
+            self.commit_copy(f'Failed to commit copy_report_push to '
+                             f'{tbl_name}.')
+        return ret
+
     def copy(self, tbl_name, data, cols=None, commit=True):
-        "Use pg_copy to copy over a large amount of data."
+        """Use pg_copy to copy over a large amount of data."""
+        if not self._precheck_copy(tbl_name, data, 'copy'):
+            return
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
         mngr = CopyManager(self._conn, tbl_name, cols)
         mngr.copy(data_bts, BytesIO)
+        if commit:
+            self.commit_copy(f'Failed to commit copy to {tbl_name}.')
         return
 
     def filter_query(self, tbls, *args):
@@ -877,6 +946,8 @@ class DatabaseManager(object):
 
     def get_primary_key(self, tbl):
         """Get an instance for the primary key column of a given table."""
+        if isinstance(tbl, str):
+            tbl = self.tables[tbl]
         return inspect(tbl).primary_key[0]
 
     def select_one(self, tbls, *args):

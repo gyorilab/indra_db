@@ -129,10 +129,13 @@ class PrincipalSchema(Schema):
         In addition we also track some basic metadata about the entry and
         updates to the data in the table.
 
-        - create_date ``timestamp without time zone``: The date the record was
-          added.
-        - last_updated ``timestamp without time zone``: The most recent time
-          the record was edited.
+        - **create_date** ``timestamp without time zone``: The date the record
+          was added.
+        - **last_updated** ``timestamp without time zone``: The most recent
+          time the record was edited.
+        - **pub_year** ``integer``: The year the article was published, based
+          on the first report we find (in order of PubMed, PMC, then PMC
+          Manuscripts).
 
         **Constraints**
 
@@ -189,6 +192,7 @@ class PrincipalSchema(Schema):
                         BtreeIndex('text_ref_pmcid_num_idx', 'pmcid_num'),
                         BtreeIndex('text_ref_doi_ns_idx', 'doi_ns'),
                         BtreeIndex('text_ref_doi_id_idx', 'doi_id'),
+                        BtreeIndex('text_ref_pub_year', 'pub_year'),
                         StringIndex('text_ref_doi_idx', 'doi')]
 
             id = Column(Integer, primary_key=True)
@@ -200,6 +204,7 @@ class PrincipalSchema(Schema):
             doi = Column(String(100))
             doi_ns = Column(Integer)
             doi_id = Column(String)
+            pub_year = Column(Integer)
             pii = Column(String(250))
             url = Column(String, unique=True)
             manuscript_id = Column(String(100), unique=True)
@@ -292,8 +297,10 @@ class PrincipalSchema(Schema):
             __tablename__ = 'mesh_ref_annotations'
             _always_disp = ['pmid_num', 'mesh_num', 'qual_num']
             _indices = [BtreeIndex('mesh_ref_annotations_pmid_idx', 'pmid_num'),
-                        BtreeIndex('mesh_ref_annotations_mesh_id_idx', 'mesh_num'),
-                        BtreeIndex('mesh_ref_annotations_qual_id_idx', 'qual_num')]
+                        BtreeIndex('mesh_ref_annotations_mesh_id_idx',
+                                   'mesh_num'),
+                        BtreeIndex('mesh_ref_annotations_qual_id_idx',
+                                   'qual_num')]
             id = Column(Integer, primary_key=True)
             pmid_num = Column(Integer, nullable=False)
             mesh_num = Column(Integer, nullable=False)
@@ -301,8 +308,8 @@ class PrincipalSchema(Schema):
             major_topic = Column(Boolean, default=False)
             is_concept = Column(Boolean, default=False)
             __table_args__ = (
-                UniqueConstraint('pmid_num', 'mesh_num', 'qual_num', 'is_concept',
-                                 name='mesh-uniqueness'),
+                UniqueConstraint('pmid_num', 'mesh_num', 'qual_num',
+                                 'is_concept', name='mesh-uniqueness'),
             )
         return MeshRefAnnotations
 
@@ -388,6 +395,8 @@ class PrincipalSchema(Schema):
           "abstract" of "fulltext".
         - **preprint** ``boolean``: Indicate whether the content is from
           a preprint.
+        - **license** [``varchar``]: Record the license that applies to the
+          content.
         - **content** ``bytea``: The raw compressed bytes of the content.
 
         **Metadata Columns**
@@ -420,6 +429,7 @@ class PrincipalSchema(Schema):
             insert_date = Column(DateTime, default=func.now())
             last_updated = Column(DateTime, onupdate=func.now())
             preprint = Column(Boolean)
+            license = Column(String)
             __table_args__ = (
                 UniqueConstraint('text_ref_id', 'source', 'format',
                                  'text_type', name='content-uniqueness'),

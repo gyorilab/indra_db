@@ -704,7 +704,24 @@ class Pubmed(_NihManager):
         return
 
     def iter_contents(self, archives=None):
-        """Iterate over the contents."""
+        """Iterate over the files in the archive, yielding ref and content data.
+
+        Parameters
+        ----------
+        archives : Optional[Iterable[str]]
+            The names of the archive files from the FTP server to processes. If
+            None, all available archives will be iterated over.
+
+        Yields
+        ------
+        label : tuple
+            A key representing the particular XML: (XML File Name, Entry Number,
+            Total Entries)
+        text_ref_dict : dict
+            A dictionary containing the text ref information.
+        text_content_dict : dict
+            A dictionary containing the text content information.
+        """
         from indra.literature.pubmed_client import get_metadata_from_xml_tree
 
         if archives is None:
@@ -1084,7 +1101,33 @@ class PmcManager(_NihManager):
         return archive_local_path
 
     def iter_xmls(self, archives=None, continuing=False, pmcid_set=None):
-        """Iterate over the xmls in the given archives."""
+        """Iterate over the xmls in the given archives.
+
+        Parameters
+        ----------
+        archives : Optional[Iterable[str]]
+            The names of the archive files from the FTP server to processes. If
+            None, all available archives will be iterated over.
+        continuing : Optional[Bool]
+            If True, look for locally saved archives to parse, saving the time
+            of downloading.
+        pmcid_set : Optional[set[str]]
+            A set of PMCIDs whose content you want returned from each archive.
+            Many archives are massive repositories with 10s of thousands of
+            papers in each, and only a fraction may need to be returned.
+            Extracting and processing XMLs can be time consuming, so skipping
+            those you don't need can really pay off!
+
+        Yields
+        ------
+        label : Tuple
+            A key representing the particular XML: (Archive Name, Entry Number,
+            Total Entries)
+        xml_name : str
+            The name of the XML file.
+        xml_str : str
+            The extracted XML string.
+        """
         # By default, iterate through all the archives.
         if archives is None:
             archives = set(self.get_all_archives())
@@ -1140,6 +1183,31 @@ class PmcManager(_NihManager):
 
     def iter_contents(self, archives=None, continuing=False, pmcid_set=None):
         """Iterate over the files in the archive, yielding ref and content data.
+
+        Parameters
+        ----------
+        archives : Optional[Iterable[str]]
+            The names of the archive files from the FTP server to processes. If
+            None, all available archives will be iterated over.
+        continuing : Optional[Bool]
+            If True, look for locally saved archives to parse, saving the time
+            of downloading.
+        pmcid_set : Optional[set[str]]
+            A set of PMCIDs whose content you want returned from each archive.
+            Many archives are massive repositories with 10s of thousands of
+            papers in each, and only a fraction may need to be returned.
+            Extracting and processing XMLs can be time consuming, so skipping
+            those you don't need can really pay off!
+
+        Yields
+        ------
+        label : tuple
+            A key representing the particular XML: (Archive Name, Entry Number,
+            Total Entries)
+        text_ref_dict : dict
+            A dictionary containing the text ref information.
+        text_content_dict : dict
+            A dictionary containing the text content information.
         """
         xml_iter = self.iter_xmls(archives, continuing, pmcid_set)
         for label, file_name, xml_str in xml_iter:

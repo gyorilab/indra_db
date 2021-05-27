@@ -753,9 +753,10 @@ class DatabaseManager(object):
 
         # Hopefully at this point there is exactly one constraint.
         if len(constraints) > 1:
-            raise ValueError("Cannot infer constraint. Only one constraint is "
-                             "allowed, and there are multiple possibilities. "
-                             "Please specify a single constraint.")
+            raise ValueError(f"Cannot infer constraint. Only one constraint is "
+                             f"allowed, and there are multiple possibilities: "
+                             f"{constraints}. Please specify a single "
+                             f"constraint.")
         elif len(constraints) == 1:
             constraint = constraints[0]
         else:

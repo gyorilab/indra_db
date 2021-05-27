@@ -737,8 +737,12 @@ class DatabaseManager(object):
         # If a constraint was given, just return it, ensuring it is the object
         # and not just the name.
         if constraint:
-            if isinstance(constraint, str):
-                constraint = tbl.get_constraint(constraint)
+            if not isinstance(constraint, str):
+                if not isinstance(constraint, UniqueConstraint):
+                    raise ValueError("`constraint` should by type "
+                                     "UniqueConstraint or the (str) name of a "
+                                     "UniqueConstraint.")
+                return constraint.name
             return constraint
 
         constraints = [c.name for c in tbl.iter_constraints(cols)]
@@ -749,20 +753,17 @@ class DatabaseManager(object):
 
         # Hopefully at this point there is exactly one constraint.
         if len(constraints) > 1:
-            raise ValueError("Cannot infer constraint. Only "
-                             "one constraint is allowed, and "
-                             "there are multiple "
-                             "possibilities. Please specify a "
-                             "single constraint.")
+            raise ValueError(f"Cannot infer constraint. Only one constraint is "
+                             f"allowed, and there are multiple possibilities: "
+                             f"{constraints}. Please specify a single "
+                             f"constraint.")
         elif len(constraints) == 1:
             constraint = constraints[0]
         else:
-            raise ValueError("Could not infer a relevant "
-                             "constraint. If no columns have "
-                             "constraints on them, the lazy "
-                             "option is unnecessary. Note that I "
-                             "cannot guess a foreign key "
-                             "constraint.")
+            raise ValueError("Could not infer a relevant constraint. If no "
+                             "columns have constraints on them, the lazy "
+                             "option is unnecessary. Note that I cannot guess "
+                             "a foreign key constraint.")
         return constraint
 
     def _get_constraint_cols(self, constraint, tbl_name, cols):

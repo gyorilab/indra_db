@@ -116,7 +116,8 @@ class XddManager:
                     s_rows.add(sd.make_tuple(stmt_batch_id))
 
         logger.info(f"Dumping {len(r_rows)} readings.")
-        db.copy_lazy('reading', r_rows, r_cols, commit=False)
+        db.copy_lazy('reading', r_rows, r_cols, commit=False,
+                     constraint='reading-uniqueness')
 
         logger.info(f"Dumping {len(s_rows)} raw statements.")
         skipped = db.copy_report_lazy('raw_statements', s_rows,

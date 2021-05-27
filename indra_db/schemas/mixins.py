@@ -274,7 +274,6 @@ class IndraDBRefTable:
 
     @classmethod
     def _get_pmid_lookups(cls, pmid_list, filter_ids=False):
-        """Get sqlalchemy clauses for a list of pmids."""
         # Process the ID list.
         pmid_num_set = set()
         for pmid in pmid_list:
@@ -291,6 +290,7 @@ class IndraDBRefTable:
 
     @classmethod
     def pmid_in(cls, pmid_list, filter_ids=False):
+        """Get sqlalchemy clauses for entries IN a list of pmids."""
         pmid_num_set = cls._get_pmid_lookups(pmid_list, filter_ids)
 
         # Return the constraint
@@ -301,6 +301,7 @@ class IndraDBRefTable:
 
     @classmethod
     def pmid_notin(cls, pmid_list, filter_ids=False):
+        """Get sqlalchemy clauses for entries NOT IN a list of pmids."""
         pmid_num_set = cls._get_pmid_lookups(pmid_list, filter_ids)
 
         # Return the constraint

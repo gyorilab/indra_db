@@ -42,10 +42,19 @@ class IndraDBTable(metaclass=IndraDBTableMetaClass):
     _skip_disp = []
     _always_disp = ['id']
     _default_insert_order_by = 'id'
+    __table_args__ = ()
 
     @classmethod
     def iter_constraints(cls, cols=None):
-        for tbl_arg in cls.__table_args__:
+        if isinstance(cls.__table_args__, dict):
+            tbl_args = (tbl_arg for tbl_arg in cls.__table_args__.values())
+        elif isinstance(cls.__table_args__, tuple) \
+                or isinstance(cls.__table_args__, list):
+            tbl_args = cls.__table_args__
+        else:
+            return
+
+        for tbl_arg in tbl_args:
             if isinstance(tbl_arg, UniqueConstraint):
                 if cols is None or set(tbl_arg.columns.keys()) < set(cols):
                     yield tbl_arg

@@ -721,7 +721,8 @@ class DatabaseManager(object):
                                  "and no `order_by` was specified." % tbl_name)
         return order_by
 
-    def _infer_copy_constraint(self, constraint, tbl_name, cols):
+    def _infer_copy_constraint(self, constraint, tbl_name, cols,
+                               failure_ok=False):
         """Try to infer a single constrain for a given table and columns.
 
         Look for table arguments that are constraints, and moreover that
@@ -752,18 +753,20 @@ class DatabaseManager(object):
             constraints.append(tbl_name + '_pkey')
 
         # Hopefully at this point there is exactly one constraint.
-        if len(constraints) > 1:
+        if len(constraints) > 1 and not failure_ok:
             raise ValueError(f"Cannot infer constraint. Only one constraint is "
                              f"allowed, and there are multiple possibilities: "
                              f"{constraints}. Please specify a single "
                              f"constraint.")
         elif len(constraints) == 1:
             constraint = constraints[0]
-        else:
+        elif  not failure_ok:
             raise ValueError("Could not infer a relevant constraint. If no "
                              "columns have constraints on them, the lazy "
                              "option is unnecessary. Note that I cannot guess "
                              "a foreign key constraint.")
+        else:
+            constraint = None
         return constraint
 
     def _get_constraint_cols(self, constraint, tbl_name, cols):
@@ -840,7 +843,11 @@ class DatabaseManager(object):
         cols, data_bts = self._prep_copy(tbl_name, data, cols)
 
         # Handle guessed-parameters
-        constraint = self._infer_copy_constraint(constraint, tbl_name, cols)
+        # NOTE: It is OK for the constraint to be None in this case. We are not
+        # trying to return any values, so an anonymous "do for any constraint"
+        # would be fine.
+        constraint = self._infer_copy_constraint(constraint, tbl_name, cols,
+                                                 failure_ok=True)
 
         # Do the copy.
         mngr = LazyCopyManager(self._conn, tbl_name, cols,

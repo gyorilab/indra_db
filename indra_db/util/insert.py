@@ -127,19 +127,21 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None, commit=True):
     if verbose and num_stmts > 25:
         print()
 
+    # Note that lazy copies are used to handle the case where hashes do not
+    # exist in the table. Such an error is not one that should result in process
+    # failure.
     if 'agents' not in skip:
         db.copy_lazy('pa_agents', ref_data,
                      ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role',
-                      'agent_ref_hash'),
-                     commit=False)
+                      'agent_ref_hash'), commit=False)
     if 'mods' not in skip:
-        db.copy('pa_mods', mod_data,
-                ('stmt_mk_hash', 'ag_num', 'type', 'position', 'residue',
-                 'modified'), commit=False)
+        db.copy_lazy('pa_mods', mod_data,
+                     ('stmt_mk_hash', 'ag_num', 'type', 'position', 'residue',
+                      'modified'), commit=False)
     if 'muts' not in skip:
-        db.copy('pa_muts', mut_data,
-                ('stmt_mk_hash', 'ag_num', 'position', 'residue_from',
-                 'residue_to'), commit=False)
+        db.copy_lazy('pa_muts', mut_data,
+                     ('stmt_mk_hash', 'ag_num', 'position', 'residue_from',
+                      'residue_to'), commit=False)
     if commit:
         db.commit_copy('Error copying pa agents, mods, and muts, excluding: '
                        '%s.' % (', '.join(skip)))

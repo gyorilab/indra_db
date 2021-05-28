@@ -128,10 +128,9 @@ def insert_pa_agents(db, stmts, verbose=False, skip=None, commit=True):
         print()
 
     if 'agents' not in skip:
-        db.copy_lazy('pa_agents', ref_data,
-                     ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role',
-                      'agent_ref_hash'),
-                     commit=False)
+        db.copy('pa_agents', ref_data,
+                ('stmt_mk_hash', 'ag_num', 'db_name', 'db_id', 'role',
+                 'agent_ref_hash'), commit=False)
     if 'mods' not in skip:
         db.copy('pa_mods', mod_data,
                 ('stmt_mk_hash', 'ag_num', 'type', 'position', 'residue',

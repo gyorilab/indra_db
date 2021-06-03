@@ -80,8 +80,10 @@ class AgentJsonSQL:
     def run(self):
         raise NotImplementedError
 
-    def print(self):
-        print(self.agg_q)
+    def __str__(self):
+        return str(self.agg_q.selectable.compile(
+            compile_kwargs={'literal_binds': True}
+        ))
 
 
 class InteractionSQL(AgentJsonSQL):
@@ -513,7 +515,7 @@ class Query(object):
         # Put it all together.
         selection = select(cols).select_from(stmts_q)
         if self._print_only:
-            print(selection)
+            print(selection.compile(compile_kwargs={'literal_binds': True}))
             return
 
         logger.debug(f"Executing query (get_statements):\n{selection}")
@@ -663,7 +665,7 @@ class Query(object):
             q = mk_hashes_q
 
         if self._print_only:
-            print(q)
+            print(q.selectable.compile(compile_kwargs={'literal_binds': True}))
             return
 
         # Make the query, and package the results.
@@ -828,7 +830,7 @@ class Query(object):
         order_params = ms.agg(ro, **kwargs)
         ms = self._apply_limits(ms, order_params, limit, offset)
         if self._print_only:
-            ms.print()
+            print(ms)
             return
         return ms.run()
 
@@ -2309,7 +2311,7 @@ class HasType(IntrusiveQuery):
         order_params = ms.agg(ro, **kwargs)
         ms = self._apply_limits(ms, order_params, limit, offset)
         if self._print_only:
-            ms.print()
+            print(ms)
             return
         return ms.run()
 

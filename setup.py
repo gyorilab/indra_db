@@ -6,8 +6,10 @@ def main():
     print("Installing `indra_db` Packages:\n", '\n'.join(packages))
     extras_require = {'test': ['nose', 'coverage', 'python-coveralls',
                                'nose-timer'],
-                      'rest_api': ['flask', 'flask-jwt-extended', 'flask-cors',
-                                   'flask-compress']}
+                      'service': ['flask', 'flask-jwt-extended', 'flask-cors',
+                                  'flask-compress'],
+                      'cli': ['click', 'boto3'],
+                      'copy': ['pgcopy']}
     extras_require['all'] = list({dep for deps in extras_require.values()
                                   for dep in deps})
     setup(name='indra_db',
@@ -19,15 +21,13 @@ def main():
           author_email='patrick_greene@hms.harvard.edu',
           packages=packages,
           include_package_data=True,
-          install_requires=['indra', 'boto3', 'sqlalchemy', 'psycopg2',
-                            'pgcopy', 'matplotlib', 'nltk', 'reportlab',
-                            'cachetools', 'termcolor', 'click'],
+          install_requires=['sqlalchemy', 'psycopg2'],
           extras_require=extras_require,
           entry_points="""
           [console_scripts]
-          indra_db=indra_db.cli:main
-          indra_db_rest=rest_api.cli:main
-          indra_db_benchmarker=benchmarker.cli:main
+          indra-db=indra_db.cli:main
+          indra-db-service=rest_api.cli:main
+          indra-db-benchmarker=benchmarker.cli:main
           """)
 
 

@@ -2,7 +2,7 @@ import logging
 from termcolor import colored
 from psycopg2.errors import DuplicateTable
 from sqlalchemy import inspect, Column, BigInteger, tuple_, and_, \
-    UniqueConstraint
+    UniqueConstraint, or_
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
@@ -260,6 +260,8 @@ class IndraDBRefTable:
     doi_ns = NotImplemented
     doi_id = NotImplemented
 
+    # PMID Processing methods.
+
     @staticmethod
     def process_pmid(pmid):
         if not pmid:
@@ -269,6 +271,46 @@ class IndraDBRefTable:
             return pmid, None
 
         return pmid, int(pmid)
+
+    @classmethod
+    def _get_pmid_lookups(cls, pmid_list, filter_ids=False):
+        # Process the ID list.
+        pmid_num_set = set()
+        for pmid in pmid_list:
+            _, pmid_num = cls.process_pmid(pmid)
+            if pmid_num is None:
+                if filter_ids:
+                    logger.warning('"%s" is not a valid pmid. Skipping.'
+                                   % pmid)
+                    continue
+                else:
+                    ValueError('"%s" is not a valid pmid.' % pmid)
+            pmid_num_set.add(pmid_num)
+        return pmid_num_set
+
+    @classmethod
+    def pmid_in(cls, pmid_list, filter_ids=False):
+        """Get sqlalchemy clauses for entries IN a list of pmids."""
+        pmid_num_set = cls._get_pmid_lookups(pmid_list, filter_ids)
+
+        # Return the constraint
+        if len(pmid_num_set) == 1:
+            return cls.pmid_num == pmid_num_set.pop()
+        else:
+            return cls.pmid_num.in_(pmid_num_set)
+
+    @classmethod
+    def pmid_notin(cls, pmid_list, filter_ids=False):
+        """Get sqlalchemy clauses for entries NOT IN a list of pmids."""
+        pmid_num_set = cls._get_pmid_lookups(pmid_list, filter_ids)
+
+        # Return the constraint
+        if len(pmid_num_set) == 1:
+            return cls.pmid_num != pmid_num_set.pop()
+        else:
+            return cls.pmid_num.notin_(pmid_num_set)
+
+    # PMCID Processing methods
 
     @staticmethod
     def process_pmcid(pmcid):
@@ -291,6 +333,47 @@ class IndraDBRefTable:
             return pmcid, None, version_number
 
         return pmcid, int(pmcid[3:]), version_number
+
+    @classmethod
+    def _get_pmcid_lookups(cls, pmcid_list, filter_ids=False):
+        # Process the ID list.
+        pmcid_num_set = set()
+        for pmcid in pmcid_list:
+            _, pmcid_num, _ = cls.process_pmcid(pmcid)
+            if not pmcid_num:
+                if filter_ids:
+                    logger.warning('"%s" does not look like a valid '
+                                   'pmcid. Skipping.' % pmcid)
+                    continue
+                else:
+                    raise ValueError('"%s" is not a valid pmcid.' % pmcid)
+            else:
+                pmcid_num_set.add(pmcid_num)
+        return pmcid_num_set
+
+    @classmethod
+    def pmcid_in(cls, pmcid_list, filter_ids=False):
+        """Get the sqlalchemy clauses for entries IN a list of pmcids."""
+        pmcid_num_set = cls._get_pmcid_lookups(pmcid_list, filter_ids)
+
+        # Return the constraint
+        if len(pmcid_num_set) == 1:
+            return cls.pmcid_num == pmcid_num_set.pop()
+        else:
+            return cls.pmcid_num.in_(pmcid_num_set)
+
+    @classmethod
+    def pmcid_notin(cls, pmcid_list, filter_ids=False):
+        """Get the sqlalchemy clause for entries NOT IN a list of pmcids."""
+        pmcid_num_set = cls._get_pmcid_lookups(pmcid_list, filter_ids)
+
+        # Return the constraint
+        if len(pmcid_num_set) == 1:
+            return cls.pmcid_num != pmcid_num_set.pop()
+        else:
+            return cls.pmcid_num.notin_(pmcid_num_set)
+
+    # DOI Processing methods
 
     @staticmethod
     def process_doi(doi):
@@ -321,53 +404,7 @@ class IndraDBRefTable:
         return doi, namespace, group_id
 
     @classmethod
-    def pmid_in(cls, pmid_list, filter_ids=False):
-        """Get sqlalchemy clauses for a list of pmids."""
-        # Process the ID list.
-        pmid_num_set = set()
-        for pmid in pmid_list:
-            _, pmid_num = cls.process_pmid(pmid)
-            if pmid_num is None:
-                if filter_ids:
-                    logger.warning('"%s" is not a valid pmid. Skipping.'
-                                   % pmid)
-                    continue
-                else:
-                    ValueError('"%s" is not a valid pmid.' % pmid)
-            pmid_num_set.add(pmid_num)
-
-        # Return the constraint
-        if len(pmid_num_set) == 1:
-            return cls.pmid_num == pmid_num_set.pop()
-        else:
-            return cls.pmid_num.in_(pmid_num_set)
-
-    @classmethod
-    def pmcid_in(cls, pmcid_list, filter_ids=False):
-        """Get the sqlalchemy clauses for a list of pmcids."""
-        # Process the ID list.
-        pmcid_num_set = set()
-        for pmcid in pmcid_list:
-            _, pmcid_num, _ = cls.process_pmcid(pmcid)
-            if not pmcid_num:
-                if filter_ids:
-                    logger.warning('"%s" does not look like a valid '
-                                   'pmcid. Skipping.' % pmcid)
-                    continue
-                else:
-                    raise ValueError('"%s" is not a valid pmcid.' % pmcid)
-            else:
-                pmcid_num_set.add(pmcid_num)
-
-        # Return the constraint
-        if len(pmcid_num_set) == 1:
-            return cls.pmcid_num == pmcid_num_set.pop()
-        else:
-            return cls.pmcid_num.in_(pmcid_num_set)
-
-    @classmethod
-    def doi_in(cls, doi_list, filter_ids=False):
-        """Get clause for looking up a list of dois."""
+    def _get_doi_lookups(cls, doi_list, filter_ids=False):
         # Parse the DOIs in the list.
         doi_tuple_set = set()
         for doi in doi_list:
@@ -381,6 +418,12 @@ class IndraDBRefTable:
                     raise ValueError('"%s" is not a valid doi.' % doi)
             else:
                 doi_tuple_set.add((doi_ns, doi_id))
+        return doi_tuple_set
+
+    @classmethod
+    def doi_in(cls, doi_list, filter_ids=False):
+        """Get clause for looking up entities IN a list of dois."""
+        doi_tuple_set = cls._get_doi_lookups(doi_list, filter_ids)
 
         # Return the constraint
         if len(doi_tuple_set) == 1:
@@ -390,8 +433,20 @@ class IndraDBRefTable:
             return tuple_(cls.doi_ns, cls.doi_id).in_(doi_tuple_set)
 
     @classmethod
+    def doi_notin(cls, doi_list, filter_ids=False):
+        """Get clause for looking up entities NOT IN a list of dois."""
+        doi_tuple_set = cls._get_doi_lookups(doi_list, filter_ids)
+
+        # Return the constraint
+        if len(doi_tuple_set) == 1:
+            doi_ns, doi_id = doi_tuple_set.pop()
+            return or_(cls.doi_ns != doi_ns, cls.doi_id != doi_id)
+        else:
+            return tuple_(cls.doi_ns, cls.doi_id).notin_(doi_tuple_set)
+
+    @classmethod
     def has_ref(cls, id_type, id_list, filter_ids=False):
-        """Get the appropriate constraint for the given ID list."""
+        """Get clause for entries IN the given ID list."""
         id_type = id_type.lower()
         if id_type == 'pmid':
             return cls.pmid_in(id_list, filter_ids)
@@ -402,7 +457,21 @@ class IndraDBRefTable:
         else:
             return getattr(cls, id_type).in_(id_list)
 
+    @classmethod
+    def not_has_ref(cls, id_type, id_list, filter_ids=False):
+        """Get clause for entries NOT IN the given ID list"""
+        id_type = id_type.lower()
+        if id_type == 'pmid':
+            return cls.pmid_notin(id_list, filter_ids)
+        elif id_type == 'pmcid':
+            return cls.pmcid_notin(id_list, filter_ids)
+        elif id_type == 'doi':
+            return cls.doi_notin(id_list, filter_ids)
+        else:
+            return getattr(cls, id_type).notin_(id_list)
+
     def get_ref_dict(self):
+        """Return the refs as a dictionary keyed by type."""
         ref_dict = {}
         for ref in self._ref_cols:
             val = getattr(self, ref, None)

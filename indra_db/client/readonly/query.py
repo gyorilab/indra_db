@@ -80,8 +80,10 @@ class AgentJsonSQL:
     def run(self):
         raise NotImplementedError
 
-    def print(self):
-        print(self.agg_q)
+    def __str__(self):
+        return str(self.agg_q.selectable.compile(
+            compile_kwargs={'literal_binds': True}
+        ))
 
 
 class InteractionSQL(AgentJsonSQL):
@@ -513,7 +515,7 @@ class Query(object):
         # Put it all together.
         selection = select(cols).select_from(stmts_q)
         if self._print_only:
-            print(selection)
+            print(selection.compile(compile_kwargs={'literal_binds': True}))
             return
 
         logger.debug(f"Executing query (get_statements):\n{selection}")
@@ -663,7 +665,7 @@ class Query(object):
             q = mk_hashes_q
 
         if self._print_only:
-            print(q)
+            print(q.selectable.compile(compile_kwargs={'literal_binds': True}))
             return
 
         # Make the query, and package the results.
@@ -828,7 +830,7 @@ class Query(object):
         order_params = ms.agg(ro, **kwargs)
         ms = self._apply_limits(ms, order_params, limit, offset)
         if self._print_only:
-            ms.print()
+            print(ms)
             return
         return ms.run()
 
@@ -1801,27 +1803,31 @@ class FromPapers(_TextRefCore):
 
     def _get_conditions(self, ro):
         conditions = []
+        id_groups = defaultdict(set)
         for id_type, paper_id in self.paper_list:
             if paper_id is None:
                 logger.warning("Got paper with id None.")
                 continue
 
-            # TODO: upgrade this to use new id formatting. This will require
-            # updating the ReadingRefLink table in the readonly build.
+            if id_type in ['trid', 'tcid']:
+                id_groups[id_type].add(int(paper_id))
+            else:
+                id_groups[id_type].add(str(paper_id))
+
+        for id_type, id_list in id_groups.items():
             tbl_attr = getattr(ro.ReadingRefLink, id_type)
             if not self._inverted:
                 if id_type in ['trid', 'tcid']:
-                    conditions.append(tbl_attr == int(paper_id))
+                    conditions.append(tbl_attr.in_(id_list))
                 else:
-                    constraint = ro.ReadingRefLink.has_ref(id_type,
-                                                           [str(paper_id)])
+                    constraint = ro.ReadingRefLink.has_ref(id_type, id_list)
                     conditions.append(constraint)
             else:
                 if id_type in ['trid', 'tcid']:
-                    conditions.append(tbl_attr != int(paper_id))
+                    conditions.append(tbl_attr.notin_(id_list))
                 else:
-                    # Note that this is a highly non-optimized approach.
-                    conditions.append(tbl_attr.notlike(str(paper_id)))
+                    constraint = ro.ReadingRefLink.not_has_ref(id_type, id_list)
+                    conditions.append(constraint)
         return conditions
 
     def _get_hash_query(self, ro, inject_queries=None):
@@ -2305,7 +2311,7 @@ class HasType(IntrusiveQuery):
         order_params = ms.agg(ro, **kwargs)
         ms = self._apply_limits(ms, order_params, limit, offset)
         if self._print_only:
-            ms.print()
+            print(ms)
             return
         return ms.run()
 

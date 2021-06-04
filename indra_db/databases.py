@@ -390,7 +390,15 @@ class DatabaseManager(object):
                 raise IndraDbException("Failed to grab session.")
             if self.__protected:
                 def no_flush(*a, **k):
-                    logger.error("Write not allowed!")
+                    #  If further errors occur as a result, please first think
+                    #  carefully whether you really want to write, and if you
+                    #  do, instantiate your database handle with
+                    #  "protected=False". Note that you should NOT be writing to
+                    #  readonly unless you are doing the initial load, or are
+                    #  testing something on a dev database. Do NOT write to a
+                    #  stable deployment.
+                    logger.info("Session flush attempted. Write not allowed in "
+                                "protected mode.")
                 self.session.flush = no_flush
 
     def get_tables(self):

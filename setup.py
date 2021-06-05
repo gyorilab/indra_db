@@ -7,9 +7,10 @@ def main():
     extras_require = {'test': ['nose', 'coverage', 'python-coveralls',
                                'nose-timer'],
                       'service': ['flask', 'flask-jwt-extended', 'flask-cors',
-                                  'flask-compress'],
+                                  'flask-compress', 'numpy'],
                       'cli': ['click', 'boto3'],
-                      'copy': ['pgcopy']}
+                      'copy': ['pgcopy'],
+                      'misc': ['cachetools', 'matplotlib', 'numpy', 'termcolor']}
     extras_require['all'] = list({dep for deps in extras_require.values()
                                   for dep in deps})
     setup(name='indra_db',

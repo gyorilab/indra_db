@@ -889,6 +889,13 @@ class TestDbApi(unittest.TestCase):
 
         assert pmids == mesh_pmids, "Not all pmids mapped ot mesh term."
 
+    def test_EPHA6_expand_failure(self):
+        self.__simple_time_test('post', 'expand', 'with_cur_counts=true',
+                                agent_json={'0': 'EPHA6'},
+                                hashes=['-22724684590296184',
+                                        '-5536416870993077',
+                                        '-31952004721698747'])
+
 
 class WebApp:
     """Mock the behavior of the "app" but on the real service."""

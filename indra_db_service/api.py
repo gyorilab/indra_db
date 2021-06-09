@@ -378,8 +378,7 @@ def expand_meta_row():
                 continue
 
         # Add english...
-        eng = _make_english_from_meta(entry['agents'],
-                                      entry.get('type'))
+        eng = _make_english_from_meta(entry)
         if not eng:
             logger.warning(f"English not formed for {key}:\n"
                            f"{entry}")

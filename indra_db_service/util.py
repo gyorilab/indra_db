@@ -144,7 +144,9 @@ def iter_free_agents(query_dict):
             yield entry
 
 
-def _make_english_from_meta(agent_json, stmt_type=None):
+def _make_english_from_meta(interaction):
+    stmt_type = interaction.get('type')
+    agent_json = interaction['agents']
     if stmt_type is None:
         if len(agent_json) == 0:
             eng = ''
@@ -162,6 +164,5 @@ def _make_english_from_meta(agent_json, stmt_type=None):
             else:
                 eng += ' is modified'
     else:
-        eng = _format_stmt_text(stmt_from_interaction({'agents': agent_json,
-                                                       'type': stmt_type}))
+        eng = _format_stmt_text(stmt_from_interaction(interaction))
     return eng

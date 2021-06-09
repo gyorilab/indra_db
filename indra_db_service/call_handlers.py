@@ -260,8 +260,7 @@ class ApiCall:
                         eng = _format_stmt_text(stmt)
                         entry['evidence'] = _format_evidence_text(stmt)
                     else:
-                        eng = _make_english_from_meta(entry['agents'],
-                                                      entry.get('type'))
+                        eng = _make_english_from_meta(entry)
                     if not eng:
                         logger.warning(f"English not formed for {key}:\n"
                                        f"{entry}")

@@ -635,7 +635,7 @@ class FromHashApiCall(StatementApiCall):
 class FromPapersApiCall(StatementApiCall):
     def _build_db_query(self):
         # Get the paper id.
-        if 'paper_ids' not in self.web_query:
+        if 'paper_ids' not in self.web_query or not self.web_query['paper_ids']:
             ids = request.json.get('ids')
             if not ids:
                 logger.error("No ids provided!")
@@ -643,7 +643,7 @@ class FromPapersApiCall(StatementApiCall):
             self.web_query['paper_ids'] = ids
 
         # Extract mesh IDs.
-        if 'mesh_ids' not in self.web_query:
+        if 'mesh_ids' not in self.web_query or not self.web_query['mesh_ids']:
             mesh_ids = request.json.get('mesh_ids', [])
             self.web_query['mesh_ids'] = mesh_ids
         return self._db_query_from_web_query()

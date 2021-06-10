@@ -3,7 +3,6 @@ import json
 import logging
 from os import path
 from datetime import datetime
-from argparse import ArgumentParser
 from collections import defaultdict
 
 from flask_cors import CORS
@@ -24,13 +23,12 @@ from indra_db.util.constructors import get_ro_host
 from indralab_auth_tools.auth import auth, resolve_auth, config_auth
 from indralab_auth_tools.log import note_in_log, set_log_service_name, \
     user_log_endpoint
-from rest_api.call_handlers import pop_request_bool
-from rest_api.errors import HttpUserError, ResultTypeError, InvalidCredentials, \
-    InsufficientPermission
+from indra_db_service.errors import HttpUserError, ResultTypeError,\
+    InvalidCredentials, InsufficientPermission
 
-from rest_api.config import *
-from rest_api.call_handlers import *
-from rest_api.util import sec_since, get_s3_client, gilda_ground, \
+from indra_db_service.config import *
+from indra_db_service.call_handlers import *
+from indra_db_service.util import sec_since, get_s3_client, gilda_ground, \
     _make_english_from_meta, get_html_source_info
 
 
@@ -43,7 +41,45 @@ logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
 # Set the name of this service for the usage logs.
-set_log_service_name(f"db-rest-api-{DEPLOYMENT if DEPLOYMENT else 'stable'}")
+if not TESTING['status']:
+    set_log_service_name(f"db-rest-api-{DEPLOYMENT if DEPLOYMENT else 'stable'}")
+else:
+    from functools import wraps
+    from werkzeug.exceptions import HTTPException
+    logger.warning("TESTING: No logging will be performed.")
+
+    def note_in_log(*args, **kwargs):
+        logger.info(f"Faux noting in the log: {args}, {kwargs}")
+
+    def end_log(status):
+        logger.info(f"Faux ending log with status {status}")
+
+    def user_log_endpoint(func):
+
+        @wraps(func)
+        def run_logged(*args, **kwargs):
+            logger.info(f"Faux running logged: {args}, {kwargs}")
+            try:
+                resp = func(*args, **kwargs)
+                if isinstance(resp, str):
+                    status = 200
+                elif isinstance(resp, tuple) and isinstance(resp[1], int):
+                    status = resp[1]
+                else:
+                    status = resp.status_code
+            except HTTPException as e:
+                end_log(e.code)
+                raise e
+            except Exception as e:
+                logger.warning("Request experienced internal error. "
+                               "Returning 500.")
+                logger.exception(e)
+                end_log(500)
+                raise
+            end_log(status)
+            return resp
+
+        return run_logged
 
 
 # Define a custom flask class to handle the deployment name prefix.
@@ -342,8 +378,7 @@ def expand_meta_row():
                 continue
 
         # Add english...
-        eng = _make_english_from_meta(entry['agents'],
-                                      entry.get('type'))
+        eng = _make_english_from_meta(entry)
         if not eng:
             logger.warning(f"English not formed for {key}:\n"
                            f"{entry}")
@@ -508,14 +543,3 @@ def list_curations(stmt_hash, src_hash):
 def handle_user_error(error):
     logger.error(f"Got user error ({error.err_code}): {error.msg}")
     return error.response()
-
-
-def main():
-    parser = ArgumentParser()
-    parser.add_argument('-p', '--port', default=5000)
-    args = parser.parse_args()
-    app.run(port=args.port)
-
-
-if __name__ == '__main__':
-    main()

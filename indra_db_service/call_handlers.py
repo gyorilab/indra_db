@@ -1,6 +1,6 @@
 __all__ = ['ApiCall', 'FromAgentsApiCall', 'FromHashApiCall',
            'FromHashesApiCall', 'FromPapersApiCall', 'FromSimpleJsonApiCall',
-           'FromAgentJsonApiCall', 'DirectQueryApiCall']
+           'FromAgentJsonApiCall', 'DirectQueryApiCall', 'pop_request_bool']
 
 import sys
 import json
@@ -20,14 +20,13 @@ from indra.assemblers.html.assembler import HtmlAssembler, _format_stmt_text, \
 from indra_db.client.readonly import *
 from indra_db.client.principal.curation import *
 from indralab_auth_tools.log import note_in_log, is_log_running
-from indralab_auth_tools.src.models import UserDatabaseError
 
-from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
+from indra_db_service.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
     jwt_nontest_optional, MAX_LIST_LEN
-from rest_api.errors import HttpUserError, ResultTypeError
-from rest_api.util import LogTracker, sec_since, get_source, process_agent, \
-    process_mesh_term, DbAPIError, iter_free_agents, _make_english_from_meta, \
-    get_html_source_info
+from indra_db_service.errors import HttpUserError, ResultTypeError
+from indra_db_service.util import LogTracker, sec_since, get_source,\
+    process_agent,  process_mesh_term, DbAPIError, iter_free_agents, \
+    _make_english_from_meta, get_html_source_info
 
 logger = logging.getLogger('call_handlers')
 
@@ -261,8 +260,7 @@ class ApiCall:
                         eng = _format_stmt_text(stmt)
                         entry['evidence'] = _format_evidence_text(stmt)
                     else:
-                        eng = _make_english_from_meta(entry['agents'],
-                                                      entry.get('type'))
+                        eng = _make_english_from_meta(entry)
                     if not eng:
                         logger.warning(f"English not formed for {key}:\n"
                                        f"{entry}")
@@ -637,7 +635,9 @@ class FromHashApiCall(StatementApiCall):
 class FromPapersApiCall(StatementApiCall):
     def _build_db_query(self):
         # Get the paper id.
-        if 'paper_ids' not in self.web_query:
+        if 'paper_ids' not in self.web_query or not self.web_query['paper_ids']:
+            if not request.json:
+                abort(Response('No paper IDs given!', 400))
             ids = request.json.get('ids')
             if not ids:
                 logger.error("No ids provided!")
@@ -645,9 +645,10 @@ class FromPapersApiCall(StatementApiCall):
             self.web_query['paper_ids'] = ids
 
         # Extract mesh IDs.
-        if 'mesh_ids' not in self.web_query:
-            mesh_ids = request.json.get('mesh_ids', [])
-            self.web_query['mesh_ids'] = mesh_ids
+        if 'mesh_ids' not in self.web_query or not self.web_query['mesh_ids']:
+            if request.json:
+                mesh_ids = request.json.get('mesh_ids', [])
+                self.web_query['mesh_ids'] = mesh_ids
         return self._db_query_from_web_query()
 
 

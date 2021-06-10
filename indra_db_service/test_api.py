@@ -20,12 +20,12 @@ from indra.sources.indra_db_rest.query_results import QueryResult, \
     StatementQueryResult
 from indra_db.client import HasAgent, HasType, FromMeshIds
 
-from rest_api.util import get_source
-from rest_api.config import MAX_STMTS, REDACT_MESSAGE, TESTING
+from indra_db_service.util import get_source
+from indra_db_service.config import MAX_STMTS, REDACT_MESSAGE, TESTING
 
 logger = logging.getLogger('db_api_unit_tests')
 try:
-    from rest_api.api import app
+    from indra_db_service.api import app
 except Exception as e:
     logger.warning(f"Could not load app: {e}")
     app = None
@@ -55,14 +55,6 @@ def _check_stmt_agents(resp, agents):
 
 # Change this flag to choose to test a remote deployment.
 TEST_DEPLOYMENT = False
-
-
-def test_secret():
-    import os
-    print("SECRET:", os.environ)
-    print("The Secret: it is secret")
-    assert False, "Oh no!"
-    return
 
 
 class TestDbApi(unittest.TestCase):
@@ -847,31 +839,7 @@ class TestDbApi(unittest.TestCase):
                          for ev in ev_list}
             assert len(ev_tuples) == len(ev_list), "Evidence is not unique."
             for ev in ev_list:
-                found_pmid = False
-                if 'pmid' in ev:
-                    pmids.add(ev['pmid'])
-                    found_pmid = True
-
-                if 'text_refs' in ev:
-                    tr_dict = ev['text_refs']
-                    if 'TRID' in tr_dict:
-                        tr = db.select_one(db.TextRef,
-                                           db.TextRef.id == tr_dict['TRID'])
-                        pmids.add(tr.pmid)
-                        found_pmid = True
-                    if 'PMID' in tr_dict:
-                        pmids.add(tr_dict['PMID'])
-                        found_pmid = True
-                    if 'DOI' in tr_dict:
-                        tr_list = db.select_all(
-                            db.TextRef,
-                            db.TextRef.doi_in([tr_dict['DOI']])
-                        )
-                        pmids |= {tr.pmid for tr in tr_list if tr.pmid}
-                        found_pmid = True
-
-                assert found_pmid,\
-                    "How could this have been mapped to mesh?"
+                pmids.add(ev['pmid'])
         pmids = {int(pmid) for pmid in pmids if pmid is not None}
 
         mesh_pmids = {n for n, in db.select_all(
@@ -887,7 +855,14 @@ class TestDbApi(unittest.TestCase):
             db.MtiRefAnnotationsTest.is_concept.is_(True)
         )}
 
-        assert pmids == mesh_pmids, "Not all pmids mapped ot mesh term."
+        assert pmids == mesh_pmids, "Not all pmids mapped to mesh term."
+
+    def test_EPHA6_expand_failure(self):
+        self.__simple_time_test('post', 'expand', 'with_cur_counts=true',
+                                agent_json={'0': 'EPHA6'},
+                                hashes=['-22724684590296184',
+                                        '-5536416870993077',
+                                        '-31952004721698747'])
 
 
 class WebApp:

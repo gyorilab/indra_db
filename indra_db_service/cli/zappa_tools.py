@@ -61,13 +61,3 @@ def fix_permissions(deployment) -> None:
                                      SourceArn=source_arn,
                                      StatementId=statement_id)
     return
-
-
-def main():
-    import sys
-    deployment = sys.argv[1]
-    fix_permissions(deployment)
-
-
-if __name__ == '__main__':
-    main()

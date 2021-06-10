@@ -1,4 +1,0 @@
-flask
-flask_compress
-flask_cors
-flask_jwt_extended

@@ -25,7 +25,7 @@
 
 <script>
   import LineChart from './LineChart'
-  import Multiselect from 'vue-multiselect'
+  import Multiselect from '@vueform/multiselect'
 
   export default {
     name: "AmountView",
@@ -148,7 +148,7 @@
 <!-- <style src="vue-multiselect/dist/vue-multiselect.min.css"></style> -->
 
 <style scoped>
-  @import "~vue-multiselect/dist/vue-multiselect.min.css";
+  @import "~@vueform/multiselect/themes/default.css";
 
   .form {
     width: 50em;

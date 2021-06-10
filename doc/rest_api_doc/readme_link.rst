@@ -1,2 +1,2 @@
-.. mdinclude:: ../../rest_api/README.md
+.. mdinclude:: ../../indra_db_service/README.md
 

@@ -9,8 +9,8 @@ Further INDRA Database documentation
    modules/index.rst
 
 
-INDRA Database REST API
-=======================
+INDRA Database REST Service
+===========================
 
 .. toctree::
    :maxdepth: 3

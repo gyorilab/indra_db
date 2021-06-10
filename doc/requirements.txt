@@ -5,7 +5,7 @@ ipython
 matplotlib
 future
 requests
-m2r
+m2r2
 cachetools
 git+https://github.com/sorgerlab/indra.git
 

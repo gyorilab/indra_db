@@ -57,14 +57,6 @@ def _check_stmt_agents(resp, agents):
 TEST_DEPLOYMENT = False
 
 
-def test_secret():
-    import os
-    print("SECRET:", os.environ)
-    print("The Secret: it is secret")
-    assert False, "Oh no!"
-    return
-
-
 class TestDbApi(unittest.TestCase):
     def setUp(self):
         if TEST_DEPLOYMENT:

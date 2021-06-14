@@ -446,15 +446,19 @@ class Query(object):
             An object holding the JSON result from the database, as well as the
             metadata for the query.
         """
+        print(0)
+        print(f"{limit=}, {offset=}, {sort_by=}, {ev_limit=}")
         if ro is None:
             ro = get_ro('primary')
 
         # If the result is by definition empty, save ourselves time and work.
+        print(1)
         if self.empty:
             return StatementQueryResult.empty(limit, offset, self.to_json())
 
         # Get the query for mk_hashes and ev_counts, and apply the generic
         # limits to it.
+        print(2)
         mk_hashes_q = self.build_hash_query(ro)
         mk_hashes_q = mk_hashes_q.distinct()
         mk_hash_obj, ev_count_obj, belief_obj = self._get_core_cols(ro)
@@ -468,6 +472,7 @@ class Query(object):
 
         # Do the difficult work of turning a query for hashes and ev_counts
         # into a query for statement JSONs. Return the results.
+        print(3)
         mk_hashes_al = mk_hashes_q.subquery('mk_hashes')
         cont_q = self._get_content_query(ro, mk_hashes_al, ev_limit)
         if evidence_filter is not None:
@@ -477,12 +482,14 @@ class Query(object):
 
         # If there is no evidence, whittle down the results so we only get one
         # pa_json for each hash.
+        print(4)
         if ev_limit == 0:
             cont_q = cont_q.distinct()
 
         # If we have a limit on the evidence, we need to do a lateral join.
         # If we are just getting all the evidence, or none of it, just put an
         # alias on the subquery.
+        print(5)
         if ev_limit is not None and ev_limit != 0:
             cont_q = cont_q.limit(ev_limit)
             json_content_al = cont_q.subquery().lateral('json_content')
@@ -503,6 +510,7 @@ class Query(object):
                     json_content_al.c.raw_json, json_content_al.c.pa_json]
 
         # Join up with other tables to pull metadata.
+        print(6)
         if ev_limit != 0:
             stmts_q = (stmts_q
                        .outerjoin(ro.ReadingRefLink,
@@ -516,22 +524,29 @@ class Query(object):
             ref_link_keys = None
 
         # Put it all together.
+        print(7)
         selection = select(cols).select_from(stmts_q)
+        selection_print = selection.compile(compile_kwargs={'literal_binds': True})
         if self._print_only:
-            print(selection.compile(compile_kwargs={'literal_binds': True}))
+            print(selection_print)
             return
 
-        logger.debug(f"Executing query (get_statements):\n{selection}")
+        logger.info("Executing query (get_statements)")
+        logger.debug(f"SQL:\n{selection_print}")
+        print(selection_print)
 
         # Execute the query.
+        print(8)
         proxy = ro.session.connection().execute(selection)
         res = proxy.fetchall()
+        logger.info("Query resolved.")
         if res:
             logger.debug("res is %d row by %d cols." % (len(res), len(res[0])))
         else:
             logger.debug("res is empty.")
 
         # Unpack the statements.
+        print(9)
         stmts_dict = OrderedDict()
         ev_counts = OrderedDict()
         beliefs = OrderedDict()

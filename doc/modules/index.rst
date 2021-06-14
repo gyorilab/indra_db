@@ -5,10 +5,10 @@ INDRA Database modules
    :maxdepth: 3
 
    client/index.rst
-   util/index.rst
-   managers/index.rst
+   cli/index.rst
    reading/index.rst
    preassembly/index.rst
    schemas/index.rst
+   util/index.rst
    misc.rst
 

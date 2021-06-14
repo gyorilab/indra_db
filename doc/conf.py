@@ -315,6 +315,10 @@ MOCK_MODULES = [
     'nltk', 'reportlab', 'reportlab.lib', 'reportlab.lib.enums',
     'reportlab.lib.pagesizes', 'reportlab.platypus', 'reportlab.lib.styles',
     'reportlab.lib.units', 'indra.tools.assemble_corpus', 'indra.ontology.bio',
+    'indra_reading', 'indra_reading.util', 'indra_reading.scripts.submit_reading_pipeline',
+    'indra_reading.batch.submitters.reading_submitter', 'indra_reading.readers',
+    'indra_reading.util.script_tools', 'indra_reading.readers.util', 'indra_reading.batch',
+    'indra_reading.batch.submitters.submitter', 'indra_reading.batch.util'
     ]
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.MagicMock()

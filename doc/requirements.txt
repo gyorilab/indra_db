@@ -4,6 +4,7 @@ mock
 ipython
 matplotlib
 future
+sphinx-click
 requests
 m2r2
 cachetools

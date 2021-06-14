@@ -41,7 +41,8 @@ extensions = [
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
     'citations',
-    'm2r2'
+    'm2r2',
+    'sphinx_click'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

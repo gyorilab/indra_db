@@ -248,12 +248,10 @@ class DatabaseManager(object):
         # Check to see if the database if available.
         self.available = True
         try:
-            print(f"Testing {self.url=}")
-            res = create_engine(
+            create_engine(
                 self.url,
                 connect_args={'connect_timeout': 1}
             ).execute('SELECT 1 AS ping;')
-            print(f"Got {list(res)}")
         except Exception as err:
             logger.warning(f"Database {repr(self.url)} is not available: {err}")
             self.available = False

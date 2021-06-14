@@ -61,7 +61,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'INDRA DB'
-copyright = u'2018, P. A. Greene, J. A. Bachman, B. M. Gyori'
+copyright = u'2021, P. A. Greene, J. A. Bachman, B. M. Gyori'
 author = u'P. A. Greene, J. A. Bachman, B. M. Gyori'
 
 # The version info for the project you're documenting, acts as replacement for

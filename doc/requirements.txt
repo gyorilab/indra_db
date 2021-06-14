@@ -8,6 +8,7 @@ psycopg2
 sphinx-click
 requests
 m2r2
+termcolor
 cachetools
 git+https://github.com/sorgerlab/indra.git
 

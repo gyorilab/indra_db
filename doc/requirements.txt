@@ -4,6 +4,7 @@ mock
 ipython
 matplotlib
 future
+psycopg2
 sphinx-click
 requests
 m2r2

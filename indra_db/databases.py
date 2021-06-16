@@ -293,7 +293,7 @@ class DatabaseManager(object):
             self.grab_session()
             self.session.rollback()
         except:
-            print("Failed to execute rollback of database upon deletion.")
+            logger.error("Failed to execute rollback of database upon deletion.")
 
     @classmethod
     def create_instance(cls, instance_name, size, tag_dict=None):

@@ -2,10 +2,10 @@ import ftplib
 import re
 import csv
 import tarfile
+import click
 import zlib
 import logging
 import pickle
-import multiprocessing as mp
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 
@@ -16,18 +16,18 @@ from datetime import datetime, timedelta
 from os import path, remove, rename, listdir
 from typing import Tuple
 
-from indra.literature.crossref_client import get_publisher
-from indra.literature.elsevier_client import download_article_from_ids
-
 from indra.util import zip_string, batch_iter
 from indra.literature import pubmed_client
 from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
+from indra.literature.crossref_client import get_publisher
+from indra.literature.elsevier_client import download_article_from_ids
 
 from indra_db.databases import texttypes, formats
 from indra_db.databases import sql_expressions as sql_exp
 from indra_db.util.data_gatherer import DataGatherer, DGContext
 
+from .util import format_date
 
 try:
     from psycopg2 import DatabaseError
@@ -1659,3 +1659,91 @@ class Elsevier(ContentManager):
         tr_query = new_trs.except_(tr_w_pmc_q)
 
         return self._get_elsevier_content(db, tr_query, False)
+
+
+@click.group()
+def content():
+    """Manage the text refs and content on the database."""
+
+
+@content.command()
+@click.argument("task", type=click.Choice(["upload", "update"]))
+@click.argument("sources", nargs=-1,
+                type=click.Choice(["pubmed", "pmc_oa", "manuscripts"]),
+                required=False)
+@click.option('-c', '--continuing', is_flag=True,
+              help=('Continue uploading or updating, picking up where you left '
+                    'off.'))
+@click.option('-d', '--debug', is_flag=True,
+              help='Run with debugging level output.')
+def run(task, sources, continuing, debug):
+    """Upload/update text refs and content on the database.
+
+    \b
+    Usage tasks are:
+     - upload: use if the knowledge bases have not yet been added.
+     - update: if they have been added, but need to be updated.
+
+    The currently available sources are "pubmed", "pmc_oa", and "manuscripts".
+    """
+    # Import what is needed.
+    from indra_db.util import get_db
+
+    content_managers = [Pubmed, PmcOA, Manuscripts]
+    db = get_db('primary')
+
+    # Set the debug level.
+    if debug:
+        import logging
+        from indra_db.databases import logger as db_logger
+        logger.setLevel(logging.DEBUG)
+        db_logger.setLevel(logging.DEBUG)
+
+    # Define which sources we touch, just once
+    if not sources:
+        sources = {cm.my_source for cm in content_managers}
+    else:
+        sources = set(sources)
+    selected_managers = (CM for CM in content_managers
+                         if CM.my_source in sources)
+
+    # Perform the task.
+    for ContentManager in selected_managers:
+        if task == 'upload':
+            print(f"Uploading {ContentManager.my_source}.")
+            ContentManager().populate(db, continuing)
+        elif task == 'update':
+            print(f"Updating {ContentManager.my_source}")
+            ContentManager().update(db)
+
+
+@content.command('list')
+@click.option('-l', '--long', is_flag=True,
+              help="Include a list of the most recently added content for all "
+                   "source types.")
+def show_list(long):
+    """List the current knowledge sources and their status."""
+    # Import what is needed.
+    import tabulate
+    from sqlalchemy import func
+    from indra_db.util import get_db
+
+    content_managers = [Pubmed, PmcOA, Manuscripts]
+    db = get_db('primary')
+
+    # Generate the rows.
+    source_updates = {cm.my_source: format_date(cm.get_latest_update(db))
+                      for cm in content_managers}
+    if long:
+        print("This may take a while...", end='', flush=True)
+        q = (db.session.query(db.TextContent.source,
+                              func.max(db.TextContent.insert_date))
+                       .group_by(db.TextContent.source))
+        rows = [(src, source_updates.get(src, '-'), format_date(last_insert))
+                for src, last_insert in q.all()]
+        headers = ('Source', 'Last Updated', 'Latest Insert')
+        print("\r", end='')
+    else:
+        rows = [(k, v) for k, v in source_updates.items()]
+        headers = ('Source', 'Last Updated')
+    print(tabulate.tabulate(rows, headers, tablefmt='simple'))

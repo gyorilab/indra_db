@@ -1,10 +1,10 @@
 import json
 import boto3
+import click
 import logging
 from collections import defaultdict
 
 from indra.statements import Statement
-from indra_db.reading.read_db import DatabaseStatementData, generate_reading_id
 from indra_db.util import S3Path, get_db, insert_raw_agents
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,8 @@ class XddManager:
         return
 
     def dump_statements(self, db):
+        from indra_db.reading.read_db import DatabaseStatementData, \
+            generate_reading_id
         tc_rows = set(self.text_content.values())
         tc_cols = ('text_ref_id', 'source', 'format', 'text_type', 'preprint')
         logger.info(f"Dumping {len(tc_rows)} text content.")
@@ -205,3 +207,15 @@ def _get_trids_from_dois(db, dois):
 
     # Make the full mapping table.
     return {tr.doi.upper(): tr.id for tr in tr_list}
+
+
+@click.group()
+def xdd():
+    """Manage xDD runs."""
+
+
+@xdd.command()
+def run():
+    """Process the latest outputs from xDD."""
+    db = get_db('primary')
+    XddManager().run(db)

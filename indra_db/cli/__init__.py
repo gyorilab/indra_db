@@ -2,7 +2,7 @@ import click
 
 from .knowledgebase import kb
 from .content import content
-from .dump import dump
+from .dump import dump_cli
 from .preassembly import pa
 from .reading import reading
 from .xdd import xdd
@@ -42,7 +42,7 @@ def pipeline_stats(task):
 
 main.add_command(kb)
 main.add_command(content)
-main.add_command(dump)
+main.add_command(dump_cli)
 main.add_command(pa)
 main.add_command(reading)
 main.add_command(xdd)

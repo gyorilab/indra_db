@@ -581,12 +581,12 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         principal_db.drop_schema('readonly')
 
 
-@click.group()
-def dump():
+@click.group('dump')
+def dump_cli():
     """Manage the data dumps from Principal to files and Readonly."""
 
 
-@dump.command()
+@dump_cli.command()
 @click.option('-P', '--principal', default="primary",
               help="Specify which principal database to use.")
 @click.option('-R', '--readonly', default="primary",
@@ -611,7 +611,7 @@ def run(principal, readonly, allow_continue, delete_existing, load_only,
          allow_continue, load_only, dump_only)
 
 
-@dump.command('list')
+@dump_cli.command('list')
 @click.argument("state", type=click.Choice(["started", "done", "unfinished"]),
                 required=False)
 def show_list(state):

@@ -7,13 +7,17 @@ __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
 import os
 import zlib
 import boto3
+import click
 import pickle
 import logging
 import tempfile
 from collections import defaultdict
+
 from indra.statements.validate import assert_valid_statement
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
+
+from .util import format_date
 
 logger = logging.getLogger(__name__)
 
@@ -510,3 +514,62 @@ class ConibManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(filtered_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+
+
+@click.group()
+def kb():
+    """Manage the Knowledge Bases used by the database."""
+
+
+@kb.command()
+@click.argument("task", type=click.Choice(["upload", "update"]))
+@click.argument("sources", nargs=-1, type=click.STRING, required=False)
+def run(task, sources):
+    """Upload/update the knowledge bases used by the database.
+
+    \b
+    Usage tasks are:
+     - upload: use if the knowledge bases have not yet been added.
+     - update: if they have been added, but need to be updated.
+
+    Specify which knowledge base sources to update by their name, e.g. "Pathway
+    Commons" or "pc". If not specified, all sources will be updated.
+    """
+    from indra_db.util import get_db
+    db = get_db('primary')
+
+    # Determine which sources we are working with
+    source_set = None
+    if sources:
+        source_set = {s.lower() for s in sources}
+    selected_kbs = (M for M in KnowledgebaseManager.__subclasses__()
+                    if not source_set or M.name.lower() in source_set
+                    or M.short_name in source_set)
+
+    # Handle the list option.
+    if task == 'list':
+        return
+
+    # Handle the other tasks.
+    for Manager in selected_kbs:
+        kbm = Manager()
+
+        # Perform the requested action.
+        if task == 'upload':
+            print(f'Uploading {kbm.name}...')
+            kbm.upload(db)
+        elif task == 'update':
+            print(f'Updating {kbm.name}...')
+            kbm.update(db)
+
+
+@kb.command('list')
+def show_list():
+    """List the knowledge sources and their status."""
+    import tabulate
+    from indra_db.util import get_db
+    db = get_db('primary')
+    rows = [(M.name, M.short_name, format_date(M.get_last_update(db)))
+            for M in KnowledgebaseManager.__subclasses__()]
+    print(tabulate.tabulate(rows, ('Name', 'Short Name', 'Last Updated'),
+                            tablefmt='simple'))

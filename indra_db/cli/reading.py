@@ -1,16 +1,16 @@
+import click
 import logging
 from os import path
 from functools import wraps
 from datetime import datetime, timedelta
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from sqlalchemy import func
 
-from indra_reading.readers import get_reader_class
 
-from indra_db.reading import read_db as rdb
-from indra_db.util import get_db
-from indra_db.reading.submitter import DbReadingSubmitter
+# Note that imports from indra_reading and indra_db.reading are burried in
+# functions to avoid imports of complex dependencies for simple CLI access.
+
+from .util import format_date
 
 logger = logging.getLogger(__name__)
 THIS_DIR = path.dirname(path.abspath(__file__))
@@ -80,6 +80,7 @@ class ReadingManager(object):
         return run_and_record_update
 
     def get_version(self, reader_name):
+        from indra_reading.readers import get_reader_class
         return get_reader_class(reader_name).get_version()
 
     @staticmethod
@@ -156,6 +157,8 @@ class BulkReadingManager(ReadingManager):
     @ReadingManager._run_all_readers
     def read_new(self, db, reader_name):
         """Update the readings and raw statements in the database."""
+        from indra_reading.readers import get_reader_class
+
         self.end_datetime = self.run_datetime
         latest_updatetime = self._get_latest_updatetime(db, reader_name)
         if latest_updatetime is not None:
@@ -241,6 +244,8 @@ class BulkAwsReadingManager(BulkReadingManager):
         return self.reader_versions[reader_name]
 
     def _run_reading(self, db, tcids, reader_name):
+        from indra_db.reading.submitter import DbReadingSubmitter
+
         ids_per_job = self.ids_per_job[reader_name.lower()]
         if ids_per_job is not None and len(tcids)/ids_per_job >= 1000:
             raise ReadingUpdateError("Too many id's for one submission. "
@@ -317,6 +322,7 @@ class BulkLocalReadingManager(BulkReadingManager):
         return
 
     def _run_reading(self, db, tcids, reader_name):
+        from indra_db.reading import read_db as rdb
         ids_per_job = 5000
         if len(tcids) > ids_per_job:
             raise ReadingUpdateError("Too many id's to run locally. Try "
@@ -330,3 +336,79 @@ class BulkLocalReadingManager(BulkReadingManager):
         rdb.run_reading(readers, tcids, db=db, batch_size=ids_per_job,
                         verbose=self.verbose)
         return
+
+
+@click.group()
+def reading():
+    """Manage the reading jobs."""
+
+
+@reading.command()
+@click.argument('task', type=click.Choice(["all", "new"]))
+@click.option('-b', '--buffer', type=int, default=1,
+              help='Set the number of buffer days to read prior to the most '
+                   'recent update. The default is 1 day.')
+@click.option('--project-name', type=str,
+              help="Set the project name to be different from the config "
+                   "default.")
+def run(task, buffer, project_name):
+    """Manage the the reading of text content on AWS.
+
+    \b
+    Tasks:
+    - "all": Read all the content available.
+    - "new": Read only the new content that has not been read.
+    """
+    from indra_db.util import get_db
+    db = get_db('primary')
+    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
+    bulk_manager = BulkAwsReadingManager(readers,
+                                         buffer_days=buffer,
+                                         project_name=project_name)
+    if task == 'all':
+        bulk_manager.read_all(db)
+    elif task == 'new':
+        bulk_manager.read_new(db)
+
+
+@reading.command()
+@click.argument('task', type=click.Choice(["all", "new"]))
+@click.option('-b', '--buffer', type=int, default=1,
+              help='Set the number of buffer days to read prior to the most '
+                   'recent update. The default is 1 day.')
+@click.option('-n', '--num-procs', type=int,
+              help="Select the number of processors to use.")
+def run_local(task, buffer, num_procs):
+    """Run reading locally, save the results on the database.
+
+    \b
+    Tasks:
+    - "all": Read all the content available.
+    - "new": Read only the new content that has not been read.
+    """
+    from indra_db.util import get_db
+    db = get_db('primary')
+
+    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
+    bulk_manager = BulkLocalReadingManager(readers,
+                                           buffer_days=buffer,
+                                           n_procs=num_procs)
+    if task == 'all':
+        bulk_manager.read_all(db)
+    elif task == 'new':
+        bulk_manager.read_new(db)
+
+
+@reading.command('list')
+def show_list():
+    """List the readers and their most recent runs."""
+    import tabulate
+    from indra_db.util import get_db
+
+    db = get_db('primary')
+    rows = [(rn, format_date(lu))
+            for rn, lu in ReadingManager.get_latest_updates(db).items()]
+    headers = ('Reader', 'Last Updated')
+    print(tabulate.tabulate(rows, headers))
+
+

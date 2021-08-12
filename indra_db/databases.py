@@ -1317,10 +1317,14 @@ class PrincipalDatabaseManager(DatabaseManager):
             f"extra in tables={in_ro-to_create}."
 
         # Dump the belief dict into the database.
-        self.Belief.__table__.create(bind=self.__engine)
-        self.copy(self.Belief.full_name(),
-                  [(int(h), n) for h, n in belief_dict.items()],
-                  ('mk_hash', 'belief'))
+        if 'belief' in self.get_active_tables(schema='readonly'):
+            logger.info("[pre] Upload of belief done, moving on...")
+        else:
+            logger.info("[pre] Uploading belief scores...")
+            self.Belief.__table__.create(bind=self.__engine)
+            self.copy(self.Belief.full_name(),
+                      [(int(h), n) for h, n in belief_dict.items()],
+                      ('mk_hash', 'belief'))
 
         # Build the tables.
         for i, ro_name in enumerate(CREATE_ORDER):

@@ -245,7 +245,8 @@ def normalize_sif_names(sif_df: pd.DataFrame):
 
 
 def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
-                   belief_dict, pkl_filename=None):
+                   belief_dict, pkl_filename=None,
+                   normalize_names: bool = False):
     """Make a pickled DataFrame of the db content, one row per stmt.
 
     Parameters
@@ -267,6 +268,9 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
         reconverting). If an S3 path is given (i.e., pkl_filename starts with
         `s3:`), the file is loaded to/saved from S3. If not given,
         reloads the content (overriding reload).
+    normalize_names :
+        If True, detect and try to merge name duplicates (same entity with
+        different names, e.g. Loratadin vs loratadin). Default: False
 
     Returns
     -------
@@ -403,6 +407,8 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
             else:
                 with open(pkl_filename, 'rb') as f:
                     df = pickle.load(f)
+    if normalize_names:
+        normalize_sif_names(sif_df=df)
     return df
 
 

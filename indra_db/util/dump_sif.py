@@ -197,6 +197,53 @@ def get_source_counts(pkl_filename=None, ro=None):
     return ev
 
 
+def normalize_sif_names(sif_df: pd.DataFrame):
+    """Try to normalize duplicated names in the sif dump dataframe
+
+    This process tries to normalize names of entities in the sif dump where
+    the namespace and identifier are the same but the names differ,
+    e.g. 'Loratadine' vs 'loratadine' both with CHEBI:6538
+
+    Parameters
+    ----------
+    sif_df :
+        The sif dataframe
+    """
+    from indra.ontology.bio import bio_ontology
+    logger.info('Normalizing duplicated names in sif dataframe')
+
+    def _get_name_case_dupl(sif):
+        ns_id_name_tups = set(
+            zip(sif.agA_ns, sif.agA_id, sif.agA_name)).union(
+            set(zip(sif.agB_ns, sif.agB_id, sif.agB_name)))
+        ns_id_to_name = {}
+        for ns_, id_, name in ns_id_name_tups:
+            tup = (ns_, id_)
+            if tup in ns_id_to_name:
+                ns_id_to_name[tup].append(name)
+            else:
+                ns_id_to_name[tup] = [name]
+        duplicated = {}
+        for t, name_list in ns_id_to_name.items():
+            if len(name_list) > 1:
+                duplicated[t] = name_list
+        return duplicated
+
+    def _rename(ns_, id_, sif):
+        gname = bio_ontology.get_name(ns_, id_)
+        if gname:
+            sif.loc[(sif_df.agA_id == id_) & (sif_df.agA_ns == ns_),
+                    'agA_name'] = gname
+            sif.loc[(sif_df.agB_id == id_) & (sif_df.agB_ns == ns_),
+                    'agB_name'] = gname
+
+    duplicated_names = _get_name_case_dupl(sif_df)
+    logger.info(f'Found {len(duplicated_names)} entities with multiple names '
+                f'for the same grounding')
+    for (_ns, _id) in duplicated_names:
+        _rename(_ns, _id, sif_df)
+
+
 def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
                    belief_dict, pkl_filename=None):
     """Make a pickled DataFrame of the db content, one row per stmt.

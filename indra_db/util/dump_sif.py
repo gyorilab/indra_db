@@ -200,9 +200,11 @@ def get_source_counts(pkl_filename=None, ro=None):
 def normalize_sif_names(sif_df: pd.DataFrame):
     """Try to normalize duplicated names in the sif dump dataframe
 
-    This process tries to normalize names of entities in the sif dump where
+    This function tries to normalize names of entities in the sif dump where
     the namespace and identifier are the same but the names differ,
-    e.g. 'Loratadine' vs 'loratadine' both with CHEBI:6538
+    e.g. 'Loratadine' vs 'loratadine' both with CHEBI:6538. The
+    'bio_ontology' is the arbiter of what constitutes a normalized
+    name. If no name exists, no further attempt to change the name is made.
 
     Parameters
     ----------

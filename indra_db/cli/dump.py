@@ -286,7 +286,8 @@ class Sif(Dumper):
                  belief_file=belief_path,
                  reload=True,
                  reconvert=True,
-                 ro=self.db)
+                 ro=self.db,
+                 normalize_names=True)
 
 
 class Belief(Dumper):

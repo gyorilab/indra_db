@@ -466,7 +466,7 @@ def get_parser():
 
 def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
              db_res_file=None, csv_file=None, reload=True, reconvert=True,
-             ro=None):
+             ro=None, normalize_names: bool = False):
     """Build and dump a sif dataframe of PA statements with grounded agents
 
     Parameters
@@ -500,6 +500,9 @@ def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
     ro : Optional[PrincipalDatabaseManager]
         Provide a DatabaseManager to load database content from. If not
         provided, `get_ro('primary')` will be used.
+    normalize_names :
+        If True, detect and try to merge name duplicates (same entity with
+        different names, e.g. Loratadin vs loratadin). Default: False
     """
     def _load_file(path):
         if isinstance(path, str) and path.startswith('s3:') or \
@@ -537,7 +540,8 @@ def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
                         db_content=db_content, src_count_dict=src_count,
-                        res_pos_dict=res_pos, belief_dict=belief)
+                        res_pos_dict=res_pos, belief_dict=belief,
+                        normalize_names=normalize_names)
 
     if csv_file:
         if isinstance(csv_file, str) and csv_file.startswith('s3:'):

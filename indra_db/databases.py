@@ -71,7 +71,7 @@ def compile_delete(element, compiler, **kw):
     return text
 
 try:
-    from indra_db.copy import *
+    from indra_db.copy_utils import *
     CAN_COPY = True
 except ImportError as e:
     logger.warning("Copy utilities unavailable: %s" % str(e))

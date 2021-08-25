@@ -212,6 +212,7 @@ def normalize_sif_names(sif_df: pd.DataFrame):
         The sif dataframe
     """
     from indra.ontology.bio import bio_ontology
+    bio_ontology.initialize()
     logger.info('Normalizing duplicated names in sif dataframe')
 
     def _get_name_case_dupl(sif):

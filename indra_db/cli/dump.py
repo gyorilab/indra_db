@@ -509,24 +509,6 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Belief dump exists, skipping.")
 
-        res_pos_dump = ResiduePosition.from_list(starter.manifest)
-        if not allow_continue or not res_pos_dump:
-            logger.info("Dumping residue and position")
-            res_pos_dumper = ResiduePosition(db=readonly_db,
-                                             date_stamp=starter.date_stamp)
-            res_pos_dumper.dump(continuing=allow_continue)
-            res_pos_dump = res_pos_dumper.get_s3_path()
-        else:
-            logger.info("Residue position dump exists, skipping")
-
-        src_count_dump = SourceCount.from_list(starter.manifest)
-        if not allow_continue or not src_count_dump:
-            logger.info("Dumping source count")
-            src_count_dumper = SourceCount(db=readonly_db,
-                                           date_stamp=starter.date_stamp)
-            src_count_dumper.dump(continuing=allow_continue)
-            src_count_dump = src_count_dumper.get_s3_path()
-
         dump_file = Readonly.from_list(starter.manifest)
         if not allow_continue or not dump_file:
             logger.info("Generating readonly schema (est. a long time)")
@@ -537,6 +519,27 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
             dump_file = ro_dumper.get_s3_path()
         else:
             logger.info("Readonly dump exists, skipping.")
+
+        # By now, the readonly schema should exist on principal, so providing
+        # the principal manager should be ok for source counts and
+        # residue/position
+        res_pos_dump = ResiduePosition.from_list(starter.manifest)
+        if not allow_continue or not res_pos_dump:
+            logger.info("Dumping residue and position")
+            res_pos_dumper = ResiduePosition(db=principal_db,
+                                             date_stamp=starter.date_stamp)
+            res_pos_dumper.dump(continuing=allow_continue)
+            res_pos_dump = res_pos_dumper.get_s3_path()
+        else:
+            logger.info("Residue position dump exists, skipping")
+
+        src_count_dump = SourceCount.from_list(starter.manifest)
+        if not allow_continue or not src_count_dump:
+            logger.info("Dumping source count")
+            src_count_dumper = SourceCount(db=principal_db,
+                                           date_stamp=starter.date_stamp)
+            src_count_dumper.dump(continuing=allow_continue)
+            src_count_dump = src_count_dumper.get_s3_path()
 
         if not allow_continue or not Sif.from_list(starter.manifest):
             logger.info("Dumping sif from the readonly schema on principal.")

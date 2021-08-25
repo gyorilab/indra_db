@@ -47,7 +47,7 @@ class MockStatement(object):
     def matches_key(self):
         return self.__mk_hash
 
-    def get_hash(self):
+    def get_hash(self, **kwargs):
         return self.__mk_hash
 
 

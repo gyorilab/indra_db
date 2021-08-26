@@ -230,7 +230,7 @@ def normalize_sif_names(sif_df: pd.DataFrame):
     )
 
     # Get the ontology name if it exists and rename in dataframe
-    for ns_, id_ in ns_id_tups:
+    for ns_, id_ in tqdm(ns_id_tups):
         oname = bio_ontology.get_name(ns_, id_)
         if oname is not None:
             _rename(_ns=ns_, _id=id_, new_name=oname, sif=sif_df)

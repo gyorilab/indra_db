@@ -221,7 +221,7 @@ def normalize_sif_names(sif_df: pd.DataFrame):
 
     from indra.ontology.bio import bio_ontology
     bio_ontology.initialize()
-    logger.info('Normalizing duplicated names in sif dataframe')
+    logger.info('Normalizing names in sif dataframe')
 
     # Get the set of grounded entities
     ns_id_tups = set(

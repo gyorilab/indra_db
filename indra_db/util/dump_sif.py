@@ -198,12 +198,10 @@ def get_source_counts(pkl_filename=None, ro=None):
 
 
 def normalize_sif_names(sif_df: pd.DataFrame):
-    """Try to normalize duplicated names in the sif dump dataframe
+    """Try to normalize names in the sif dump dataframe
 
-    This function tries to normalize names of entities in the sif dump where
-    the namespace and identifier are the same but the names differ,
-    e.g. 'Loratadine' vs 'loratadine' both with CHEBI:6538. The
-    'bio_ontology' is the arbiter of what constitutes a normalized
+    This function tries to normalize the names of the entities in the sif
+    dump. The 'bio_ontology' is the arbiter of what constitutes a normalized
     name. If no name exists, no further attempt to change the name is made.
 
     Parameters
@@ -211,40 +209,31 @@ def normalize_sif_names(sif_df: pd.DataFrame):
     sif_df :
         The sif dataframe
     """
+    def _rename(_ns: str, _id: str, new_name: str, sif: pd.DataFrame):
+        sif.loc[
+            (sif.agA_id == _id) & (sif.agA_ns == _ns),
+            'agA_name'
+        ] = new_name
+        sif.loc[
+            (sif.agB_id == _id) & (sif.agB_ns == _ns),
+            'agB_name'
+        ] = new_name
+
     from indra.ontology.bio import bio_ontology
     bio_ontology.initialize()
     logger.info('Normalizing duplicated names in sif dataframe')
 
-    def _get_name_case_dupl(sif):
-        ns_id_name_tups = set(
-            zip(sif.agA_ns, sif.agA_id, sif.agA_name)).union(
-            set(zip(sif.agB_ns, sif.agB_id, sif.agB_name)))
-        ns_id_to_name = {}
-        for ns_, id_, name in ns_id_name_tups:
-            tup = (ns_, id_)
-            if tup in ns_id_to_name:
-                ns_id_to_name[tup].append(name)
-            else:
-                ns_id_to_name[tup] = [name]
-        duplicated = {}
-        for t, name_list in ns_id_to_name.items():
-            if len(name_list) > 1:
-                duplicated[t] = name_list
-        return duplicated
+    # Get the set of grounded entities
+    ns_id_tups = set(
+        zip(sif_df.agA_ns, sif_df.agA_id)).union(
+        set(zip(sif_df.agB_ns, sif_df.agB_id))
+    )
 
-    def _rename(ns_, id_, sif):
-        gname = bio_ontology.get_name(ns_, id_)
-        if gname:
-            sif.loc[(sif_df.agA_id == id_) & (sif_df.agA_ns == ns_),
-                    'agA_name'] = gname
-            sif.loc[(sif_df.agB_id == id_) & (sif_df.agB_ns == ns_),
-                    'agB_name'] = gname
-
-    duplicated_names = _get_name_case_dupl(sif_df)
-    logger.info(f'Found {len(duplicated_names)} entities with multiple names '
-                f'for the same grounding')
-    for (_ns, _id) in duplicated_names:
-        _rename(_ns, _id, sif_df)
+    # Get the ontology name if it exists and rename in dataframe
+    for ns_, id_ in ns_id_tups:
+        oname = bio_ontology.get_name(ns_, id_)
+        if oname is not None:
+            _rename(_ns=ns_, _id=id_, new_name=oname, sif=sif_df)
 
 
 def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,

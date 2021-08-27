@@ -17,15 +17,6 @@ from indra_db.util.dump_sif import dump_sif, get_source_counts, load_res_pos
 logger = logging.getLogger(__name__)
 
 
-# READONLY UPDATE CONFIG
-try:
-    aws_role = CONFIG['lambda']['role']
-    aws_lambda_function = CONFIG['lambda']['function']
-except KeyError:
-    aws_role = None
-    aws_lambda_function = None
-
-
 def list_dumps(started=None, ended=None):
     """List all dumps, optionally filtered by their status.
 
@@ -435,8 +426,7 @@ def load_readonly_dump(principal_db, readonly_db, dump_file):
 
 
 def get_lambda_client():
-    if aws_role is None:
-        raise Exception("Cannot get lambda client: no role.")
+    aws_role = CONFIG['lambda']['role']
     kwargs, _ = get_role_kwargs(aws_role)
     return boto3.client('lambda', **kwargs)
 
@@ -448,8 +438,7 @@ class ReadonlyTransferEnv(object):
 
     @record_in_test
     def _set_lambda_env(self, env_dict):
-        if aws_lamdba_function is None:
-            raise Exception("Cannot update function; no function specified.")
+        aws_lambda_function = CONFIG['lambda']['function']
         lambda_client = get_lambda_client()
         lambda_client.update_function_configuration(
             FunctionName=aws_lambda_function,

@@ -232,43 +232,57 @@ def normalize_sif_names(sif_df: pd.DataFrame):
         if oname and oname != cur_name and (ns_, id_, oname) not in inserted_set:
             inserted_set.add((ns_, id_, oname))
 
-    logger.info(f'Found {len(inserted_set)} names in dataframe that need '
-                f'renaming')
+    if len(inserted_set) > 0:
+        logger.info(f'Found {len(inserted_set)} names in dataframe that need '
+                    f'renaming')
 
-    # Make dataframe of rename dict
-    logger.info('Making rename dataframe')
-    df_dict = defaultdict(list)
-    for ns_, id_, name in inserted_set:
-        df_dict['ns'].append(ns_)
-        df_dict['id'].append(id_)
-        df_dict['name'].append(name)
+        # Make dataframe of rename dict
+        logger.info('Making rename dataframe')
+        df_dict = defaultdict(list)
+        for ns_, id_, name in inserted_set:
+            df_dict['ns'].append(ns_)
+            df_dict['id'].append(id_)
+            df_dict['name'].append(name)
 
-    rename_df = pd.DataFrame(df_dict)
+        rename_df = pd.DataFrame(df_dict)
 
-    # Do merge on with relevant columns from sif for both A and B
-    logger.info('Getting temporary dataframes for renaming')
+        # Do merge on with relevant columns from sif for both A and B
+        logger.info('Getting temporary dataframes for renaming')
 
-    # Get dataframe with ns, id, new name column
-    rename_a = sif_df[['agA_ns', 'agA_id']].merge(
-        right=rename_df,
-        left_on=['agA_ns', 'agA_id'],
-        right_on=['ns', 'id'], how='left'
-    ).drop('ns', axis=1).drop('id', axis=1)
+        # Get dataframe with ns, id, new name column
+        rename_a = sif_df[['agA_ns', 'agA_id']].merge(
+            right=rename_df,
+            left_on=['agA_ns', 'agA_id'],
+            right_on=['ns', 'id'], how='left'
+        ).drop('ns', axis=1).drop('id', axis=1)
 
-    # Check which rows have name entries
-    truthy_a = pd.notna(rename_a.name)
+        # Check which rows have name entries
+        truthy_a = pd.notna(rename_a.name)
 
-    # Rename in sif_df from new names
-    sif_df.loc[truthy_a, 'agA_name'] = rename_a.name[truthy_a]
+        # Rename in sif_df from new names
+        sif_df.loc[truthy_a, 'agA_name'] = rename_a.name[truthy_a]
 
-    # Repeat for agB_name
-    rename_b = sif_df[['agB_ns', 'agB_id']].merge(
-        right=rename_df,
-        left_on=['agB_ns', 'agB_id'],
-        right_on=['ns', 'id'], how='left'
-    ).drop('ns', axis=1).drop('id', axis=1)
-    truthy_b = pd.notna(rename_b.name)
-    sif_df.loc[truthy_b, 'agB_name'] = rename_b.name[truthy_b]
+        # Repeat for agB_name
+        rename_b = sif_df[['agB_ns', 'agB_id']].merge(
+            right=rename_df,
+            left_on=['agB_ns', 'agB_id'],
+            right_on=['ns', 'id'], how='left'
+        ).drop('ns', axis=1).drop('id', axis=1)
+        truthy_b = pd.notna(rename_b.name)
+        sif_df.loc[truthy_b, 'agB_name'] = rename_b.name[truthy_b]
+
+        # Check that there are no missing names
+        assert sum(pd.isna(sif_df.agA_name)) == 0
+        assert sum(pd.isna(sif_df.agB_name)) == 0
+
+        # Get the set of ns, id, name tuples and check diff
+        ns_id_name_tups_after = set(
+            zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+            set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
+        )
+        assert ns_id_name_tups_after != ns_id_name_tups
+    else:
+        logger.info('No names need renaming')
 
 
 def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,

@@ -216,7 +216,6 @@ def normalize_sif_names(sif_df: pd.DataFrame):
     logger.info('Getting ns, id, name tuples')
 
     # Get the set of grounded entities
-
     ns_id_name_tups = set(
         zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
         set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
@@ -248,20 +247,26 @@ def normalize_sif_names(sif_df: pd.DataFrame):
 
     # Do merge on with relevant columns from sif for both A and B
     logger.info('Getting temporary dataframes for renaming')
+
+    # Get dataframe with ns, id, new name column
     rename_a = sif_df[['agA_ns', 'agA_id']].merge(
         right=rename_df,
         left_on=['agA_ns', 'agA_id'],
         right_on=['ns', 'id'], how='left'
     ).drop('ns', axis=1).drop('id', axis=1)
+
+    # Check which rows have name entries
     truthy_a = pd.notna(rename_a.name)
+
+    # Rename in sif_df from new names
     sif_df.loc[truthy_a, 'agA_name'] = rename_a.name[truthy_a]
 
+    # Repeat for agB_name
     rename_b = sif_df[['agB_ns', 'agB_id']].merge(
         right=rename_df,
         left_on=['agB_ns', 'agB_id'],
         right_on=['ns', 'id'], how='left'
     ).drop('ns', axis=1).drop('id', axis=1)
-    # Get notna rows of name column in rename
     truthy_b = pd.notna(rename_b.name)
     sif_df.loc[truthy_b, 'agB_name'] = rename_b.name[truthy_b]
 

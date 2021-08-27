@@ -8,7 +8,9 @@ import argparse
 from io import StringIO
 from datetime import datetime
 from itertools import permutations
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from typing import Tuple, Dict
+
 from tqdm import tqdm
 
 from indra.util.aws import get_s3_client
@@ -221,19 +223,57 @@ def normalize_sif_names(sif_df: pd.DataFrame):
 
     from indra.ontology.bio import bio_ontology
     bio_ontology.initialize()
-    logger.info('Normalizing names in sif dataframe')
+    logger.info('Getting ns, id, name tuples')
 
     # Get the set of grounded entities
-    ns_id_tups = set(
-        zip(sif_df.agA_ns, sif_df.agA_id)).union(
-        set(zip(sif_df.agB_ns, sif_df.agB_id))
+
+    ns_id_name_tups = set(
+        zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+        set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
     )
 
-    # Get the ontology name if it exists and rename in dataframe
-    for ns_, id_ in tqdm(ns_id_tups):
+    # Get the ontology name, if it exists, and check if the name in the
+    # dataframe needs update
+    logger.info('Checking which names need updating')
+    inserted_set = set()
+    for ns_, id_, cur_name in tqdm(ns_id_name_tups):
         oname = bio_ontology.get_name(ns_, id_)
-        if oname is not None:
-            _rename(_ns=ns_, _id=id_, new_name=oname, sif=sif_df)
+        # If there is a name in the ontology and it is different than the
+        # original, insert it
+        if oname and oname != cur_name and (ns_, id_, oname) not in inserted_set:
+            inserted_set.add((ns_, id_, oname))
+
+    logger.info(f'Found {len(inserted_set)} names in dataframe that need '
+                f'renaming')
+
+    # Make dataframe of rename dict
+    logger.info('Making rename dataframe')
+    df_dict = defaultdict(list)
+    for ns_, id_, name in inserted_set:
+        df_dict['ns'].append(ns_)
+        df_dict['id'].append(id_)
+        df_dict['name'].append(name)
+
+    rename_df = pd.DataFrame(df_dict)
+
+    # Do merge on with relevant columns from sif for both A and B
+    logger.info('Getting temporary dataframes for renaming')
+    rename_a = sif_df[['agA_ns', 'agA_id']].merge(
+        right=rename_df,
+        left_on=['agA_ns', 'agA_id'],
+        right_on=['ns', 'id'], how='left'
+    ).drop('ns', axis=1).drop('id', axis=1)
+    truthy_a = pd.notna(rename_a.name)
+    sif_df.loc[truthy_a, 'agA_name'] = rename_a.name[truthy_a]
+
+    rename_b = sif_df[['agB_ns', 'agB_id']].merge(
+        right=rename_df,
+        left_on=['agB_ns', 'agB_id'],
+        right_on=['ns', 'id'], how='left'
+    ).drop('ns', axis=1).drop('id', axis=1)
+    # Get notna rows of name column in rename
+    truthy_b = pd.notna(rename_b.name)
+    sif_df.loc[truthy_b, 'agB_name'] = rename_b.name[truthy_b]
 
 
 def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,

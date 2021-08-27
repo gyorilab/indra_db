@@ -510,7 +510,7 @@ def get_parser():
 
 def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
              db_res_file=None, csv_file=None, reload=True, reconvert=True,
-             ro=None, normalize_names: bool = False):
+             ro=None, normalize_names: bool = True):
     """Build and dump a sif dataframe of PA statements with grounded agents
 
     Parameters

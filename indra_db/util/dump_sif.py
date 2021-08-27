@@ -211,16 +211,6 @@ def normalize_sif_names(sif_df: pd.DataFrame):
     sif_df :
         The sif dataframe
     """
-    def _rename(_ns: str, _id: str, new_name: str, sif: pd.DataFrame):
-        sif.loc[
-            (sif.agA_id == _id) & (sif.agA_ns == _ns),
-            'agA_name'
-        ] = new_name
-        sif.loc[
-            (sif.agB_id == _id) & (sif.agB_ns == _ns),
-            'agB_name'
-        ] = new_name
-
     from indra.ontology.bio import bio_ontology
     bio_ontology.initialize()
     logger.info('Getting ns, id, name tuples')

@@ -272,6 +272,7 @@ def normalize_sif_names(sif_df: pd.DataFrame):
         sif_df.loc[truthy_b, 'agB_name'] = rename_b.name[truthy_b]
 
         # Check that there are no missing names
+        logger.info('Performing sanity checks')
         assert sum(pd.isna(sif_df.agA_name)) == 0
         assert sum(pd.isna(sif_df.agB_name)) == 0
 
@@ -280,7 +281,11 @@ def normalize_sif_names(sif_df: pd.DataFrame):
             zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
             set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
         )
+        # Check that rename took place
         assert ns_id_name_tups_after != ns_id_name_tups
+        # Check that all new names are used
+        assert set(rename_df.name).issubset({n for _, _, n in ns_id_name_tups_after})
+        logger.info('Sif dataframe renamed successfully')
     else:
         logger.info('No names need renaming')
 

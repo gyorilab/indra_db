@@ -5,15 +5,16 @@ import pandas as pd
 
 import indra_db.tests.util as tu
 from indra_db.util.dump_sif import load_db_content, get_source_counts, \
-    make_dataframe, NS_LIST
-
-# Get db
-db = tu.get_filled_ro(1000)
+    make_dataframe, NS_LIST, normalize_sif_names
 
 
 class SifDumperTester(unittest.TestCase):
+    def get_db(self, count=1000):
+        # Get db
+        return tu.get_filled_ro(count)
+
     def setUp(self):
-        self.db = db
+        self.db = self.get_db()
         self.db_content = load_db_content(True, NS_LIST, None, self.db)
         self.df = make_dataframe(True, self.db_content, None)
 
@@ -84,3 +85,26 @@ class SifDumperTester(unittest.TestCase):
         df_hashes = set(self.df['stmt_hash'].values)
         sd_hashes = set(ev_dict.keys())
         assert len(sd_hashes.intersection(df_hashes)) / len(sd_hashes) > 0.25
+
+
+def test_normalize_names():
+    sif_dict = {
+        'agA_ns': ['HGNC', 'HGNC'],
+        'agA_id': ['26128', '26128'],
+        'agA_name': ['SPRING1', 'C12orf49'],
+        'agB_ns': ['HGNC', 'HGNC'],
+        'agB_id': ['11892', '3236'],
+        'agB_name': ['TNF', 'EGFR'],
+        'stmt_type': ['Activation', 'Phosphorylation'],
+        'evidence_count': [10, 12],
+        'stmt_hash': [1234567890, -9876543210],
+        'residue': [None, None],
+        'position': [None, None],
+        'source_counts': [{'sparser': 6, 'reach': 4}, {'pc': 6, 'sparser': 6}],
+        'belief': [0.998, 0.9999]
+     }
+
+    sif_df = pd.DataFrame(sif_dict)
+    normalize_sif_names(sif_df)
+    # Both names should now be SPRING1
+    assert set(sif_df.agA_name.values) == {'SPRING1'}

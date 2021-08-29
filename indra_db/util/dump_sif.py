@@ -8,7 +8,9 @@ import argparse
 from io import StringIO
 from datetime import datetime
 from itertools import permutations
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from typing import Tuple, Dict
+
 from tqdm import tqdm
 
 from indra.util.aws import get_s3_client
@@ -197,8 +199,100 @@ def get_source_counts(pkl_filename=None, ro=None):
     return ev
 
 
+def normalize_sif_names(sif_df: pd.DataFrame):
+    """Try to normalize names in the sif dump dataframe
+
+    This function tries to normalize the names of the entities in the sif
+    dump. The 'bio_ontology' is the arbiter of what constitutes a normalized
+    name. If no name exists, no further attempt to change the name is made.
+
+    Parameters
+    ----------
+    sif_df :
+        The sif dataframe
+    """
+    from indra.ontology.bio import bio_ontology
+    bio_ontology.initialize()
+    logger.info('Getting ns, id, name tuples')
+
+    # Get the set of grounded entities
+    ns_id_name_tups = set(
+        zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+        set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
+    )
+
+    # Get the ontology name, if it exists, and check if the name in the
+    # dataframe needs update
+    logger.info('Checking which names need updating')
+    inserted_set = set()
+    for ns_, id_, cur_name in tqdm(ns_id_name_tups):
+        oname = bio_ontology.get_name(ns_, id_)
+        # If there is a name in the ontology and it is different than the
+        # original, insert it
+        if oname and oname != cur_name and (ns_, id_, oname) not in inserted_set:
+            inserted_set.add((ns_, id_, oname))
+
+    if len(inserted_set) > 0:
+        logger.info(f'Found {len(inserted_set)} names in dataframe that need '
+                    f'renaming')
+
+        # Make dataframe of rename dict
+        logger.info('Making rename dataframe')
+        df_dict = defaultdict(list)
+        for ns_, id_, name in inserted_set:
+            df_dict['ns'].append(ns_)
+            df_dict['id'].append(id_)
+            df_dict['name'].append(name)
+
+        rename_df = pd.DataFrame(df_dict)
+
+        # Do merge on with relevant columns from sif for both A and B
+        logger.info('Getting temporary dataframes for renaming')
+
+        # Get dataframe with ns, id, new name column
+        rename_a = sif_df[['agA_ns', 'agA_id']].merge(
+            right=rename_df,
+            left_on=['agA_ns', 'agA_id'],
+            right_on=['ns', 'id'], how='left'
+        ).drop('ns', axis=1).drop('id', axis=1)
+
+        # Check which rows have name entries
+        truthy_a = pd.notna(rename_a.name)
+
+        # Rename in sif_df from new names
+        sif_df.loc[truthy_a, 'agA_name'] = rename_a.name[truthy_a]
+
+        # Repeat for agB_name
+        rename_b = sif_df[['agB_ns', 'agB_id']].merge(
+            right=rename_df,
+            left_on=['agB_ns', 'agB_id'],
+            right_on=['ns', 'id'], how='left'
+        ).drop('ns', axis=1).drop('id', axis=1)
+        truthy_b = pd.notna(rename_b.name)
+        sif_df.loc[truthy_b, 'agB_name'] = rename_b.name[truthy_b]
+
+        # Check that there are no missing names
+        logger.info('Performing sanity checks')
+        assert sum(pd.isna(sif_df.agA_name)) == 0
+        assert sum(pd.isna(sif_df.agB_name)) == 0
+
+        # Get the set of ns, id, name tuples and check diff
+        ns_id_name_tups_after = set(
+            zip(sif_df.agA_ns, sif_df.agA_id, sif_df.agA_name)).union(
+            set(zip(sif_df.agB_ns, sif_df.agB_id, sif_df.agB_name))
+        )
+        # Check that rename took place
+        assert ns_id_name_tups_after != ns_id_name_tups
+        # Check that all new names are used
+        assert set(rename_df.name).issubset({n for _, _, n in ns_id_name_tups_after})
+        logger.info('Sif dataframe renamed successfully')
+    else:
+        logger.info('No names need renaming')
+
+
 def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
-                   belief_dict, pkl_filename=None):
+                   belief_dict, pkl_filename=None,
+                   normalize_names: bool = False):
     """Make a pickled DataFrame of the db content, one row per stmt.
 
     Parameters
@@ -220,6 +314,9 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
         reconverting). If an S3 path is given (i.e., pkl_filename starts with
         `s3:`), the file is loaded to/saved from S3. If not given,
         reloads the content (overriding reload).
+    normalize_names :
+        If True, detect and try to merge name duplicates (same entity with
+        different names, e.g. Loratadin vs loratadin). Default: False
 
     Returns
     -------
@@ -356,6 +453,8 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
             else:
                 with open(pkl_filename, 'rb') as f:
                     df = pickle.load(f)
+    if normalize_names:
+        normalize_sif_names(sif_df=df)
     return df
 
 
@@ -411,7 +510,7 @@ def get_parser():
 
 def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
              db_res_file=None, csv_file=None, reload=True, reconvert=True,
-             ro=None):
+             ro=None, normalize_names: bool = True):
     """Build and dump a sif dataframe of PA statements with grounded agents
 
     Parameters
@@ -445,6 +544,9 @@ def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
     ro : Optional[PrincipalDatabaseManager]
         Provide a DatabaseManager to load database content from. If not
         provided, `get_ro('primary')` will be used.
+    normalize_names :
+        If True, detect and try to merge name duplicates (same entity with
+        different names, e.g. Loratadin vs loratadin). Default: False
     """
     def _load_file(path):
         if isinstance(path, str) and path.startswith('s3:') or \
@@ -482,7 +584,8 @@ def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
     # Convert the database query result into a set of pairwise relationships
     df = make_dataframe(pkl_filename=df_file, reconvert=reconvert,
                         db_content=db_content, src_count_dict=src_count,
-                        res_pos_dict=res_pos, belief_dict=belief)
+                        res_pos_dict=res_pos, belief_dict=belief,
+                        normalize_names=normalize_names)
 
     if csv_file:
         if isinstance(csv_file, str) and csv_file.startswith('s3:'):

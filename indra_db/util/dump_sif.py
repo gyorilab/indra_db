@@ -17,6 +17,8 @@ from indra.util.aws import get_s3_client
 from indra_db.schemas.readonly_schema import ro_type_map
 from indra.statements import get_all_descendants, Modification
 from indra.statements.agent import default_ns_order
+from indra.statements.validate import assert_valid_db_refs
+from indra.databases.identifiers import ensure_prefix_if_needed
 
 try:
     import pandas as pd
@@ -339,6 +341,7 @@ def make_dataframe(reconvert, db_content, res_pos_dict, src_count_dict,
         stmt_info = {} # Store statement info (agents, ev, type) by hash
         ag_name_by_hash_num = {} # Store name for each stmt agent
         for h, db_nm, db_id, num, n, t in tqdm(db_content):
+            db_nmn, db_id = fix_id(db_nm, db_id)
             # Populate the 'NAME' dictionary per agent
             if db_nm == 'NAME':
                 ag_name_by_hash_num[(h, num)] = db_id
@@ -620,6 +623,23 @@ def dump_sif(src_count_file, res_pos_file, belief_file, df_file=None,
         else:
             type_counts.to_csv(csv_file)
     return
+
+
+def fix_id(db_ns: str, db_id: str) -> Tuple[str, str]:
+    """Fix ID issues specific to the SIF dump."""
+    if db_ns == "GO":
+        if db_id.isnumeric():
+            db_id = "0" * (7 - len(db_id)) + db_id
+    elif db_ns == "EFO" and db_id.startswith("EFO:"):
+        db_id = db_id[4:]
+    elif db_ns == "UP" and db_id.startswith("SL"):
+        db_ns = "UPLOC"
+    elif db_ns == "UP" and "-" in db_id and not db_id.startswith("SL-"):
+        db_id = db_id.split("-")[0]
+    elif db_ns == 'FPLX' and db_id == 'TCF-LEF':
+        db_id = 'TCF_LEF'
+    db_id = ensure_prefix_if_needed(db_ns, db_id)
+    return db_ns, db_id
 
 
 def main():

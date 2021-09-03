@@ -6,6 +6,7 @@ from .dump import dump_cli
 from .preassembly import pa
 from .reading import reading
 from .xdd import xdd
+from .counts import counts
 
 
 @click.group()
@@ -46,3 +47,4 @@ main.add_command(dump_cli)
 main.add_command(pa)
 main.add_command(reading)
 main.add_command(xdd)
+main.add_command(counts)

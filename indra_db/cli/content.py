@@ -17,7 +17,6 @@ from os import path, remove, rename, listdir
 from typing import Tuple
 
 from indra.util import zip_string, batch_iter
-from indra.literature import pubmed_client
 from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
 from indra.literature.crossref_client import get_publisher
@@ -617,6 +616,7 @@ class Pubmed(_NihManager):
         return [sub_dir + '/' + k for k in all_files if k.endswith('.xml.gz')]
 
     def get_article_info(self, xml_file, q=None):
+        from indra.literature import pubmed_client
         tree = self.ftp.get_xml_file(xml_file)
         article_info = pubmed_client.get_metadata_from_xml_tree(
             tree,

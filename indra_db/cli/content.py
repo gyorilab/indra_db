@@ -17,7 +17,6 @@ from os import path, remove, rename, listdir
 from typing import Tuple
 
 from indra.util import zip_string, batch_iter
-from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
 from indra.literature.crossref_client import get_publisher
 from indra.literature.elsevier_client import download_article_from_ids
@@ -906,6 +905,7 @@ class PmcManager(_NihManager):
     @staticmethod
     def get_missing_pmids(db, tr_data):
         """Try to get missing pmids using the pmc client."""
+        from indra.literature.pmc_client import id_lookup
 
         logger.info("Getting missing pmids.")
 

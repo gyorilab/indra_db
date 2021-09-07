@@ -13,6 +13,7 @@ def counts():
 def run():
     """Run out all the counts. This will take a long time."""
     print("Running counts: this may take a while.")
+    print()
     get_counts()
 
 
@@ -27,9 +28,10 @@ def get_counts():
     res = db.session.execute("""
     SELECT source, text_type, COUNT(*) FROM text_content GROUP BY source, text_type;
     """)
-    print("Source-type counts:")
+    print("Source-type Counts:")
+    print("-------------------")
     print(tabulate([(src, tt, intword(n)) for src, tt, n in sorted(res, key=lambda t: -t[-1])],
-                   headers=["Source", "Text Type", "Count"]))
+                   headers=["Source", "Text Type", "Content Count"]))
     print()
 
     # Do reader counts.
@@ -38,9 +40,10 @@ def get_counts():
     FROM text_content LEFT JOIN reading ON text_content_id = text_content.id
     GROUP BY reader, reader_version, source, text_type;
     """)
-    print("reader rv src type counts:")
+    print("Reader and Source Type Counts:")
+    print("------------------------------")
     print(tabulate([t[:-1] + (intword(t[-1]),) for t in sorted(res, key=lambda t: -t[-1])],
-                   headers=["Reader", "Reader Version", "Source", "Text Type", "Count"]))
+                   headers=["Reader", "Reader Version", "Source", "Text Type", "Reading Count"]))
     print()
 
     # Get the list of distinct HGNC IDs (and dump them as JSON).

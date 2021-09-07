@@ -61,19 +61,19 @@ def get_counts():
     print("Number of all distinct groundings:", intword(len(ids)))
 
     # Count the number of raw statements.
-    raw_cnt, = db.session.execute("""
+    (raw_cnt,), = db.session.execute("""
     SELECT count(*) FROM raw_statements
     """)
     print("Raw stmt count:", intword(raw_cnt))
 
     # Count the number of preassembled statements.
-    pa_cnt, = db.session.execute("""
+    (pa_cnt,), = db.session.execute("""
     SELECT count(*) FROM pa_statements
     """)
     print("PA stmt count:", intword(pa_cnt))
 
     # Count the number of links between raw and preassembled statements.
-    raw_used_in_pa_cnt, = db.session.execute("""
+    (raw_used_in_pa_cnt,), = db.session.execute("""
     SELECT count(*) FROM raw_unique_links
     """)
     print("Raw statements used in PA:", intword(raw_used_in_pa_cnt))

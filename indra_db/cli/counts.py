@@ -28,8 +28,9 @@ def get_counts():
     SELECT source, text_type, COUNT(*) FROM text_content GROUP BY source, text_type;
     """)
     print("Source-type counts:")
-    print(tabulate([(src, tt, intword(n)) for src, tt, n in res],
+    print(tabulate([(src, tt, intword(n)) for src, tt, n in sorted(res, key=lambda t: -t[-1])],
                    headers=["Source", "Text Type", "Count"]))
+    print()
 
     # Do reader counts.
     res = db.session.execute("""
@@ -38,8 +39,9 @@ def get_counts():
     GROUP BY reader, reader_version, source, text_type;
     """)
     print("reader rv src type counts:")
-    print(tabulate([t[:-1] + (intword(t[-1]),) for t in res],
+    print(tabulate([t[:-1] + (intword(t[-1]),) for t in sorted(res, key=lambda t: -t[-1])],
                    headers=["Reader", "Reader Version", "Source", "Text Type", "Count"]))
+    print()
 
     # Get the list of distinct HGNC IDs (and dump them as JSON).
     resp = ro.session.execute("""

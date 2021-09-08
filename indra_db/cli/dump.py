@@ -421,6 +421,46 @@ class StatementHashMeshId(Dumper):
         self.get_s3_path().upload(s3, pickle.dumps(mesh_data))
 
 
+
+class PrincipalStats(Dumper):
+    name = 'principal-statistics'
+    fmt = 'csv'
+    db_required = True
+    db_options = ['principal']
+
+    def dump(self, continuing=False):
+        import io
+        import csv
+
+        # Get the data from the database
+        res = self.db.session.execute("""
+            SELECT source, text_type, reader, reader_version, raw_statements.type,
+                   COUNT(DISTINCT(text_content.id)), COUNT(DISTINCT(reading.id)),
+                   COUNT(DISTINCT(raw_statements.id)),
+                   COUNT(DISTINCT(pa_statements.mk_hash))
+            FROM text_content
+             LEFT JOIN reading ON text_content_id = text_content.id
+             LEFT JOIN raw_statements ON reading_id = reading.id
+             LEFT JOIN raw_unique_links ON raw_statements.id = raw_stmt_id
+             LEFT JOIN pa_statements ON pa_statements.mk_hash = pa_stmt_mk_hash
+            GROUP BY source, text_type, reader, reader_version, raw_statements.type;
+        """)
+
+        # Create the CSV
+        str_io = io.StringIO()
+        writer = csv.writer(str_io)
+        writer.writerow(["source", "text type", "reader", "reader version",
+                         "raw statements", "statement type", "content count",
+                         "reading count", "raw statement count",
+                         "preassembled statement count"])
+        writer.writerows(res)
+
+        # Upload a bytes-like object
+        csv_bytes = str_io.getvalue().encode('utf-8')
+        s3 = boto3.client('s3')
+        self.s3_dump_path().upload(s3, csv_bytes)
+
+
 def load_readonly_dump(principal_db, readonly_db, dump_file):
     logger.info("Using dump_file = \"%s\"." % dump_file)
     logger.info("%s - Beginning upload of content (est. ~30 minutes)"
@@ -746,5 +786,3 @@ def print_summary_counts():
         if len(ag_dict) == n:
             cnt += 1
     print("Number of pa statements in ro with all agents grounded:", intword(cnt))
-
-

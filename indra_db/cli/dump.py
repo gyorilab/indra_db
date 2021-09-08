@@ -726,7 +726,7 @@ def show_list(state):
 
 
 @dump_cli.command()
-def print_summary_counts():
+def print_database_stats():
     """Print the summary counts for the content on the database."""
     from humanize import intword
     from tabulate import tabulate

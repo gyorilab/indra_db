@@ -533,13 +533,24 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         Do not load a new readonly database, only produce the dump files on s3.
         (Default is False)
     """
-    if delete_existing and 'readonly' in principal_db.get_schemas():
-        principal_db.drop_schema('readonly')
-
     if not load_only:
+        # START THE DUMP
+        if delete_existing and 'readonly' in principal_db.get_schemas():
+            principal_db.drop_schema('readonly')
+
         starter = Start()
         starter.dump(continuing=allow_continue)
 
+        # STATS DUMP
+        stats_dumper = PrincipalStats.from_list(starter.manifest)
+        if not allow_continue or not stats_dumper:
+            logger.info("Dumping principal stats.")
+            PrincipalStats(db=principal_db, date_stamp=starter.date_stamp)\
+                .dump(continuing=allow_continue)
+        else:
+            logger.info("Stats dump exists, skipping.")
+
+        # BELIEF DUMP
         belief_dump = Belief.from_list(starter.manifest)
         if not allow_continue or not belief_dump:
             logger.info("Dumping belief.")
@@ -550,6 +561,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Belief dump exists, skipping.")
 
+        # READONLY DUMP
         dump_file = Readonly.from_list(starter.manifest)
         if not allow_continue or not dump_file:
             logger.info("Generating readonly schema (est. a long time)")
@@ -561,6 +573,8 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Readonly dump exists, skipping.")
 
+
+        # RESIDUE POSITION DUMP
         # By now, the readonly schema should exist on principal, so providing
         # the principal manager should be ok for source counts and
         # residue/position
@@ -574,6 +588,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Residue position dump exists, skipping")
 
+        # SOURCE COUNT DUMP
         src_count_dump = SourceCount.from_list(starter.manifest)
         if not allow_continue or not src_count_dump:
             logger.info("Dumping source count")
@@ -582,6 +597,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
             src_count_dumper.dump(continuing=allow_continue)
             src_count_dump = src_count_dumper.get_s3_path()
 
+        # SIF DUMP
         if not allow_continue or not Sif.from_list(starter.manifest):
             logger.info("Dumping sif from the readonly schema on principal.")
             Sif(db=principal_db, date_stamp=starter.date_stamp)\
@@ -592,6 +608,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Sif dump exists, skipping.")
 
+        # FULL PA JSON DUMP
         if not allow_continue or not FullPaJson.from_list(starter.manifest):
             logger.info("Dumping all PA Statements as jsonl.")
             FullPaJson(db=principal_db, date_stamp=starter.date_stamp)\
@@ -599,6 +616,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         else:
             logger.info("Statement dump exists, skipping.")
 
+        # HASH MESH ID DUMP
         if not allow_continue \
                 or not StatementHashMeshId.from_list(starter.manifest):
             logger.info("Dumping hash-mesh tuples.")
@@ -606,6 +624,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
                                 date_stamp=starter.date_stamp)\
                 .dump(continuing=allow_continue)
 
+        # END DUMP
         End(date_stamp=starter.date_stamp).dump(continuing=allow_continue)
     else:
         # Find the most recent dump that has a readonly.
@@ -614,6 +633,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
             raise Exception("Could not find any suitable readonly dumps.")
 
     if not dump_only:
+        # READONLY LOAD
         print("Dump file:", dump_file)
         load_readonly_dump(principal_db, readonly_db, dump_file)
 

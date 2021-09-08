@@ -9,7 +9,6 @@ from datetime import datetime
 
 from indra.statements import get_all_descendants
 from indra.statements.io import stmts_from_json
-from indra_db import get_ro, get_db
 from indra_db.belief import get_belief
 from indra_db.config import CONFIG, get_s3_dump, record_in_test
 from indra_db.util import get_db, get_ro, S3Path
@@ -97,20 +96,41 @@ def get_latest_dump_s3_path(dumper_name):
     return None
 
 
-class Dumper(object):
-    name = NotImplemented
-    fmt = NotImplemented
-    db_options = []
-    db_required = False
+class DumpOrderError(Exception):
+    pass
 
-    def __init__(self, date_stamp=None, **kwargs):
+
+class Dumper(object):
+    name: str = NotImplemented
+    fmt: str = NotImplemented
+    db_options: list = []
+    db_required: bool = False
+    requires: list = NotImplemented
+
+    def __init__(self, start=None, date_stamp=None, **kwargs):
         # Get a database handle, if needed.
         self.db = self._choose_db(**kwargs)
+
+        # Get s3 paths for required dumps
+        self.required_s3_paths = {}
+        if self.requires and not start:
+            raise DumpOrderError(f"{self.name} has prerequisites, but no start "
+                                 f"given.")
+        for ReqDump in self.requires:
+            dumper = ReqDump.from_list(start.manifest)
+            if dumper is None:
+                raise DumpOrderError(f"{self.name} dump requires "
+                                     f"{ReqDump.name} to be completed before "
+                                     f"running.")
+            self.required_s3_paths[ReqDump.name] = dumper.get_s3_path()
 
         # Get the date stamp.
         self.s3_dump_path = None
         if date_stamp is None:
-            self.date_stamp = datetime.now().strftime('%Y-%m-%d')
+            if start:
+                self.date_stamp = start.date_stamp
+            else:
+                self.date_stamp = datetime.now().strftime('%Y-%m-%d')
         else:
             self.date_stamp = date_stamp
 
@@ -202,6 +222,7 @@ class Start(Dumper):
     name = 'start'
     fmt = 'json'
     db_required = False
+    requires = []
 
     def __init__(self, *args, **kwargs):
         super(Start, self).__init__(*args, **kwargs)
@@ -255,178 +276,12 @@ class Start(Dumper):
         self.manifest = manifest
 
 
-class End(Dumper):
-    name = 'end'
-    fmt = 'json'
-    db_required = False
-
-    def dump(self, continuing=False):
-        s3 = boto3.client('s3')
-        s3.put_object(
-            Body=json.dumps(
-                {'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            ),
-            **self.get_s3_path().kw()
-        )
-
-
-class Sif(Dumper):
-    """Dumps a pandas dataframe of preassembled statements"""
-    name = 'sif'
-    fmt = 'pkl'
-    db_required = True
-    db_options = ['principal', 'readonly']
-
-    def __init__(self, use_principal=False, **kwargs):
-        super(Sif, self).__init__(use_principal=use_principal, **kwargs)
-
-    def dump(self, src_counts_path, res_pos_path, belief_path,
-             continuing=False):
-        s3_path = self.get_s3_path()
-        dump_sif(df_file=s3_path,
-                 src_count_file=src_counts_path,
-                 res_pos_file=res_pos_path,
-                 belief_file=belief_path,
-                 reload=True,
-                 reconvert=True,
-                 ro=self.db,
-                 normalize_names=True)
-
-
-class Belief(Dumper):
-    """Dump a dict of belief scores keyed by hash"""
-    name = 'belief'
-    fmt = 'json'
-    db_required = True
-    db_options = ['principal']
-
-    def dump(self, continuing=False):
-        belief_dict = get_belief(self.db, partition=False)
-        s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, json.dumps(belief_dict).encode('utf-8'))
-
-
-class SourceCount(Dumper):
-    """Dumps a dict of dicts with source counts per source api per statement"""
-    name = 'source_count'
-    fmt = 'pkl'
-    db_required = True
-    db_options = ['principal', 'readonly']
-
-    def __init__(self, use_principal=True, **kwargs):
-        super(SourceCount, self).__init__(use_principal=use_principal,
-                                          **kwargs)
-
-    def dump(self, continuing=False):
-        get_source_counts(self.get_s3_path(), self.db)
-
-
-class ResiduePosition(Dumper):
-    """Dumps a dict of dicts with residue/position data from Modifications"""
-    name = 'res_pos'
-    fmt = 'pkl'
-    db_required = True
-    db_options = ['readonly', 'principal']
-
-    def __init__(self, use_principal=True, **kwargs):
-        super(ResiduePosition, self).__init__(use_principal=use_principal,
-                                              **kwargs)
-
-    def dump(self, continuing=False):
-        res_pos_dict = load_res_pos(ro=self.db)
-        s3 = boto3.client('s3')
-        logger.info(f'Uploading residue position dump to '
-                    f'{self.get_s3_path().to_string()}')
-        self.get_s3_path().upload(s3=s3, body=pickle.dumps(res_pos_dict))
-
-
-class FullPaJson(Dumper):
-    """Dumps all statements found in FastRawPaLink as jsonl"""
-    name = 'full_pa_json'
-    fmt = 'jsonl'
-    db_required = True
-    db_options = ['principal', 'readonly']
-
-    def __init__(self, use_principal=False, **kwargs):
-        super(FullPaJson, self).__init__(use_principal=use_principal, **kwargs)
-
-    def dump(self, continuing=False):
-        query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
-        jsonl_str = '\n'.join([js.decode() for js, in query_res.all()])
-        s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, jsonl_str.encode('utf-8'))
-
-
-class FullPaStmts(Dumper):
-    """Dumps all statements found in FastRawPaLink as a pickle"""
-    name = 'full_pa_stmts'
-    fmt = 'pkl'
-    db_required = True
-    db_options = ['principal', 'readonly']
-
-    def __init__(self, use_principal=False, **kwargs):
-        super(FullPaStmts, self).__init__(use_principal=use_principal, **kwargs)
-
-    def dump(self, continuing=False):
-        query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
-        stmt_list = stmts_from_json([json.loads(js[0]) for js in
-                                     query_res.all()])
-        s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, pickle.dumps(stmt_list))
-
-
-class Readonly(Dumper):
-    name = 'readonly'
-    fmt = 'dump'
-    db_required = True
-    db_options = ['principal']
-
-    def dump(self, belief_dump, continuing=False):
-
-        logger.info("%s - Generating readonly schema (est. a long time)"
-                    % datetime.now())
-        import boto3
-        s3 = boto3.client('s3')
-        belief_data = belief_dump.get(s3)
-        belief_dict = json.loads(belief_data['Body'].read())
-        self.db.generate_readonly(belief_dict, allow_continue=continuing)
-
-        logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
-                    % datetime.now())
-        self.db.dump_readonly(self.get_s3_path())
-        return
-
-
-class StatementHashMeshId(Dumper):
-    name = 'mti_mesh_ids'
-    fmt = 'pkl'
-    db_required = True
-    db_options = ['principal', 'readonly']
-
-    def __init__(self, use_principal=False, **kwargs):
-        super(StatementHashMeshId, self).__init__(use_principal=use_principal,
-                                                  **kwargs)
-
-    def dump(self, continuing=False):
-        mesh_term_tuples = self.db.select_all([
-            self.db.MeshTermMeta.mk_hash,
-            self.db.MeshTermMeta.mesh_num])
-        mesh_concept_tuples = self.db.select_all([
-            self.db.MeshConceptMeta.mk_hash,
-            self.db.MeshConceptMeta.mesh_num])
-        mesh_data = {'terms': mesh_term_tuples,
-                     'concepts': mesh_concept_tuples}
-
-        s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, pickle.dumps(mesh_data))
-
-
-
 class PrincipalStats(Dumper):
     name = 'principal-statistics'
     fmt = 'csv'
     db_required = True
     db_options = ['principal']
+    requires = [Start]
 
     def dump(self, continuing=False):
         import io
@@ -459,6 +314,179 @@ class PrincipalStats(Dumper):
         csv_bytes = str_io.getvalue().encode('utf-8')
         s3 = boto3.client('s3')
         self.s3_dump_path().upload(s3, csv_bytes)
+
+
+class Belief(Dumper):
+    """Dump a dict of belief scores keyed by hash"""
+    name = 'belief'
+    fmt = 'json'
+    db_required = True
+    db_options = ['principal']
+    requires = [Start]
+
+    def dump(self, continuing=False):
+        belief_dict = get_belief(self.db, partition=False)
+        s3 = boto3.client('s3')
+        self.get_s3_path().upload(s3, json.dumps(belief_dict).encode('utf-8'))
+
+
+class Readonly(Dumper):
+    name = 'readonly'
+    fmt = 'dump'
+    db_required = True
+    db_options = ['principal']
+    requires = [Belief]
+
+    def dump(self, continuing=False):
+
+        logger.info("%s - Generating readonly schema (est. a long time)"
+                    % datetime.now())
+        import boto3
+        s3 = boto3.client('s3')
+        belief_data = self.required_s3_paths[Belief.name].get(s3)
+        belief_dict = json.loads(belief_data['Body'].read())
+        self.db.generate_readonly(belief_dict, allow_continue=continuing)
+
+        logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
+                    % datetime.now())
+        self.db.dump_readonly(self.get_s3_path())
+        return
+
+
+class SourceCount(Dumper):
+    """Dumps a dict of dicts with source counts per source api per statement"""
+    name = 'source_count'
+    fmt = 'pkl'
+    db_required = True
+    db_options = ['principal', 'readonly']
+    requires = [Readonly]
+
+    def __init__(self, start, use_principal=True, **kwargs):
+        super(SourceCount, self).__init__(start, use_principal=use_principal,
+                                          **kwargs)
+
+    def dump(self, continuing=False):
+        get_source_counts(self.get_s3_path(), self.db)
+
+
+class ResiduePosition(Dumper):
+    """Dumps a dict of dicts with residue/position data from Modifications"""
+    name = 'res_pos'
+    fmt = 'pkl'
+    db_required = True
+    db_options = ['readonly', 'principal']
+    requires = [Readonly]
+
+    def __init__(self, start, use_principal=True, **kwargs):
+        super(ResiduePosition, self).__init__(start, use_principal=use_principal,
+                                              **kwargs)
+
+    def dump(self, continuing=False):
+        res_pos_dict = load_res_pos(ro=self.db)
+        s3 = boto3.client('s3')
+        logger.info(f'Uploading residue position dump to '
+                    f'{self.get_s3_path().to_string()}')
+        self.get_s3_path().upload(s3=s3, body=pickle.dumps(res_pos_dict))
+
+
+class FullPaStmts(Dumper):
+    """Dumps all statements found in FastRawPaLink as a pickle"""
+    name = 'full_pa_stmts'
+    fmt = 'pkl'
+    db_required = True
+    db_options = ['principal', 'readonly']
+    requires=[Readonly]
+
+    def __init__(self, start, use_principal=False, **kwargs):
+        super(FullPaStmts, self).__init__(start, use_principal=use_principal, **kwargs)
+
+    def dump(self, continuing=False):
+        query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
+        stmt_list = stmts_from_json([json.loads(js[0]) for js in
+                                     query_res.all()])
+        s3 = boto3.client('s3')
+        self.get_s3_path().upload(s3, pickle.dumps(stmt_list))
+
+
+class FullPaJson(Dumper):
+    """Dumps all statements found in FastRawPaLink as jsonl"""
+    name = 'full_pa_json'
+    fmt = 'jsonl'
+    db_required = True
+    db_options = ['principal', 'readonly']
+    requires = [Readonly]
+
+    def __init__(self, start, use_principal=False, **kwargs):
+        super(FullPaJson, self).__init__(start, use_principal=use_principal,
+                                         **kwargs)
+
+    def dump(self, continuing=False):
+        query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
+        jsonl_str = '\n'.join([js.decode() for js, in query_res.all()])
+        s3 = boto3.client('s3')
+        self.get_s3_path().upload(s3, jsonl_str.encode('utf-8'))
+
+
+class Sif(Dumper):
+    """Dumps a pandas dataframe of preassembled statements"""
+    name = 'sif'
+    fmt = 'pkl'
+    db_required = True
+    db_options = ['principal', 'readonly']
+    requires = [SourceCount, ResiduePosition, Belief]
+
+    def __init__(self, start, use_principal=False, **kwargs):
+        super(Sif, self).__init__(start, use_principal=use_principal, **kwargs)
+
+    def dump(self, continuing=False):
+        s3_path = self.get_s3_path()
+        dump_sif(df_file=s3_path,
+                 src_count_file=self.required_s3_paths[SourceCount.name],
+                 res_pos_file=self.required_s3_paths[ResiduePosition.name],
+                 belief_file=self.required_s3_paths[Belief.name],
+                 reload=True,
+                 reconvert=True,
+                 ro=self.db,
+                 normalize_names=True)
+
+
+class StatementHashMeshId(Dumper):
+    name = 'mti_mesh_ids'
+    fmt = 'pkl'
+    db_required = True
+    db_options = ['principal', 'readonly']
+    requires = [Readonly]
+
+    def __init__(self, start, use_principal=False, **kwargs):
+        super(StatementHashMeshId, self).__init__(start,
+                                                  use_principal=use_principal,
+                                                  **kwargs)
+
+    def dump(self, continuing=False):
+        mesh_term_tuples = self.db.select_all([
+            self.db.MeshTermMeta.mk_hash,
+            self.db.MeshTermMeta.mesh_num])
+        mesh_concept_tuples = self.db.select_all([
+            self.db.MeshConceptMeta.mk_hash,
+            self.db.MeshConceptMeta.mesh_num])
+        mesh_data = {'terms': mesh_term_tuples,
+                     'concepts': mesh_concept_tuples}
+
+        s3 = boto3.client('s3')
+        self.get_s3_path().upload(s3, pickle.dumps(mesh_data))
+
+
+class End(Dumper):
+    name = 'end'
+    fmt = 'json'
+    db_required = False
+    requires = get_all_descendants(Dumper)
+
+    def dump(self, continuing=False):
+        s3 = boto3.client('s3')
+        self.get_s3_path().upload(s3, json.dumps(
+            {'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        ))
 
 
 def load_readonly_dump(principal_db, readonly_db, dump_file):
@@ -538,37 +566,30 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         if delete_existing and 'readonly' in principal_db.get_schemas():
             principal_db.drop_schema('readonly')
 
-        starter = Start()
-        starter.dump(continuing=allow_continue)
+        start = Start()
+        start.dump(continuing=allow_continue)
 
         # STATS DUMP
-        stats_dumper = PrincipalStats.from_list(starter.manifest)
-        if not allow_continue or not stats_dumper:
+        if not allow_continue or not PrincipalStats.from_list(start.manifest):
             logger.info("Dumping principal stats.")
-            PrincipalStats(db=principal_db, date_stamp=starter.date_stamp)\
+            PrincipalStats(start, db=principal_db)\
                 .dump(continuing=allow_continue)
         else:
             logger.info("Stats dump exists, skipping.")
 
         # BELIEF DUMP
-        belief_dump = Belief.from_list(starter.manifest)
-        if not allow_continue or not belief_dump:
+        if not allow_continue or not Belief.from_list(start.manifest):
             logger.info("Dumping belief.")
-            belief_dumper = Belief(db=principal_db,
-                                   date_stamp=starter.date_stamp)
-            belief_dumper.dump(continuing=allow_continue)
-            belief_dump = belief_dumper.get_s3_path()
+            Belief(start, db=principal_db).dump(continuing=allow_continue)
         else:
             logger.info("Belief dump exists, skipping.")
 
         # READONLY DUMP
-        dump_file = Readonly.from_list(starter.manifest)
+        dump_file = Readonly.from_list(start.manifest)
         if not allow_continue or not dump_file:
             logger.info("Generating readonly schema (est. a long time)")
-            ro_dumper = Readonly(db=principal_db,
-                                 date_stamp=starter.date_stamp)
-            ro_dumper.dump(belief_dump=belief_dump,
-                           continuing=allow_continue)
+            ro_dumper = Readonly(start, db=principal_db)
+            ro_dumper.dump(continuing=allow_continue)
             dump_file = ro_dumper.get_s3_path()
         else:
             logger.info("Readonly dump exists, skipping.")
@@ -578,59 +599,49 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         # By now, the readonly schema should exist on principal, so providing
         # the principal manager should be ok for source counts and
         # residue/position
-        res_pos_dump = ResiduePosition.from_list(starter.manifest)
-        if not allow_continue or not res_pos_dump:
+        if not allow_continue or not ResiduePosition.from_list(start.manifest):
             logger.info("Dumping residue and position")
-            res_pos_dumper = ResiduePosition(db=principal_db,
-                                             date_stamp=starter.date_stamp)
-            res_pos_dumper.dump(continuing=allow_continue)
-            res_pos_dump = res_pos_dumper.get_s3_path()
+            ResiduePosition(start, db=principal_db)\
+                .dump(continuing=allow_continue)
         else:
             logger.info("Residue position dump exists, skipping")
 
         # SOURCE COUNT DUMP
-        src_count_dump = SourceCount.from_list(starter.manifest)
-        if not allow_continue or not src_count_dump:
+        if not allow_continue or not SourceCount.from_list(start.manifest):
             logger.info("Dumping source count")
-            src_count_dumper = SourceCount(db=principal_db,
-                                           date_stamp=starter.date_stamp)
-            src_count_dumper.dump(continuing=allow_continue)
-            src_count_dump = src_count_dumper.get_s3_path()
+            SourceCount(start, db=principal_db)\
+                .dump(continuing=allow_continue)
+        else:
+            logger.info("Source count dump exists, skipping.")
 
         # SIF DUMP
-        if not allow_continue or not Sif.from_list(starter.manifest):
+        if not allow_continue or not Sif.from_list(start.manifest):
             logger.info("Dumping sif from the readonly schema on principal.")
-            Sif(db=principal_db, date_stamp=starter.date_stamp)\
-                .dump(src_counts_path=src_count_dump,
-                      res_pos_path=res_pos_dump,
-                      belief_path=belief_dump,
-                      continuing=allow_continue)
+            Sif(start, db=principal_db).dump(continuing=allow_continue)
         else:
             logger.info("Sif dump exists, skipping.")
 
         # FULL PA JSON DUMP
-        if not allow_continue or not FullPaJson.from_list(starter.manifest):
+        if not allow_continue or not FullPaJson.from_list(start.manifest):
             logger.info("Dumping all PA Statements as jsonl.")
-            FullPaJson(db=principal_db, date_stamp=starter.date_stamp)\
-                .dump(continuing=allow_continue)
+            FullPaJson(start, db=principal_db).dump(continuing=allow_continue)
         else:
             logger.info("Statement dump exists, skipping.")
 
         # HASH MESH ID DUMP
         if not allow_continue \
-                or not StatementHashMeshId.from_list(starter.manifest):
+                or not StatementHashMeshId.from_list(start.manifest):
             logger.info("Dumping hash-mesh tuples.")
-            StatementHashMeshId(db=principal_db,
-                                date_stamp=starter.date_stamp)\
+            StatementHashMeshId(start, db=principal_db)\
                 .dump(continuing=allow_continue)
 
         # END DUMP
-        End(date_stamp=starter.date_stamp).dump(continuing=allow_continue)
+        End(start).dump(continuing=allow_continue)
     else:
         # Find the most recent dump that has a readonly.
         dump_file = get_latest_dump_s3_path(Readonly.name)
         if dump_file is None:
-            raise Exception("Could not find any suitable readonly dumps.")
+            raise DumpOrderError("Could not find any suitable readonly dumps.")
 
     if not dump_only:
         # READONLY LOAD

@@ -715,28 +715,23 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
 
 
 @run_commands.command('all')
-@click.option('-P', '--principal', default="primary",
-              help="Specify which principal database to use.")
-@click.option('-R', '--readonly', default="primary",
-              help="Specify which readonly database to use.")
-@click.option('-a', '--allow-continue', is_flag=True,
+@click.option('-c', '--continuing', is_flag=True,
               help="Indicate whether you want the job to continue building an "
                    "existing dump corpus, or if you want to start a new one.")
-@click.option('-d', '--delete-existing', is_flag=True,
-              help="Delete and restart an existing readonly schema in "
-                   "principal.")
-@click.option('-u', '--dump-only', is_flag=True,
+@click.option('-d', '--dump-only', is_flag=True,
               help='Only generate the dumps on s3.')
 @click.option('-l', '--load-only', is_flag=True,
               help='Only load a readonly dump from s3 into the given readonly '
                    'database.')
-def run_all(principal, readonly, allow_continue, delete_existing, load_only,
-            dump_only):
+@click.option('--delete-existing', is_flag=True,
+              help="Delete and restart an existing readonly schema in "
+                   "principal.")
+def run_all(continuing, delete_existing, load_only, dump_only):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
-    dump(get_db(principal, protected=False),
-         get_ro(readonly, protected=False), delete_existing,
-         allow_continue, load_only, dump_only)
+    dump(get_db('primary', protected=False),
+         get_ro('primary', protected=False), delete_existing,
+         continuing, load_only, dump_only)
 
 
 @dump_cli.command()

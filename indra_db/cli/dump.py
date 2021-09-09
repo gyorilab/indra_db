@@ -741,7 +741,7 @@ def run_all(continuing, delete_existing, load_only, dump_only):
 def load_readonly(from_dump):
     """Load the readonly database with readonly schema dump."""
     start = Start.from_date(from_dump)
-    dump_file = Readonly.from_list(start.manifest)
+    dump_file = Readonly.from_list(start.manifest).get_s3_path()
     if not dump_file:
         print(f"ERROR: No readonly dump for {start.date_stamp}")
         return

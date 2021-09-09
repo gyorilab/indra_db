@@ -235,18 +235,28 @@ class Dumper(object):
 
         # Define the dump function.
         @click.command(cls.name.replace('_', '-'), help=cls.__doc__)
-        @click.option('-c', '--continuing', is_flag=True)
+        @click.option('-c', '--continuing', is_flag=True,
+                      help="Continue a partial dump, if applicable.")
         @click.option('-d', '--date-stamp',
                       type=click.DateTime(formats=['%Y-%m-%d']),
                       help="Provide a datestamp with which to mark this dump. "
                            "The default is same as the start dump from which "
                            "this is built.")
+        @click.option('-f', '--force', is_flag=True,
+                      help="Run the build even if the dump file has already "
+                           "been produced.")
         @click.option('--from-dump', type=click.DateTime(formats=[DATE_FMT]),
-                      help="Indicate a specific start dump from which to build. "
-                           "The default is the most recent.")
-        def run_dump(continuing, date_stamp, from_dump):
+                      help="Indicate a specific start dump from which to "
+                           "build. The default is the most recent.")
+        def run_dump(continuing, date_stamp, force, from_dump):
             start = Start.from_date(from_dump)
-            cls(start, date_stamp=date_stamp).dump(continuing)
+
+            if not cls.from_list(start.manifest) or force:
+                logger.info(f"Dumping {cls.name}.")
+                cls(start, date_stamp=date_stamp).dump(continuing)
+            else:
+                logger.info(f"{cls.name} exists, nothing to do. To force a "
+                            f"re-computation use -f/--force.")
 
         # Register it with the run commands.
         run_commands.add_command(run_dump)

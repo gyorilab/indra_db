@@ -739,7 +739,7 @@ def run_all(principal, readonly, allow_continue, delete_existing, load_only,
          allow_continue, load_only, dump_only)
 
 
-@run_commands.command()
+@dump_cli.command()
 @click.option('--from-dump', type=click.DateTime(formats=[DATE_FMT]),
               help="Indicate a specific start dump from which to build. "
                    "The default is the most recent.")

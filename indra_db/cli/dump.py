@@ -327,6 +327,19 @@ class Start(Dumper):
         start.load(selected_dump)
         return start
 
+    @classmethod
+    def register(cls):
+        # Define the dump function.
+        @click.command(cls.name.replace('_', '-'), help=cls.__doc__)
+        @click.option('-c', '--continuing', is_flag=True,
+                      help="Add this flag to only create a new start if an "
+                           "unfinished start does not already exist.")
+        def run_dump(continuing):
+            start = Start()
+            start.dump(continuing)
+
+        # Register it with the run commands.
+        run_commands.add_command(run_dump)
 
 
 

@@ -19,6 +19,16 @@ from indra_db.util.dump_sif import dump_sif, get_source_counts, load_res_pos
 logger = logging.getLogger(__name__)
 
 
+@click.group('dump')
+def dump_cli():
+    """Manage the data dumps from Principal to files and Readonly."""
+
+
+@click.group('run')
+def run_commands():
+    """Run dumps."""
+
+
 def list_dumps(started=None, ended=None):
     """List all dumps, optionally filtered by their status.
 
@@ -217,8 +227,39 @@ class Dumper(object):
         s3 = boto3.client('s3')
         self.get_s3_path().upload(s3, b'')
 
+    @classmethod
+    def register(cls):
+
+        # Define the dump function.
+        @click.command(cls.name.replace('_', '-'), help=cls.__doc__)
+        @click.option('-c', '--continuing', is_flag=True)
+        @click.option('-d', '--date-stamp',
+                      type=click.DateTime(formats=['%Y-%m-%d']),
+                      help="Provide a datestamp with which to mark this dump. "
+                           "The default is same as the start dump from which "
+                           "this is built.")
+        @click.option('--from-dump', type=click.DateTime(formats=['%Y-%m-%d']),
+                      help="Indicate a specific start dump from which to build. "
+                           "The default is the most recent.")
+        def run_dump(continuing, date_stamp, from_dump):
+
+            # Sort out what dump we are building off of.
+            all_dumps = list_dumps(started=True)
+            if from_dump:
+                print(from_dump)
+            selected_dump = max(all_dumps)
+            start = Start()
+            start.load(selected_dump)
+
+            # Run the dump.
+            cls(start, date_stamp=date_stamp).dump(continuing)
+
+        # Register it with the run commands.
+        run_commands.add_command(run_dump)
+
 
 class Start(Dumper):
+    """Initialize the dump on s3, marking the start datetime of the dump."""
     name = 'start'
     fmt = 'json'
     db_required = False
@@ -277,6 +318,7 @@ class Start(Dumper):
 
 
 class PrincipalStats(Dumper):
+    """Dump a CSV of extensive counts of content in the principal database."""
     name = 'principal-statistics'
     fmt = 'csv'
     db_required = True
@@ -331,6 +373,7 @@ class Belief(Dumper):
 
 
 class Readonly(Dumper):
+    """Generate the readonly schema, and dump it using pgdump."""
     name = 'readonly'
     fmt = 'dump'
     db_required = True
@@ -451,6 +494,7 @@ class Sif(Dumper):
 
 
 class StatementHashMeshId(Dumper):
+    """Dump a mapping from Statement hashes to MeSH terms."""
     name = 'mti_mesh_ids'
     fmt = 'pkl'
     db_required = True
@@ -477,6 +521,7 @@ class StatementHashMeshId(Dumper):
 
 
 class End(Dumper):
+    """Mark the dump as complete."""
     name = 'end'
     fmt = 'json'
     db_required = False
@@ -656,12 +701,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         principal_db.drop_schema('readonly')
 
 
-@click.group('dump')
-def dump_cli():
-    """Manage the data dumps from Principal to files and Readonly."""
-
-
-@dump_cli.command()
+@run_commands.command('all')
 @click.option('-P', '--principal', default="primary",
               help="Specify which principal database to use.")
 @click.option('-R', '--readonly', default="primary",
@@ -677,7 +717,7 @@ def dump_cli():
 @click.option('-l', '--load-only', is_flag=True,
               help='Only load a readonly dump from s3 into the given readonly '
                    'database.')
-def run(principal, readonly, allow_continue, delete_existing, load_only,
+def run_all(principal, readonly, allow_continue, delete_existing, load_only,
         dump_only):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
@@ -817,3 +857,10 @@ def print_database_stats():
         if len(ag_dict) == n:
             cnt += 1
     print("Number of pa statements in ro with all agents grounded:", intword(cnt))
+
+
+for DumperChild in get_all_descendants(Dumper):
+    DumperChild.register()
+
+
+dump_cli.add_command(run_commands)

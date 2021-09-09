@@ -110,6 +110,9 @@ class DumpOrderError(Exception):
     pass
 
 
+DATE_FMT = '%Y-%m-%d'
+
+
 class Dumper(object):
     name: str = NotImplemented
     fmt: str = NotImplemented
@@ -140,7 +143,7 @@ class Dumper(object):
             if start:
                 self.date_stamp = start.date_stamp
             else:
-                self.date_stamp = datetime.now().strftime('%Y-%m-%d')
+                self.date_stamp = datetime.now().strftime(DATE_FMT)
         else:
             self.date_stamp = date_stamp
 
@@ -238,7 +241,7 @@ class Dumper(object):
                       help="Provide a datestamp with which to mark this dump. "
                            "The default is same as the start dump from which "
                            "this is built.")
-        @click.option('--from-dump', type=click.DateTime(formats=['%Y-%m-%d']),
+        @click.option('--from-dump', type=click.DateTime(formats=[DATE_FMT]),
                       help="Indicate a specific start dump from which to build. "
                            "The default is the most recent.")
         def run_dump(continuing, date_stamp, from_dump):
@@ -246,8 +249,15 @@ class Dumper(object):
             # Sort out what dump we are building off of.
             all_dumps = list_dumps(started=True)
             if from_dump:
-                print(from_dump)
-            selected_dump = max(all_dumps)
+                for dump_base in all_dumps:
+                    if from_dump.strptime(DATE_FMT) in dump_base.prefix:
+                        selected_dump = dump_base
+                        break
+                else:
+                    print(f"Could not find dump from date {from_dump}.")
+                    return
+            else:
+                selected_dump = max(all_dumps)
             start = Start()
             start.load(selected_dump)
 

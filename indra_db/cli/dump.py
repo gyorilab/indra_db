@@ -245,23 +245,7 @@ class Dumper(object):
                       help="Indicate a specific start dump from which to build. "
                            "The default is the most recent.")
         def run_dump(continuing, date_stamp, from_dump):
-
-            # Sort out what dump we are building off of.
-            all_dumps = list_dumps(started=True)
-            if from_dump:
-                for dump_base in all_dumps:
-                    if from_dump.strptime(DATE_FMT) in dump_base.prefix:
-                        selected_dump = dump_base
-                        break
-                else:
-                    print(f"Could not find dump from date {from_dump}.")
-                    return
-            else:
-                selected_dump = max(all_dumps)
-            start = Start()
-            start.load(selected_dump)
-
-            # Run the dump.
+            start = Start.from_date(from_dump)
             cls(start, date_stamp=date_stamp).dump(continuing)
 
         # Register it with the run commands.
@@ -325,6 +309,25 @@ class Start(Dumper):
         start_json = json.loads(res['Body'].read())
         self.date_stamp = start_json['date_stamp']
         self.manifest = manifest
+
+    @classmethod
+    def from_date(cls, dump_date: datetime):
+        """Select a dump based on the given datetime."""
+        all_dumps = list_dumps(started=True)
+        if dump_date:
+            for dump_base in all_dumps:
+                if dump_date.strptime(DATE_FMT) in dump_base.prefix:
+                    selected_dump = dump_base
+                    break
+            else:
+                raise ValueError(f"Could not find dump from date {dump_date}.")
+        else:
+            selected_dump = max(all_dumps)
+        start = cls()
+        start.load(selected_dump)
+        return start
+
+
 
 
 class PrincipalStats(Dumper):
@@ -728,12 +731,27 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
               help='Only load a readonly dump from s3 into the given readonly '
                    'database.')
 def run_all(principal, readonly, allow_continue, delete_existing, load_only,
-        dump_only):
+            dump_only):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
     dump(get_db(principal, protected=False),
          get_ro(readonly, protected=False), delete_existing,
          allow_continue, load_only, dump_only)
+
+
+@run_commands.command()
+@click.option('--from-dump', type=click.DateTime(formats=[DATE_FMT]),
+              help="Indicate a specific start dump from which to build. "
+                   "The default is the most recent.")
+def load_readonly(from_dump):
+    """Load the readonly database with readonly schema dump."""
+    start = Start.from_date(from_dump)
+    dump_file = Readonly.from_list(start.manifest)
+    if not dump_file:
+        print(f"ERROR: No readonly dump for {start.date_stamp}")
+        return
+    load_readonly_dump(get_db('primary', protected=True),
+                       get_ro('primary', protected=False), dump_file)
 
 
 @dump_cli.command('list')

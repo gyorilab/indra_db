@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
+from hashlib import md5
 
 from flask_cors import CORS
 from flask_compress import Compress
@@ -225,6 +226,9 @@ def search():
 suf_ct_map = {'.js': 'application/javascript', '.css': 'text/css'}
 
 
+suf_ct_map = {'.js': 'application/javascript', '.css': 'text/css'}
+
+
 @app.route('/data-vis/<path:file_path>')
 def serve_data_vis(file_path):
     full_path = HERE / 'data-vis' / 'dist' / file_path
@@ -245,8 +249,8 @@ if TESTING['status'] and not TESTING['deployment']:
         # Sort out where the VUE directory is.
         full_path = VUE_ROOT / file
         if not full_path.exists():
-            return abort(404, f'File {full_path.as_posix()} not found.')
-        with open(full_path, 'rb') as f:
+            return abort(404, f'File {full_path.name} not found.')
+        with full_path.open(mode='rb') as f:
             return Response(f.read(),
                             content_type=suf_ct_map.get(full_path.suffix))
 

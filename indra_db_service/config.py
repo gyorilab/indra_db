@@ -1,5 +1,5 @@
 __all__ = ["TITLE", "DEPLOYMENT", "VUE_ROOT", "MAX_STMTS", "MAX_LIST_LEN",
-           "REDACT_MESSAGE", "TESTING", "jwt_nontest_optional"]
+           "REDACT_MESSAGE", "TESTING", "jwt_nontest_optional", "CURATOR_SALT"]
 
 from os import environ
 from pathlib import Path

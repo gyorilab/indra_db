@@ -548,15 +548,20 @@ def list_curations(stmt_hash, src_hash):
     user, roles = auth_curation()
 
     # The user needs extra permission to load all curations.
+    can_load = True
     if not params:
         can_load = False
         for role in roles:
             can_load |= role.permissions.get('get_curations', False)
-        if not can_load:
-            raise InsufficientPermission("get all curations")
 
     # Get the curations.
     curations = get_curations(**params)
+    if not can_load:
+        for curation in curations:
+            s = curation['curator']
+            if CURATOR_SALT:
+                s += CURATOR_SALT
+            curation['curator'] = md5(s.encode('utf-8')).hexdigest()[:16]
     return jsonify(curations), 200
 
 

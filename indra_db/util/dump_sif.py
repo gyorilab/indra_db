@@ -22,9 +22,12 @@ from indra.databases.identifiers import ensure_prefix_if_needed
 
 try:
     import pandas as pd
+    from pandas import DataFrame
 except ImportError:
     print("Pandas not available.")
     pd = None
+    from typing import Any
+    DataFrame = Any
 
 from indra_db.util.s3_path import S3Path
 from indra_db.util.constructors import get_ro, get_db
@@ -201,7 +204,7 @@ def get_source_counts(pkl_filename=None, ro=None):
     return ev
 
 
-def normalize_sif_names(sif_df: pd.DataFrame):
+def normalize_sif_names(sif_df: DataFrame):
     """Try to normalize names in the sif dump dataframe
 
     This function tries to normalize the names of the entities in the sif

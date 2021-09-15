@@ -17,11 +17,7 @@ from os import path, remove, rename, listdir
 from typing import Tuple
 
 from indra.util import zip_string, batch_iter
-from indra.literature import pubmed_client
-from indra.literature.pmc_client import id_lookup
 from indra.util import UnicodeXMLTreeBuilder as UTB
-from indra.literature.crossref_client import get_publisher
-from indra.literature.elsevier_client import download_article_from_ids
 
 from indra_db.databases import texttypes, formats
 from indra_db.databases import sql_expressions as sql_exp
@@ -617,6 +613,7 @@ class Pubmed(_NihManager):
         return [sub_dir + '/' + k for k in all_files if k.endswith('.xml.gz')]
 
     def get_article_info(self, xml_file, q=None):
+        from indra.literature import pubmed_client
         tree = self.ftp.get_xml_file(xml_file)
         article_info = pubmed_client.get_metadata_from_xml_tree(
             tree,
@@ -906,6 +903,7 @@ class PmcManager(_NihManager):
     @staticmethod
     def get_missing_pmids(db, tr_data):
         """Try to get missing pmids using the pmc client."""
+        from indra.literature.pmc_client import id_lookup
 
         logger.info("Getting missing pmids.")
 
@@ -1509,6 +1507,7 @@ class Elsevier(ContentManager):
     def __select_elsevier_refs(self, tr_set, max_retries=2):
         """Try to check if this content is available on Elsevier."""
         from indra.literature.pubmed_client import get_metadata_for_ids
+        from indra.literature.crossref_client import get_publisher
 
         elsevier_tr_set = set()
         for tr in tr_set.copy():
@@ -1552,6 +1551,7 @@ class Elsevier(ContentManager):
 
     def __get_content(self, trs):
         """Get the content."""
+        from indra.literature.elsevier_client import download_article_from_ids
         article_tuples = set()
         for tr in trs:
             id_dict = {id_type: getattr(tr, id_type)

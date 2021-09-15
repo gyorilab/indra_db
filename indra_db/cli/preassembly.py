@@ -3,8 +3,6 @@ from datetime import datetime
 
 from indra_db import get_db
 from indra_db.exceptions import IndraDbException
-from indra_db.preassembly.submitter import VALID_STATEMENTS, \
-    PreassemblySubmitter
 
 from .util import format_date
 
@@ -14,6 +12,7 @@ def filter_updates(stmt_type, pa_updates):
 
 def list_last_updates(db):
     """Return a dict of the most recent updates for each statement type."""
+    from indra_db.preassembly.submitter import VALID_STATEMENTS
     pa_updates = db.select_all(db.PreassemblyUpdates)
     last_full_update = max(filter_updates(None, pa_updates))
     last_updates = {st: max(filter_updates(st, pa_updates)
@@ -48,6 +47,8 @@ def run_preassembly(mode, project_name):
         This name is used to gag the various AWS resources used for accounting
         purposes.
     """
+    from indra_db.preassembly.submitter import VALID_STATEMENTS, \
+        PreassemblySubmitter
     db = get_db('primary')
     if mode == 'update':
         # Find the latest update for each statement type.

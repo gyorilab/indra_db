@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from typing import Optional, List
 
 import click
 import boto3
@@ -130,12 +131,12 @@ class Dumper(object):
             raise DumpOrderError(f"{self.name} has prerequisites, but no start "
                                  f"given.")
         for ReqDump in self.requires:
-            dumper = ReqDump.from_list(start.manifest)
-            if dumper is None:
+            dump_path = ReqDump.from_list(start.manifest)
+            if dump_path is None:
                 raise DumpOrderError(f"{self.name} dump requires "
                                      f"{ReqDump.name} to be completed before "
                                      f"running.")
-            self.required_s3_paths[ReqDump.name] = dumper.get_s3_path()
+            self.required_s3_paths[ReqDump.name] = dump_path
 
         # Get the date stamp.
         self.s3_dump_path = None
@@ -217,7 +218,7 @@ class Dumper(object):
         return True
 
     @classmethod
-    def from_list(cls, s3_path_list):
+    def from_list(cls, s3_path_list: List[S3Path]) -> Optional[S3Path]:
         for p in s3_path_list:
             if cls.is_dump_path(p):
                 return p

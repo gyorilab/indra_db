@@ -22,7 +22,7 @@ def main():
           author_email='patrick_greene@hms.harvard.edu',
           packages=packages,
           include_package_data=True,
-          install_requires=['sqlalchemy', 'psycopg2'],
+          install_requires=['sqlalchemy<1.4', 'psycopg2'],
           extras_require=extras_require,
           entry_points="""
           [console_scripts]

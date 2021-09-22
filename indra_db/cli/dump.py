@@ -327,7 +327,7 @@ class Start(Dumper):
         all_dumps = list_dumps(started=True)
         if dump_date:
             for dump_base in all_dumps:
-                if dump_date.strptime(DATE_FMT) in dump_base.prefix:
+                if dump_date.strftime(DATE_FMT) in dump_base.prefix:
                     selected_dump = dump_base
                     break
             else:

@@ -120,6 +120,7 @@ class Dumper(object):
     db_options: list = []
     db_required: bool = False
     requires: list = NotImplemented
+    heavy_compute: bool = True
 
     def __init__(self, start=None, date_stamp=None, **kwargs):
         # Get a database handle, if needed.
@@ -268,6 +269,7 @@ class Start(Dumper):
     name = 'start'
     fmt = 'json'
     db_required = False
+    heavy_compute = False
     requires = []
 
     def __init__(self, *args, **kwargs):
@@ -361,6 +363,7 @@ class PrincipalStats(Dumper):
     db_required = True
     db_options = ['principal']
     requires = [Start]
+    heavy_compute = False
 
     def dump(self, continuing=False):
         import io
@@ -416,6 +419,7 @@ class Readonly(Dumper):
     db_required = True
     db_options = ['principal']
     requires = [Belief]
+    heavy_compute = False
 
     def dump(self, continuing=False):
 
@@ -563,6 +567,7 @@ class End(Dumper):
     fmt = 'json'
     db_required = False
     requires = get_all_descendants(Dumper)
+    heavy_compute = False
 
     def dump(self, continuing=False):
         s3 = boto3.client('s3')

@@ -915,6 +915,18 @@ def print_database_stats():
     print("Number of pa statements in ro with all agents grounded:", intword(cnt))
 
 
+@dump_cli.command('hierarchy')
+def dump_hierarchy():
+    """Dump hierarchy of Dumper classes to S3."""
+    hierarchy = {}
+    for d in get_all_descendants(Dumper):
+        hierarchy[d.name] = d.config_to_json()
+    s3_base = get_s3_dump()
+    s3_path = s3_base.get_element_path('hierarchy.json')
+    s3 = boto3.client('s3')
+    s3_path.upload(s3, json.dumps(hierarchy))
+
+
 for DumperChild in get_all_descendants(Dumper):
     DumperChild.register()
 

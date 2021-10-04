@@ -263,6 +263,10 @@ class Dumper(object):
         # Register it with the run commands.
         run_commands.add_command(run_dump)
 
+    @classmethod
+    def config_to_json(cls):
+        return {'requires': [r.name for r in cls.requires],
+                'heavy_compute': cls.heavy_compute}
 
 class Start(Dumper):
     """Initialize the dump on s3, marking the start datetime of the dump."""

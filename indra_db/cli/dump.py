@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from typing import Optional, List
 
 import click
 import boto3
@@ -119,6 +120,7 @@ class Dumper(object):
     db_options: list = []
     db_required: bool = False
     requires: list = NotImplemented
+    heavy_compute: bool = True
 
     def __init__(self, start=None, date_stamp=None, **kwargs):
         # Get a database handle, if needed.
@@ -130,12 +132,12 @@ class Dumper(object):
             raise DumpOrderError(f"{self.name} has prerequisites, but no start "
                                  f"given.")
         for ReqDump in self.requires:
-            dumper = ReqDump.from_list(start.manifest)
-            if dumper is None:
+            dump_path = ReqDump.from_list(start.manifest)
+            if dump_path is None:
                 raise DumpOrderError(f"{self.name} dump requires "
                                      f"{ReqDump.name} to be completed before "
                                      f"running.")
-            self.required_s3_paths[ReqDump.name] = dumper.get_s3_path()
+            self.required_s3_paths[ReqDump.name] = dump_path
 
         # Get the date stamp.
         self.s3_dump_path = None
@@ -217,7 +219,7 @@ class Dumper(object):
         return True
 
     @classmethod
-    def from_list(cls, s3_path_list):
+    def from_list(cls, s3_path_list: List[S3Path]) -> Optional[S3Path]:
         for p in s3_path_list:
             if cls.is_dump_path(p):
                 return p
@@ -261,12 +263,17 @@ class Dumper(object):
         # Register it with the run commands.
         run_commands.add_command(run_dump)
 
+    @classmethod
+    def config_to_json(cls):
+        return {'requires': [r.name for r in cls.requires],
+                'heavy_compute': cls.heavy_compute}
 
 class Start(Dumper):
     """Initialize the dump on s3, marking the start datetime of the dump."""
     name = 'start'
     fmt = 'json'
     db_required = False
+    heavy_compute = False
     requires = []
 
     def __init__(self, *args, **kwargs):
@@ -326,7 +333,7 @@ class Start(Dumper):
         all_dumps = list_dumps(started=True)
         if dump_date:
             for dump_base in all_dumps:
-                if dump_date.strptime(DATE_FMT) in dump_base.prefix:
+                if dump_date.strftime(DATE_FMT) in dump_base.prefix:
                     selected_dump = dump_base
                     break
             else:
@@ -360,6 +367,7 @@ class PrincipalStats(Dumper):
     db_required = True
     db_options = ['principal']
     requires = [Start]
+    heavy_compute = False
 
     def dump(self, continuing=False):
         import io
@@ -415,6 +423,7 @@ class Readonly(Dumper):
     db_required = True
     db_options = ['principal']
     requires = [Belief]
+    heavy_compute = False
 
     def dump(self, continuing=False):
 
@@ -562,6 +571,7 @@ class End(Dumper):
     fmt = 'json'
     db_required = False
     requires = get_all_descendants(Dumper)
+    heavy_compute = False
 
     def dump(self, continuing=False):
         s3 = boto3.client('s3')
@@ -903,6 +913,18 @@ def print_database_stats():
         if len(ag_dict) == n:
             cnt += 1
     print("Number of pa statements in ro with all agents grounded:", intword(cnt))
+
+
+@dump_cli.command('hierarchy')
+def dump_hierarchy():
+    """Dump hierarchy of Dumper classes to S3."""
+    hierarchy = {}
+    for d in get_all_descendants(Dumper):
+        hierarchy[d.name] = d.config_to_json()
+    s3_base = get_s3_dump()
+    s3_path = s3_base.get_element_path('hierarchy.json')
+    s3 = boto3.client('s3')
+    s3_path.upload(s3, json.dumps(hierarchy))
 
 
 for DumperChild in get_all_descendants(Dumper):

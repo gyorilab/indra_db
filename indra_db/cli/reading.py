@@ -269,7 +269,8 @@ class BulkAwsReadingManager(BulkReadingManager):
                            self.ids_per_job[reader_name.lower()])
 
         logger.info("Waiting for complete...")
-        sub.watch_and_wait(idle_log_timeout=self.timeouts[reader_name.lower()],
+        sub.watch_and_wait(poll_interval=30,
+                           idle_log_timeout=self.timeouts[reader_name.lower()],
                            kill_on_timeout=True, stash_log_method='s3')
 
         # Get the versions of the reader reader used in all the jobs, check for
@@ -361,7 +362,7 @@ def run(task, buffer, project_name):
     """
     from indra_db.util import get_db
     db = get_db('primary')
-    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
+    readers = ['SPARSER', 'REACH', 'EIDOS', 'TRIPS', 'ISI', 'MTI']
     bulk_manager = BulkAwsReadingManager(readers,
                                          buffer_days=buffer,
                                          project_name=project_name)

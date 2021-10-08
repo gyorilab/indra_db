@@ -209,7 +209,7 @@ class BulkAwsReadingManager(BulkReadingManager):
         'sparser': 600,
         'isi': 2400,
         'trips': 300,
-        'eidos': 1200,
+        'eidos': 2400,
         'mti': 5400,
     }
 

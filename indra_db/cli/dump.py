@@ -254,7 +254,7 @@ class Dumper(object):
             start = Start.from_date(from_dump)
 
             if not cls.from_list(start.manifest) or force:
-                logger.info(f"Dumping {cls.name}.")
+                logger.info(f"Dumping {cls.name} for {date_stamp}.")
                 cls(start, date_stamp=date_stamp).dump(continuing)
             else:
                 logger.info(f"{cls.name} exists, nothing to do. To force a "

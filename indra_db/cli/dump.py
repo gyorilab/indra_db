@@ -257,15 +257,15 @@ class Dumper(object):
                 logger.info(f"Dumping {cls.name} for {date_stamp}.")
                 cls(start, date_stamp=date_stamp).dump(continuing)
             else:
-                logger.info(f"{cls.name} exists, nothing to do. To force a "
-                            f"re-computation use -f/--force.")
+                logger.info(f"{cls.name} for {date_stamp} exists, nothing to "
+                            f"do. To force a re-computation use -f/--force.")
 
         # Register it with the run commands.
         run_commands.add_command(run_dump)
 
     @classmethod
     def config_to_json(cls):
-        return {'requires': [r.name for r in cls.requires],
+        return {'requires': [r.name.replace('_', '-') for r in cls.requires],
                 'heavy_compute': cls.heavy_compute}
 
 class Start(Dumper):
@@ -920,7 +920,8 @@ def dump_hierarchy():
     """Dump hierarchy of Dumper classes to S3."""
     hierarchy = {}
     for d in get_all_descendants(Dumper):
-        hierarchy[d.name] = d.config_to_json()
+        command_name = d.name.replace('_', '-')
+        hierarchy[command_name] = d.config_to_json()
     s3_base = get_s3_dump()
     s3_path = s3_base.get_element_path('hierarchy.json')
     s3 = boto3.client('s3')

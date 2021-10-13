@@ -440,7 +440,6 @@ class Readonly(Dumper):
         self.db.dump_readonly(self.get_s3_path())
         return
 
-
 class SourceCount(Dumper):
     """Dumps a dict of dicts with source counts per source api per statement"""
     name = 'source_count'
@@ -925,7 +924,7 @@ def dump_hierarchy():
     s3_base = get_s3_dump()
     s3_path = s3_base.get_element_path('hierarchy.json')
     s3 = boto3.client('s3')
-    s3_path.upload(s3, json.dumps(hierarchy))
+    s3_path.upload(s3, json.dumps(hierarchy).encode('utf-8'))
 
 
 for DumperChild in get_all_descendants(Dumper):

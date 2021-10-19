@@ -1,12 +1,15 @@
 __all__ = ['ReadonlySchema']
 
 import logging
+from collections import defaultdict
 
 from sqlalchemy import Column, Integer, String, BigInteger, Boolean,\
     SmallInteger
 from sqlalchemy.dialects.postgresql import BYTEA, JSON, JSONB, REAL
 
 from indra.statements import get_all_descendants, Statement
+from indra.sources import SOURCE_INFO
+from indra.util.statement_presentation import internal_source_mappings
 
 from .mixins import ReadonlyTable, NamespaceLookup, SpecialColumnTable, \
     IndraDBTable, IndraDBRefTable, Schema
@@ -953,9 +956,9 @@ class ReadonlySchema(Schema):
                 all_sources = ', '.join(s for src in srcs
                                         for s in (repr(src), src))
                 rd_sources = ', '.join(repr(src)
-                                       for src in SOURCE_GROUPS['reading'])
+                                       for src in SOURCE_GROUPS['reader'])
                 db_sources = ', '.join(repr(src)
-                                       for src in SOURCE_GROUPS['databases'])
+                                       for src in SOURCE_GROUPS['database'])
                 sql = cls.__definition_fmt__.format(all_sources=all_sources,
                                                     reading_sources=rd_sources,
                                                     db_sources=db_sources)
@@ -1349,15 +1352,19 @@ class ReadonlySchema(Schema):
         return AgentInteractions
 
 
-SOURCE_GROUPS = {'databases': ['phosphosite', 'cbn', 'pc11', 'biopax',
-                               'bel_lc', 'signor', 'biogrid', 'tas',
-                               'lincs_drug', 'hprd', 'trrust'],
-                 'reading': ['geneways', 'tees', 'isi', 'trips', 'rlimsp',
-                             'medscan', 'sparser', 'reach', 'eidos', 'mti']}
-"""The source short-names grouped by "database" or "reading".
+
+def _get_source_groups():
+    source_groups = defaultdict(list)
+    for source_key, info in SOURCE_INFO.items():
+        mapped_source = internal_source_mappings.get(source_key, source_key)
+        source_groups[info['type']].append(mapped_source)
+    return dict(source_groups)
+
+SOURCE_GROUPS = _get_source_groups()
+"""The source short-names grouped by "database" or "reader".
 
 It is worth noting that "database" and "knowledge base" are not equivalent here.
-There are several entries in the "reading" category that we gather from other
+There are several entries in the "reader" category that we gather from other
 knowledge bases, but are based on machine readers.
 
 This is used in the formation of the sources table, as well as in the display

@@ -1354,11 +1354,12 @@ class ReadonlySchema(Schema):
 
 
 def _get_source_groups():
-    source_groups = defaultdict(list)
+    # Initially a set because we get duplicates due to mappings
+    source_groups = defaultdict(set)
     for source_key, info in SOURCE_INFO.items():
         mapped_source = internal_source_mappings.get(source_key, source_key)
-        source_groups[info['type']].append(mapped_source)
-    return dict(source_groups)
+        source_groups[info['type']].add(mapped_source)
+    return {k: list(v) for k, v in source_groups.items()}
 
 SOURCE_GROUPS = _get_source_groups()
 """The source short-names grouped by "database" or "reader".

@@ -1462,9 +1462,9 @@ class SourceTypeCore(SourceQuery):
 
     def ev_filter(self):
         if self.col == 'has_rd':
-            my_src_group = SOURCE_GROUPS['reading']
+            my_src_group = SOURCE_GROUPS['reader']
         elif self.col == 'has_db':
-            my_src_group = SOURCE_GROUPS['databases']
+            my_src_group = SOURCE_GROUPS['database']
         else:
             raise RuntimeError("`col` class attribute not recognized.")
 

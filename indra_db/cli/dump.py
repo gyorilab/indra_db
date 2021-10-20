@@ -399,7 +399,7 @@ class PrincipalStats(Dumper):
         # Upload a bytes-like object
         csv_bytes = str_io.getvalue().encode('utf-8')
         s3 = boto3.client('s3')
-        self.s3_dump_path().upload(s3, csv_bytes)
+        self.get_s3_path().upload(s3, csv_bytes)
 
 
 class Belief(Dumper):

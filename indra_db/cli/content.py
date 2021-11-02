@@ -1367,8 +1367,9 @@ class PmcOA(PmcManager):
         files = self.ftp.get_csv_as_dict('oa_file_list.csv')
         archive_set = {
             f['File'] for f in files
-            if datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
-                                 '%Y-%m-%d %H:%M:%S') > min_date
+            if 'Last Updated (YYYY-MM-DD HH:MM:SS)' in f and
+            datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
+                              '%Y-%m-%d %H:%M:%S') > min_date
         }
         return archive_set
 

@@ -485,8 +485,11 @@ class DatabaseReader(object):
                 commit=False,
                 return_cols=('uuid',)
             )
-            gatherer.add('new_stmts', len(stmt_tuples) - len(updated))
-            gatherer.add('upd_stmts', len(updated))
+            num_updated = 0
+            if updated:
+                num_updated = len(updated)
+            gatherer.add('new_stmts', len(stmt_tuples) - num_updated)
+            gatherer.add('upd_stmts', num_updated)
 
             # Dump the duplicates into a separate to all for debugging.
             self._db.copy('rejected_statements',

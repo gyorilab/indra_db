@@ -488,11 +488,16 @@ class FullPaStmts(Dumper):
         super(FullPaStmts, self).__init__(start, use_principal=use_principal, **kwargs)
 
     def dump(self, continuing=False):
+        logger.info('Querying the database to get FastRawPaLink statements')
         query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
+        logger.info('Getting statements from json')
         stmt_list = stmts_from_json([json.loads(js[0]) for js in
                                      query_res.all()])
+        logger.info('Dumping to pickle')
+        stmt_obj = pickle.dumps(stmt_list)
+        logger.info('Uploading to S3')
         s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, pickle.dumps(stmt_list))
+        self.get_s3_path().upload(s3, stmt_obj)
 
 
 class FullPaJson(Dumper):

@@ -575,7 +575,10 @@ class End(Dumper):
     name = 'end'
     fmt = 'json'
     db_required = False
-    requires = get_all_descendants(Dumper)
+    # We don't need a FullPaStmts as a pickle because we already have the
+    # jsonl (keeping the class definition if ever need to save a pickle)
+    requires = [dumper for dumper in get_all_descendants(Dumper)
+                if dumper.name != 'full_pa_stmts']
     heavy_compute = False
 
     def dump(self, continuing=False):

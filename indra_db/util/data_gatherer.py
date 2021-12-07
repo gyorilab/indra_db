@@ -74,7 +74,10 @@ class DataGatherer(object):
         return
 
     def dump(self, err_type, err, tb):
-        logger.info("Leaving manager env with error type: %s" % err_type)
+        if err_type:
+            logger.info("Leaving manager env with error type: %s" % err_type)
+        else:
+            logger.info("Successful run, leaving manager env.")
         s3 = boto3.client('s3')
 
         if err_type:

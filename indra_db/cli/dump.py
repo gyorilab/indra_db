@@ -928,6 +928,9 @@ def dump_hierarchy():
     """Dump hierarchy of Dumper classes to S3."""
     hierarchy = {}
     for d in get_all_descendants(Dumper):
+        # Skip the FullPaStmts here.
+        if d.name == 'full_pa_stmts':
+            continue
         command_name = d.name.replace('_', '-')
         hierarchy[command_name] = d.config_to_json()
     s3_base = get_s3_dump()

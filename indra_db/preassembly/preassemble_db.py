@@ -549,6 +549,7 @@ class DbPreassembler:
         support_links = set()
         idx_batches, start_idx = self._make_idx_batches(new_hashes, continuing)
         for outer_idx, (out_s, out_e) in enumerate(idx_batches[start_idx:]):
+            outer_idx += 1  # log starting at 1
             outer_idx += start_idx
             # Create the statements from the jsons.
             npa_json_q = db.filter_query(
@@ -576,8 +577,8 @@ class DbPreassembler:
                 split_idx = len(npa_batch) - 1
                 full_list = npa_batch + other_npa_batch
                 self._log(f"Comparing outer batch {outer_idx}/"
-                          f"{len(idx_batches)-1} to inner batch {in_idx}/"
-                          f"{len(idx_batches)-in_start-1} of other new "
+                          f"{len(idx_batches)} to inner batch {in_idx}/"
+                          f"{len(idx_batches)-in_start} of other new "
                           f"statements.")
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx)
@@ -591,6 +592,7 @@ class DbPreassembler:
                                                   db.PAStatements.json,
                                                   *opa_args)
             for opa_idx, opa_json_batch in opa_json_iter:
+                opa_idx += 1  # log starting at 1
                 opa_batch = [_stmt_from_json(s_json)
                              for s_json, in opa_json_batch]
                 # NOTE: deliberately subtracting 1 because the INDRA
@@ -598,7 +600,7 @@ class DbPreassembler:
                 split_idx = len(npa_batch) - 1
                 full_list = npa_batch + opa_batch
                 self._log(f"Comparing new batch {outer_idx}/"
-                          f"{len(idx_batches)-1} to batch {opa_idx} of old pa "
+                          f"{len(idx_batches)} to batch {opa_idx} of old pa "
                           f"statements.")
                 some_support_links |= \
                     self._get_support_links(full_list, split_idx=split_idx)

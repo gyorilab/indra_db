@@ -551,9 +551,7 @@ class DbPreassembler:
 
         # We first get all the new statements in batches
         all_outer_stmts = []
-        for outer_idx, (out_s, out_e) in enumerate(idx_batches[start_idx:]):
-            outer_idx += 1  # log starting at 1
-            outer_idx += start_idx
+        for (out_s, out_e) in idx_batches[start_idx:]:
             # Create the statements from the JSONs
             npa_json_q = db.filter_query(
                 db.PAStatements.json,

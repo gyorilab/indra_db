@@ -585,7 +585,7 @@ class End(Dumper):
         s3 = boto3.client('s3')
         self.get_s3_path().upload(s3, json.dumps(
             {'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-        ))
+        ).encode('utf-8'))
 
 
 def load_readonly_dump(principal_db, readonly_db, dump_file):

@@ -423,7 +423,7 @@ class Readonly(Dumper):
     db_required = True
     db_options = ['principal']
     requires = [Belief]
-    heavy_compute = False
+    heavy_compute = True
 
     def dump(self, continuing=False):
 

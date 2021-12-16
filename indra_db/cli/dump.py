@@ -431,8 +431,13 @@ class Readonly(Dumper):
                     % datetime.now())
         import boto3
         s3 = boto3.client('s3')
+        logger.info("Getting belief data from S3")
         belief_data = self.required_s3_paths[Belief.name].get(s3)
-        belief_dict = json.loads(belief_data['Body'].read())
+        logger.info("Reading belief data body")
+        belief_body = belief_data['Body'].read()
+        logger.info("Loading belief dict from string")
+        belief_dict = json.loads(belief_body)
+        logger.info("Generating readonly schema")
         self.db.generate_readonly(belief_dict, allow_continue=continuing)
 
         logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"

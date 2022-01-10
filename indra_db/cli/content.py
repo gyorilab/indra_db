@@ -1409,11 +1409,24 @@ class Manuscripts(PmcManager):
     def get_license(self, pmcid):
         return 'manuscripts'
 
+    def get_csv_files(self):
+        """Get a list of CSV files from the FTP server."""
+        all_files = self.ftp.ftp_ls('xml')
+        return [f for f in all_files if f.endswith('filelist.csv')]
+
     def get_file_data(self):
-        return self.ftp.get_csv_as_dict("filelist.csv")
+        files = self.get_csv_files()
+        ftp_file_list = []
+        for f in files:
+            file_root = f.split('.filelist')[0]
+            archive = self.ftp._path_join('xml', f'{file_root}.tar.gz')
+            ftp_file_list += self.ftp.get_csv_as_dict(
+                self.ftp._path_join('xml', f),
+                add_fields={'archive': archive})
+        return ftp_file_list
 
     def get_pmcid_file_dict(self):
-        return {d['PMCID']: d['File'] for d in self.get_file_data()}
+        return {d['AccessionID']: d['Article File'] for d in self.get_file_data()}
 
     def get_tarname_from_filename(self, fname):
         "Get the name of the tar file based on the file name (or a pmcid)."

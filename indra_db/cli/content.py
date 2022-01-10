@@ -95,7 +95,8 @@ class _NihFtpClient(object):
         logger.info("Parsing XML metadata")
         return ET.XML(xml_bytes, parser=UTB())
 
-    def get_csv_as_dict(self, csv_file, cols=None, infer_header=True):
+    def get_csv_as_dict(self, csv_file, cols=None, infer_header=True,
+                        add_fields=None):
         """Get the content from a csv file as a list of dicts.
 
         Parameters
@@ -107,6 +108,8 @@ class _NihFtpClient(object):
         infer_header : bool
             If True, infer the cols from the first line. If False, the cols
             will simply be indexed by integers.
+        add_fields : dict
+            A dictionary of additional fields to add to the dicts.
         """
         csv_str = self.get_file(csv_file)
         csv_lines = csv_str.splitlines()
@@ -118,7 +121,10 @@ class _NihFtpClient(object):
                     continue
                 else:
                     cols = list(range(len(row)))
-            result.append(dict(zip(cols, row)))
+            row_dict = dict(zip(cols, row))
+            if add_fields is not None:
+                row_dict.update(add_fields)
+            result.append(row_dict)
         return result
 
     def ret_file(self, f_path, buf):

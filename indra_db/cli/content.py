@@ -1473,8 +1473,8 @@ class Manuscripts(PmcManager):
         The continuing feature isn't implemented yet.
         """
         logger.info("Getting list of manuscript content available.")
-        ftp_file_list = self.ftp.get_csv_as_dict('filelist.csv')
-        ftp_pmcid_set = {entry['PMCID'] for entry in ftp_file_list}
+        ftp_file_list = self.get_file_data()
+        ftp_pmcid_set = {entry['AccessionID'] for entry in ftp_file_list}
 
         logger.info("Getting a list of text refs that already correspond to "
                     "manuscript content.")
@@ -1488,10 +1488,12 @@ class Manuscripts(PmcManager):
         logger.info("There are %d manuscripts to load."
                     % (len(load_pmcid_set)))
 
-        logger.info("Determining which archives need to be laoded.")
+        logger.info("Determining which archives need to be loaded.")
         update_archives = defaultdict(set)
-        for pmcid in load_pmcid_set:
-            update_archives[f'PMC00{pmcid[3]}XXXXXX.xml.tar.gz'].add(pmcid)
+        for file_dict in ftp_file_list:
+            pmcid = file_dict['AccessionID']
+            if pmcid in load_pmcid_set:
+                update_archives[file_dict['archive']].add(pmcid)
 
         logger.info("Beginning to upload archives.")
         for archive, pmcid_set in sorted(update_archives.items()):

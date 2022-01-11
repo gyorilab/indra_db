@@ -516,6 +516,23 @@ class ConibManager(KnowledgebaseManager):
         return unique_stmts
 
 
+class UbiBrowserManager(KnowledgebaseManager):
+    """This manager handles retrieval and processing of UbiBrowser data."""
+    name = 'UbiBrowser'
+    short_name = 'ubibrowser'
+    source = 'ubibrowser'
+
+    def _get_statements(self):
+        from indra.sources import ubibrowser
+        logger.info('Processing UbiBrowser from web')
+        up = ubibrowser.process_from_web()
+        logger.info('Expanding evidences and deduplicating')
+        filtered_stmts = [s for s in _expanded(up.statements)]
+        unique_stmts, _ = extract_duplicates(filtered_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
+
+
 @click.group()
 def kb():
     """Manage the Knowledge Bases used by the database."""

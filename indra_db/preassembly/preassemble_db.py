@@ -548,76 +548,46 @@ class DbPreassembler:
         # If we are continuing, check for support links that were already found
         support_links = set()
         idx_batches, start_idx = self._make_idx_batches(new_hashes, continuing)
-        for outer_idx, (out_s, out_e) in enumerate(idx_batches[start_idx:]):
-            outer_idx += start_idx
-            # Create the statements from the jsons.
+
+        # We first get all the new statements in batches
+        all_outer_stmts = []
+        for (out_s, out_e) in idx_batches[start_idx:]:
+            # Create the statements from the JSONs
             npa_json_q = db.filter_query(
                 db.PAStatements.json,
                 db.PAStatements.mk_hash.in_(new_hashes[out_s:out_e])
             )
-            npa_batch = [_stmt_from_json(s_json) for s_json, in npa_json_q.all()]
+            all_outer_stmts += [_stmt_from_json(s_json)
+                                for s_json, in npa_json_q.all()]
 
-            # Compare internally
-            self._log(f"Getting support for new pa batch {outer_idx}/"
-                      f"{len(idx_batches)}.")
-            some_support_links = self._get_support_links(npa_batch)
+        # Compare new statements to themselves
+        self._log(f"Getting refinements for {len(all_outer_stmts)} new statements")
+        support_links |= self._get_support_links(all_outer_stmts)
 
-            # Compare against the other new batch statements.
-            in_start = outer_idx + 1
-            for in_idx, (in_s, in_e) in enumerate(idx_batches[in_start:]):
-                other_npa_q = db.filter_query(
-                    db.PAStatements.json,
-                    db.PAStatements.mk_hash.in_(new_hashes[in_s:in_e])
-                )
-                other_npa_batch = [_stmt_from_json(sj)
-                                   for sj, in other_npa_q.all()]
-                # NOTE: deliberately subtracting 1 because the INDRA
-                # implementation is weird.
-                split_idx = len(npa_batch) - 1
-                full_list = npa_batch + other_npa_batch
-                self._log(f"Comparing outer batch {outer_idx}/"
-                          f"{len(idx_batches)-1} to inner batch {in_idx}/"
-                          f"{len(idx_batches)-in_start-1} of other new "
-                          f"statements.")
-                some_support_links |= \
-                    self._get_support_links(full_list, split_idx=split_idx)
+        # We now compare all new statements against batches of existing statements
+        opa_args = (db.PAStatements.create_date < start_time,)
+        if self.stmt_type is not None:
+            opa_args += (db.PAStatements.type == self.stmt_type,)
 
-            # Compare against the existing statements.
-            opa_args = (db.PAStatements.create_date < start_time,)
-            if self.stmt_type is not None:
-                opa_args += (db.PAStatements.type == self.stmt_type,)
-
-            opa_json_iter = db.select_all_batched(self.batch_size,
-                                                  db.PAStatements.json,
-                                                  *opa_args)
-            for opa_idx, opa_json_batch in opa_json_iter:
-                opa_batch = [_stmt_from_json(s_json)
-                             for s_json, in opa_json_batch]
-                # NOTE: deliberately subtracting 1 because the INDRA
-                # implementation is weird.
-                split_idx = len(npa_batch) - 1
-                full_list = npa_batch + opa_batch
-                self._log(f"Comparing new batch {outer_idx}/"
-                          f"{len(idx_batches)-1} to batch {opa_idx} of old pa "
-                          f"statements.")
-                some_support_links |= \
-                    self._get_support_links(full_list, split_idx=split_idx)
-
-            support_links |= some_support_links
-
-            # There are generally few support links compared to the number of
-            # statements, so it doesn't make sense to copy every time, but for
-            # long preassembly, this allows for better failure recovery.
-            if len(support_links) >= self.batch_size:
-                self._dump_links(db, support_links)
-                self._put_support_mark(outer_idx)
-                support_links = set()
+        opa_json_iter = db.select_all_batched(self.batch_size,
+                                              db.PAStatements.json,
+                                              *opa_args)
+        for opa_idx, opa_json_batch in opa_json_iter:
+            opa_idx += 1  # log starting at 1
+            opa_batch = [_stmt_from_json(s_json) for s_json, in opa_json_batch]
+            # NOTE: deliberately subtracting 1 because the INDRA
+            # implementation is weird.
+            split_idx = len(all_outer_stmts) - 1
+            full_list = all_outer_stmts + opa_batch
+            self._log(f"Comparing new statements to batch {opa_idx} of old "
+                      f"statements.")
+            support_links |= \
+                self._get_support_links(full_list, split_idx=split_idx)
 
         # Insert any remaining support links.
         if support_links:
-            self._log("Final (overflow) batch of new support links.")
+            self._log(f"Adding a total of {len(support_links)} support links.")
             self._dump_links(db, support_links)
-        return
 
     @_handle_update_table
     @DGContext.wrap(gatherer)

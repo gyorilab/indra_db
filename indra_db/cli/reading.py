@@ -207,8 +207,8 @@ class BulkAwsReadingManager(BulkReadingManager):
     timeouts = {
         'reach': 1200,
         'sparser': 600,
-        'isi': 2400,
-        'trips': 300,
+        'isi': 5400,
+        'trips': 1200,
         'eidos': 2400,
         'mti': 5400,
     }

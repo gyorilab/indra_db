@@ -254,18 +254,18 @@ class Dumper(object):
             start = Start.from_date(from_dump)
 
             if not cls.from_list(start.manifest) or force:
-                logger.info(f"Dumping {cls.name}.")
+                logger.info(f"Dumping {cls.name} for {start.date_stamp}.")
                 cls(start, date_stamp=date_stamp).dump(continuing)
             else:
-                logger.info(f"{cls.name} exists, nothing to do. To force a "
-                            f"re-computation use -f/--force.")
+                logger.info(f"{cls.name} for {date_stamp} exists, nothing to "
+                            f"do. To force a re-computation use -f/--force.")
 
         # Register it with the run commands.
         run_commands.add_command(run_dump)
 
     @classmethod
     def config_to_json(cls):
-        return {'requires': [r.name for r in cls.requires],
+        return {'requires': [r.name.replace('_', '-') for r in cls.requires],
                 'heavy_compute': cls.heavy_compute}
 
 class Start(Dumper):
@@ -399,7 +399,7 @@ class PrincipalStats(Dumper):
         # Upload a bytes-like object
         csv_bytes = str_io.getvalue().encode('utf-8')
         s3 = boto3.client('s3')
-        self.s3_dump_path().upload(s3, csv_bytes)
+        self.get_s3_path().upload(s3, csv_bytes)
 
 
 class Belief(Dumper):
@@ -423,7 +423,7 @@ class Readonly(Dumper):
     db_required = True
     db_options = ['principal']
     requires = [Belief]
-    heavy_compute = False
+    heavy_compute = True
 
     def dump(self, continuing=False):
 
@@ -431,15 +431,19 @@ class Readonly(Dumper):
                     % datetime.now())
         import boto3
         s3 = boto3.client('s3')
+        logger.info("Getting belief data from S3")
         belief_data = self.required_s3_paths[Belief.name].get(s3)
-        belief_dict = json.loads(belief_data['Body'].read())
+        logger.info("Reading belief data body")
+        belief_body = belief_data['Body'].read()
+        logger.info("Loading belief dict from string")
+        belief_dict = json.loads(belief_body)
+        logger.info("Generating readonly schema")
         self.db.generate_readonly(belief_dict, allow_continue=continuing)
 
         logger.info("%s - Beginning dump of database (est. 1 + epsilon hours)"
                     % datetime.now())
         self.db.dump_readonly(self.get_s3_path())
         return
-
 
 class SourceCount(Dumper):
     """Dumps a dict of dicts with source counts per source api per statement"""
@@ -489,11 +493,17 @@ class FullPaStmts(Dumper):
         super(FullPaStmts, self).__init__(start, use_principal=use_principal, **kwargs)
 
     def dump(self, continuing=False):
+        logger.info('Querying the database to get FastRawPaLink statements')
         query_res = self.db.session.query(self.db.FastRawPaLink.pa_json.distinct())
-        stmt_list = stmts_from_json([json.loads(js[0]) for js in
-                                     query_res.all()])
+        logger.info('Processing query result into jsons')
+        stmt_jsons = [json.loads(row[0]) for row in query_res.all()]
+        logger.info('Getting statements from json')
+        stmt_list = stmts_from_json(stmt_jsons)
+        logger.info('Dumping to pickle')
+        stmt_obj = pickle.dumps(stmt_list)
+        logger.info('Uploading to S3')
         s3 = boto3.client('s3')
-        self.get_s3_path().upload(s3, pickle.dumps(stmt_list))
+        self.get_s3_path().upload(s3, stmt_obj)
 
 
 class FullPaJson(Dumper):
@@ -570,14 +580,17 @@ class End(Dumper):
     name = 'end'
     fmt = 'json'
     db_required = False
-    requires = get_all_descendants(Dumper)
+    # We don't need a FullPaStmts as a pickle because we already have the
+    # jsonl (keeping the class definition if ever need to save a pickle)
+    requires = [dumper for dumper in get_all_descendants(Dumper)
+                if dumper.name != 'full_pa_stmts']
     heavy_compute = False
 
     def dump(self, continuing=False):
         s3 = boto3.client('s3')
         self.get_s3_path().upload(s3, json.dumps(
             {'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-        ))
+        ).encode('utf-8'))
 
 
 def load_readonly_dump(principal_db, readonly_db, dump_file):
@@ -920,11 +933,15 @@ def dump_hierarchy():
     """Dump hierarchy of Dumper classes to S3."""
     hierarchy = {}
     for d in get_all_descendants(Dumper):
-        hierarchy[d.name] = d.config_to_json()
+        # Skip the FullPaStmts here.
+        if d.name == 'full_pa_stmts':
+            continue
+        command_name = d.name.replace('_', '-')
+        hierarchy[command_name] = d.config_to_json()
     s3_base = get_s3_dump()
     s3_path = s3_base.get_element_path('hierarchy.json')
     s3 = boto3.client('s3')
-    s3_path.upload(s3, json.dumps(hierarchy))
+    s3_path.upload(s3, json.dumps(hierarchy).encode('utf-8'))
 
 
 for DumperChild in get_all_descendants(Dumper):

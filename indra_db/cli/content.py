@@ -902,8 +902,12 @@ class PmcManager(_NihManager):
 
     def __init__(self, *args, **kwargs):
         super(PmcManager, self).__init__(*args, **kwargs)
+        self.file_data = self.get_file_data()
 
     def update(self, db):
+        raise NotImplementedError
+
+    def get_file_data(self):
         raise NotImplementedError
 
     @staticmethod
@@ -1345,7 +1349,7 @@ class PmcOA(PmcManager):
     def __init__(self, *args, **kwargs):
         super(PmcOA, self).__init__(*args, **kwargs)
         self.licenses = {d['Accession ID']: d['License']
-                         for d in self.get_file_data()}
+                         for d in self.file_data}
 
     def get_license(self, pmcid):
         return self.licenses[pmcid]
@@ -1363,8 +1367,7 @@ class PmcOA(PmcManager):
         return files_metadata
 
     def get_pmcid_file_dict(self):
-        file_data = self.get_file_data()
-        return {d['Accession ID']: d['File'] for d in file_data}
+        return {d['Accession ID']: d['File'] for d in self.file_data}
 
     def get_archives_after_date(self, min_date):
         """Get the names of all single-article archives after the given date."""
@@ -1426,7 +1429,7 @@ class Manuscripts(PmcManager):
         return ftp_file_list
 
     def get_pmcid_file_dict(self):
-        return {d['AccessionID']: d['Article File'] for d in self.get_file_data()}
+        return {d['AccessionID']: d['Article File'] for d in self.file_data}
 
     def get_tarname_from_filename(self, fname):
         "Get the name of the tar file based on the file name (or a pmcid)."
@@ -1473,8 +1476,7 @@ class Manuscripts(PmcManager):
         The continuing feature isn't implemented yet.
         """
         logger.info("Getting list of manuscript content available.")
-        ftp_file_list = self.get_file_data()
-        ftp_pmcid_set = {entry['AccessionID'] for entry in ftp_file_list}
+        ftp_pmcid_set = {entry['AccessionID'] for entry in self.file_data}
 
         logger.info("Getting a list of text refs that already correspond to "
                     "manuscript content.")
@@ -1490,7 +1492,7 @@ class Manuscripts(PmcManager):
 
         logger.info("Determining which archives need to be loaded.")
         update_archives = defaultdict(set)
-        for file_dict in ftp_file_list:
+        for file_dict in self.file_data:
             pmcid = file_dict['AccessionID']
             if pmcid in load_pmcid_set:
                 update_archives[file_dict['archive']].add(pmcid)

@@ -4,7 +4,7 @@ Scores are calculated using INDRA's belief engine, with MockStatements and
 MockEvidence derived from shallow metadata on the database, allowing the entire
 corpus to be processed locally in RAM, in very little time.
 """
-
+import tqdm
 import pickle
 import logging
 import argparse
@@ -80,7 +80,7 @@ def populate_support(stmts, links):
         stmt_dict = stmts
     else:
         stmt_dict = {s.matches_key(): s for s in stmts}
-    for link in links:
+    for link in tqdm.tqdm(links):
         invalid_idx = [idx for idx in link if idx not in stmt_dict.keys()]
         if invalid_idx:
             logger.warning("Found at least one invalid index %s, from support "
@@ -107,6 +107,7 @@ def load_mock_statements(db, hashes=None, sup_links=None):
         stmts_dict[mk_hash].evidence.append(mev)
 
     # Handle the evidence from reading.
+    logger.info('Querying for evidence from reading')
     q_rdg = db.filter_query([db.Reading.reader,
                              db.RawUniqueLinks.pa_stmt_mk_hash,
                              db.RawUniqueLinks.raw_stmt_id],
@@ -115,10 +116,11 @@ def load_mock_statements(db, hashes=None, sup_links=None):
         q_rdg = q_rdg.filter(db.RawUniqueLinks.pa_stmt_mk_hash.in_(hashes))
     res_rdg = q_rdg.all()
 
-    for src_api, mk_hash, sid in res_rdg:
+    for src_api, mk_hash, sid in tqdm.tqdm(res_rdg):
         add_evidence(src_api, mk_hash, sid)
 
     # Handle the evidence from knowledge bases.
+    logger.info('Querying for evidence from knowledge bases')
     q_dbs = db.filter_query([db.DBInfo.source_api,
                              db.DBInfo.db_name,
                              db.RawUniqueLinks.pa_stmt_mk_hash,
@@ -128,11 +130,12 @@ def load_mock_statements(db, hashes=None, sup_links=None):
         q_dbs = q_dbs.filter(db.RawUniqueLinks.pa_stmt_mk_hash.in_(hashes))
     res_dbs = q_dbs.all()
 
-    for src_api, db_name, mk_hash, sid in res_dbs:
+    for src_api, db_name, mk_hash, sid in tqdm.tqdm(res_dbs):
         add_evidence(src_api, mk_hash, sid, db_name)
 
     # Get the support links and populate
     if sup_links is None:
+        logger.info('Querying for support links')
         sup_link_q = db.filter_query([db.PASupportLinks.supported_mk_hash,
                                       db.PASupportLinks.supporting_mk_hash])
         if hashes is not None:
@@ -145,6 +148,7 @@ def load_mock_statements(db, hashes=None, sup_links=None):
             )
         sup_links = sup_link_q.all()
 
+    logger.info('Populating support')
     populate_support(stmts_dict, sup_links)
 
     return list(stmts_dict.values())
@@ -165,6 +169,7 @@ def get_belief(db=None, partition=True):
         db = dbu.get_db('primary')
 
     if partition:
+        logger.info('Running on partitioned components')
         import networkx as nx
         hashes = {h for h, in db.select_all(db.PAStatements.mk_hash)}
         link_pair = [db.PASupportLinks.supporting_mk_hash,
@@ -176,7 +181,7 @@ def get_belief(db=None, partition=True):
 
         group = set()
         beliefs = {}
-        for c in nx.connected_components(g):
+        for c in tqdm.tqdm(nx.connected_components(g)):
             group |= c
 
             if len(group) >= 10000:
@@ -187,6 +192,7 @@ def get_belief(db=None, partition=True):
                 group = set()
         return beliefs
     else:
+        logger.info('Running without partitioning, loading mock statements')
         stmts = load_mock_statements(db)
         return calculate_belief(stmts)
 

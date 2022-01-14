@@ -1335,8 +1335,12 @@ class PmcManager(_NihManager):
 
     def get_pmcid_file_dict(self):
         """Get a dict keyed by PMCID mapping them to file names."""
-        raise NotImplementedError()
+        return {d['AccessionID']: d['Article File'] for d in self.file_data}
 
+    def get_csv_files(self, path):
+        """Get a list of CSV files from the FTP server."""
+        all_files = self.ftp.ftp_ls(path)
+        return [f for f in all_files if f.endswith('filelist.csv')]
 
 class PmcOA(PmcManager):
     """ContentManager for the pmc open access content.
@@ -1362,20 +1366,25 @@ class PmcOA(PmcManager):
                 if self.is_archive(k)]
 
     def get_file_data(self):
-        """Retrieve the metdata provided by the FTP server for files."""
-        files_metadata = self.ftp.get_csv_as_dict('oa_file_list.csv')
-        return files_metadata
-
-    def get_pmcid_file_dict(self):
-        return {d['Accession ID']: d['File'] for d in self.file_data}
+        """Retrieve the metadata provided by the FTP server for files."""
+        ftp_file_list = []
+        for subf in ['oa_comm', 'oa_noncomm', 'oa_other']:
+            path = self.ftp._path_join('oa_bulk', subf, 'xml')
+            csv_files = self.get_csv_files(path)
+            for f in csv_files:
+                file_root = f.split('.filelist')[0]
+                archive = self.ftp._path_join(path, f'{file_root}.tar.gz')
+                ftp_file_list += self.ftp.get_csv_as_dict(
+                    self.ftp._path_join(path, f),
+                    add_fields={'archive': archive})
+        return ftp_file_list
 
     def get_archives_after_date(self, min_date):
         """Get the names of all single-article archives after the given date."""
         logger.info("Getting list of articles that have been uploaded since "
                     "the last update.")
-        files = self.ftp.get_csv_as_dict('oa_file_list.csv')
         archive_set = {
-            f['File'] for f in files
+            f['archive'] for f in self.file_data
             if 'Last Updated (YYYY-MM-DD HH:MM:SS)' in f and
             datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
                               '%Y-%m-%d %H:%M:%S') > min_date
@@ -1412,13 +1421,9 @@ class Manuscripts(PmcManager):
     def get_license(self, pmcid):
         return 'manuscripts'
 
-    def get_csv_files(self):
-        """Get a list of CSV files from the FTP server."""
-        all_files = self.ftp.ftp_ls('xml')
-        return [f for f in all_files if f.endswith('filelist.csv')]
-
     def get_file_data(self):
-        files = self.get_csv_files()
+        """Retrieve the metadata provided by the FTP server for files."""
+        files = self.get_csv_files('xml')
         ftp_file_list = []
         for f in files:
             file_root = f.split('.filelist')[0]
@@ -1427,9 +1432,6 @@ class Manuscripts(PmcManager):
                 self.ftp._path_join('xml', f),
                 add_fields={'archive': archive})
         return ftp_file_list
-
-    def get_pmcid_file_dict(self):
-        return {d['AccessionID']: d['Article File'] for d in self.file_data}
 
     def get_tarname_from_filename(self, fname):
         "Get the name of the tar file based on the file name (or a pmcid)."

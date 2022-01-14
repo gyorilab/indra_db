@@ -1049,11 +1049,13 @@ class PmcManager(_NihManager):
             e.get('pub-id-type'): e.text for e in
             tree.findall('.//article-id')
             }
-        if 'pmc' not in id_data.keys():
-            logger.info("Did not get a 'pmc' in %s." % filename)
-            return None
         if 'pmcid' not in id_data.keys():
-            id_data['pmcid'] = 'PMC' + id_data['pmc']
+            if 'pmc' in id_data.keys():
+                pmcid = 'PMC' + id_data['pmc']
+            else:
+                pmcid = filename.split('/')[1].split('.')[0]
+            id_data['pmcid'] = pmcid
+            logger.info('Processing XML for %s.' % pmcid)
         if 'manuscript' in id_data.keys():
             id_data['manuscript_id'] = id_data['manuscript']
 
@@ -1352,7 +1354,7 @@ class PmcOA(PmcManager):
 
     def __init__(self, *args, **kwargs):
         super(PmcOA, self).__init__(*args, **kwargs)
-        self.licenses = {d['Accession ID']: d['License']
+        self.licenses = {d['AccessionID']: d['License']
                          for d in self.file_data}
 
     def get_license(self, pmcid):

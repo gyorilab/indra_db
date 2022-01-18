@@ -779,8 +779,14 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
 def run_all(continuing, delete_existing, load_only, dump_only):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
+
+    if not dump_only and not load_only:
+        ro_manager = get_ro('primary', protected=False)
+    else:
+        ro_manager = None
+
     dump(get_db('primary', protected=False),
-         get_ro('primary', protected=False), delete_existing,
+         ro_manager, delete_existing,
          continuing, load_only, dump_only)
 
 

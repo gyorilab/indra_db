@@ -641,8 +641,8 @@ class ReadonlyTransferEnv(object):
 dumpers = {dumper.name: dumper for dumper in get_all_descendants(Dumper)}
 
 
-def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
-         load_only=False, dump_only=False):
+def dump(principal_db, readonly_db=None, delete_existing=False,
+         allow_continue=True, load_only=False, dump_only=False):
     """Run the suite of dumps in the specified order.
 
     Parameters
@@ -650,7 +650,7 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
     principal_db : :class:`indra_db.databases.PrincipalDatabaseManager`
         A handle to the principal database.
     readonly_db : :class:`indra_db.databases.ReadonlyDatabaseManager`
-        A handle to the readonly database.
+        A handle to the readonly database. Optional when running dump only.
     delete_existing : bool
         If True, clear out the existing readonly build from the principal
         database. Otherwise it will be continued. (Default is False)
@@ -665,6 +665,10 @@ def dump(principal_db, readonly_db, delete_existing=False, allow_continue=True,
         Do not load a new readonly database, only produce the dump files on s3.
         (Default is False)
     """
+    # Check if readonly is needed:
+    if not dump_only:
+        raise ValueError("readonly_db must be provided with when "
+                         "dump_only == False")
     if not load_only:
         # START THE DUMP
         if delete_existing and 'readonly' in principal_db.get_schemas():

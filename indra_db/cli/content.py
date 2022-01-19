@@ -1051,7 +1051,10 @@ class PmcManager(_NihManager):
             }
         if 'pmcid' not in id_data.keys():
             if 'pmc' in id_data.keys():
-                pmcid = 'PMC' + id_data['pmc']
+                if id_data['pmc'].startswith('PMC'):
+                    pmcid = id_data['pmc']
+                else:
+                    pmcid = 'PMC' + id_data['pmc']
             else:
                 pmcid = filename.split('/')[1].split('.')[0]
             id_data['pmcid'] = pmcid

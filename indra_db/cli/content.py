@@ -301,10 +301,6 @@ class ContentManager(object):
         """
         logger.info("Beginning to filter %d text refs..." % len(tr_data_set))
 
-        # This is a helper for accessing the data tuples we create
-        def id_idx(id_type):
-            return self.tr_cols.index(id_type)
-
         # If there are not actual refs to work with, don't waste time.
         N = len(tr_data_set)
         if not N:
@@ -317,6 +313,10 @@ class ContentManager(object):
             match_id_types = primary_id_types
         else:
             match_id_types = self.tr_cols
+
+        # This is a helper for accessing the data tuples we create
+        def id_idx(id_type):
+            return match_id_types.index(id_type)
 
         # Get IDs from the tr_data_set that have one or more of the listed
         # id types.
@@ -356,7 +356,7 @@ class ContentManager(object):
         # tuple with all the id data.
         logger.debug("Building index of new data...")
         tr_data_idx_dict = {}
-        for id_type in self.tr_cols:
+        for id_type in match_id_types:
             tr_data_idx = {}
             for entry in tr_data_set:
                 id_val = entry[id_idx(id_type)]
@@ -423,7 +423,7 @@ class ContentManager(object):
                 # Go through all the id_types
                 all_good = True
                 id_updates = {}
-                for i, id_type in enumerate(self.tr_cols):
+                for i, id_type in enumerate(match_id_types):
                     # Check if the text ref is missing that id.
                     if getattr(tr, id_type) is None:
                         # If so, and if our new data does have that id, update
@@ -1000,16 +1000,15 @@ class PmcManager(_NihManager):
 
         # Check for any pmids we can get from the pmc client (this is slow!)
         self.get_missing_pmids(db, tr_data)
-
+        primary_id_types=['pmid', 'pmcid', 'manuscript_id']
         # Turn the list of dicts into a set of tuples
-        tr_data_set = {tuple([entry[id_type] for id_type in self.tr_cols])
+        tr_data_set = {tuple([entry[id_type] for id_type in primary_id_types])
                        for entry in tr_data}
 
         filtered_tr_records, flawed_tr_records, updated_id_map = \
             self.filter_text_refs(db, tr_data_set,
-                                  primary_id_types=['pmid', 'pmcid',
-                                                    'manuscript_id'])
-        pmcids_to_skip = {rec[self.tr_cols.index('pmcid')]
+                                  primary_id_types=primary_id_types)
+        pmcids_to_skip = {rec[primary_id_types.index('pmcid')]
                           for cause, rec in flawed_tr_records
                           if cause in ['pmcid', 'over_match_input',
                                        'over_match_db']}

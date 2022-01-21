@@ -10,12 +10,14 @@ from collections import defaultdict
 
 from flask import request, Response, abort
 
+from indra.sources import SOURCE_INFO
+from indra.util.statement_presentation import internal_source_mappings
 from indralab_auth_tools.auth import resolve_auth
 
 from indra.ontology.bio import bio_ontology
 from indra.statements import stmts_from_json, Complex, make_statement_camel
 from indra.assemblers.html.assembler import HtmlAssembler, _format_stmt_text, \
-    _format_evidence_text
+    _format_evidence_text, DEFAULT_SOURCE_COLORS
 
 from indra_db.client.readonly import *
 from indra_db.client.principal.curation import *
@@ -26,9 +28,12 @@ from indra_db_service.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
 from indra_db_service.errors import HttpUserError, ResultTypeError
 from indra_db_service.util import LogTracker, sec_since, get_source,\
     process_agent,  process_mesh_term, DbAPIError, iter_free_agents, \
-    _make_english_from_meta, get_html_source_info
+    _make_english_from_meta
 
 logger = logging.getLogger('call_handlers')
+
+
+rev_source_mapping = {v: k for k, v in internal_source_mappings.items()}
 
 
 def pop_request_bool(args, key, default):
@@ -383,10 +388,10 @@ class StatementApiCall(ApiCall):
                     identity = self.user.identity() if self.user else None
                 else:
                     identity = None
-                source_info, source_colors = get_html_source_info()
                 resp_content = html_assembler.make_model(
-                    idbr_template, identity=identity, source_info=source_info,
-                    source_colors=source_colors, simple=False
+                    idbr_template, identity=identity, source_info=SOURCE_INFO,
+                    source_colors=DEFAULT_SOURCE_COLORS, simple=False,
+                    reverse_source_mapping=rev_source_mapping
                 )
                 if self.tracker.get_messages():
                     level_stats = ['%d %ss' % (n, lvl.lower())

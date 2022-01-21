@@ -25,10 +25,12 @@ def push(deployment):
 @main.command()
 @click.option('-p', '--port', type=click.INT,
               help="Override the default port number.")
-def test_service(port):
+@click.option('-h', '--host', default='0.0.0.0',
+              help="Override the default host.")
+def test_service(port, host):
     """Run the service in test mode locally."""
     from indra_db_service.config import TESTING
     TESTING['status'] = True
 
     from indra_db_service.api import app
-    app.run(port=port, debug=True)
+    app.run(host=host, port=port, debug=True)

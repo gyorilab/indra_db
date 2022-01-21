@@ -3,9 +3,8 @@ import logging
 from io import StringIO
 from datetime import datetime
 
-from indra.assemblers.html.assembler import _format_stmt_text, \
-    make_source_colors
-from indra_db.client import stmt_from_interaction, get_ro_source_info
+from indra.assemblers.html.assembler import _format_stmt_text
+from indra_db.client import stmt_from_interaction
 
 from indra_db.client.readonly.query import gilda_ground
 
@@ -83,19 +82,6 @@ def get_source(ev_json):
     if src is None:
         return
     return src.lower()
-
-
-def get_html_source_info():
-    source_info = get_ro_source_info()
-    databases = []
-    readers = []
-    for src_id, src_info in source_info.items():
-        if src_info['type'] == 'database':
-            databases.append(src_id)
-        else:
-            readers.append(src_id)
-    source_colors = make_source_colors(databases, readers)
-    return source_info, source_colors
 
 
 def sec_since(t):

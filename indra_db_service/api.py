@@ -14,6 +14,7 @@ from flask import Flask, request, abort, Response, redirect, jsonify
 
 from indra.statements import get_all_descendants, Statement
 from indra.assemblers.html.assembler import loader as indra_loader
+from indra.util.statement_presentation import internal_source_mappings
 
 from indra_db.exceptions import BadHashError
 from indra_db.client.principal.curation import *
@@ -39,6 +40,8 @@ from indra_db_service.util import sec_since, get_s3_client, gilda_ground, \
 # Get a logger, and assert the logging level.
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
+
+rev_source_mapping = {v: k for k, v in internal_source_mappings.items()}
 
 # Set the name of this service for the usage logs.
 if not TESTING['status']:
@@ -190,7 +193,9 @@ def search():
     return render_my_template(
         'search.html', 'Search', source_colors=source_colors,
         source_info=source_info, search_active=True, vue_src=vue_src,
-        vue_style=vue_style, stmt_types_json=stmt_types_json)
+        vue_style=vue_style, stmt_types_json=stmt_types_json,
+        reverse_source_mapping=rev_source_mapping
+    )
 
 
 @app.route('/data-vis/<path:file_path>')

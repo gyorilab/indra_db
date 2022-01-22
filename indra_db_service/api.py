@@ -13,7 +13,9 @@ from flask_jwt_extended import get_jwt_identity
 from flask import Flask, request, abort, Response, redirect, jsonify
 
 from indra.statements import get_all_descendants, Statement
-from indra.assemblers.html.assembler import loader as indra_loader
+from indra.assemblers.html.assembler import loader as indra_loader, \
+    SOURCE_INFO, DEFAULT_SOURCE_COLORS
+from indra.util.statement_presentation import internal_source_mappings
 
 from indra_db.exceptions import BadHashError
 from indra_db.client.principal.curation import *
@@ -29,7 +31,7 @@ from indra_db_service.errors import HttpUserError, ResultTypeError,\
 from indra_db_service.config import *
 from indra_db_service.call_handlers import *
 from indra_db_service.util import sec_since, get_s3_client, gilda_ground, \
-    _make_english_from_meta, get_html_source_info
+    _make_english_from_meta
 
 
 # =========================
@@ -39,6 +41,8 @@ from indra_db_service.util import sec_since, get_s3_client, gilda_ground, \
 # Get a logger, and assert the logging level.
 logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
+
+rev_source_mapping = {v: k for k, v in internal_source_mappings.items()}
 
 # Set the name of this service for the usage logs.
 if not TESTING['status']:
@@ -180,7 +184,6 @@ def search():
     stmt_types = {c.__name__ for c in get_all_descendants(Statement)}
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
     stmt_types_json = json.dumps(sorted(list(stmt_types)))
-    source_info, source_colors = get_html_source_info()
     if TESTING['status']:
         vue_src = url_for("serve_indralab_vue", file='IndralabVue.umd.js')
         vue_style = url_for("serve_indralab_vue", file='IndralabVue.css')
@@ -188,9 +191,11 @@ def search():
         vue_src = f'{VUE_ROOT}/IndralabVue.umd.js'
         vue_style = f'{VUE_ROOT}/IndralabVue.css'
     return render_my_template(
-        'search.html', 'Search', source_colors=source_colors,
-        source_info=source_info, search_active=True, vue_src=vue_src,
-        vue_style=vue_style, stmt_types_json=stmt_types_json)
+        'search.html', 'Search', source_colors=DEFAULT_SOURCE_COLORS,
+        source_info=SOURCE_INFO, search_active=True, vue_src=vue_src,
+        vue_style=vue_style, stmt_types_json=stmt_types_json,
+        reverse_source_mapping=rev_source_mapping
+    )
 
 
 @app.route('/data-vis/<path:file_path>')
@@ -281,11 +286,12 @@ def old_search():
     url_base = request.url_root
     if DEPLOYMENT is not None:
         url_base = f'{url_base}{DEPLOYMENT}/'
-    source_info, source_colors = get_html_source_info()
     return render_my_template('search_statements.html', 'Search',
                               message="Welcome! Try asking a question.",
-                              old_search_active=True, source_info=source_info,
-                              source_colors=source_colors, endpoint=url_base)
+                              old_search_active=True, source_info=SOURCE_INFO,
+                              source_colors=DEFAULT_SOURCE_COLORS,
+                              endpoint=url_base,
+                              reverse_source_mapping=rev_source_mapping)
 
 
 @app.route('/<result_type>/<path:method>', methods=['GET', 'POST'])

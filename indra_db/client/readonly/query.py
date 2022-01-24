@@ -517,6 +517,12 @@ class Query(object):
 
         # Put it all together.
         selection = select(cols).select_from(stmts_q)
+
+        # This try-except section handles a sqlalchemy error that occurs when
+        # trying to compile a string of the query.
+        # See: https://github.com/sqlalchemy/sqlalchemy/issues/6514
+        # The string is only used for printing and ignoring it does not affect
+        # the query.
         try:
             selection_print = selection.compile(compile_kwargs={'literal_binds': True})
             if self._print_only:

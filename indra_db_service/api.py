@@ -14,7 +14,7 @@ from flask import Flask, request, abort, Response, redirect, jsonify
 
 from indra.statements import get_all_descendants, Statement
 from indra.assemblers.html.assembler import loader as indra_loader, \
-    SOURCE_INFO, DEFAULT_SOURCE_COLORS
+    SOURCE_INFO, DEFAULT_SOURCE_COLORS, all_sources
 from indra.util.statement_presentation import internal_source_mappings
 
 from indra_db.exceptions import BadHashError
@@ -43,6 +43,22 @@ logger = logging.getLogger("db rest api")
 logger.setLevel(logging.INFO)
 
 rev_source_mapping = {v: k for k, v in internal_source_mappings.items()}
+
+
+def _source_index(source: str) -> int:
+    if source in all_sources:
+        return all_sources.index(source)
+    else:
+        logger.warning(f'Source {source} is not in the list of all sources.')
+        return len(all_sources)
+
+
+sources_dict = {
+    category: sorted(
+        [source for source in data["sources"].keys()],
+        key=_source_index
+    ) for category, data in DEFAULT_SOURCE_COLORS
+}
 
 # Set the name of this service for the usage logs.
 if not TESTING['status']:
@@ -194,7 +210,8 @@ def search():
         'search.html', 'Search', source_colors=DEFAULT_SOURCE_COLORS,
         source_info=SOURCE_INFO, search_active=True, vue_src=vue_src,
         vue_style=vue_style, stmt_types_json=stmt_types_json,
-        reverse_source_mapping=rev_source_mapping
+        reverse_source_mapping=rev_source_mapping,
+        sources_dict=sources_dict,
     )
 
 
@@ -495,7 +512,7 @@ def submit_curation_endpoint(hash_val):
     ev_json = request.json.get('ev_json')
     is_test = 'test' in request.args
     if not is_test:
-        assert tag is not 'test'
+        assert tag != 'test'
         try:
             dbid = submit_curation(hash_val, tag, email, ip, text, ev_hash,
                                    source_api, pa_json, ev_json)

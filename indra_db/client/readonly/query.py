@@ -517,13 +517,24 @@ class Query(object):
 
         # Put it all together.
         selection = select(cols).select_from(stmts_q)
-        selection_print = selection.compile(compile_kwargs={'literal_binds': True})
-        if self._print_only:
-            print(selection_print)
-            return
 
-        logger.info("Executing query (get_statements)")
-        logger.debug(f"SQL:\n{selection_print}")
+        # This try-except section handles a sqlalchemy error that occurs when
+        # trying to compile a string of the query.
+        # See: https://github.com/sqlalchemy/sqlalchemy/issues/6514
+        # The string is only used for printing and ignoring it does not affect
+        # the query.
+        try:
+            selection_print = selection.compile(compile_kwargs={'literal_binds': True})
+            if self._print_only:
+                print(selection_print)
+                return
+
+            logger.info("Executing query (get_statements)")
+            logger.debug(f"SQL:\n{selection_print}")
+        except Exception as err:
+            if self._print_only:
+                raise err
+            logger.warning("Could not print query")
 
         # Execute the query.
         proxy = ro.session.connection().execute(selection)

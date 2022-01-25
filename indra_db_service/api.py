@@ -44,10 +44,20 @@ logger.setLevel(logging.INFO)
 
 rev_source_mapping = {v: k for k, v in internal_source_mappings.items()}
 
+
+def _source_index(source: str) -> int:
+    if source in all_sources:
+        return all_sources.index(source)
+    else:
+        logger.warning(f'Source {source} is not in the list of all sources.')
+        return len(all_sources)
+
+
 sources_dict = {
-    category: sorted([source for source in data["sources"].keys()],
-                     key=lambda x: all_sources.index(x))
-    for category, data in DEFAULT_SOURCE_COLORS
+    category: sorted(
+        [source for source in data["sources"].keys()],
+        key=_source_index
+    ) for category, data in DEFAULT_SOURCE_COLORS
 }
 
 # Set the name of this service for the usage logs.

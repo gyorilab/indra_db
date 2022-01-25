@@ -2,7 +2,6 @@ import os
 
 import click
 
-from indra_db_service.cli.zappa_tools import fix_permissions, ZAPPA_CONFIG
 
 
 @click.group()
@@ -14,6 +13,7 @@ def main():
 @click.argument('deployment', nargs=1)
 def push(deployment):
     """Push a new deployment to the remote lambdas using zappa."""
+    from indra_db_service.cli.zappa_tools import fix_permissions, ZAPPA_CONFIG
     click.echo(f"Updating {deployment} deployment.")
     if ZAPPA_CONFIG not in os.listdir('.'):
         click.echo(f"Please run in directory with {ZAPPA_CONFIG}.")

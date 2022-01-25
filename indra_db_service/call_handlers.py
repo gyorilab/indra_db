@@ -580,8 +580,10 @@ class StatementApiCall(ApiCall):
                              f"{require_all}")
 
         if self.web_query and empty_web_query:
-            raise DbAPIError(f"Invalid query options: "
-                             f"{list(self.web_query.keys())}.")
+            invalid_keys = set(self.web_query.keys()) - {'expand_all'}
+            if invalid_keys:
+                raise DbAPIError(f"Invalid query options: "
+                                 f"{list(invalid_keys)}.")
         return
 
     def _db_query_from_web_query(self, require_any=None, require_all=None,

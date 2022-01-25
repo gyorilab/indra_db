@@ -201,8 +201,15 @@ def search():
     stmt_types -= {'Influence', 'Event', 'Unresolved'}
     stmt_types_json = json.dumps(sorted(list(stmt_types)))
     if TESTING['status']:
-        vue_src = url_for("serve_indralab_vue", file='IndralabVue.umd.js')
-        vue_style = url_for("serve_indralab_vue", file='IndralabVue.css')
+        if not TESTING['deployment']:
+            vue_src = url_for("serve_indralab_vue", file='IndralabVue.umd.js')
+            vue_style = url_for("serve_indralab_vue", file='IndralabVue.css')
+        else:
+            vue_root = TESTING['vue-root']
+            logging.info(f"Testing deployed vue files at: {vue_root}")
+            vue_src = f'{vue_root}/IndralabVue.umd.js'
+            vue_style = f'{vue_root}/IndralabVue.css'
+
     else:
         vue_src = f'{VUE_ROOT}/IndralabVue.umd.js'
         vue_style = f'{VUE_ROOT}/IndralabVue.css'

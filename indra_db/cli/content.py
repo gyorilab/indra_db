@@ -95,7 +95,8 @@ class _NihFtpClient(object):
         logger.info("Parsing XML metadata")
         return ET.XML(xml_bytes, parser=UTB())
 
-    def get_csv_as_dict(self, csv_file, cols=None, infer_header=True):
+    def get_csv_as_dict(self, csv_file, cols=None, infer_header=True,
+                        add_fields=None):
         """Get the content from a csv file as a list of dicts.
 
         Parameters
@@ -107,6 +108,8 @@ class _NihFtpClient(object):
         infer_header : bool
             If True, infer the cols from the first line. If False, the cols
             will simply be indexed by integers.
+        add_fields : dict
+            A dictionary of additional fields to add to the dicts.
         """
         csv_str = self.get_file(csv_file)
         csv_lines = csv_str.splitlines()
@@ -118,7 +121,10 @@ class _NihFtpClient(object):
                     continue
                 else:
                     cols = list(range(len(row)))
-            result.append(dict(zip(cols, row)))
+            row_dict = dict(zip(cols, row))
+            if add_fields is not None:
+                row_dict.update(add_fields)
+            result.append(row_dict)
         return result
 
     def ret_file(self, f_path, buf):
@@ -295,10 +301,6 @@ class ContentManager(object):
         """
         logger.info("Beginning to filter %d text refs..." % len(tr_data_set))
 
-        # This is a helper for accessing the data tuples we create
-        def id_idx(id_type):
-            return self.tr_cols.index(id_type)
-
         # If there are not actual refs to work with, don't waste time.
         N = len(tr_data_set)
         if not N:
@@ -311,6 +313,10 @@ class ContentManager(object):
             match_id_types = primary_id_types
         else:
             match_id_types = self.tr_cols
+
+        # This is a helper for accessing the data tuples we create
+        def id_idx(id_type):
+            return match_id_types.index(id_type)
 
         # Get IDs from the tr_data_set that have one or more of the listed
         # id types.
@@ -350,7 +356,7 @@ class ContentManager(object):
         # tuple with all the id data.
         logger.debug("Building index of new data...")
         tr_data_idx_dict = {}
-        for id_type in self.tr_cols:
+        for id_type in match_id_types:
             tr_data_idx = {}
             for entry in tr_data_set:
                 id_val = entry[id_idx(id_type)]
@@ -417,7 +423,7 @@ class ContentManager(object):
                 # Go through all the id_types
                 all_good = True
                 id_updates = {}
-                for i, id_type in enumerate(self.tr_cols):
+                for i, id_type in enumerate(match_id_types):
                     # Check if the text ref is missing that id.
                     if getattr(tr, id_type) is None:
                         # If so, and if our new data does have that id, update
@@ -896,8 +902,12 @@ class PmcManager(_NihManager):
 
     def __init__(self, *args, **kwargs):
         super(PmcManager, self).__init__(*args, **kwargs)
+        self.file_data = self.get_file_data()
 
     def update(self, db):
+        raise NotImplementedError
+
+    def get_file_data(self):
         raise NotImplementedError
 
     @staticmethod
@@ -990,16 +1000,15 @@ class PmcManager(_NihManager):
 
         # Check for any pmids we can get from the pmc client (this is slow!)
         self.get_missing_pmids(db, tr_data)
-
+        primary_id_types=['pmid', 'pmcid', 'manuscript_id']
         # Turn the list of dicts into a set of tuples
-        tr_data_set = {tuple([entry[id_type] for id_type in self.tr_cols])
+        tr_data_set = {tuple([entry[id_type] for id_type in primary_id_types])
                        for entry in tr_data}
 
         filtered_tr_records, flawed_tr_records, updated_id_map = \
             self.filter_text_refs(db, tr_data_set,
-                                  primary_id_types=['pmid', 'pmcid',
-                                                    'manuscript_id'])
-        pmcids_to_skip = {rec[self.tr_cols.index('pmcid')]
+                                  primary_id_types=primary_id_types)
+        pmcids_to_skip = {rec[primary_id_types.index('pmcid')]
                           for cause, rec in flawed_tr_records
                           if cause in ['pmcid', 'over_match_input',
                                        'over_match_db']}
@@ -1039,11 +1048,16 @@ class PmcManager(_NihManager):
             e.get('pub-id-type'): e.text for e in
             tree.findall('.//article-id')
             }
-        if 'pmc' not in id_data.keys():
-            logger.info("Did not get a 'pmc' in %s." % filename)
-            return None
         if 'pmcid' not in id_data.keys():
-            id_data['pmcid'] = 'PMC' + id_data['pmc']
+            if 'pmc' in id_data.keys():
+                if id_data['pmc'].startswith('PMC'):
+                    pmcid = id_data['pmc']
+                else:
+                    pmcid = 'PMC' + id_data['pmc']
+            else:
+                pmcid = filename.split('/')[1].split('.')[0]
+            id_data['pmcid'] = pmcid
+            logger.info('Processing XML for %s.' % pmcid)
         if 'manuscript' in id_data.keys():
             id_data['manuscript_id'] = id_data['manuscript']
 
@@ -1325,8 +1339,12 @@ class PmcManager(_NihManager):
 
     def get_pmcid_file_dict(self):
         """Get a dict keyed by PMCID mapping them to file names."""
-        raise NotImplementedError()
+        return {d['AccessionID']: d['Article File'] for d in self.file_data}
 
+    def get_csv_files(self, path):
+        """Get a list of CSV files from the FTP server."""
+        all_files = self.ftp.ftp_ls(path)
+        return [f for f in all_files if f.endswith('filelist.csv')]
 
 class PmcOA(PmcManager):
     """ContentManager for the pmc open access content.
@@ -1338,8 +1356,8 @@ class PmcOA(PmcManager):
 
     def __init__(self, *args, **kwargs):
         super(PmcOA, self).__init__(*args, **kwargs)
-        self.licenses = {d['Accession ID']: d['License']
-                         for d in self.get_file_data()}
+        self.licenses = {d['AccessionID']: d['License']
+                         for d in self.file_data}
 
     def get_license(self, pmcid):
         return self.licenses[pmcid]
@@ -1352,21 +1370,25 @@ class PmcOA(PmcManager):
                 if self.is_archive(k)]
 
     def get_file_data(self):
-        """Retrieve the metdata provided by the FTP server for files."""
-        files_metadata = self.ftp.get_csv_as_dict('oa_file_list.csv')
-        return files_metadata
-
-    def get_pmcid_file_dict(self):
-        file_data = self.get_file_data()
-        return {d['Accession ID']: d['File'] for d in file_data}
+        """Retrieve the metadata provided by the FTP server for files."""
+        ftp_file_list = []
+        for subf in ['oa_comm', 'oa_noncomm', 'oa_other']:
+            path = self.ftp._path_join('oa_bulk', subf, 'xml')
+            csv_files = self.get_csv_files(path)
+            for f in csv_files:
+                file_root = f.split('.filelist')[0]
+                archive = self.ftp._path_join(path, f'{file_root}.tar.gz')
+                ftp_file_list += self.ftp.get_csv_as_dict(
+                    self.ftp._path_join(path, f),
+                    add_fields={'archive': archive})
+        return ftp_file_list
 
     def get_archives_after_date(self, min_date):
         """Get the names of all single-article archives after the given date."""
         logger.info("Getting list of articles that have been uploaded since "
                     "the last update.")
-        files = self.ftp.get_csv_as_dict('oa_file_list.csv')
         archive_set = {
-            f['File'] for f in files
+            f['archive'] for f in self.file_data
             if 'Last Updated (YYYY-MM-DD HH:MM:SS)' in f and
             datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
                               '%Y-%m-%d %H:%M:%S') > min_date
@@ -1404,10 +1426,16 @@ class Manuscripts(PmcManager):
         return 'manuscripts'
 
     def get_file_data(self):
-        return self.ftp.get_csv_as_dict("filelist.csv")
-
-    def get_pmcid_file_dict(self):
-        return {d['PMCID']: d['File'] for d in self.get_file_data()}
+        """Retrieve the metadata provided by the FTP server for files."""
+        files = self.get_csv_files('xml')
+        ftp_file_list = []
+        for f in files:
+            file_root = f.split('.filelist')[0]
+            archive = self.ftp._path_join('xml', f'{file_root}.tar.gz')
+            ftp_file_list += self.ftp.get_csv_as_dict(
+                self.ftp._path_join('xml', f),
+                add_fields={'archive': archive})
+        return ftp_file_list
 
     def get_tarname_from_filename(self, fname):
         "Get the name of the tar file based on the file name (or a pmcid)."
@@ -1454,8 +1482,7 @@ class Manuscripts(PmcManager):
         The continuing feature isn't implemented yet.
         """
         logger.info("Getting list of manuscript content available.")
-        ftp_file_list = self.ftp.get_csv_as_dict('filelist.csv')
-        ftp_pmcid_set = {entry['PMCID'] for entry in ftp_file_list}
+        ftp_pmcid_set = {entry['AccessionID'] for entry in self.file_data}
 
         logger.info("Getting a list of text refs that already correspond to "
                     "manuscript content.")
@@ -1469,10 +1496,12 @@ class Manuscripts(PmcManager):
         logger.info("There are %d manuscripts to load."
                     % (len(load_pmcid_set)))
 
-        logger.info("Determining which archives need to be laoded.")
+        logger.info("Determining which archives need to be loaded.")
         update_archives = defaultdict(set)
-        for pmcid in load_pmcid_set:
-            update_archives[f'PMC00{pmcid[3]}XXXXXX.xml.tar.gz'].add(pmcid)
+        for file_dict in self.file_data:
+            pmcid = file_dict['AccessionID']
+            if pmcid in load_pmcid_set:
+                update_archives[file_dict['archive']].add(pmcid)
 
         logger.info("Beginning to upload archives.")
         for archive, pmcid_set in sorted(update_archives.items()):

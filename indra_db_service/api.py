@@ -1,7 +1,7 @@
 import sys
 import json
 import logging
-from os import path
+from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
@@ -135,7 +135,7 @@ Compress(app)
 CORS(app)
 
 # The directory path to this location (works in any file system).
-HERE = path.abspath(path.dirname(__file__))
+HERE = Path(__file__).parent.absolute()
 
 # Instantiate a jinja2 env.
 env = Environment(loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader,
@@ -215,42 +215,33 @@ def search():
     )
 
 
+suf_ct_map = {'.js': 'application/javascript', '.css': 'text/css'}
+
+
 @app.route('/data-vis/<path:file_path>')
 def serve_data_vis(file_path):
-    full_path = path.join(HERE, 'data-vis/dist', file_path)
+    full_path = HERE / 'data-vis' / 'dist' / file_path
     logger.info('data-vis: ' + full_path)
-    if not path.exists(full_path):
+    if not full_path.exists():
         return abort(404)
-    ext = full_path.split('.')[-1]
-    if ext == 'js':
-        ct = 'application/javascript'
-    elif ext == 'css':
-        ct = 'text/css'
-    else:
-        ct = None
-    with open(full_path, 'rb') as f:
+    with full_path.open('rb') as f:
         return Response(f.read(),
-                        content_type=ct)
+                        content_type=suf_ct_map.get(full_path.suffix))
 
 
 if TESTING['status']:
-    assert path.exists(VUE_ROOT), "Cannot test API with Vue packages."
+    assert VUE_ROOT.exists() and VUE_ROOT.is_absolute(),\
+        "Cannot test API without absolute path to Vue packages."
 
     @app.route('/ilv/<path:file>')
     def serve_indralab_vue(file):
-        full_path = path.join(HERE, VUE_ROOT, file)
-        if not path.exists(full_path):
-            return abort(404)
-        ext = full_path.split('.')[-1]
-        if ext == 'js':
-            ct = 'application/javascript'
-        elif ext == 'css':
-            ct = 'text/css'
-        else:
-            ct = None
+        # Sort out where the VUE directory is.
+        full_path = VUE_ROOT / file
+        if not full_path.exists():
+            return abort(404, f'File {full_path.as_posix()} not found.')
         with open(full_path, 'rb') as f:
             return Response(f.read(),
-                            content_type=ct)
+                            content_type=suf_ct_map.get(full_path.suffix))
 
 
 @app.route('/monitor')

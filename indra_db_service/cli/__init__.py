@@ -44,3 +44,7 @@ def test_service(port, host, deployment=None):
 
     from indra_db_service.api import app
     app.run(host=host, port=port, debug=True)
+
+
+if __name__ == '__main__':
+    main()

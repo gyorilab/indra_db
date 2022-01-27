@@ -21,6 +21,8 @@ if environ.get('TESTING_DB_APP') == '1':
     TESTING['status'] = True
 else:
     TESTING['status'] = False
+TESTING['deployment'] = ''
+TESTING['vue-root'] = ''
 
 
 def jwt_nontest_optional(func):

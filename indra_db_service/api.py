@@ -236,7 +236,7 @@ def serve_data_vis(file_path):
                         content_type=suf_ct_map.get(full_path.suffix))
 
 
-if TESTING['status']:
+if TESTING['status'] and not TESTING['deployment']:
     assert VUE_ROOT.exists() and VUE_ROOT.is_absolute(),\
         "Cannot test API without absolute path to Vue packages."
 

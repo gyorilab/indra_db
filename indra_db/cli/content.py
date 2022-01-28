@@ -316,7 +316,7 @@ class ContentManager(object):
 
         # This is a helper for accessing the data tuples we create
         def id_idx(id_type):
-            return match_id_types.index(id_type)
+            return self.tr_cols.index(id_type)
 
         # Get IDs from the tr_data_set that have one or more of the listed
         # id types.
@@ -423,7 +423,9 @@ class ContentManager(object):
                 # Go through all the id_types
                 all_good = True
                 id_updates = {}
-                for i, id_type in enumerate(match_id_types):
+                for i, id_type in enumerate(self.tr_cols):
+                    if id_type not in match_id_types:
+                        continue                    
                     # Check if the text ref is missing that id.
                     if getattr(tr, id_type) is None:
                         # If so, and if our new data does have that id, update
@@ -1002,7 +1004,7 @@ class PmcManager(_NihManager):
         self.get_missing_pmids(db, tr_data)
         primary_id_types=['pmid', 'pmcid', 'manuscript_id']
         # Turn the list of dicts into a set of tuples
-        tr_data_set = {tuple([entry[id_type] for id_type in primary_id_types])
+        tr_data_set = {tuple([entry[id_type] for id_type in self.tr_cols])
                        for entry in tr_data}
 
         filtered_tr_records, flawed_tr_records, updated_id_map = \

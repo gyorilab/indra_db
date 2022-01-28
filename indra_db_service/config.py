@@ -8,7 +8,7 @@ from flask_jwt_extended import jwt_optional
 TITLE = "The INDRA Database"
 DEPLOYMENT = environ.get('INDRA_DB_API_DEPLOYMENT')
 VUE_ROOT = environ.get('INDRA_DB_API_VUE_ROOT')
-if VUE_ROOT is not None:
+if VUE_ROOT is not None and not VUE_ROOT.startswith('http'):
     VUE_ROOT = Path(VUE_ROOT).expanduser()
     if not VUE_ROOT.is_absolute():
         VUE_ROOT = Path(__file__).parent.absolute() / VUE_ROOT

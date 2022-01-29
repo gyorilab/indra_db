@@ -593,12 +593,16 @@ class End(Dumper):
         ).encode('utf-8'))
 
 
-def load_readonly_dump(principal_db, readonly_db, dump_file):
+def load_readonly_dump(principal_db, readonly_db, dump_file,
+                       no_redirect_to_principal=True):
     logger.info("Using dump_file = \"%s\"." % dump_file)
-    logger.info("%s - Beginning upload of content (est. ~30 minutes)"
+    logger.info("%s - Beginning upload of content (est. ~2.5 hours)"
                 % datetime.now())
-    with ReadonlyTransferEnv(principal_db, readonly_db):
+    if no_redirect_to_principal:
         readonly_db.load_dump(dump_file)
+    else:
+        with ReadonlyTransferEnv(principal_db, readonly_db):
+            readonly_db.load_dump(dump_file)
 
 
 def get_lambda_client():
@@ -642,7 +646,8 @@ dumpers = {dumper.name: dumper for dumper in get_all_descendants(Dumper)}
 
 
 def dump(principal_db, readonly_db=None, delete_existing=False,
-         allow_continue=True, load_only=False, dump_only=False):
+         allow_continue=True, load_only=False, dump_only=False,
+         no_redirect_to_principal=True):
     """Run the suite of dumps in the specified order.
 
     Parameters
@@ -664,6 +669,14 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
     dump_only : bool
         Do not load a new readonly database, only produce the dump files on s3.
         (Default is False)
+    no_redirect_to_principal : bool
+        If False (default), and if we are running without dump_only (i.e.,
+        we are also loading a dump into a readonly DB), then we redirect the
+        lambda function driving the REST API to the readonly schema in the
+        principal DB while the readonly DB is being restored. If True,
+        this redirect is not attempted and we assume it is okay if the
+        readonly DB being restored is not accessible for the duration
+        of the load.
     """
     # Check if readonly is needed:
     if not dump_only and readonly_db is None:
@@ -701,7 +714,6 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
             dump_file = ro_dumper.get_s3_path()
         else:
             logger.info("Readonly dump exists, skipping.")
-
 
         # RESIDUE POSITION DUMP
         # By now, the readonly schema should exist on principal, so providing
@@ -754,7 +766,8 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
     if not dump_only:
         # READONLY LOAD
         print("Dump file:", dump_file)
-        load_readonly_dump(principal_db, readonly_db, dump_file)
+        load_readonly_dump(principal_db, readonly_db, dump_file,
+                           no_redirect_to_principal=no_redirect_to_principal)
 
     if not load_only:
         # This database no longer needs this schema (this only executes if
@@ -776,7 +789,12 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
 @click.option('--delete-existing', is_flag=True,
               help="Delete and restart an existing readonly schema in "
                    "principal.")
-def run_all(continuing, delete_existing, load_only, dump_only):
+@click.option('--no-redirect-to-principal', is_flag=True,
+              help="If given, the lambda function serving the REST API will not"
+                   "be modified to redirect from the readonly database to the"
+                   "principal database while readonly is being loaded.")
+def run_all(continuing, delete_existing, load_only, dump_only,
+            no_redirect_to_principal):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
 
@@ -788,14 +806,19 @@ def run_all(continuing, delete_existing, load_only, dump_only):
 
     dump(get_db('primary', protected=False),
          ro_manager, delete_existing,
-         continuing, load_only, dump_only)
+         continuing, load_only, dump_only,
+         no_redirect_to_principal=no_redirect_to_principal)
 
 
 @dump_cli.command()
 @click.option('--from-dump', type=click.DateTime(formats=[DATE_FMT]),
               help="Indicate a specific start dump from which to build. "
                    "The default is the most recent.")
-def load_readonly(from_dump):
+@click.option('--no-redirect-to-principal', is_flag=True,
+              help="If given, the lambda function serving the REST API will not"
+                   "be modified to redirect from the readonly database to the"
+                   "principal database while readonly is being loaded.")
+def load_readonly(from_dump, no_redirect_to_principal):
     """Load the readonly database with readonly schema dump."""
     start = Start.from_date(from_dump)
     dump_file = Readonly.from_list(start.manifest).get_s3_path()
@@ -803,7 +826,8 @@ def load_readonly(from_dump):
         print(f"ERROR: No readonly dump for {start.date_stamp}")
         return
     load_readonly_dump(get_db('primary', protected=True),
-                       get_ro('primary', protected=False), dump_file)
+                       get_ro('primary', protected=False), dump_file,
+                       no_redirect_to_principal=no_redirect_to_principal)
 
 
 @dump_cli.command('list')

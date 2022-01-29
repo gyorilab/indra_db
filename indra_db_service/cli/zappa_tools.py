@@ -39,6 +39,8 @@ def fix_permissions(deployment) -> None:
 
     # Get the ID for the API on API Gateway
     kwargs, identity = get_role_kwargs(aws_role)
+    if 'region_name' not in kwargs:
+        kwargs['region_name'] = region
     api_gateway = boto3.client('apigateway', **kwargs)
     api_data = api_gateway.get_rest_apis()
     for item in api_data['items']:

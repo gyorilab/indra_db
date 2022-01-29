@@ -41,9 +41,10 @@ def test_service(port, host, deployment=None):
             f'{deployment}'
         )
         click.echo(f'Using deployment {deployment} from S3 at {TESTING["vue-root"]}')
-    else:
-        TESTING['deployment'] = ''
-        TESTING['vue-root'] = ''
 
     from indra_db_service.api import app
     app.run(host=host, port=port, debug=True)
+
+
+if __name__ == '__main__':
+    main()

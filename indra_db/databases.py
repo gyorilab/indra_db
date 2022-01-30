@@ -1526,6 +1526,16 @@ class ReadonlyDatabaseManager(DatabaseManager):
         """
         return super(ReadonlyDatabaseManager, self).get_active_tables(schema)
 
+    def ensure_indexes(self):
+        """Iterates over all the tables and builds indices if they are missing.
+
+        When restoring a readonly dump into an instance, some indexes may
+        be missing. This function rebuilds missing indexes while skipping
+        any existing ones.
+        """
+        for key, table in self.tables.items():
+            table.build_indices(self)
+
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
         if self.__protected:
@@ -1543,6 +1553,10 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
         # Do the restore
         self.pg_restore(dump_file)
+
+        # Ensure indexes are present in case they went missing during
+        # the restore
+        self.ensure_indexes()
 
         # Run Vacuuming
         logger.info("Running vacuuming.")

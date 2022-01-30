@@ -1558,8 +1558,8 @@ class ReadonlyDatabaseManager(DatabaseManager):
         # the restore
         self.ensure_indexes()
 
-        # Run Vacuuming
-        logger.info("Running vacuuming.")
+        # Run VACUUUM ANALYZE
+        logger.info("Running vacuuming and analysis.")
         self.vacuum()
 
         return

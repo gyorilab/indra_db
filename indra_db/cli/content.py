@@ -1415,6 +1415,68 @@ class PmcOA(PmcManager):
         self.upload_archives(db, archive_set, batch_size=5000)
         return True
 
+    def find_all_missing_pmcids(self, db):
+        """Find PMCIDs available from the FTP server that are not in the DB."""
+        logger.info("Getting list of PMC OA content available.")
+        ftp_pmcid_set = {entry['AccessionID'] for entry in self.file_data}
+
+        logger.info("Getting a list of text refs that already correspond to "
+                    "PMC OA content.")
+        tr_list = db.select_all(
+            db.TextRef,
+            db.TextRef.id == db.TextContent.text_ref_id,
+            db.TextContent.source == self.my_source
+            )
+        load_pmcid_set = ftp_pmcid_set - {tr.pmcid for tr in tr_list}
+
+        logger.info("There are %d PMC OA articles to load."
+                    % (len(load_pmcid_set)))
+
+        return load_pmcid_set
+
+    def get_archives_for_pmcids(self, pmcid_set):
+        logger.info("Determining which archives need to be loaded.")
+        update_archives = defaultdict(set)
+        for file_dict in self.file_data:
+            pmcid = file_dict['AccessionID']
+            if pmcid in pmcid_set:
+                update_archives[file_dict['archive']].add(pmcid)
+        return update_archives
+
+    @ContentManager._record_for_review
+    @DGContext.wrap(gatherer, my_source)
+    def upload_all_missing_pmcids(self, db, archives_to_skip=None):
+        """
+        This is a special case of update where we upload all missing PMCIDs
+        instead of a regular incremental update.
+
+        Parameters
+        ----------
+        db : indra.db.DatabaseManager instance
+            The database to which the data will be uploaded.
+        archives_to_skip : list[str] or None
+            A list of archives to skip. Processing each archive is
+            time-consuming, so we can skip some archives if we have already
+            processed them. Note that if 100% of the articles from a given
+            archive are already in the database, it will be skipped
+            automatically; this parameter is only used to skip archives that
+            have some articles that could not be uploaded (e.g. because of
+            text ref conflicts, etc.).
+        """
+        load_pmcid_set = self.find_all_missing_pmcids(db)
+        update_archives = self.get_archives_for_pmcids(load_pmcid_set)
+
+        logger.info("Beginning to upload archives.")
+        count = 0
+        for archive, pmcid_set in sorted(update_archives.items()):
+            if archive in archives_to_skip:
+                continue
+            count += len(pmcid_set)
+            logging.info(f"Extracting {len(pmcid_set)} articles from {archive}.")
+            self.upload_archives(db, [archive], pmcid_set=pmcid_set,
+                                batch_size=500)
+        logger.info(f"Processed {count} articles. Done uploading.")
+        return True
 
 class Manuscripts(PmcManager):
     """ContentManager for the pmc manuscripts.

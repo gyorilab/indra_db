@@ -1526,6 +1526,20 @@ class ReadonlyDatabaseManager(DatabaseManager):
         """
         return super(ReadonlyDatabaseManager, self).get_active_tables(schema)
 
+    def ensure_indices(self):
+        """Iterates over all the tables and builds indices if they are missing.
+
+        When restoring a readonly dump into an instance, some indices may
+        be missing. This function rebuilds missing indices while skipping
+        any existing ones.
+        """
+        from psycopg2 import UndefinedTable
+        for key, table in self.tables.items():
+            try:
+                table.build_indices(self)
+            except UndefinedTable:
+                logger.warning('Skipping missing table %s' % key)
+
     def load_dump(self, dump_file, force_clear=True):
         """Load from a dump of the readonly schema on s3."""
         if self.__protected:
@@ -1544,8 +1558,12 @@ class ReadonlyDatabaseManager(DatabaseManager):
         # Do the restore
         self.pg_restore(dump_file)
 
-        # Run Vacuuming
-        logger.info("Running vacuuming.")
+        # Ensure indices are present in case they went missing during
+        # the restore
+        self.ensure_indices()
+
+        # Run VACUUUM ANALYZE
+        logger.info("Running vacuuming and analysis.")
         self.vacuum()
 
         return

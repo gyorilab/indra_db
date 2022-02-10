@@ -78,6 +78,7 @@ class IndraDBTable(metaclass=IndraDBTableMetaClass):
                 logger.info("%s exists, skipping." % index.name)
 
             if index.cluster:
+                logger.info("Clustering %s using %s" % (full_name, index.name))
                 cluster_sql = f"CLUSTER {full_name} USING {index.name};"
                 cls.execute(db, cluster_sql)
         return sql

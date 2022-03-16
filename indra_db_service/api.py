@@ -100,7 +100,7 @@ else:
                 end_log(e.code)
                 raise e
             except Exception as e:
-                logger.warning("Request experienced internal error. " "Returning 500.")
+                logger.warning("Request experienced internal error. Returning 500.")
                 logger.exception(e)
                 end_log(500)
                 raise

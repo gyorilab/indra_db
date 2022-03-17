@@ -3,7 +3,6 @@ import os
 import click
 
 
-
 @click.group()
 def main():
     """Run the indra db rest service CLI."""

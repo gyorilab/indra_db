@@ -1391,8 +1391,8 @@ class PmcOA(PmcManager):
                     "the last update.")
         archive_set = {
             f['archive'] for f in self.file_data
-            if 'Last Updated (YYYY-MM-DD HH:MM:SS)' in f and
-            datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
+            if 'LastUpdated (YYYY-MM-DD HH:MM:SS)' in f and
+            datetime.strptime(f['LastUpdated (YYYY-MM-DD HH:MM:SS)'],
                               '%Y-%m-%d %H:%M:%S') > min_date
         }
         return archive_set

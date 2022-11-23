@@ -123,6 +123,18 @@ class ReturningCopyManager(LazyCopyManager):
         return sql
 
     def _get_existing(self, compare_cols):
+        # Change to pmid_num and pmcid_num for text_ref_table
+        if self.table == "text_ref":
+            _replace_cols = []
+            for pair in compare_cols:
+                c0, c1 = pair
+                if c0 in ["pmid", "pmcid"]:
+                    c0 += "_num"
+                if c1 in ["pmid", "pmcid"]:
+                    c1 += "_num"
+                _replace_cols.append((c0, c1))
+            compare_cols = _replace_cols
+
         cursor = self.conn.cursor()
 
         ret_col_str = '", "'.join(f't"."{col}' for col in self.return_cols)

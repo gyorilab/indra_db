@@ -362,7 +362,8 @@ def run(task, buffer, project_name):
     """
     from indra_db.util import get_db
     db = get_db('primary')
-    readers = ['SPARSER', 'REACH', 'EIDOS', 'TRIPS', 'ISI', 'MTI']
+    #readers = ['SPARSER', 'REACH', 'EIDOS', 'TRIPS', 'ISI', 'MTI']
+    readers = ['SPARSER', 'REACH', 'EIDOS', 'TRIPS']
     bulk_manager = BulkAwsReadingManager(readers,
                                          buffer_days=buffer,
                                          project_name=project_name)
@@ -390,7 +391,8 @@ def run_local(task, buffer, num_procs):
     from indra_db.util import get_db
     db = get_db('primary')
 
-    readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
+    #readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
+    readers = ['SPARSER', 'REACH', 'EIDOS', 'TRIPS']
     bulk_manager = BulkLocalReadingManager(readers,
                                            buffer_days=buffer,
                                            n_procs=num_procs)

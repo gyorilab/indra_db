@@ -132,7 +132,7 @@ reader_versions = {
               '1.6.3-e48717'],
     'trips': ['STATIC', '2019Nov14', '2021Jan26'],
     'isi': ['20180503'],
-    'eidos': ['0.2.3-SNAPSHOT'],
+    'eidos': ['0.2.3-SNAPSHOT', '1.7.1-SNAPSHOT'],
     'mti': ['1.0'],
 }
 """A dict of list values keyed by reader name, tracking reader versions.

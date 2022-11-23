@@ -1359,10 +1359,13 @@ class PmcOA(PmcManager):
     def __init__(self, *args, **kwargs):
         super(PmcOA, self).__init__(*args, **kwargs)
         self.licenses = {d['AccessionID']: d['License']
-                         for d in self.file_data}
+                         for d in self.file_data if 'License' in d}
 
     def get_license(self, pmcid):
-        return self.licenses[pmcid]
+        lic = self.licenses.get(pmcid)
+        if lic is None:
+            logger.warning(f"Unable to find license for pmcid {pmcid}")
+        return lic
 
     def is_archive(self, k):
         return k.endswith('.xml.tar.gz')

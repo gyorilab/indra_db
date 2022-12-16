@@ -287,7 +287,7 @@ class ReadonlySchema(Schema):
             manuscript_id = Column(String(100))
             tcid = Column(Integer)
             source = Column(String(250))
-            rid = Column(Integer, primary_key=True)
+            rid = Column(BigInteger, primary_key=True)
             reader = Column(String(20))
         return ReadingRefLink
 

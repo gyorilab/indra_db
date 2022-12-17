@@ -152,6 +152,11 @@ def _find_disallowed_keywords(query: str) -> list:
     return list(query_token_set & set(disallowed))
 
 
+def drop_schema(ro_mngr_local: ReadonlyDatabaseManager):
+    logger.info("Dropping schema 'readonly'")
+    ro_mngr_local.drop_schema('readonly')
+
+
 def create_ro_tables(ro_mngr: ReadonlyDatabaseManager, postgres_url):
     engine = create_engine(postgres_url)
     logger.info("Connected to local db")

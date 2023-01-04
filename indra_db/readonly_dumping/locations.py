@@ -9,6 +9,9 @@ __all__ = ["raw_statements_fpath", "source_counts_fpath", "text_refs_fpath",
 TEMP_DIR = os.environ.get("PRINCIPAL_DUMPING_ROOT")
 if not TEMP_DIR:
     TEMP_DIR = Path.home().joinpath(".data/indra/db")
+else:
+    TEMP_DIR = Path(TEMP_DIR)
+
 TEMP_DIR.mkdir(exist_ok=True, parents=True)
 
 raw_statements_fpath = TEMP_DIR.joinpath("raw_statements.tsv.gz")

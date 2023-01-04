@@ -13,10 +13,19 @@ import pandas
 from tqdm import tqdm
 
 from adeft import get_available_models
-from indra.statements import stmts_from_json
+from indra.ontology.bio import bio_ontology
+from indra.preassembler import Preassembler
+from indra.statements import stmts_from_json, stmt_from_json, Statement
 from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 from .locations import *
+
+
+refinement_cycles_fpath = TEMP_DIR.joinpath("refinement_cycles.pkl")
+batch_size = int(1e6)
+
+StmtList = List[Statement]
+
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +55,76 @@ version_to_reader = {}
 for reader, versions in reader_versions.items():
     for version in versions:
         version_to_reader[version] = reader
+
+
+def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
+    stmts_by_type = defaultdict(list)
+    for stmt in stmts:
+        stmts_by_type[stmt.__class__.__name__].append(stmt)
+    refinements = set()
+    for _, stmts_this_type in stmts_by_type.items():
+        refinements |= pa._generate_relation_tuples(stmts_this_type)
+    return refinements
+
+
+def get_related_split(stmts1: StmtList, stmts2: StmtList) -> Set[Tuple[int, int]]:
+    stmts_by_type1 = defaultdict(list)
+    stmts_by_type2 = defaultdict(list)
+    for stmt in stmts1:
+        stmts_by_type1[stmt.__class__.__name__].append(stmt)
+    for stmt in stmts2:
+        stmts_by_type2[stmt.__class__.__name__].append(stmt)
+    refinements = set()
+    for stmt_type, stmts_this_type1 in stmts_by_type1.items():
+        stmts_this_type2 = stmts_by_type2.get(stmt_type)
+        if not stmts_this_type2:
+            continue
+        refinements |= pa._generate_relation_tuples(
+            stmts_this_type1 + stmts_this_type2, split_idx=len(stmts_this_type1) - 1
+        )
+    return refinements
+
+
+def sample_unique_stmts(
+    num: int = 100000, n_rows: int = None
+) -> List[Tuple[int, Statement]]:
+    """Return a random sample of Statements from unique_statements.tsv.gz
+
+    Parameters
+    ----------
+    num :
+        Number of Statements to return
+    n_rows :
+        The number of rows in the file. If not provided, the file is read in
+        its entirety first to determine the number of rows.
+
+    Returns
+    -------
+    :
+        A list of tuples of the form (hash, Statement)
+    """
+    if n_rows is None:
+        logger.info("Counting lines...")
+        with gzip.open(unique_stmts_fpath.as_posix(), "rt") as f:
+            reader = csv.reader(f, delimiter="\t")
+            n_rows = sum(1 for _ in reader)
+
+    # Generate a random sample of line indices
+    logger.info(f"Sampling {num} unique statements from a total of {n_rows}")
+    indices = np.random.choice(n_rows, num, replace=False)
+    stmts = []
+    t = tqdm(total=num, desc="Sampling statements")
+    with gzip.open(unique_stmts_fpath, "rt") as f:
+        reader = csv.reader(f, delimiter="\t")
+        for index, (sh, sjs) in enumerate(reader):
+            if index in indices:
+                stmts.append((int(sh), stmt_from_json(load_statement_json(sjs))))
+                t.update()
+                if len(stmts) == num:
+                    break
+
+    t.close()
+    return stmts
 
 
 def load_text_refs_by_trid(fname: str) -> Dict:
@@ -490,8 +569,31 @@ if __name__ == '__main__':
     #    based on number of agents, as is done in cogex)
     ground_deduplicate()
 
-    # 4. Assembly pipeline:
-    ref_graph = get_refinement_graph()
+    # Setup bio ontololgy for preassembler
+    bio_ontology.initialize()
+    bio_ontology._build_transitive_closure()
+    pa = Preassembler(bio_ontology)
 
-    # 5. Get belief scores
-    calculate_belief(ref_graph)
+    # Count lines in unique statements file (needed to run refinement calc)
+    logger.info(f"Counting lines in {unique_stmts_fpath.as_posix()}")
+    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
+        csv_reader = csv.reader(fh, delimiter="\t")
+        num_rows = sum(1 for _ in csv_reader)
+
+    num_batches = math.ceil(num_rows / batch_size)
+
+    # 4. Assembly pipeline:
+    cycles_found = False
+    ref_graph = get_refinement_graph(batch_size=batch_size,
+                                     num_batches=num_batches)
+    if cycles_found:
+        logger.info(
+            f"Refinement graph stored in variable 'ref_graph', "
+            f"edges saved to {refinements_fpath.as_posix()}"
+            f"and cycles saved to {refinement_cycles_fpath.as_posix()}"
+        )
+
+    else:
+
+        # 5. Get belief scores, if there were no refinement cycles
+        calculate_belief(ref_graph)

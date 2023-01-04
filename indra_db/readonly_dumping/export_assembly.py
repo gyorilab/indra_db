@@ -540,9 +540,9 @@ def calculate_belief(refinements_graph: nx.DiGraph):
     with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
         reader = csv.reader(fh, delimiter="\t")
 
-        for _ in tqdm(range(num_batches), desc="Calculating belief"):
+        for bn in tqdm(range(num_batches), desc="Calculating belief"):
             stmts = []
-            for _ in tqdm(range(batch_size), leave=False):
+            for _ in tqdm(range(batch_size), leave=False, desc=f"Batch {bn}"):
                 try:
                     sh, sjs = next(reader)
                     stmt = stmt_from_json(

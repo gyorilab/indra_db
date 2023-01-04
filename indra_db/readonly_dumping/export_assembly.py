@@ -16,7 +16,7 @@ from adeft import get_available_models
 from indra.statements import stmts_from_json
 from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
-from readonly_dumping.locations import *
+from .locations import *
 
 logger = logging.getLogger(__name__)
 

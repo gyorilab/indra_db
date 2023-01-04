@@ -293,8 +293,132 @@ def ground_deduplicate():
         )
 
 
-def get_refinement_graph() -> nx.DiGraph:
-    pass
+def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
+    global cycles_found
+    """Get refinement pairs as: (more specific, less specific)
+
+    The evidence from the more specific statement is included in the less
+    specific statement
+
+    Step 1, alternative:
+
+    Open two CSV readers for the unique_statements.tsv.gz and then move them
+    forward in batches to cover all combinations of Statement batches.
+
+    - First batch of Stmts, internal refinement finding
+    - First batch (first reader) x Second batch (second reader)
+    - First batch (first reader) x Third batch (second reader)
+    - ...
+    - One before last batch (first reader) x Last batch (second reader)
+    ---> Giant list of refinement relation pairs (hash1, hash2)
+
+    Put the pairs in a networkx DiGraph
+    """
+    # Loop statements: the outer index runs all batches while the inner index
+    # runs outer index < inner index <= num_batches. This way the outer
+    # index runs the "diagonal" of the combinations while the inner index runs
+    # the upper triangle of the combinations.
+
+    # Open two csv readers to the same file
+    if not refinements_fpath.exists():
+        logger.info("Calculating refinements")
+        refinements = set()
+        # This takes ~9-10 hours to run
+        with gzip.open(unique_stmts_fpath, "rt") as fh1:
+            reader1 = csv.reader(fh1, delimiter="\t")
+            for outer_batch_ix in tqdm(
+                    range(num_batches), total=num_batches,
+                    desc="Calculating refinements"
+            ):
+                # read in a batch from the first reader
+                stmts1 = []
+                for _ in range(batch_size):
+                    try:
+                        _, sjs = next(reader1)
+                        stmt = stmt_from_json(
+                            load_statement_json(sjs, remove_evidence=True)
+                        )
+                        stmts1.append(stmt)
+                    except StopIteration:
+                        break
+
+                # Get refinements for the i-th batch with itself
+                refinements |= get_related(stmts1)
+
+                # Loop batches from second reader, starting at outer_batch_ix + 1
+                with gzip.open(unique_stmts_fpath, "rt") as fh2:
+                    reader2 = csv.reader(fh2, delimiter="\t")
+                    batch_iterator = batch_iter(reader2, batch_size=batch_size)
+                    # Note: first argument is the start index, second is
+                    # the stop index, but if None is used, it will iterate
+                    # until possible
+                    batch_iterator = itertools.islice(
+                        batch_iterator, outer_batch_ix + 1, None
+                    )
+
+                    # Loop the batches
+                    for inner_batch_idx, batch in tqdm(
+                            enumerate(batch_iterator),
+                            total=num_batches-outer_batch_ix-1,
+                            leave=False
+                    ):
+                        stmts2 = []
+
+                        # Loop the statements in the batch
+                        for _, sjs in batch:
+                            try:
+                                stmt = stmt_from_json(
+                                    load_statement_json(sjs, remove_evidence=True)
+                                )
+                                stmts2.append(stmt)
+                            except StopIteration:
+                                break
+
+                        # Get refinements for the i-th batch with the j-th batch
+                        refinements |= get_related_split(stmts1, stmts2)
+
+        # Write out the refinements as a gzipped TSV file
+        with gzip.open(refinements_fpath.as_posix(), "wt") as f:
+            tsv_writer = csv.writer(f, delimiter="\t")
+            tsv_writer.writerows(refinements)
+    else:
+        logger.info(f"Loading refinements from existing file"
+                    f"{refinements_fpath.as_posix()}")
+        with gzip.open(refinements_fpath.as_posix(), "rt") as f:
+            tsv_reader = csv.reader(f, delimiter="\t")
+
+            # Each line is a refinement pair of two Statement hashes as ints
+            refinements = {(int(h1), int(h2)) for h1, h2 in tsv_reader}
+
+    # Perform sanity check on the refinements
+    logger.info("Checking refinements")
+    sample_stmts = sample_unique_stmts(n_rows=num_rows)
+    sample_refinements = get_related([s for _, s in sample_stmts])
+    assert sample_refinements.issubset(refinements), (
+        f"Refinements are not a subset of the sample. Sample contains "
+        f"{len(sample_refinements - refinements)} refinements not in "
+        f"the full set."
+    )
+
+    logger.info("Checking refinements for cycles")
+    ref_graph = nx.DiGraph(refinements)
+    try:
+        cycles = nx.find_cycle(ref_graph)
+        cycles_found = True
+    except nx.NetworkXNoCycle:
+        logger.info("No cycles found in the refinements")
+        cycles = None
+        cycles_found = False
+
+    # If cycles are found, save them to a file for later inspection
+    if cycles_found and cycles is not None:
+        logger.warning(f"Found cycles in the refinement graph. Dumping to "
+                       f"{refinement_cycles_fpath.as_posix()}")
+        with refinement_cycles_fpath.open("wb") as f:
+            pickle.dump(obj=cycles, file=f)
+        cycles_found = True
+
+    return ref_graph
 
 
 def calculate_belief(refinement_graph: nx.DiGraph):

@@ -7,7 +7,7 @@ import logging
 import math
 import os
 import pickle
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import Tuple, Set, Dict, List
 
 import networkx as nx
@@ -16,9 +16,11 @@ import pandas
 from tqdm import tqdm
 
 from adeft import get_available_models
+from indra.belief import BeliefEngine
 from indra.ontology.bio import bio_ontology
 from indra.preassembler import Preassembler
-from indra.statements import stmts_from_json, stmt_from_json, Statement
+from indra.statements import stmts_from_json, stmt_from_json, Statement, \
+    Evidence
 from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 from .locations import *
@@ -511,8 +513,79 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
     return ref_graph
 
 
-def calculate_belief(refinement_graph: nx.DiGraph):
-    pass
+def calculate_belief(refinements_graph: nx.DiGraph):
+    # The refinement set is a set of pairs of hashes, with the *first hash
+    # being more specific than the second hash*, i.e. the evidence for the
+    # first should be included in the evidence for the second
+    #
+    # The BeliefEngine expects the refinement graph to be a directed graph,
+    # with edges pointing from *more specific* to *less specific* statements
+    # (see docstring of indra.belief.BeliefEngine)
+    #
+    # => The edges represented by the refinement set are the *same* as the
+    # edges expected by the BeliefEngine.
+
+    # Initialize a belief engine
+    logger.info("Initializing belief engine")
+    be = BeliefEngine(refinements_graph=refinements_graph)
+
+    # Load the source counts
+    with source_counts_fpath.open("rb") as fh:
+        source_counts = pickle.load(fh)
+
+    # Store hash: belief score
+    belief_scores = {}
+
+    # Iterate over each unique statement
+    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
+        reader = csv.reader(fh, delimiter="\t")
+
+        for _ in tqdm(range(num_batches), desc="Calculating belief"):
+            stmts = []
+            for _ in tqdm(range(batch_size), leave=False):
+                try:
+                    sh, sjs = next(reader)
+                    stmt = stmt_from_json(
+                        load_statement_json(sjs, remove_evidence=True)
+                    )
+                    this_hash = int(sh)
+
+                    # Find all the statements that refine the current
+                    # statement, i.e. all the statements that are more
+                    # specific than the current statement => look for ancestors
+                    # then add up all the source counts for the statement
+                    # itself and the statements that refine it
+                    summed_source_counts = Counter(source_counts[this_hash])
+
+                    # If there are refinements, add them to the source counts
+                    if this_hash in refinements_graph.nodes():
+                        refiner_hashes = nx.ancestors(
+                            G=refinements_graph, source=this_hash
+                        )
+                        for refiner_hash in refiner_hashes:
+                            summed_source_counts += Counter(source_counts[refiner_hash])
+
+                    # Mock evidence - todo: add annotations?
+                    ev_list = []
+                    for source, count in summed_source_counts.items():
+                        # Add `count` evidence objects for each source
+                        for _ in range(count):
+                            ev_list.append(Evidence(source_api=source))
+                    stmt.evidence = ev_list
+                    stmts.append((this_hash, stmt))
+
+                except StopIteration:
+                    break
+
+            # Belief calculation for this batch
+            hashes, stmt_list = zip(*stmts)
+            be.set_prior_probs(statements=stmt_list)
+            for sh, st in zip(hashes, stmt_list):
+                belief_scores[sh] = stmt.belief
+
+    # Dump the belief scores
+    with belief_scores_pkl_fpath.open("wb") as fo:
+        pickle.dump(belief_scores, fo)
 
 
 if __name__ == '__main__':

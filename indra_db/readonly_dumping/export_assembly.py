@@ -265,7 +265,32 @@ def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
 
 
 def ground_deduplicate():
-    pass
+    if not grounded_stmts_fpath.exists() or not unique_stmts_fpath.exists():
+        with gzip.open(processed_stmts_fpath, "rt") as fh, gzip.open(
+            grounded_stmts_fpath, "wt"
+        ) as fh_out_gr, gzip.open(unique_stmts_fpath, "wt") as fh_out_uniq:
+            seen_hashes = set()
+            reader = csv.reader(fh, delimiter="\t")
+            writer_gr = csv.writer(fh_out_gr, delimiter="\t")
+            writer_uniq = csv.writer(fh_out_uniq, delimiter="\t")
+            for sh, stmt_json_str in tqdm(
+                reader, total=60405451, desc="Gathering grounded and unique statements"
+            ):
+                stmt = stmts_from_json([load_statement_json(stmt_json_str)])[0]
+                if all(
+                    (set(agent.db_refs) - {"TEXT", "TEXT_NORM"})
+                    for agent in stmt.real_agent_list()
+                ):
+                    writer_gr.writerow((sh, stmt_json_str))
+                    if sh not in seen_hashes:
+                        writer_uniq.writerow((sh, stmt_json_str))
+                seen_hashes.add(sh)
+    else:
+        logger.info(
+            f"Grounded and unique statements already dumped at "
+            f"{grounded_stmts_fpath.as_posix()} and "
+            f"{unique_stmts_fpath.as_posix()}, skipping..."
+        )
 
 
 def get_refinement_graph() -> nx.DiGraph:

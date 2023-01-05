@@ -646,41 +646,54 @@ if __name__ == '__main__':
             "No adeft models detected, run 'python -m adeft.download' to download models"
         )
 
-    # 1. Distill statements
-    readings_to_drop, reading_id_textref_id_map = distill_statements()
+    # Check if output from preassembly (step 2) already exists
+    if not processed_stmts_fpath.exists() or not source_counts_fpath.exists():
+        # 1. Distill statements
+        logger.info("1. Running statement distillation")
+        readings_to_drop, reading_id_textref_id_map = distill_statements()
 
-    # 2. Preassembly (needs indra_db_lite setup)
-    preassembly(drop_readings=readings_to_drop, reading_id_to_text_ref_id=reading_id_textref_id_map)
+        # 2. Preassembly (needs indra_db_lite setup)
+        logger.info("2. Running preassembly")
+        preassembly(drop_readings=readings_to_drop, reading_id_to_text_ref_id=reading_id_textref_id_map)
+    else:
+        logger.info("Output from step 2 already exists, skipping to step 3...")
 
     # 3. Ground and deduplicate statements (here don't discard any statements
     #    based on number of agents, as is done in cogex)
+    logger.info("3. Running grounding and deduplication")
     ground_deduplicate()
 
     # Setup bio ontololgy for preassembler
-    bio_ontology.initialize()
-    bio_ontology._build_transitive_closure()
-    pa = Preassembler(bio_ontology)
+    if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():
+        if not refinements_fpath.exists():
+            logger.info("4. Running setup for refinement calculation")
+            bio_ontology.initialize()
+            bio_ontology._build_transitive_closure()
+            pa = Preassembler(bio_ontology)
 
-    # Count lines in unique statements file (needed to run refinement calc)
-    logger.info(f"Counting lines in {unique_stmts_fpath.as_posix()}")
-    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
-        csv_reader = csv.reader(fh, delimiter="\t")
-        num_rows = sum(1 for _ in csv_reader)
+            # Count lines in unique statements file (needed to run refinement calc)
+            logger.info(f"Counting lines in {unique_stmts_fpath.as_posix()}")
+            with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
+                csv_reader = csv.reader(fh, delimiter="\t")
+                num_rows = sum(1 for _ in csv_reader)
 
-    num_batches = math.ceil(num_rows / batch_size)
+            num_batches = math.ceil(num_rows / batch_size)
+        else:
+            # Refinement graph will be loaded from file, so mock num_batches
+            num_batches = 1
 
-    # 4. Assembly pipeline:
-    cycles_found = False
-    ref_graph = get_refinement_graph(batch_size=batch_size,
-                                     num_batches=num_batches)
-    if cycles_found:
-        logger.info(
-            f"Refinement graph stored in variable 'ref_graph', "
-            f"edges saved to {refinements_fpath.as_posix()}"
-            f"and cycles saved to {refinement_cycles_fpath.as_posix()}"
-        )
+        # 4. Calculate refinement graph:
+        cycles_found = False
+        ref_graph = get_refinement_graph(batch_size=batch_size,
+                                         num_batches=num_batches)
+        if cycles_found:
+            logger.info(
+                f"Refinement graph stored in variable 'ref_graph', "
+                f"edges saved to {refinements_fpath.as_posix()}"
+                f"and cycles saved to {refinement_cycles_fpath.as_posix()}"
+            )
 
-    else:
-
-        # 5. Get belief scores, if there were no refinement cycles
-        calculate_belief(ref_graph)
+        else:
+            # 5. Get belief scores, if there were no refinement cycles
+            logger.info("5. Calculating belief")
+            calculate_belief(ref_graph)

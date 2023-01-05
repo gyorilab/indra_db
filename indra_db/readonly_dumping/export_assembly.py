@@ -63,6 +63,7 @@ for reader, versions in reader_versions.items():
 
 
 def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
+    global pa
     stmts_by_type = defaultdict(list)
     for stmt in stmts:
         stmts_by_type[stmt.__class__.__name__].append(stmt)
@@ -73,6 +74,7 @@ def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
 
 
 def get_related_split(stmts1: StmtList, stmts2: StmtList) -> Set[Tuple[int, int]]:
+    global pa
     stmts_by_type1 = defaultdict(list)
     stmts_by_type2 = defaultdict(list)
     for stmt in stmts1:
@@ -357,6 +359,7 @@ def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
 
 
 def ground_deduplicate():
+    # ~2.5-3 hours
     if not grounded_stmts_fpath.exists() or not unique_stmts_fpath.exists():
         with gzip.open(processed_stmts_fpath, "rt") as fh, gzip.open(
             grounded_stmts_fpath, "wt"
@@ -386,7 +389,7 @@ def ground_deduplicate():
 
 
 def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
-    global cycles_found
+    global cycles_found, pa
     """Get refinement pairs as: (more specific, less specific)
 
     The evidence from the more specific statement is included in the less
@@ -624,7 +627,7 @@ if __name__ == '__main__':
     """
     logger.info(f"Root data path: {TEMP_DIR}")
 
-    # 0. Dump raw data (raw statements, text content, text refs)
+    # 0. Dump raw data (raw statements, text content + reading, text refs)
     needed_files = [reading_text_content_fpath, text_refs_fpath,
                     raw_statements_fpath]
 

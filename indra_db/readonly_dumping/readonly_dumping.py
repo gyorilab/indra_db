@@ -45,6 +45,7 @@ def belief():
                                  column_order="mk_hash, belief",
                                  tsv_file=belief_scores_tsv_fpath.absolute().as_posix())
 
+    logger.info(f"Deleting {belief_scores_tsv_fpath.absolute().as_posix()}")
     os.remove(belief_scores_tsv_fpath.absolute().as_posix())
 
 

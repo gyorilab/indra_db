@@ -27,9 +27,11 @@ def belief():
     requires assembly: True
     assembly process: (see indra_cogex.sources.indra_db.raw_export)
     """
+    logger.info("Reading belief score pickle file")
     with belief_scores_pkl_fpath.open("rb") as pkl_in:
         belief_dict = pickle.load(pkl_in)
 
+    logger.info("Dumping belief scores to tsv file")
     with belief_scores_tsv_fpath.open("w") as fh_out:
         writer = csv.writer(fh_out, delimiter="\t")
         writer.writerows(((sh, bs) for sh, bs in belief_dict.items()))

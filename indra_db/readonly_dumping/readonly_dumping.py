@@ -1,8 +1,9 @@
 import argparse
+import csv
 import logging
 import os
+import pickle
 import subprocess
-from pathlib import Path
 from textwrap import dedent
 
 from sqlalchemy import create_engine
@@ -11,10 +12,33 @@ from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.schemas.mixins import ReadonlyTable
 
+from .locations import *
+
 logger = logging.getLogger(__name__)
 
 
-TEMPDIR = Path('~/.data/temp')
+# Tables to create (currently in no particular order):
+
+# Belief
+def belief():
+    """Dump belief scores into the belief table on the local readonly db
+
+    depends on: raw_statements, text_content, reading
+    requires assembly: True
+    assembly process: (see indra_cogex.sources.indra_db.raw_export)
+    """
+    with belief_scores_pkl_fpath.open("rb") as pkl_in:
+        belief_dict = pickle.load(pkl_in)
+
+    with belief_scores_tsv_fpath.open("w") as fh_out:
+        writer = csv.writer(fh_out, delimiter="\t")
+        writer.writerows((sh, bs for sh, bs in belief_dict.items()))
+
+    load_data_file_into_local_ro(table_name="readonly.belief",
+                                 column_order="mk_hash, belief",
+                                 tsv_file=belief_scores_tsv_fpath.absolute().as_posix())
+
+    os.remove(belief_scores_tsv_fpath.absolute().as_posix())
 
 
 def get_local_ro_uri() -> str:

@@ -32,7 +32,7 @@ def belief():
 
     with belief_scores_tsv_fpath.open("w") as fh_out:
         writer = csv.writer(fh_out, delimiter="\t")
-        writer.writerows((sh, bs for sh, bs in belief_dict.items()))
+        writer.writerows(((sh, bs) for sh, bs in belief_dict.items()))
 
     load_data_file_into_local_ro(table_name="readonly.belief",
                                  column_order="mk_hash, belief",

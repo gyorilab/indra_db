@@ -49,6 +49,59 @@ def belief():
     os.remove(belief_scores_tsv_fpath.absolute().as_posix())
 
 
+# ReadingRefLink
+def reading_ref_link(ro_mngr: ReadonlyDatabaseManager,
+                     reading_ref_link_table: ReadonlyTable):
+    """Fill the reading ref link table with data
+    depends on: text_ref, text_content, reading
+    requires assembly: False
+    Table definition:
+
+    Original SQL query to get data
+        SELECT pmid, pmid_num, pmcid, pmcid_num,
+               pmcid_version, doi, doi_ns, doi_id,
+               tr.id AS trid, pii, url, manuscript_id,
+               tc.id AS tcid, source, r.id AS rid, reader
+        FROM text_ref AS tr
+        JOIN text_content AS tc
+            ON tr.id = tc.text_ref_id
+        JOIN reading AS r
+            ON tc.id = r.text_content_id
+    """
+    # Create a temp file to put the query in
+    dump_file = reading_ref_link_tsv_fpath
+
+    sql = dedent(
+        """SELECT pmid, pmid_num, pmcid, pmcid_num,
+                  pmcid_version, doi, doi_ns, doi_id,
+                  tr.id AS trid, pii, url, manuscript_id,
+                  tc.id AS tcid, source, r.id AS rid, reader
+        FROM text_ref AS tr
+        JOIN text_content AS tc
+            ON tr.id = tc.text_ref_id
+        JOIN reading AS r
+            ON tc.id = r.text_content_id""")
+    column_order = (
+        "pmid, pmid_num, pmcid, pmcid_num, pmcid_version, doi, doi_ns, "
+        "doi_id, trid, pii, url, manuscript_id, tcid, source, rid, reader"
+    )
+
+    # Dump the query from principal
+    principal_query_to_csv(query=sql, output_location=dump_file)
+
+    # todo: if you want to switch to gzipped files you can do
+    #  "copy table_name from program 'zcat /tmp/tp.csv.gz';"
+    load_data_file_into_local_ro(table_name="readonly.reading_ref_link",
+                                 column_order=column_order,
+                                 tsv_file=dump_file)
+
+    # Build the index
+    reading_ref_link_table.build_indices(ro_mngr)
+
+    # Delete the dump file after upload
+    os.remove(dump_file)
+
+
 def get_local_ro_uri() -> str:
     # postgresql://<username>:<password>@localhost[:port]/[name]
     return f"postgresql://{LOCAL_RO_USER}:{LOCAL_RO_PASSWORD}@localhost:" \
@@ -198,59 +251,6 @@ def create_ro_tables(ro_mngr: ReadonlyDatabaseManager, postgres_url):
     logger.info("Creating tables")
     tables_metadata.create_all(bind=engine)
     logger.info("Done creating tables")
-
-
-# ReadingRefLink
-def reading_ref_link(ro_mngr: ReadonlyDatabaseManager,
-                     reading_ref_link_table: ReadonlyTable):
-    """Fill the reading ref link table with data
-    depends on: text_ref, text_content, reading
-    requires assembly: False
-    Table definition:
-
-    Original SQL query to get data
-        SELECT pmid, pmid_num, pmcid, pmcid_num,
-               pmcid_version, doi, doi_ns, doi_id,
-               tr.id AS trid, pii, url, manuscript_id,
-               tc.id AS tcid, source, r.id AS rid, reader
-        FROM text_ref AS tr
-        JOIN text_content AS tc
-            ON tr.id = tc.text_ref_id
-        JOIN reading AS r
-            ON tc.id = r.text_content_id
-    """
-    # Create a temp file to put the query in
-    dump_file = TEMPDIR.joinpath("reading_ref_link.tsv").absolute().as_posix()
-
-    sql = dedent(
-        """SELECT pmid, pmid_num, pmcid, pmcid_num,
-                  pmcid_version, doi, doi_ns, doi_id,
-                  tr.id AS trid, pii, url, manuscript_id,
-                  tc.id AS tcid, source, r.id AS rid, reader
-        FROM text_ref AS tr
-        JOIN text_content AS tc
-            ON tr.id = tc.text_ref_id
-        JOIN reading AS r
-            ON tc.id = r.text_content_id""")
-    column_order = (
-        "pmid, pmid_num, pmcid, pmcid_num, pmcid_version, doi, doi_ns, "
-        "doi_id, trid, pii, url, manuscript_id, tcid, source, rid, reader"
-    )
-
-    # Dump the query from principal
-    principal_query_to_csv(query=sql, output_location=dump_file)
-
-    # todo: if you want to switch to gzipped files you can do
-    #  "copy table_name from program 'zcat /tmp/tp.csv.gz';"
-    load_data_file_into_local_ro(table_name="readonly.reading_ref_link",
-                                 column_order=column_order,
-                                 tsv_file=dump_file)
-
-    # Build the index
-    reading_ref_link_table.build_indices(ro_mngr)
-
-    # Delete the dump file after upload
-    os.remove(dump_file)
 
 
 if __name__ == '__main__':

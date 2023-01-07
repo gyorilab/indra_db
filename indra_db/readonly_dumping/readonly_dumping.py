@@ -16,6 +16,11 @@ from .locations import *
 
 logger = logging.getLogger(__name__)
 
+LOCAL_RO_PASSWORD = os.environ["LOCAL_RO_PASSWORD"]
+LOCAL_RO_USER = os.environ["LOCAL_RO_USER"]
+LOCAL_RO_PORT = int(os.environ.get("LOCAL_RO_PORT", "5432"))
+LOCAL_RO_DB_NAME = os.environ.get("LOCAL_RO_DB_NAME", "indradb_readonly_local")
+
 
 # Tables to create (currently in no particular order):
 
@@ -45,11 +50,8 @@ def belief():
 
 def get_local_ro_uri() -> str:
     # postgresql://<username>:<password>@localhost[:port]/[name]
-    pwd = os.environ["LOCAL_RO_PASSWORD"]
-    user = os.environ["LOCAL_RO_USER"]
-    port = int(os.environ.get("LOCAL_RO_PORT", "5432"))
-    db_name = os.environ.get("LOCAL_RO_DB_NAME", "indradb_readonly_local")
-    return f"postgresql://{user}:{pwd}@localhost:{port}/{db_name}"
+    return f"postgresql://{LOCAL_RO_USER}:{LOCAL_RO_PASSWORD}@localhost:" \
+           f"{LOCAL_RO_PORT}/{LOCAL_RO_DB_NAME}"
 
 
 def load_data_file_into_local_ro(table_name: str, column_order: str,

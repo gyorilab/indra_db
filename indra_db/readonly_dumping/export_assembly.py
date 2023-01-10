@@ -496,7 +496,8 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
     )
 
     logger.info("Checking refinements for cycles")
-    ref_graph = nx.DiGraph(refinements)
+    ref_graph = nx.DiGraph()
+    ref_graph.add_edges_from(refinements)
     try:
         cycles = nx.find_cycle(ref_graph)
         cycles_found = True

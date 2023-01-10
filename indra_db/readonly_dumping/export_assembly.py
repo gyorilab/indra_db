@@ -566,6 +566,13 @@ def calculate_belief(
                 ev_list.append(Evidence(source_api=source))
         return ev_list
 
+    def _add_belief_scores_for_batch(batch: List[Tuple[int, Statement]]):
+        # Belief calculation for this batch
+        hashes, stmt_list = zip(*batch)
+        be.set_prior_probs(statements=stmt_list)
+        for sh, st in zip(hashes, stmt_list):
+            belief_scores[sh] = st.belief
+
     # Iterate over each unique statement
     with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
         reader = csv.reader(fh, delimiter="\t")
@@ -585,11 +592,7 @@ def calculate_belief(
                 except StopIteration:
                     break
 
-            # Belief calculation for this batch
-            hashes, stmt_list = zip(*stmt_batch)
-            be.set_prior_probs(statements=stmt_list)
-            for sh, st in zip(hashes, stmt_list):
-                belief_scores[sh] = st.belief
+            _add_belief_scores_for_batch(stmt_batch)
 
     # Dump the belief scores
     with belief_scores_pkl_fpath.open("wb") as fo:

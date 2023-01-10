@@ -543,49 +543,50 @@ def calculate_belief(
     # Store hash: belief score
     belief_scores = {}
 
+    def _get_support_evidence_for_stmt(stmt_hash: int) -> List[Evidence]:
+        # Find all the statements that refine the current
+        # statement, i.e. all the statements that are more
+        # specific than the current statement => look for ancestors
+        # then add up all the source counts for the statement
+        # itself and the statements that refine it
+        summed_source_counts = Counter(source_counts[stmt_hash])
+
+        # If there are refinements, add them to the source counts
+        if stmt_hash in refinements_graph.nodes():
+            refiner_hashes = nx.ancestors(G=refinements_graph,
+                                          source=stmt_hash)
+            for refiner_hash in refiner_hashes:
+                summed_source_counts += Counter(source_counts[refiner_hash])
+
+        # Mock evidence - todo: add annotations?
+        # Add evidence objects for each source's count and each source
+        ev_list = []
+        for source, count in summed_source_counts.items():
+            for _ in range(count):
+                ev_list.append(Evidence(source_api=source))
+        return ev_list
+
     # Iterate over each unique statement
     with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
         reader = csv.reader(fh, delimiter="\t")
 
         for bn in tqdm(range(num_batches), desc="Calculating belief"):
-            stmts = []
+            stmt_batch = []
             for _ in tqdm(range(batch_size), leave=False, desc=f"Batch {bn}"):
                 try:
-                    sh, sjs = next(reader)
+                    stmt_hash_string, stmt_json_string = next(reader)
                     stmt = stmt_from_json(
-                        load_statement_json(sjs, remove_evidence=True)
+                        load_statement_json(stmt_json_string, remove_evidence=True)
                     )
-                    this_hash = int(sh)
-
-                    # Find all the statements that refine the current
-                    # statement, i.e. all the statements that are more
-                    # specific than the current statement => look for ancestors
-                    # then add up all the source counts for the statement
-                    # itself and the statements that refine it
-                    summed_source_counts = Counter(source_counts[this_hash])
-
-                    # If there are refinements, add them to the source counts
-                    if this_hash in refinements_graph.nodes():
-                        refiner_hashes = nx.ancestors(
-                            G=refinements_graph, source=this_hash
-                        )
-                        for refiner_hash in refiner_hashes:
-                            summed_source_counts += Counter(source_counts[refiner_hash])
-
-                    # Mock evidence - todo: add annotations?
-                    ev_list = []
-                    for source, count in summed_source_counts.items():
-                        # Add `count` evidence objects for each source
-                        for _ in range(count):
-                            ev_list.append(Evidence(source_api=source))
-                    stmt.evidence = ev_list
-                    stmts.append((this_hash, stmt))
+                    this_hash = int(stmt_hash_string)
+                    stmt.evidence = _get_support_evidence_for_stmt(this_hash)
+                    stmt_batch.append((this_hash, stmt))
 
                 except StopIteration:
                     break
 
             # Belief calculation for this batch
-            hashes, stmt_list = zip(*stmts)
+            hashes, stmt_list = zip(*stmt_batch)
             be.set_prior_probs(statements=stmt_list)
             for sh, st in zip(hashes, stmt_list):
                 belief_scores[sh] = st.belief

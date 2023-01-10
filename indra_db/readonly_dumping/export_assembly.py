@@ -527,6 +527,7 @@ def calculate_belief(refinements_graph: nx.DiGraph):
     #
     # => The edges represented by the refinement set are the *same* as the
     # edges expected by the BeliefEngine.
+    global num_batches, batch_size
 
     # Initialize a belief engine
     logger.info("Initializing belief engine")
@@ -671,16 +672,14 @@ if __name__ == '__main__':
             bio_ontology._build_transitive_closure()
             pa = Preassembler(bio_ontology)
 
-            # Count lines in unique statements file (needed to run refinement calc)
-            logger.info(f"Counting lines in {unique_stmts_fpath.as_posix()}")
-            with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
-                csv_reader = csv.reader(fh, delimiter="\t")
-                num_rows = sum(1 for _ in csv_reader)
+        # Count lines in unique statements file (needed to run
+        # refinement calc and belief calc)
+        logger.info(f"Counting lines in {unique_stmts_fpath.as_posix()}")
+        with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
+            csv_reader = csv.reader(fh, delimiter="\t")
+            num_rows = sum(1 for _ in csv_reader)
 
-            num_batches = math.ceil(num_rows / batch_size)
-        else:
-            # Refinement graph will be loaded from file, so mock num_batches
-            num_batches = 1
+        num_batches = math.ceil(num_rows / batch_size)
 
         # 4. Calculate refinement graph:
         cycles_found = False

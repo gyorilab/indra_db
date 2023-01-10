@@ -668,11 +668,10 @@ if __name__ == '__main__':
 
     # Setup bio ontololgy for preassembler
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():
-        if not refinements_fpath.exists():
-            logger.info("4. Running setup for refinement calculation")
-            bio_ontology.initialize()
-            bio_ontology._build_transitive_closure()
-            pa = Preassembler(bio_ontology)
+        logger.info("4. Running setup for refinement calculation")
+        bio_ontology.initialize()
+        bio_ontology._build_transitive_closure()
+        pa = Preassembler(bio_ontology)
 
         # Count lines in unique statements file (needed to run
         # refinement calc and belief calc)

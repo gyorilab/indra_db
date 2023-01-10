@@ -57,9 +57,9 @@ reader_versions = {
 }
 
 version_to_reader = {}
-for reader, versions in reader_versions.items():
-    for version in versions:
-        version_to_reader[version] = reader
+for reader_name, reader_versions in reader_versions.items():
+    for reader_version in reader_versions:
+        version_to_reader[reader_version] = reader_name
 
 
 def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
@@ -599,9 +599,9 @@ def calculate_belief(
 if __name__ == '__main__':
     command_line_instructions = """
     NOTE: it is essential that the file dumps are synced, i.e. run 
-    immediately after each other, otherwise there is a risk that Evidence 
-    and Publication nodes in the end are missing from new statements picked 
-    up in the time between dumps. Additionally, to avoid the risk of having 
+    immediately after each other, otherwise there is a risk that evidence 
+    and publication data are missing from new statements picked up in the 
+    time between dumps. Additionally, to avoid the risk of having 
     statements with missing reading data, the raw statements dump should be 
     run *first*, followed by the other two dumps:
 

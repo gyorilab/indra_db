@@ -588,7 +588,7 @@ def calculate_belief(
             hashes, stmt_list = zip(*stmts)
             be.set_prior_probs(statements=stmt_list)
             for sh, st in zip(hashes, stmt_list):
-                belief_scores[sh] = stmt.belief
+                belief_scores[sh] = st.belief
 
     # Dump the belief scores
     with belief_scores_pkl_fpath.open("wb") as fo:

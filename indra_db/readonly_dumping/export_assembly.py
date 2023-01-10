@@ -517,7 +517,9 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
     return ref_graph
 
 
-def calculate_belief(refinements_graph: nx.DiGraph):
+def calculate_belief(
+        refinements_graph: nx.DiGraph, num_batches: int, batch_size: int
+):
     # The refinement set is a set of pairs of hashes, with the *first hash
     # being more specific than the second hash*, i.e. the evidence for the
     # first should be included in the evidence for the second
@@ -528,7 +530,6 @@ def calculate_belief(refinements_graph: nx.DiGraph):
     #
     # => The edges represented by the refinement set are the *same* as the
     # edges expected by the BeliefEngine.
-    global num_batches, batch_size
 
     # Initialize a belief engine
     logger.info("Initializing belief engine")
@@ -680,12 +681,12 @@ if __name__ == '__main__':
             csv_reader = csv.reader(fh, delimiter="\t")
             num_rows = sum(1 for _ in csv_reader)
 
-        num_batches = math.ceil(num_rows / batch_size)
+        batch_count = math.ceil(num_rows / batch_size)
 
         # 4. Calculate refinement graph:
         cycles_found = False
         ref_graph = get_refinement_graph(batch_size=batch_size,
-                                         num_batches=num_batches)
+                                         num_batches=batch_count)
         if cycles_found:
             logger.info(
                 f"Refinement graph stored in variable 'ref_graph', "
@@ -696,6 +697,8 @@ if __name__ == '__main__':
         else:
             # 5. Get belief scores, if there were no refinement cycles
             logger.info("5. Calculating belief")
-            calculate_belief(ref_graph)
+            calculate_belief(
+                ref_graph, num_batches=batch_count, batch_size=batch_size
+            )
     else:
         logger.info("Final output already exists, stopping script")

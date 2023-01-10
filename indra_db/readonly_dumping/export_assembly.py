@@ -698,3 +698,5 @@ if __name__ == '__main__':
             # 5. Get belief scores, if there were no refinement cycles
             logger.info("5. Calculating belief")
             calculate_belief(ref_graph)
+    else:
+        logger.info("Final output already exists, stopping script")

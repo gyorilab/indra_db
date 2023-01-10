@@ -32,7 +32,7 @@ batch_size = int(1e6)
 StmtList = List[Statement]
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("indra_db.readonly_dumping.export_assembly")
 
 
 reader_versions = {
@@ -534,6 +534,7 @@ def calculate_belief(refinements_graph: nx.DiGraph):
     be = BeliefEngine(refinements_graph=refinements_graph)
 
     # Load the source counts
+    logger.info("Loading source counts")
     with source_counts_fpath.open("rb") as fh:
         source_counts = pickle.load(fh)
 

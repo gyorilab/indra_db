@@ -50,12 +50,11 @@ def belief():
 
 
 # ReadingRefLink
-def reading_ref_link(ro_mngr: ReadonlyDatabaseManager,
-                     reading_ref_link_table: ReadonlyTable):
+def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the reading ref link table with data
+
     depends on: text_ref, text_content, reading
     requires assembly: False
-    Table definition:
 
     Original SQL query to get data
         SELECT pmid, pmid_num, pmcid, pmcid_num,
@@ -93,12 +92,15 @@ def reading_ref_link(ro_mngr: ReadonlyDatabaseManager,
     #  "copy table_name from program 'zcat /tmp/tp.csv.gz';"
     load_data_file_into_local_ro(table_name="readonly.reading_ref_link",
                                  column_order=column_order,
-                                 tsv_file=dump_file)
+                                 tsv_file=dump_file.absolute().as_posix())
 
     # Build the index
-    reading_ref_link_table.build_indices(ro_mngr)
+    reading_ref_link_table: ReadonlyTable = local_ro_mngr.tables["reading_ref_link"]
+    logger.info(f"Building index for table {reading_ref_link_table.full_name()}")
+    reading_ref_link_table.build_indices(local_ro_mngr)
 
-    # Delete the dump file after upload
+    # Delete the dump file
+    logger.info(f"Deleting {dump_file.absolute().as_posix()}")
     os.remove(dump_file)
 
 

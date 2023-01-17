@@ -49,6 +49,55 @@ def belief():
     os.remove(belief_scores_tsv_fpath.absolute().as_posix())
 
 
+# RawStmtSrc
+def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
+    """Fill the raw statement source table with data
+
+    Depends on: raw_statements, text_content, reading
+    Requires assembly: False
+
+    Original SQL query to get data:
+
+        SELECT raw_statements.id AS sid, lower(reading.reader) AS src
+        FROM raw_statements, reading
+        WHERE reading.id = raw_statements.reading_id
+        UNION
+        SELECT raw_statements.id AS sid,
+        lower(db_info.db_name) AS src
+        FROM raw_statements, db_info
+        WHERE db_info.id = raw_statements.db_info_id
+    """
+    dump_file = raw_stmt_source_tsv_fpath
+    principal_dump_sql = dedent(
+        """SELECT raw_statements.id AS sid, lower(reading.reader) AS src 
+           FROM raw_statements, reading 
+           WHERE reading.id = raw_statements.reading_id 
+           UNION 
+           SELECT raw_statements.id AS sid, 
+           lower(db_info.db_name) AS src 
+           FROM raw_statements, db_info 
+           WHERE db_info.id = raw_statements.db_info_id"""
+    )
+    columns = "sid, src"
+
+    # Dump the query output
+    principal_query_to_csv(query=principal_dump_sql,
+                           output_location=dump_file)
+
+    load_data_file_into_local_ro(table_name="readonly.raw_stmt_src",
+                                 column_order=columns,
+                                 tsv_file=dump_file.absolute().as_posix())
+
+    # Delete the dump file
+    logger.info(f"Deleting {dump_file.absolute().as_posix()}")
+    os.remove(dump_file.absolute().as_posix())
+
+    # Build the index
+    raw_stmt_src_table: ReadonlyTable = local_ro_mngr.tables["raw_stmt_src"]
+    logger.info(f"Building index on {raw_stmt_src_table.full_name()}")
+    raw_stmt_src_table.build_indices(local_ro_mngr)
+
+
 # ReadingRefLink
 def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the reading ref link table with data

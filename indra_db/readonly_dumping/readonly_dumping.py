@@ -25,7 +25,7 @@ LOCAL_RO_DB_NAME = os.environ.get("LOCAL_RO_DB_NAME", "indradb_readonly_local")
 # Tables to create (currently in no particular order):
 
 # Belief
-def belief():
+def belief(local_ro_mngr: ReadonlyDatabaseManager):
     """Dump belief scores into the belief table on the local readonly db
 
     depends on: raw_statements, text_content, reading
@@ -47,6 +47,11 @@ def belief():
 
     logger.info(f"Deleting {belief_scores_tsv_fpath.absolute().as_posix()}")
     os.remove(belief_scores_tsv_fpath.absolute().as_posix())
+
+    # Build index
+    belief_table: ReadonlyTable = local_ro_mngr.tables["belief"]
+    logger.info(f"Building index on {belief_table.full_name()}")
+    belief_table.build_indices(local_ro_mngr)
 
 
 # RawStmtSrc

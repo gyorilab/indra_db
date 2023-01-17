@@ -6,7 +6,8 @@ __all__ = ["raw_statements_fpath", "source_counts_fpath", "text_refs_fpath",
            "reading_to_text_ref_map_fpath", "processed_stmts_fpath",
            "grounded_stmts_fpath", "unique_stmts_fpath",
            "refinements_fpath", "belief_scores_pkl_fpath", "TEMP_DIR",
-           "belief_scores_tsv_fpath", "reading_ref_link_tsv_fpath"]
+           "belief_scores_tsv_fpath", "reading_ref_link_tsv_fpath",
+           "raw_stmt_source_tsv_fpath"]
 
 TEMP_DIR = os.environ.get("PRINCIPAL_DUMPING_ROOT")
 if not TEMP_DIR:
@@ -32,3 +33,4 @@ belief_scores_pkl_fpath = TEMP_DIR.joinpath("belief_scores.pkl")
 # Temporary tsv files used for load into readonly db
 belief_scores_tsv_fpath = TEMP_DIR.joinpath("belief_scores.tsv")
 reading_ref_link_tsv_fpath = TEMP_DIR.joinpath("reading_ref_link.tsv")
+raw_stmt_source_tsv_fpath = TEMP_DIR.joinpath("raw_stmt_source.tsv")

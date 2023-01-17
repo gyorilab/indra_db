@@ -70,7 +70,7 @@ def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
     # Create a temp file to put the query in
     dump_file = reading_ref_link_tsv_fpath
 
-    sql = dedent(
+    principal_dump_sql = dedent(
         """SELECT pmid, pmid_num, pmcid, pmcid_num,
                   pmcid_version, doi, doi_ns, doi_id,
                   tr.id AS trid, pii, url, manuscript_id,
@@ -86,7 +86,7 @@ def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
     )
 
     # Dump the query from principal
-    principal_query_to_csv(query=sql, output_location=dump_file)
+    principal_query_to_csv(query=principal_dump_sql, output_location=dump_file)
 
     # todo: if you want to switch to gzipped files you can do
     #  "copy table_name from program 'zcat /tmp/tp.csv.gz';"

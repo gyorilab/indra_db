@@ -94,14 +94,14 @@ def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
                                  column_order=column_order,
                                  tsv_file=dump_file.absolute().as_posix())
 
+    # Delete the dump file
+    logger.info(f"Deleting {dump_file.absolute().as_posix()}")
+    os.remove(dump_file)
+
     # Build the index
     reading_ref_link_table: ReadonlyTable = local_ro_mngr.tables["reading_ref_link"]
     logger.info(f"Building index for table {reading_ref_link_table.full_name()}")
     reading_ref_link_table.build_indices(local_ro_mngr)
-
-    # Delete the dump file
-    logger.info(f"Deleting {dump_file.absolute().as_posix()}")
-    os.remove(dump_file)
 
 
 def get_local_ro_uri() -> str:

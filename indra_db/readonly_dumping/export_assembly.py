@@ -1,4 +1,3 @@
-import codecs
 import csv
 import gzip
 import itertools
@@ -23,6 +22,7 @@ from indra.statements import stmts_from_json, stmt_from_json, Statement, \
     Evidence
 from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
+from readonly_dumping.util import load_statement_json
 from .locations import *
 
 

@@ -312,31 +312,47 @@ def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
         logger.info("Preassembling statements and collecting source counts")
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
         source_counts = defaultdict(lambda: defaultdict(int))
+        stmt_hash_to_raw_stmt_ids = defaultdict(set)
+        # Todo:
+        #  - parallelize
         with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
-                gzip.open(processed_stmts_fpath.as_posix(), "wt") as fh_out:
+                gzip.open(processed_stmts_fpath.as_posix(), "wt") as fh_out, \
+                gzip.open(raw_id_info_map_fpath.as_posix(), "wt") as fh_info:
             raw_stmts_reader = csv.reader(fh, delimiter="\t")
             writer = csv.writer(fh_out, delimiter="\t")
+            info_writer = csv.writer(fh_info, delimiter="\t")
             for lines in tqdm(batch_iter(raw_stmts_reader, 10000),
-                              total=7185, desc="Looping raw statements"):
-                stmts_jsons = []
+                              total=7536, desc="Looping raw statements"):
+                paired_stmts_jsons = []
+                info_rows = []
                 for raw_stmt_id, db_info_id, reading_id, stmt_json_raw in lines:
-                    # NOTE: We might want to propagate the raw_stmt_id for
-                    # use when constructing Evidence nodes in the ingestion
-                    # step.
+                    raw_stmt_id_int = int(raw_stmt_id)
+                    db_info_id = int(db_info_id) if db_info_id != "\\N" else None
                     refs = None
+                    int_reading_id = None
                     if reading_id != "\\N":
                         # Skip if this is for a dropped reading
-                        if int(reading_id) in drop_readings:
+                        int_reading_id = int(reading_id)
+                        if int_reading_id in drop_readings:
                             continue
-                        text_ref_id = reading_id_to_text_ref_id.get(int(reading_id))
+                        text_ref_id = reading_id_to_text_ref_id.get(int_reading_id)
                         if text_ref_id:
                             refs = text_refs.get(text_ref_id)
+
+                    # Append to info rows
+                    info_rows.append((raw_stmt_id_int, db_info_id,
+                                      int_reading_id, stmt_json_raw))
                     stmt_json = load_statement_json(stmt_json_raw)
                     if refs:
                         stmt_json["evidence"][0]["text_refs"] = refs
                         if refs.get("PMID"):
                             stmt_json["evidence"][0]["pmid"] = refs["PMID"]
-                    stmts_jsons.append(stmt_json)
+                    paired_stmts_jsons.append((raw_stmt_id_int, stmt_json))
+
+                # Write to the info file
+                info_writer.writerows(info_rows)
+
+                raw_ids, stmts_jsons = zip(*paired_stmts_jsons)
                 stmts = stmts_from_json(stmts_jsons)
 
                 # This part ultimately calls indra_db_lite or the principal db,
@@ -345,8 +361,10 @@ def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
 
                 stmts = ac.map_grounding(stmts)
                 stmts = ac.map_sequence(stmts)
-                for stmt in stmts:
+                for raw_id, stmt in zip(raw_ids, stmts):
+                    # Get the statement hash and get the source counts
                     stmt_hash = stmt.get_hash(refresh=True)
+                    stmt_hash_to_raw_stmt_ids[stmt_hash].add(raw_id)
                     source_counts[stmt_hash][stmt.evidence[0].source_api] += 1
                 rows = [(stmt.get_hash(), json.dumps(stmt.to_json())) for stmt in stmts]
                 writer.writerows(rows)
@@ -356,6 +374,12 @@ def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
         source_counts = dict(source_counts)
         with source_counts_fpath.open("wb") as fh:
             pickle.dump(source_counts, fh)
+
+        # Cast defaultdict to dict and pickle the stmt hash to raw stmt ids
+        logger.info("Dumping stmt hash to raw stmt ids")
+        stmt_hash_to_raw_stmt_ids = dict(stmt_hash_to_raw_stmt_ids)
+        with stmt_hash_to_raw_stmt_ids_fpath.open("wb") as fh:
+            pickle.dump(stmt_hash_to_raw_stmt_ids, fh)
 
 
 def ground_deduplicate():

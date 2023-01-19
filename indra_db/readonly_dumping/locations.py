@@ -4,8 +4,9 @@ from pathlib import Path
 __all__ = ["raw_statements_fpath", "source_counts_fpath", "text_refs_fpath",
            "reading_text_content_fpath", "drop_readings_fpath",
            "reading_to_text_ref_map_fpath", "processed_stmts_fpath",
-           "grounded_stmts_fpath", "unique_stmts_fpath",
-           "refinements_fpath", "belief_scores_pkl_fpath", "TEMP_DIR",
+           "grounded_stmts_fpath", "unique_stmts_fpath", "refinements_fpath",
+           "belief_scores_pkl_fpath", "stmt_hash_to_raw_stmt_ids_fpath",
+           "raw_stmt_id_to_db_info_id_fpath", "TEMP_DIR",
            "belief_scores_tsv_fpath", "reading_ref_link_tsv_fpath",
            "raw_stmt_source_tsv_fpath"]
 
@@ -25,6 +26,8 @@ drop_readings_fpath = TEMP_DIR.joinpath("drop_readings.pkl")
 reading_to_text_ref_map_fpath = TEMP_DIR.joinpath("reading_to_text_ref_map.pkl")
 processed_stmts_fpath = TEMP_DIR.joinpath("processed_statements.tsv.gz")
 source_counts_fpath = TEMP_DIR.joinpath("source_counts.pkl")
+stmt_hash_to_raw_stmt_ids_fpath = TEMP_DIR.joinpath("stmt_hash_to_raw_stmt_ids.pkl")
+raw_stmt_id_to_db_info_id_fpath = TEMP_DIR.joinpath("raw_stmt_id_to_db_info_id.pkl")
 grounded_stmts_fpath = TEMP_DIR.joinpath("grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.joinpath("unique_statements.tsv.gz")
 refinements_fpath = TEMP_DIR.joinpath("refinements.tsv.gz")

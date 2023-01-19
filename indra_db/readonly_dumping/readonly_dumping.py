@@ -1,9 +1,11 @@
 import argparse
 import csv
+import gzip
 import logging
 import os
 import pickle
 import subprocess
+import uuid
 from textwrap import dedent
 
 from sqlalchemy import create_engine
@@ -11,8 +13,10 @@ from sqlalchemy import create_engine
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.schemas.mixins import ReadonlyTable
+from schemas.readonly_schema import ro_type_map
 
 from .locations import *
+from .util import load_statement_json
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +191,106 @@ def load_data_file_into_local_ro(table_name: str, column_order: str,
     ]
     logger.info(f"Loading data into table {table_name} from {tsv_file}")
     subprocess.run(command)
+
+
+# FastRawPaLink
+def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
+    """Fill the fast_raw_pa_link table in the local readonly database
+
+    Depends on:
+    (principal)
+    raw_statements, (pa_statements), raw_unique_links
+
+    (readonly)
+    raw_stmt_src
+
+    (requires statement type map a.k.a ro_type_map.get_with_clause() to be
+    inserted, here only showing the first 5. The full type map has almost 50
+    items)
+
+    Steps:
+    Iterate through the grounded statements and:
+    1. Dump (sid, src) from raw_stmt_src and load it into a dictionary
+    2. Load stmt hash - raw statement id mapping into a dictionary
+    3. Get raw statement id mapping to a) db info id and b) raw statement json
+    4. Iterate over the grounded statements and get the following values:
+        raw statement id
+        raw statement json
+        raw db info id      <-- (get from raw statements)
+        assembled statement hash
+        assembled statement json
+        type num (from ro_type_map; (0, 'Acetylation'), (1, 'Activation'), ...)
+        raw statement source (mapped from the raw_stmt_src dictionary)
+    """
+    table_name = "fast_raw_pa_link"
+    assert table_name in local_ro_mngr.tables
+    # Load the raw_stmt_src table into a dictionary
+    logger.info("Loading raw_stmt_src table into a dictionary")
+    local_ro_mngr.grab_session()
+    query = local_ro_mngr.session.query(local_ro_mngr.RawStmtSrc.sid,
+                                        local_ro_mngr.RawStmtSrc.src)
+    reading_id_source_map = {int(read_id): src for read_id, src in query.all()}
+    if len(reading_id_source_map) == 0:
+        raise ValueError("No data in readonly.raw_stmt_src")
+
+    # Load statement hash - raw statement id mapping into a dictionary
+    hash_to_raw_id_map = pickle.load(stmt_hash_to_raw_stmt_ids_fpath.open("rb"))
+
+    # Iterate over the raw statements to get mapping from
+    # raw statement id to reading id, db info id and raw json
+    logger.info("Loading mapping from raw statement id to info id")
+    with gzip.open(raw_id_info_map_fpath.as_posix(), "rt") as fh:
+        reader = csv.reader(fh, delimiter="\t")
+        raw_id_to_info = {}
+        for raw_stmt_id, db_info_id, reading_id, stmt_json_raw in reader:
+            info = {"raw_json": stmt_json_raw}
+            if db_info_id:
+                info["db_info_id"] = int(db_info_id)
+            if reading_id:
+                info["reading_id"] = int(reading_id)
+            raw_id_to_info[int(raw_stmt_id)] = info
+
+    # For each grounded statements, get all associated raw statement ids and
+    # get the following values:
+    #   - raw statement id,
+    #   - raw statement json,
+    #   - db info id,
+    #   - assembled statement hash,
+    #   - assembled statement json,
+    #   - type num (from ro_type_map)
+    #   - raw statement source (mapped from the raw_stmt_src dictionary)
+    temp_tsv = f"{uuid.uuid4()}.tsv"
+    logger.info("Iterating over grounded statements")
+    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh, open(
+            temp_tsv, "w") as out_fh:
+        unique_stmts_reader = csv.reader(fh, delimiter="\t")
+        writer = csv.writer(out_fh, delimiter="\t")
+
+        for statement_hash_string, stmt_json_string in unique_stmts_reader:
+            this_hash = int(statement_hash_string)
+            stmt_json = load_statement_json(stmt_json_string)
+            for raw_stmt_id in hash_to_raw_id_map[this_hash]:
+                info_dict = raw_id_to_info.get(raw_stmt_id, {})
+                raw_stmt_src_name = reading_id_source_map[raw_stmt_id]
+                type_num = ro_type_map._str_to_int(stmt_json["type"])
+                writer.writerow([
+                    raw_stmt_id,
+                    info_dict.get("raw_json"),
+                    info_dict.get("reading_id"),
+                    info_dict.get("db_info_id"),
+                    statement_hash_string,
+                    stmt_json_string,
+                    type_num,
+                    raw_stmt_src_name,
+                ])
+
+    # Load the data into the fast_raw_pa_link table
+    column_order = ("id, raw_json, reading_id, db_info_id, mk_hash, pa_json, "
+                    "type_num, src")
+    load_data_file_into_local_ro(table_name, column_order, temp_tsv)
+
+    # Remove the temporary file
+    os.remove(temp_tsv)
 
 
 def principal_query_to_csv(

@@ -292,6 +292,11 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     # Remove the temporary file
     os.remove(temp_tsv)
 
+    # Build the index
+    table: ReadonlyTable = local_ro_mngr.tables[table_name]
+    logger.info(f"Building index on {table.full_name()}")
+    table.build_indices(local_ro_mngr)
+
 
 def principal_query_to_csv(
         query: str, output_location: str, db: str = "primary"

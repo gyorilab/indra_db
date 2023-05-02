@@ -60,8 +60,7 @@ def update_signor(csv_writer):
     # Columns: index (should be set when inserted), db_info_id == 3,
     # reading_id (missing), raw_stmt_json_str
     rows = (
-        (null, 3, null, json.dumps(raw_stmt_json)
-         for raw_stmt_json in sp.statements)
+        (null, 3, null, json.dumps(stmt_json)) for stmt_json in sp.statements
     )
     logger.info(f"Writing {len(sp.statements)} new statements from signor")
     csv_writer.writerows(rows=rows)

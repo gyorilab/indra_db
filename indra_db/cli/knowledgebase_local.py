@@ -56,9 +56,11 @@ def update_signor(csv_writer):
     sp = process_from_web()
 
     # Append the new statements to the old statements
-    # Start at start_index if given, otherwise use None to append?
-    # Columns: index (should be set when inserted), db_info_id == 3,
-    # reading_id (missing), raw_stmt_json_str
+    # Columns:
+    #   - index/raw stmt id (set by db when inserted into table, right?)
+    #   - db_info_id (3)
+    #   - reading_id (empty, since it's a )
+    #   - raw_stmt_json_str (json.dumps(stmt.to_json()))
     rows = (
         (null, 3, null, json.dumps(stmt.to_json())) for stmt in sp.statements
     )

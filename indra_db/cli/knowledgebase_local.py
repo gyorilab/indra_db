@@ -63,7 +63,7 @@ def update_signor(csv_writer):
         (null, 3, null, json.dumps(stmt_json)) for stmt_json in sp.statements
     )
     logger.info(f"Writing {len(sp.statements)} new statements from signor")
-    csv_writer.writerows(rows=rows)
+    csv_writer.writerows(rows)
 
 
 def update(raw_stmts_path: str, new_stmts_path: str):

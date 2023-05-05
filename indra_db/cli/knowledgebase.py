@@ -591,7 +591,7 @@ def local_update(
         # Return true if the statement's source is not from any of the
         # knowledgebases
         for mngr in kb_manager_list:
-            if mngr.source == stmt_json['source_api']:
+            if mngr.source == stmt_json["evidence"][0]["source_api"]:
                 return False
         return True
 

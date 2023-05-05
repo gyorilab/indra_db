@@ -4,6 +4,10 @@ __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
            'CTDManager', 'VirHostNetManager', 'PhosphoElmManager',
            'DrugBankManager']
 
+import codecs
+import csv
+import gzip
+import json
 import os
 import zlib
 import boto3
@@ -13,6 +17,8 @@ import logging
 import tempfile
 from collections import defaultdict
 
+from tqdm import tqdm
+
 from indra.statements.validate import assert_valid_statement
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
@@ -20,6 +26,27 @@ from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 from .util import format_date
 
 logger = logging.getLogger(__name__)
+
+
+class StatementJSONDecodeError(Exception):
+    pass
+
+
+def load_statement_json(
+        json_str: str, attempt: int = 1, max_attempts: int = 5
+):
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        if attempt < max_attempts:
+            json_str = codecs.escape_decode(json_str)[0].decode()
+            return load_statement_json(
+                json_str, attempt=attempt + 1, max_attempts=max_attempts
+            )
+    raise StatementJSONDecodeError(
+        f"Could not decode statement JSON after " f"{attempt} attempts: {json_str}"
+    )
+
 
 
 class KnowledgebaseManager(object):
@@ -535,6 +562,61 @@ class UbiBrowserManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(filtered_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+
+
+def local_update(
+    raw_stmts_tsv_gz_path: str,
+    out_tsv_gz_path: str,
+    kb_manager_list,
+    kb_mapping,
+):
+    """Update the knowledgebases of a local raw statements file dump
+
+    Parameters
+    ----------
+    raw_stmts_tsv_gz_path :
+        Path to the raw statements file dump
+    out_tsv_gz_path :
+        Path to the output file
+    kb_manager_list :
+        List of knowledgebase managers to update
+    kb_mapping :
+        Mapping of knowledgebase source api and name, to db info id. Keyed
+        by tuple of (source api, db name) from db info table.
+    """
+    null = "\\N"
+
+    def _keep(stmt_json):
+        # Return true if the statement's source is not from any of the
+        # knowledgebases
+        for mngr in kb_manager_list:
+            if mngr.source == stmt_json['source_api']:
+                return False
+        return True
+
+    with gzip.open(raw_stmts_tsv_gz_path, 'rt') as in_fh, \
+            gzip.open(out_tsv_gz_path, 'wt') as out_fh:
+        reader = csv.reader(in_fh, delimiter='\t')
+        writer = csv.writer(out_fh, delimiter='\t')
+
+        # Filter out old knowledgebase statements
+        for raw_stmt_id, db_info_id, reading_id, rsjs in tqdm(
+                reader, total=75816146, desc="Filtering raw statements"
+        ):
+            raw_stmt_json = load_statement_json(rsjs)
+            if _keep(raw_stmt_json):
+                writer.writerow([raw_stmt_id, db_info_id, reading_id, rsjs])
+
+        # Update the knowledgebases
+        for kbm in tqdm(kb_manager_list, desc="Updating knowledgebases"):
+            db_id = kb_mapping[(kbm.source, kbm.short_name)]
+            rows = (
+                (null, db_id, null, json.dumps(stmt.to_json()))
+                for stmt in tqdm(kbm.get_statements(),
+                                 desc=kbm.name,
+                                 leave=False)
+            )
+            writer.writerows(rows)
 
 
 @click.group()

@@ -48,7 +48,6 @@ def load_statement_json(
     )
 
 
-
 class KnowledgebaseManager(object):
     """This is a class to lay out the methods for updating a dataset."""
     name = NotImplemented
@@ -608,7 +607,8 @@ def local_update(
                 writer.writerow([raw_stmt_id, db_info_id, reading_id, rsjs])
 
         # Update the knowledgebases
-        for kbm in tqdm(kb_manager_list, desc="Updating knowledgebases"):
+        for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
+            kbm = Mngr()
             db_id = kb_mapping[(kbm.source, kbm.short_name)]
             rows = (
                 (null, db_id, null, json.dumps(stmt.to_json()))

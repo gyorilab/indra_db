@@ -612,7 +612,7 @@ def local_update(
             db_id = kb_mapping[(kbm.source, kbm.short_name)]
             rows = (
                 (null, db_id, null, json.dumps(stmt.to_json()))
-                for stmt in tqdm(kbm.get_statements(),
+                for stmt in tqdm(kbm._get_statements(),
                                  desc=kbm.name,
                                  leave=False)
             )

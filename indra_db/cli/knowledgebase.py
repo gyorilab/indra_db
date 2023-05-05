@@ -583,6 +583,8 @@ def local_update(
         Mapping of knowledgebase source api and name, to db info id. Keyed
         by tuple of (source api, db name) from db info table.
     """
+    assert raw_stmts_tsv_gz_path != out_tsv_gz_path, \
+        "Input and output paths cannot be the same"
     null = "\\N"
 
     def _keep(stmt_json):

@@ -672,7 +672,7 @@ def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
             raw_tsvgz_out = \
                 raw_stmts_tsvgz.split("/")[-1].split(".")[0] + "_updated.tsv.gz"
 
-        logger.info(f"Using default output file name: {raw_tsvgz_out}")
+        logger.info(f"Using output file name: {raw_tsvgz_out}")
 
     # Determine which sources we are working with
     source_set = None
@@ -681,6 +681,9 @@ def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
     selected_kbs = (M for M in KnowledgebaseManager.__subclasses__()
                     if not source_set or M.name.lower() in source_set
                     or M.short_name in source_set)
+    if not sources:
+        logger.info(f"Selected all knowledgebases: "
+                    f"{', '.join([M.name for M in selected_kbs])}")
 
     # Handle the list option.
     if task == 'list':

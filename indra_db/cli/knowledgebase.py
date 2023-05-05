@@ -686,7 +686,7 @@ def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
 
     # Handle the other tasks.
     if task == "local-update":
-        local_update(raw_stmts_tsvgz, raw_stmts_tsvgz, selected_kbs, kb_mapping)
+        local_update(raw_stmts_tsvgz, raw_tsvgz_out, selected_kbs, kb_mapping)
     else:
         for Manager in selected_kbs:
             kbm = Manager()

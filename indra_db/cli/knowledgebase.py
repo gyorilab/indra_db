@@ -625,22 +625,24 @@ def kb():
 
 
 @kb.command()
-@click.argument("task", type=click.Choice(["upload", "update"]))
+@click.argument("task", type=click.Choice(["upload", "update", "local-update"]))
 @click.argument("sources", nargs=-1, type=click.STRING, required=False)
-@click.option("--local", is_flag=True, default=False)
-@click.option("--raw-stmts-tsvgz", type=click.STRING,
+@click.option("--raw-stmts-tsvgz", type=click.STRING, required=False,
               help="Path to the raw statements tsv.gz file when using the "
                    "local option.")
-@click.option("--raw-tsvgz-out", type=click.STRING,
+@click.option("--raw-tsvgz-out", type=click.STRING, required=False,
               help="Path to the output raw statements tsv.gz file when "
                    "using the local option.")
-def run(task, sources, local, raw_stmts_tsvgz, raw_tsvgz_out):
+def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
     """Upload/update the knowledge bases used by the database.
 
     \b
     Usage tasks are:
      - upload: use if the knowledge bases have not yet been added.
      - update: if they have been added, but need to be updated.
+     - local-update: if you have a local raw statements file dump, and want
+       to update the knowledge bases from that and create a new raw
+       statements file dump.
 
     Specify which knowledge base sources to update by their name, e.g. "Pathway
     Commons" or "pc". If not specified, all sources will be updated.
@@ -651,7 +653,7 @@ def run(task, sources, local, raw_stmts_tsvgz, raw_tsvgz_out):
     res = db.select_all(db.DBInfo)
     kb_mapping = {(r.source_api, r.db_name): r.id for r in res}
 
-    if local:
+    if task == "local-update":
         if not raw_stmts_tsvgz:
             raise ValueError("Must specify raw statements tsv.gz file when "
                              "using the local option.")
@@ -661,13 +663,14 @@ def run(task, sources, local, raw_stmts_tsvgz, raw_tsvgz_out):
         elif not raw_stmts_tsvgz.endswith(".tsv.gz"):
             raise ValueError("Raw statements file must be tsv gzipped file. "
                              "Expected extension: .tsv.gz - got: "
-                             f"{raw_stmts_tsvgz}")
+                             f"{raw_stmts_tsvgz.split('.')[-1]}")
 
         if not raw_tsvgz_out:
             # Just add a suffix to the input file name
             raw_tsvgz_out = \
                 raw_stmts_tsvgz.split("/")[-1].split(".")[0] + "_updated.tsv.gz"
-            logger.info(f"Using default output file name: {raw_tsvgz_out}")
+
+        logger.info(f"Using default output file name: {raw_tsvgz_out}")
 
     # Determine which sources we are working with
     source_set = None
@@ -682,7 +685,7 @@ def run(task, sources, local, raw_stmts_tsvgz, raw_tsvgz_out):
         return
 
     # Handle the other tasks.
-    if local:
+    if task == "local-update":
         local_update(raw_stmts_tsvgz, raw_stmts_tsvgz, selected_kbs, kb_mapping)
     else:
         for Manager in selected_kbs:

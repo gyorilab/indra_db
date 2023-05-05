@@ -627,7 +627,14 @@ def kb():
 @kb.command()
 @click.argument("task", type=click.Choice(["upload", "update"]))
 @click.argument("sources", nargs=-1, type=click.STRING, required=False)
-def run(task, sources):
+@click.option("--local", is_flag=True, default=False)
+@click.option("--raw-stmts-tsvgz", type=click.STRING,
+              help="Path to the raw statements tsv.gz file when using the "
+                   "local option.")
+@click.option("--raw-tsvgz-out", type=click.STRING,
+              help="Path to the output raw statements tsv.gz file when "
+                   "using the local option.")
+def run(task, sources, local, raw_stmts_tsvgz, raw_tsvgz_out):
     """Upload/update the knowledge bases used by the database.
 
     \b
@@ -640,6 +647,27 @@ def run(task, sources):
     """
     from indra_db.util import get_db
     db = get_db('primary')
+
+    res = db.select_all(db.DBInfo)
+    kb_mapping = {(r.source_api, r.db_name): r.id for r in res}
+
+    if local:
+        if not raw_stmts_tsvgz:
+            raise ValueError("Must specify raw statements tsv.gz file when "
+                             "using the local option.")
+        elif not os.path.exists(raw_stmts_tsvgz):
+            raise FileNotFoundError("Raw statements tsv.gz file does not "
+                                    "exist: %s" % raw_stmts_tsvgz)
+        elif not raw_stmts_tsvgz.endswith(".tsv.gz"):
+            raise ValueError("Raw statements file must be tsv gzipped file. "
+                             "Expected extension: .tsv.gz - got: "
+                             f"{raw_stmts_tsvgz}")
+
+        if not raw_tsvgz_out:
+            # Just add a suffix to the input file name
+            raw_tsvgz_out = \
+                raw_stmts_tsvgz.split("/")[-1].split(".")[0] + "_updated.tsv.gz"
+            logger.info(f"Using default output file name: {raw_tsvgz_out}")
 
     # Determine which sources we are working with
     source_set = None
@@ -654,16 +682,18 @@ def run(task, sources):
         return
 
     # Handle the other tasks.
-    for Manager in selected_kbs:
-        kbm = Manager()
+    if local:
+        local_update(raw_stmts_tsvgz, raw_stmts_tsvgz, selected_kbs, kb_mapping)
+    else:
+        for Manager in selected_kbs:
+            kbm = Manager()
 
-        # Perform the requested action.
-        if task == 'upload':
-            print(f'Uploading {kbm.name}...')
-            kbm.upload(db)
-        elif task == 'update':
-            print(f'Updating {kbm.name}...')
-            kbm.update(db)
+            if task == 'upload':
+                print(f'Uploading {kbm.name}...')
+                kbm.upload(db)
+            elif task == 'update':
+                print(f'Updating {kbm.name}...')
+                kbm.update(db)
 
 
 @kb.command('list')

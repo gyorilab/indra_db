@@ -15,7 +15,7 @@ import click
 import pickle
 import logging
 import tempfile
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from tqdm import tqdm
 
@@ -586,15 +586,12 @@ def local_update(
     assert raw_stmts_tsv_gz_path != out_tsv_gz_path, \
         "Input and output paths cannot be the same"
     null = "\\N"
-
-    def _keep(stmt_json):
-        # Return true if the statement's source is not from any of the
-        # knowledgebases
-        for mngr in kb_manager_list:
-            if mngr.source == stmt_json["evidence"][0]["source_api"]:
-                return False
-        return True
-
+    ids_to_update = {int(v) for v in kb_mapping.values()}
+    logger.info(f"Updating knowledgebases corresponding to db info ids: "
+                f"{ids_to_update}")
+    logger.info(f"Reading raw statements from {raw_stmts_tsv_gz_path}"
+                f" and writing to {out_tsv_gz_path}")
+    counter = Counter()
     with gzip.open(raw_stmts_tsv_gz_path, 'rt') as in_fh, \
             gzip.open(out_tsv_gz_path, 'wt') as out_fh:
         reader = csv.reader(in_fh, delimiter='\t')
@@ -607,29 +604,42 @@ def local_update(
         for raw_stmt_id, db_info_id, reading_id, rsjs in tqdm(
                 reader, total=75816146, desc="Filtering raw statements"
         ):
-            raw_stmt_json = load_statement_json(rsjs)
-            if _keep(raw_stmt_json):
+            # Skip the row if it has a db info ID and that ID is in the list of
+            # IDs to update
+            if db_info_id != null and int(db_info_id) in ids_to_update:
+                rows_deleted += 1
+            else:
                 writer.writerow([raw_stmt_id, db_info_id, reading_id, rsjs])
                 rows_kept += 1
-            else:
-                rows_deleted += 1
+
+        logger.info("Filtering done")
+        logger.info(f"Rows kept: {rows_kept}")
+        logger.info(f"Rows filtered out: {rows_deleted}")
 
         # Update the knowledgebases
+        logger.info("Updating knowledgebases")
         for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
             kbm = Mngr()
             db_id = kb_mapping[(kbm.source, kbm.short_name)]
             stmts = kbm._get_statements()
-            logger.info(f"Updating {kbm.name} with {len(stmts)} statements")
-            rows = (
+            logger.info(
+                f"Appending {len(stmts)} raw statements from {kbm.name}"
+            )
+            rows = [
+                # raw stmt id, db info id, reading id, raw stmt json string
                 (null, db_id, null, json.dumps(stmt.to_json()))
                 for stmt in stmts
-            )
+            ]
             writer.writerows(rows)
             rows_added += len(stmts)
+            counter[(kbm.source, kbm.short_name)] = len(stmts)
 
     logger.info(f"Rows deleted: {rows_deleted}")
     logger.info(f"Rows kept: {rows_kept}")
-    logger.info(f"Rows added: {rows_added}")
+    logger.info("Rows added by knowledgebase:")
+    for (source, short_name), count in counter.most_common():
+        logger.info(f"  - {source} {short_name}: {count}")
+    logger.info(f"Total rows added: {rows_added}")
     logger.info(
         f"Net rows (kept-deleted+added): {rows_kept-rows_deleted+rows_added}"
     )

@@ -592,9 +592,13 @@ def local_update(
                 "name, (short name): db info id")
     ids_to_update = set()
     for kb_manager in kb_manager_list:
-        kb_id = kb_mapping[(kb_manager.source, kb_manager.short_name)]
-        ids_to_update.add(kb_id)
-        logger.info(f"  {kb_manager.name} ({kb_manager.short_name}): {kb_id}")
+        try:
+            kb_id = kb_mapping[(kb_manager.source, kb_manager.short_name)]
+            ids_to_update.add(kb_id)
+            logger.info(f"  {kb_manager.name} ({kb_manager.short_name}): {kb_id}")
+        except KeyError:
+            logger.info(f"Detected new knowledgebase: {kb_manager.name} "
+                        f"({kb_manager.short_name})")
 
     logger.info(f"Reading raw statements from {raw_stmts_tsv_gz_path}"
                 f" and writing to {out_tsv_gz_path}")
@@ -627,7 +631,7 @@ def local_update(
         logger.info("Updating knowledgebases")
         for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
             kbm = Mngr()
-            db_id = kb_mapping[(kbm.source, kbm.short_name)]
+            db_id = kb_mapping.get((kbm.source, kbm.short_name), null)
             stmts = kbm._get_statements()
             logger.info(
                 f"Appending {len(stmts)} raw statements from {kbm.name}"

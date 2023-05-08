@@ -599,6 +599,7 @@ def local_update(
         except KeyError:
             logger.info(f"Detected new knowledgebase: {kb_manager.name} "
                         f"({kb_manager.short_name})")
+    assert ids_to_update, "No knowledgebases to update"
 
     logger.info(f"Reading raw statements from {raw_stmts_tsv_gz_path}"
                 f" and writing to {out_tsv_gz_path}")

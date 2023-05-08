@@ -612,11 +612,11 @@ def local_update(
         for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
             kbm = Mngr()
             db_id = kb_mapping[(kbm.source, kbm.short_name)]
+            stmts = kbm._get_statements()
+            logger.info(f"Updating {kbm.name} with {len(stmts)} statements")
             rows = (
                 (null, db_id, null, json.dumps(stmt.to_json()))
-                for stmt in tqdm(kbm._get_statements(),
-                                 desc=kbm.name,
-                                 leave=False)
+                for stmt in stmts
             )
             writer.writerows(rows)
 

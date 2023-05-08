@@ -681,15 +681,16 @@ def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
     selected_kbs = (M for M in KnowledgebaseManager.__subclasses__()
                     if not source_set or M.name.lower() in source_set
                     or M.short_name in source_set)
-    if not sources:
-        logger.info(f"Selected all knowledgebases: "
-                    f"{', '.join([M.name for M in selected_kbs])}")
+
+    logger.info(f"Selected knowledgebases: "
+                f"{', '.join([M.name for M in selected_kbs])}")
 
     # Handle the list option.
     if task == 'list':
         return
 
     # Handle the other tasks.
+    logger.info(f"Running {task}...")
     if task == "local-update":
         local_update(raw_stmts_tsvgz, raw_tsvgz_out, selected_kbs, kb_mapping)
     else:

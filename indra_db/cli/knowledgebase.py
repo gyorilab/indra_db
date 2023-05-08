@@ -601,12 +601,18 @@ def local_update(
         writer = csv.writer(out_fh, delimiter='\t')
 
         # Filter out old knowledgebase statements
+        rows_deleted = 0
+        rows_kept = 0
+        rows_added = 0
         for raw_stmt_id, db_info_id, reading_id, rsjs in tqdm(
                 reader, total=75816146, desc="Filtering raw statements"
         ):
             raw_stmt_json = load_statement_json(rsjs)
             if _keep(raw_stmt_json):
                 writer.writerow([raw_stmt_id, db_info_id, reading_id, rsjs])
+                rows_kept += 1
+            else:
+                rows_deleted += 1
 
         # Update the knowledgebases
         for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
@@ -619,6 +625,14 @@ def local_update(
                 for stmt in stmts
             )
             writer.writerows(rows)
+            rows_added += len(stmts)
+
+    logger.info(f"Rows deleted: {rows_deleted}")
+    logger.info(f"Rows kept: {rows_kept}")
+    logger.info(f"Rows added: {rows_added}")
+    logger.info(
+        f"Net rows (kept-deleted+added): {rows_kept-rows_deleted+rows_added}"
+    )
 
 
 @click.group()

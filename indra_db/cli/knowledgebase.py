@@ -578,7 +578,7 @@ def local_update(
     out_tsv_gz_path :
         Path to the output file
     kb_manager_list :
-        List of knowledgebase managers to update
+        List of the classes of the knowledgebase managers to use in update
     kb_mapping :
         Mapping of knowledgebase source api and name, to db info id. Keyed
         by tuple of (source api, db name) from db info table.

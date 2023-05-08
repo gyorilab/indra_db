@@ -586,9 +586,16 @@ def local_update(
     assert raw_stmts_tsv_gz_path != out_tsv_gz_path, \
         "Input and output paths cannot be the same"
     null = "\\N"
-    ids_to_update = {int(v) for v in kb_mapping.values()}
-    logger.info(f"Updating knowledgebases corresponding to db info ids: "
-                f"{ids_to_update}")
+
+    # Get the ids of the knowledgebases to update
+    logger.info("Updating knowledgebases for the following:\n"
+                "name, (short name): db info id")
+    ids_to_update = set()
+    for kb_manager in kb_manager_list:
+        kb_id = kb_mapping[(kb_manager.source, kb_manager.short_name)]
+        ids_to_update.add(kb_id)
+        logger.info(f"  {kb_manager.name} ({kb_manager.short_name}): {kb_id}")
+
     logger.info(f"Reading raw statements from {raw_stmts_tsv_gz_path}"
                 f" and writing to {out_tsv_gz_path}")
     counter = Counter()

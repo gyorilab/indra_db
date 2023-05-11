@@ -597,13 +597,16 @@ def local_update(
         knowledgebase short names, values are kwargs to pass to the
         knowledgebase manager _get_statements method.
     """
-    assert raw_stmts_tsv_gz_path != out_tsv_gz_path, \
-        "Input and output paths cannot be the same"
+    if raw_stmts_tsv_gz_path == out_tsv_gz_path:
+        raise ValueError("Input and output paths cannot be the same")
+    if not kb_manager_list:
+        raise ValueError(
+            "No knowledgebase managers provided, nothing to update"
+        )
     null = "\\N"
 
     # Get the ids of the knowledgebases to update
-    logger.info("Updating knowledgebases for the following:\n"
-                "name, (short name): db info id")
+    logger.info("Updating the following knowledgebases:")
     ids_to_update = set()
     for kb_manager in kb_manager_list:
         try:

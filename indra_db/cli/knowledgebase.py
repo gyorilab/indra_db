@@ -10,6 +10,8 @@ import gzip
 import json
 import os
 import zlib
+from typing import Dict
+
 import boto3
 import click
 import pickle
@@ -145,9 +147,16 @@ class SignorManager(KnowledgebaseManager):
     short_name = 'signor'
     source = 'signor'
 
-    def _get_statements(self):
-        from indra.sources.signor import process_from_web
-        proc = process_from_web()
+    def _get_statements(self, **kwargs):
+        from indra.sources.signor import process_from_web, process_from_file
+        if kwargs.get("signor_data_file"):
+            data_file = kwargs.pop("signor_data_file")
+            complexes_file = kwargs.pop("signor_complexes_file", None)
+            proc = process_from_file(signor_data_file=data_file,
+                                     signor_complexes_file=complexes_file,
+                                     **kwargs)
+        else:
+            proc = process_from_web()
         return proc.statements
 
 
@@ -568,6 +577,7 @@ def local_update(
     out_tsv_gz_path: str,
     kb_manager_list,
     kb_mapping,
+    local_files: Dict[str, Dict] = None,
 ):
     """Update the knowledgebases of a local raw statements file dump
 
@@ -582,6 +592,10 @@ def local_update(
     kb_mapping :
         Mapping of knowledgebase source api and name, to db info id. Keyed
         by tuple of (source api, db name) from db info table.
+    local_files :
+        Dictionary of local files to use in the update. Keys are the
+        knowledgebase short names, values are kwargs to pass to the
+        knowledgebase manager _get_statements method.
     """
     assert raw_stmts_tsv_gz_path != out_tsv_gz_path, \
         "Input and output paths cannot be the same"
@@ -633,7 +647,8 @@ def local_update(
         for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
             kbm = Mngr()
             db_id = kb_mapping.get((kbm.source, kbm.short_name), null)
-            stmts = kbm._get_statements()
+            kb_kwargs = local_files.get(kbm.short_name, {})
+            stmts = kbm._get_statements(**kb_kwargs)
             logger.info(
                 f"Appending {len(stmts)} raw statements from {kbm.name}"
             )
@@ -728,7 +743,10 @@ def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
     # Handle the other tasks.
     logger.info(f"Running {task}...")
     if task == "local-update":
-        local_update(raw_stmts_tsvgz, raw_tsvgz_out, selected_kbs, kb_mapping)
+        local_update(raw_stmts_tsv_gz_path=raw_stmts_tsvgz,
+                     out_tsv_gz_path=raw_tsvgz_out,
+                     kb_manager_list=selected_kbs,
+                     kb_mapping=kb_mapping)
     else:
         for Manager in selected_kbs:
             kbm = Manager()

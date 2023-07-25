@@ -618,8 +618,8 @@ def local_update(
                         f"({kb_manager.short_name})")
     assert ids_to_update, "No knowledgebases to update"
 
-    logger.info(f"Reading raw statements from {raw_stmts_tsv_gz_path}"
-                f" and writing to {out_tsv_gz_path}")
+    logger.info(f"Reading raw statements from {raw_stmts_tsv_gz_path}")
+    logger.info(f"Writing output to {out_tsv_gz_path}")
     counter = Counter()
     with gzip.open(raw_stmts_tsv_gz_path, 'rt') as in_fh, \
             gzip.open(out_tsv_gz_path, 'wt') as out_fh:

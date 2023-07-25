@@ -686,6 +686,7 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
         # START THE DUMP
         if delete_existing and 'readonly' in principal_db.get_schemas():
             principal_db.drop_schema('readonly')
+            logger.info("Deleted existing readonly schema.")
 
         start = Start()
         start.dump(continuing=allow_continue)

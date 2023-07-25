@@ -793,7 +793,7 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
               help="If given, the lambda function serving the REST API will not"
                    "be modified to redirect from the readonly database to the"
                    "principal database while readonly is being loaded.")
-@click.option('--debug-log', default=False, is_flag=True,
+@click.option('--debug-log', is_flag=True,
               help="If set, the logging level will be set to DEBUG.")
 def run_all(
     continuing,

@@ -7,6 +7,7 @@ import math
 import os
 import pickle
 from collections import defaultdict, Counter
+from pathlib import Path
 from typing import Tuple, Set, Dict, List
 
 import networkx as nx
@@ -516,7 +517,10 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
 
 
 def calculate_belief(
-        refinements_graph: nx.DiGraph, num_batches: int, batch_size: int
+    refinements_graph: nx.DiGraph,
+    num_batches: int,
+    batch_size: int,
+    unique_stmts_path: Path = unique_stmts_fpath,
 ):
     # The refinement set is a set of pairs of hashes, with the *first hash
     # being more specific than the second hash*, i.e. the evidence for the
@@ -572,7 +576,7 @@ def calculate_belief(
             belief_scores[sh] = st.belief
 
     # Iterate over each unique statement
-    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
+    with gzip.open(unique_stmts_path.as_posix(), "rt") as fh:
         reader = csv.reader(fh, delimiter="\t")
 
         for bn in tqdm(range(num_batches), desc="Calculating belief"):

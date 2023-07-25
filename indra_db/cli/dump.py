@@ -793,8 +793,16 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
               help="If given, the lambda function serving the REST API will not"
                    "be modified to redirect from the readonly database to the"
                    "principal database while readonly is being loaded.")
-def run_all(continuing, delete_existing, load_only, dump_only,
-            no_redirect_to_principal):
+@click.option('--debug-log', default=False, is_flag=True,
+              help="If set, the logging level will be set to DEBUG.")
+def run_all(
+    continuing,
+    delete_existing,
+    load_only,
+    dump_only,
+    no_redirect_to_principal,
+    debug_log
+):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
 
@@ -804,10 +812,21 @@ def run_all(continuing, delete_existing, load_only, dump_only,
     else:
         ro_manager = None
 
-    dump(get_db('primary', protected=False),
-         ro_manager, delete_existing,
-         continuing, load_only, dump_only,
-         no_redirect_to_principal=no_redirect_to_principal)
+    # Set the debug level.
+    if debug_log:
+        from indra.belief import logger as indra_belief_logger
+        logger.setLevel(logging.DEBUG)
+        indra_belief_logger.setLevel(logging.DEBUG)
+
+    dump(
+        principal_db=get_db('primary', protected=False),
+        readonly_db=ro_manager,
+        delete_existing=delete_existing,
+        allow_continue=continuing,
+        load_only=load_only,
+        dump_only=dump_only,
+        no_redirect_to_principal=no_redirect_to_principal
+    )
 
 
 @dump_cli.command()

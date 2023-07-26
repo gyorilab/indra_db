@@ -399,6 +399,22 @@ def _find_disallowed_keywords(query: str) -> list:
     return list(query_token_set & set(disallowed))
 
 
+def get_temp_file(suffix: str) -> Path:
+    """Return a temporary file path.
+
+    Parameters
+    ----------
+    suffix :
+        The suffix to use for the temporary file, e.g. '.csv'.
+
+    Returns
+    -------
+    :
+        A Path object pointing to the temporary file.
+    """
+    return TEMP_DIR.joinpath(f"{uuid.uuid4()}{suffix}")
+
+
 def drop_schema(ro_mngr_local: ReadonlyDatabaseManager):
     logger.info("Dropping schema 'readonly'")
     ro_mngr_local.drop_schema('readonly')

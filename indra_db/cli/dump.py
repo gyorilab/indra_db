@@ -59,8 +59,21 @@ def list_dumps(started=None, ended=None):
     res = s3.list_objects_v2(Delimiter='/', **s3_base.kw(prefix=True))
     if res['KeyCount'] == 0:
         return []
-    dumps = [S3Path.from_key_parts(s3_base.bucket, d['Prefix'])
-             for d in res['CommonPrefixes']]
+
+    # List all dump directories where the last subdirectory ends in a
+    # "YYYY-MM-DD" format and is a proper date.
+    dumps = []
+    for d in res['CommonPrefixes']:
+        date_str = d['Prefix'].split('/')[-2]
+        try:
+            # If it's not a date, skip it. This check is better than just
+            # checking for the length of the string or using a regex like
+            # \d{4}-\d{2}-\d{2} because it will also catch things like
+            # 2020-13-36.
+            datetime.strptime(date_str, '%Y-%m-%d')
+            dumps.append(S3Path.from_key_parts(s3_base.bucket, d['Prefix']))
+        except ValueError:
+            continue
 
     # Filter to those that have "started"
     if started is not None:
@@ -305,7 +318,7 @@ class Start(Dumper):
             self.load(latest_dump)
         return
 
-    def load(self, dump_path):
+    def load(self, dump_path: S3Path):
         """Load manifest from the Start of the given dump path."""
         s3 = boto3.client('s3')
         manifest = dump_path.list_objects(s3)

@@ -1,14 +1,31 @@
 import os
 from pathlib import Path
 
-__all__ = ["raw_statements_fpath", "source_counts_fpath", "text_refs_fpath",
-           "reading_text_content_fpath", "drop_readings_fpath",
-           "reading_to_text_ref_map_fpath", "processed_stmts_fpath",
-           "grounded_stmts_fpath", "unique_stmts_fpath", "refinements_fpath",
-           "belief_scores_pkl_fpath", "stmt_hash_to_raw_stmt_ids_fpath",
-           "raw_id_info_map_fpath", "TEMP_DIR",
-           "belief_scores_tsv_fpath", "reading_ref_link_tsv_fpath",
-           "raw_stmt_source_tsv_fpath"]
+__all__ = [
+    "raw_statements_fpath",
+    "source_counts_fpath",
+    "text_refs_fpath",
+    "reading_text_content_fpath",
+    "drop_readings_fpath",
+    "reading_to_text_ref_map_fpath",
+    "processed_stmts_fpath",
+    "grounded_stmts_fpath",
+    "unique_stmts_fpath",
+    "refinements_fpath",
+    "belief_scores_pkl_fpath",
+    "stmt_hash_to_raw_stmt_ids_fpath",
+    "raw_id_info_map_fpath",
+    "TEMP_DIR",
+    "PUBMED_MESH_DIR",
+    "belief_scores_tsv_fpath",
+    "reading_ref_link_tsv_fpath",
+    "raw_stmt_source_tsv_fpath",
+    "pubmed_xml_gz_dir",
+    "mesh_concepts_meta",
+    "mesh_terms_meta",
+    "raw_stmt_mesh_concepts",
+    "raw_stmt_mesh_terms",
+]
 
 TEMP_DIR = os.environ.get("PRINCIPAL_DUMPING_ROOT")
 if not TEMP_DIR:
@@ -37,3 +54,15 @@ belief_scores_pkl_fpath = TEMP_DIR.joinpath("belief_scores.pkl")
 belief_scores_tsv_fpath = TEMP_DIR.joinpath("belief_scores.tsv")
 reading_ref_link_tsv_fpath = TEMP_DIR.joinpath("reading_ref_link.tsv")
 raw_stmt_source_tsv_fpath = TEMP_DIR.joinpath("raw_stmt_source.tsv")
+
+# Pubmed XML files
+PUBMED_MESH_DIR = TEMP_DIR.joinpath("pubmed_mesh")
+pubmed_xml_gz_dir = PUBMED_MESH_DIR.joinpath("pubmed_xml_gz")
+
+# MeshConceptMeta and MeshTermMeta
+mesh_concepts_meta = PUBMED_MESH_DIR.joinpath("mesh_concepts_meta.tsv")
+mesh_terms_meta = PUBMED_MESH_DIR.joinpath("mesh_terms_meta.tsv")
+
+# RawStmtMeshConcepts and RawStmtMeshTerms
+raw_stmt_mesh_concepts = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_concepts.tsv")
+raw_stmt_mesh_terms = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_terms.tsv")

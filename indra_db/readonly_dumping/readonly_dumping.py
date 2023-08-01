@@ -13,6 +13,8 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Tuple, Iterable
 
+import requests
+from bs4 import BeautifulSoup
 from lxml import etree
 from sqlalchemy import create_engine
 from tqdm import tqdm
@@ -310,21 +312,29 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
 def ensure_pubmed_xml_files(xml_dir: Path = pubmed_xml_gz_dir,
                             retries: int = 3) -> int:
     """Downloads the PubMed XML files if they are not already present"""
-    if retries < 0:
-        raise ValueError("retries must be >= 0")
 
-    import requests
+    def _get_urls(url: str) -> Iterable[str]:
+        """Get the paths to all XML files on the PubMed FTP server."""
+        logger.info("Getting URL paths from %s" % url)
 
-    # Define some constants
-    year_index = 23  # Check https://ftp.ncbi.nlm.nih.gov/pubmed/baseline/
-    max_file_index = 1166  # Check https://ftp.ncbi.nlm.nih.gov/pubmed/baseline/
-    max_update_index = 1218  # Check https://ftp.ncbi.nlm.nih.gov/pubmed/updatefiles/
-    xml_file_template = "pubmed%sn{index}.xml.gz" % year_index
-    pubmed_base_url = "https://ftp.ncbi.nlm.nih.gov/pubmed/baseline/"
-    pubmed_update_url = "https://ftp.ncbi.nlm.nih.gov/pubmed/updatefiles/"
+        # Get page
+        response = requests.get(url)
+        response.raise_for_status()
 
-    # Create the directory if it doesn't exist
-    xml_dir.mkdir(exist_ok=True, parents=True)
+        # Make soup
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Append trailing slash if not present
+        url = url if url.endswith("/") else url + "/"
+
+        # Loop over all links
+        for link in soup.find_all("a"):
+            href = link.get("href")
+            # yield if href matches
+            # 'pubmed<2 digit year>n<4 digit file index>.xml.gz'
+            # but skip the md5 files
+            if href and href.startswith("pubmed") and href.endswith(".xml.gz"):
+                yield url + href
 
     def _download_xml_gz(xml_url: str, xml_file: Path, md5_check: bool = True):
         try:
@@ -346,22 +356,32 @@ def ensure_pubmed_xml_files(xml_dir: Path = pubmed_xml_gz_dir,
                 raise ValueError("Checksum mismatch")
 
         # Write the file xml.gz file
-        with open(xml_file, "wb") as fh:
+        with xml_file.open("wb") as fh:
             fh.write(resp.content)
 
         return True
 
+    if retries < 0:
+        raise ValueError("retries must be >= 0")
+
+    # Define some constants
+    pubmed_base_url = "https://ftp.ncbi.nlm.nih.gov/pubmed/baseline/"
+    pubmed_update_url = "https://ftp.ncbi.nlm.nih.gov/pubmed/updatefiles/"
+
+    # Create the directory if it doesn't exist
+    xml_dir.mkdir(exist_ok=True, parents=True)
+
     # Download the files if they don't exist
     num_files = 0
-    for index in tqdm(range(1, max_update_index + 10)):
-        xml_file_name = xml_file_template.format(index=index)
-        xml_file_path = xml_dir.joinpath(xml_file_name)
+    basefiles = [u for u in _get_urls(pubmed_base_url)]
+    updatefiles = [u for u in _get_urls(pubmed_update_url)]
+    for xml_url in tqdm(
+            basefiles + updatefiles, desc="Downloading PubMed XML files"
+    ):
+        xml_file_path = xml_dir.joinpath(xml_url.split("/")[-1])
 
         # Download the file if it doesn't exist
         if not xml_file_path.exists():
-            base_url = pubmed_base_url if index <= max_file_index else \
-                pubmed_update_url
-            xml_url = base_url + xml_file_name
             success = False
             for _ in range(retries + 1):
                 try:
@@ -374,7 +394,9 @@ def ensure_pubmed_xml_files(xml_dir: Path = pubmed_xml_gz_dir,
                     num_files += 1
                     break
             if not success:
-                logger.error(f"Failed to download {xml_url} after {retries} retries")
+                logger.error(
+                    f"Failed to download {xml_url} after {retries} retries"
+                )
         else:
             num_files += 1
 

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import click
 
@@ -10,15 +11,20 @@ def main():
 
 @main.command()
 @click.argument('deployment', nargs=1)
-def push(deployment):
+@click.option('-z', '--zappa-settings',
+              help="Path to the zappa settings file.")
+def push(deployment, zappa_settings):
     """Push a new deployment to the remote lambdas using zappa."""
     from indra_db_service.cli.zappa_tools import fix_permissions, ZAPPA_CONFIG
     click.echo(f"Updating {deployment} deployment.")
-    if ZAPPA_CONFIG not in os.listdir('.'):
-        click.echo(f"Please run in directory with {ZAPPA_CONFIG}.")
+    zappa_settings_path = Path(zappa_settings or ZAPPA_CONFIG)
+    if not zappa_settings_path.exists():
+        click.echo(f"Please run in directory with {ZAPPA_CONFIG} or specify "
+                   f"the path to the zappa settings file with the "
+                   f"'--zappa-settings' option.")
         return
     os.system(f'zappa update {deployment}')
-    fix_permissions(deployment)
+    fix_permissions(deployment, zappa_settings_path)
 
 
 @main.command()

@@ -723,18 +723,16 @@ def principal_query_to_csv(
 
     disallowed_keywords = _find_disallowed_keywords(query)
 
-    try:
-        assert not disallowed_keywords
-    except AssertionError:
-        logger.exception(
-            f'Query "{query}" uses disallowed keywords: {disallowed_keywords}'
+    if disallowed_keywords:
+        raise ValueError(
+            f"Query '{query}' uses disallowed keywords: {disallowed_keywords}"
         )
 
     defaults = get_databases()
     try:
         principal_db_uri = defaults[db]
-    except KeyError:
-        logger.exception(f"db {db} not available. Check db_config.ini")
+    except KeyError as err:
+        raise KeyError(f"db {db} not available. Check db_config.ini") from err
 
     command = [
         "psql",

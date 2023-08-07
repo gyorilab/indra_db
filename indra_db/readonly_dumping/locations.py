@@ -1,32 +1,6 @@
 import os
 from pathlib import Path
 
-__all__ = [
-    "raw_statements_fpath",
-    "source_counts_fpath",
-    "text_refs_fpath",
-    "reading_text_content_fpath",
-    "drop_readings_fpath",
-    "reading_to_text_ref_map_fpath",
-    "processed_stmts_fpath",
-    "grounded_stmts_fpath",
-    "unique_stmts_fpath",
-    "refinements_fpath",
-    "belief_scores_pkl_fpath",
-    "stmt_hash_to_raw_stmt_ids_fpath",
-    "raw_id_info_map_fpath",
-    "TEMP_DIR",
-    "PUBMED_MESH_DIR",
-    "belief_scores_tsv_fpath",
-    "reading_ref_link_tsv_fpath",
-    "raw_stmt_source_tsv_fpath",
-    "pubmed_xml_gz_dir",
-    "mesh_concepts_meta",
-    "mesh_terms_meta",
-    "raw_stmt_mesh_concepts",
-    "raw_stmt_mesh_terms",
-]
-
 TEMP_DIR = os.environ.get("PRINCIPAL_DUMPING_ROOT")
 if not TEMP_DIR:
     TEMP_DIR = Path.home().joinpath(".data/indra/db")

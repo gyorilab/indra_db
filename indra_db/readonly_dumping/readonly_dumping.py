@@ -2,14 +2,12 @@ import argparse
 import csv
 import gzip
 import logging
-import os
 import pickle
 import re
 import subprocess
 import uuid
 from collections import defaultdict
 from hashlib import md5
-from pathlib import Path
 from textwrap import dedent
 from typing import Tuple, Iterable
 
@@ -93,8 +91,7 @@ def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
            FROM raw_statements, reading 
            WHERE reading.id = raw_statements.reading_id 
            UNION 
-           SELECT raw_statements.id AS sid, 
-           lower(db_info.db_name) AS src 
+           SELECT raw_statements.id AS sid, lower(db_info.db_name) AS src 
            FROM raw_statements, db_info 
            WHERE db_info.id = raw_statements.db_info_id"""
     )
@@ -179,8 +176,9 @@ def get_local_ro_uri() -> str:
            f"{LOCAL_RO_PORT}/{LOCAL_RO_DB_NAME}"
 
 
-def load_data_file_into_local_ro(table_name: str, column_order: str,
-                                 tsv_file: str):
+def load_data_file_into_local_ro(
+    table_name: str, column_order: str, tsv_file: str
+):
     """Load data from a file to the local ro database
 
     Parameters
@@ -188,17 +186,20 @@ def load_data_file_into_local_ro(table_name: str, column_order: str,
     table_name :
         The name of the table to transfer to, e.g. readonly.reading_ref_link
     column_order :
-        A string of comma separated column names as they appear in the file.
+        A string of comma separated column names as they appear in the file,
+        where the names correspond to the naming in the table in the readonly
+        database, e.g. "reading_id, db_info_id, ref_id, ref_type, ref_text"
     tsv_file :
-        The path to the file to be uploaded.
-
-    COPY FROM copies data from a file to a table
+        The path to the tab separated file to be (up)loaded into the database.
     """
     command = [
         "psql",
         get_local_ro_uri(),
         "-c",
-        f"\\copy {table_name} ({column_order}) from '{tsv_file}' with (format csv, delimiter E'\t', header)",
+        (
+            f"\\copy {table_name} ({column_order}) from '{tsv_file}' with "
+            f"(format csv, delimiter E'\t', header)"
+        ),
     ]
     logger.info(f"Loading data into table {table_name} from {tsv_file}")
     subprocess.run(command)
@@ -235,6 +236,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     """
     table_name = "fast_raw_pa_link"
     assert table_name in local_ro_mngr.tables
+
     # Load the raw_stmt_src table into a dictionary
     logger.info("Loading raw_stmt_src table into a dictionary")
     local_ro_mngr.grab_session()
@@ -261,7 +263,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
                 info["reading_id"] = int(reading_id)
             raw_id_to_info[int(raw_stmt_id)] = info
 
-    # For each grounded statements, get all associated raw statement ids and
+    # For each grounded statement, get all associated raw statement ids and
     # get the following values:
     #   - raw statement id,
     #   - raw statement json,
@@ -1058,16 +1060,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Get a ro manager
+    # Get a ro manager for the local readonly db
     # postgresql://<username>:<password>@localhost[:port]/[name]
-    postgres_url = (
-        f"postgresql://{args.username}:{args.password}"
-        f"@{args.hostname}:{args.port}/indradb_readonly_local"
-    )
+    postgres_url = get_local_ro_uri()
     ro_manager = ReadonlyDatabaseManager(postgres_url)
 
     # Create the tables
     create_ro_tables(ro_manager, postgres_url)
 
     # For each table, run the function that will fill out the table with data
-    # todo: add all tables filling functions
+    # todo: add all table filling functions

@@ -17,12 +17,16 @@ drop_readings_fpath = TEMP_DIR.joinpath("drop_readings.pkl")
 reading_to_text_ref_map_fpath = TEMP_DIR.joinpath("reading_to_text_ref_map.pkl")
 processed_stmts_fpath = TEMP_DIR.joinpath("processed_statements.tsv.gz")
 source_counts_fpath = TEMP_DIR.joinpath("source_counts.pkl")
-stmt_hash_to_raw_stmt_ids_fpath = TEMP_DIR.joinpath("stmt_hash_to_raw_stmt_ids.pkl")
+stmt_hash_to_raw_stmt_ids_fpath = TEMP_DIR.joinpath(
+    "stmt_hash_to_raw_stmt_ids.pkl")
 raw_id_info_map_fpath = TEMP_DIR.joinpath("raw_stmt_id_to_info_map.tsv.gz")
 grounded_stmts_fpath = TEMP_DIR.joinpath("grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.joinpath("unique_statements.tsv.gz")
 refinements_fpath = TEMP_DIR.joinpath("refinements.tsv.gz")
 belief_scores_pkl_fpath = TEMP_DIR.joinpath("belief_scores.pkl")
+pa_meta_fpath = TEMP_DIR.joinpath("pa_meta.tsv.gz")
+pa_hash_act_type_ag_count_cache = TEMP_DIR.joinpath(
+    "pa_hash_act_type_ag_count_cache.pkl")
 
 # Temporary tsv files used for load into readonly db
 belief_scores_tsv_fpath = TEMP_DIR.joinpath("belief_scores.tsv")

@@ -24,7 +24,7 @@ from indra.statements import stmt_from_json, ActiveForm
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.schemas.mixins import ReadonlyTable
-from schemas.readonly_schema import ro_type_map
+from schemas.readonly_schema import ro_type_map, ro_role_map
 
 from .locations import *
 from .util import load_statement_json
@@ -307,6 +307,212 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     table: ReadonlyTable = local_ro_mngr.tables[table_name]
     logger.info(f"Building index on {table.full_name()}")
     table.build_indices(local_ro_mngr)
+
+
+# PaMeta - the table itself is not generated on the readonly db, but the
+# tables derived from it are (NameMeta, TextMeta and OtherMeta)
+def ensure_pa_meta_table():
+    """Generate the source files for the Name/Text/OtherMeta tables"""
+    if all([name_meta_tsv.exists(),
+            text_meta_tsv.exists(),
+            other_meta_tsv.exists()]):
+        return
+
+    #  Depends on:
+    #   - PaActivity (from principal schema)
+    #   - PaAgents (from principal schema)
+    #   - PAStatements (from principal schema)
+    # - Belief (from readonly schema)
+    # - EvidenceCounts (from readonly schema)
+    # - PaAgentCounts (from readonly schema)
+    # - TypeMap (from ???)
+    # - RoleMap (from ???)
+    # To get the needed info from the principal schema, select the
+    # appropriate columns from the tables on the principal schema, join them
+    # by mk_hash and then read in belief, agent count and evidence count
+    # from the belief dump, unique statement file and source counts file.
+    #
+    # **Role num** is the integer mapping subject, other, object to
+    # (-1, 0, 1), see schemas.readonly_schema.RoleMapping
+    #
+    # **Type num** is the integer mapping of the statement type to
+    # the integer in the type map, see
+    # schemas.readonly_schema.StatementTypeMapping
+    #
+    # *pa_agents* has the columns:
+    # stmt_mk_hash, db_name, db_id, role, ag_num, agent_ref_hash
+    #
+    # *pa_statements* has the columns:
+    # mk_hash, matches_key, uuid, type, indra_version, json, create_date
+    #
+    # *pa_activity* has the columns:
+    # id, stmt_mk_hash, statements, activity, is_active
+    pa_meta_query = ("""
+    SELECT pa_agents.db_name,
+           pa_agents.db_id,
+           pa_agents.id AS ag_id, 
+           pa_agents.ag_num,
+           pa_agent.role,
+           pa_statements.mk_hash
+    FROM pa_agents INNER JOIN
+         pa_statements ON
+             pa_agents.stmt_mk_hash = pa_statements.mk_hash
+    WHERE LENGTH(pa_agents.db_id) < 2000
+    """)
+    # fixme:
+    #  - Add 'LENGTH(pa_agents.db_id) < 2000' as condition to the query??
+    #  - Skip the INNER JOIN and just use the mk_hash from pa_agents?
+    principal_query_to_csv(pa_meta_query, pa_meta_fpath)
+
+    # Load the belief dump into a dictionary
+    logger.info("Loading belief scores")
+    belief_dict = pickle.load(belief_scores_pkl_fpath.open("rb"))
+
+    # Load source counts (can generate evidence counts from this)
+    logger.info("Loading source counts")
+    source_counts = pickle.load(source_counts_fpath.open("rb"))
+
+    # Load agent count, activity and type mapping
+    stmt_hash_to_activity_type_count = get_activity_type_ag_count()
+
+    # Loop pa_meta dump and write load files for NameMeta, TextMeta, OtherMeta
+    logger.info("Iterating over pa_meta dump")
+    nones = (None, None, None, None)
+    with gzip.open(pa_meta_fpath.as_posix(), "rt") as fh, \
+            name_meta_tsv.open("wt") as name_fh, \
+            text_meta_tsv.open("wt") as text_fh, \
+            other_meta_tsv.open("wt") as other_fh:
+        reader = csv.reader(fh, delimiter="\t")
+        name_writer = csv.writer(name_fh, delimiter="\t")
+        text_writer = csv.writer(text_fh, delimiter="\t")
+        other_writer = csv.writer(other_fh, delimiter="\t")
+
+        for db_name, db_id, ag_id, ag_num, role, stmt_hash_str in reader:
+            stmt_hash = int(stmt_hash_str)
+
+            # Get the belief score
+            belief_score = belief_dict.get(stmt_hash)
+            if belief_score is None:
+                # todo: debug log, remove later
+                logger.warning(f"Missing belief score for {stmt_hash}")
+                continue
+
+            # Get the agent count, activity and type count
+            activity, is_active, type_num, agent_count = \
+                stmt_hash_to_activity_type_count.get(stmt_hash, nones)
+            if type_num is None and agent_count is None:
+                continue
+
+            # Get the evidence count
+            ev_count = sum(
+                source_counts.get(stmt_hash, {}).values()
+            )
+            if ev_count == 0:
+                # todo: debug log, remove later
+                logger.warning(f"Missing evidence count for {stmt_hash}")
+                continue
+
+            # Get role num
+            role_num = ro_role_map.get_int(role)
+            is_complex_dup = True if type_num == ro_type_map.get_int(
+                "Complex") else False
+
+            # NameMeta - db_name == "NAME"
+            # TextMeta - db_name == "TEXT"
+            # OtherMeta - other db_names not part of ("NAME", "TEXT")
+            # Columns are:
+            # ag_id, ag_num, [db_name,] db_id, role_num, type_num, mk_hash,
+            # ev_count, belief, activity, is_active, agent_count,
+            # is_complex_dup
+            row_start = [
+                ag_id,
+                ag_num,
+            ]
+            row_end = [
+                db_id,
+                role_num,
+                type_num,
+                stmt_hash,
+                ev_count,
+                belief_score,
+                activity,
+                is_active,
+                agent_count,
+                is_complex_dup,
+            ]
+            if db_name == "NAME":
+                name_writer.writerow(row_start + row_end)
+            elif db_name == "TEXT":
+                text_writer.writerow(row_start + row_end)
+            else:
+                other_writer.writerow(row_start + [db_name] + row_end)
+
+
+# NameMeta, TextMeta, OtherMeta
+def name_meta(local_ro_mngr: ReadonlyDatabaseManager):
+    # Ensure the pa_meta file exists
+    ensure_pa_meta_table()
+    # ag_id, ag_num, db_id, role_num, type_num, mk_hash,
+    # ev_count, belief, activity, is_active, agent_count, is_complex_dup
+    colum_order = (
+        "ag_id, ag_num, db_id, role_num, type_num, mk_hash, ev_count, "
+        "belief, activity, is_active, agent_count, is_complex_dup"
+    )
+
+    # Load into local ro
+    logger.info("Loading name_meta into local ro")
+    load_data_file_into_local_ro("readonly.name_meta",
+                                 colum_order,
+                                 name_meta_tsv.absolute().as_posix())
+
+    # Build indices
+    name_meta_table: ReadonlyTable = local_ro_mngr.tables["name_meta"]
+    logger.info("Building indices for name_meta")
+    name_meta_table.build_indices(local_ro_mngr)
+
+
+def text_meta(local_ro_mngr: ReadonlyDatabaseManager):
+    # Ensure the pa_meta file exists
+    ensure_pa_meta_table()
+    # ag_id, ag_num, db_id, role_num, type_num, mk_hash,
+    # ev_count, belief, activity, is_active, agent_count, is_complex_dup
+    colum_order = (
+        "ag_id, ag_num, db_id, role_num, type_num, mk_hash, ev_count, "
+        "belief, activity, is_active, agent_count, is_complex_dup"
+    )
+
+    # Load into local ro
+    logger.info("Loading text_meta into local ro")
+    load_data_file_into_local_ro("readonly.text_meta",
+                                 colum_order,
+                                 text_meta_tsv.absolute().as_posix())
+
+    # Build indices
+    text_meta_table: ReadonlyTable = local_ro_mngr.tables["text_meta"]
+    logger.info("Building indices for text_meta")
+    text_meta_table.build_indices(local_ro_mngr)
+
+
+def other_meta(local_ro_mngr: ReadonlyDatabaseManager):
+    # Ensure the pa_meta file exists
+    ensure_pa_meta_table()
+    # ag_id, ag_num, db_name, db_id, role_num, type_num, mk_hash,
+    # ev_count, belief, activity, is_active, agent_count, is_complex_dup
+    colum_order = (
+        "ag_id, ag_num, db_name, db_id, role_num, type_num, mk_hash, "
+        "ev_count, belief, activity, is_active, agent_count, is_complex_dup"
+    )
+
+    # Load into local ro
+    logger.info("Loading other_meta into local ro")
+    load_data_file_into_local_ro("readonly.other_meta",
+                                 colum_order,
+                                 other_meta_tsv.absolute().as_posix())
+
+    # Build indices
+    other_meta_table: ReadonlyTable = local_ro_mngr.tables["other_meta"]
+    logger.info("Building indices for other_meta")
+    other_meta_table.build_indices(local_ro_mngr)
 
 
 def ensure_pubmed_xml_files(xml_dir: Path = pubmed_xml_gz_dir,

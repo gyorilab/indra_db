@@ -24,7 +24,6 @@ grounded_stmts_fpath = TEMP_DIR.joinpath("grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.joinpath("unique_statements.tsv.gz")
 refinements_fpath = TEMP_DIR.joinpath("refinements.tsv.gz")
 belief_scores_pkl_fpath = TEMP_DIR.joinpath("belief_scores.pkl")
-pa_meta_fpath = TEMP_DIR.joinpath("pa_meta.tsv.gz")
 pa_hash_act_type_ag_count_cache = TEMP_DIR.joinpath(
     "pa_hash_act_type_ag_count_cache.pkl")
 
@@ -44,3 +43,9 @@ mesh_terms_meta = PUBMED_MESH_DIR.joinpath("mesh_terms_meta.tsv")
 # RawStmtMeshConcepts and RawStmtMeshTerms
 raw_stmt_mesh_concepts = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_concepts.tsv")
 raw_stmt_mesh_terms = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_terms.tsv")
+
+# PaMeta and derived files
+pa_meta_fpath = TEMP_DIR.joinpath("pa_meta.tsv.gz")
+name_meta_tsv = TEMP_DIR.joinpath("name_meta.tsv")
+text_meta_tsv = TEMP_DIR.joinpath("text_meta.tsv")
+other_meta_tsv = TEMP_DIR.joinpath("other_meta.tsv")

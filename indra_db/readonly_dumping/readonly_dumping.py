@@ -506,6 +506,39 @@ def _load_pmid_to_raw_stmt_id():
     return _load_create_pmid_to_raw_stmt_id()
 
 
+def get_activity_type_ag_count():
+    if pa_hash_act_type_ag_count_cache.exists():
+        cache = pickle.load(pa_hash_act_type_ag_count_cache.open("rb"))
+        return cache
+
+    # Get stmt_hash -> type_num, activity, is_active, agent_count
+    # Loop unique_stmts_path
+    logger.info("Mapping pre-assembled statement hashes to activity data and "
+                "agent counts")
+    stmt_hash_to_activity_type_count = {}
+    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
+        reader = csv.reader(fh, delimiter="\t")
+        for stmt_hash_string, stmt_json_string in tqdm(reader):
+            stmt_json = load_statement_json(stmt_json_string)
+            stmt = stmt_from_json(stmt_json)
+            stmt_hash = int(stmt_hash_string)
+            agent_count = len(stmt.agent_list())
+            type_num = ro_type_map.get_int(stmt_json["type"])
+            if isinstance(stmt, ActiveForm):
+                activity = stmt.activity
+                is_active = stmt.is_active
+            else:
+                activity = None
+                is_active = False  # is_active is a boolean column
+            stmt_hash_to_activity_type_count[stmt_hash] = (
+                activity, is_active, type_num, agent_count
+            )
+
+    # Save to cache
+    with pa_hash_act_type_ag_count_cache.open("wb") as fh:
+        pickle.dump(stmt_hash_to_activity_type_count, fh)
+
+
 def ensure_pubmed_mesh_data():
     """Get the of PubMed XML gzip files for pmid-mesh processing"""
     # Check if the output files already exist
@@ -537,28 +570,7 @@ def ensure_pubmed_mesh_data():
     # Load the pmid -> raw statement id mapping
     pmid_to_raw_stmt_id = _load_pmid_to_raw_stmt_id()
 
-    # Get stmt_hash -> type_num, activity, is_active, agent_count
-    # Loop unique_stmts_path
-    logger.info("Mapping pre-assembled statement hashes to activity data and "
-                "agent counts")
-    stmt_hash_to_activity_type_count = {}
-    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
-        reader = csv.reader(fh, delimiter="\t")
-        for stmt_hash_string, stmt_json_string in tqdm(reader):
-            stmt_json = load_statement_json(stmt_json_string)
-            stmt = stmt_from_json(stmt_json)
-            stmt_hash = int(stmt_hash_string)
-            agent_count = len(stmt.agent_list())
-            type_num = ro_type_map.get_int(stmt_json["type"])
-            if isinstance(stmt, ActiveForm):
-                activity = stmt.activity
-                is_active = stmt.is_active
-            else:
-                activity = None
-                is_active = False  # is_active is a boolean column
-            stmt_hash_to_activity_type_count[stmt_hash] = (
-                activity, is_active, type_num, agent_count
-            )
+    stmt_hash_to_activity_type_count = get_activity_type_ag_count()
 
     # Get source counts ({hash: {source: count}})
     logger.info("Loading source counts")

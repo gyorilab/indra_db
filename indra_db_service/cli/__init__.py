@@ -23,6 +23,8 @@ def push(deployment, zappa_settings):
                    f"the path to the zappa settings file with the "
                    f"'--zappa-settings' option.")
         return
+    click.echo(f"Fixing permissions with "
+               f"{zappa_settings_path.resolve().as_posix()}")
     os.system(f'zappa update {deployment}')
     fix_permissions(deployment, zappa_settings_path)
 

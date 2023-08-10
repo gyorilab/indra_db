@@ -417,7 +417,9 @@ def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
     table_name = "readonly.source_meta"
 
     logger.info(f"Loading data into {table_name}")
-    load_data_file_into_local_ro(table_name, col_order, source_meta_tsv)
+    load_data_file_into_local_ro(
+        table_name, col_order, source_meta_tsv, null_value=""
+    )
 
     # Build the index
     table: ReadonlyTable = local_ro_mngr.tables[table_name]

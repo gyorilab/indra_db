@@ -391,7 +391,7 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
                 ev_count,
                 belief,
                 num_srcs,
-                json.dumps(src_count_dict),  # src_json - fixme: bin? str?
+                json.dumps(src_count_dict).replace('"', '""'),
                 only_src,
                 has_rd,
                 has_db,

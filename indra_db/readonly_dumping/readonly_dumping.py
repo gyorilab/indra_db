@@ -348,7 +348,7 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
     # fixme: What is the proper null value? None, "null", "\\N", 0?
     null = ""
     all_sources = list(
-        {[*SOURCE_GROUPS["reading"], *SOURCE_GROUPS["database"]]}
+        {*SOURCE_GROUPS["reader"], *SOURCE_GROUPS["database"]}
     )
     with source_meta_tsv.open("w") as out_fh:
         writer = csv.writer(out_fh, delimiter="\t")
@@ -361,7 +361,7 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
                 continue
 
             num_srcs = len(src_count_dict)
-            has_rd = SOURCE_GROUPS["reading"] in src_count_dict
+            has_rd = SOURCE_GROUPS["reader"] in src_count_dict
             has_db = SOURCE_GROUPS["database"] in src_count_dict
             only_src = list(src_count_dict.keys())[0] if num_srcs == 1 else None
             sources_tuple = tuple(

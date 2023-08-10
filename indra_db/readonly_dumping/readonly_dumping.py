@@ -22,7 +22,7 @@ from indra.statements import stmt_from_json, ActiveForm
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.schemas.mixins import ReadonlyTable
-from schemas.readonly_schema import ro_type_map, ro_role_map
+from schemas.readonly_schema import ro_type_map, ro_role_map, SOURCE_GROUPS
 
 from .locations import *
 from .util import load_statement_json
@@ -314,6 +314,110 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
 
     # Remove the temporary file
     os.remove(temp_tsv)
+
+    # Build the index
+    table: ReadonlyTable = local_ro_mngr.tables[table_name]
+    logger.info(f"Building index on {table.full_name()}")
+    table.build_indices(local_ro_mngr)
+
+
+def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
+    """Generate the source files for the SourceMeta table"""
+    # NOTE: this function depends on the readonly NameMeta table
+    # Load source_counts
+    ro = local_ro_mngr
+    source_counts = pickle.load(source_counts_fpath.open("rb"))
+
+    # Dump out from NameMeta
+    # mk_hash, type_num, activity, is_active, ev_count, belief, agent_count
+    # where is_complex_dup == False
+    # todo If it's too large, we can do it in chunks of 100k
+    # Typical count for namemeta 90_385_263
+    res = local_ro_mngr.select_all([ro.NameMeta.ev_count,
+                                    ro.NameMeta.belief,
+                                    ro.NameMeta.type_num,
+                                    ro.NameMeta.activity,
+                                    ro.NameMeta.is_active,
+                                    ro.NameMeta.agent_count],
+                                   ro.NameMeta.is_complex_dup == False)
+
+    # Loop the dump and create the following columns as well:
+    # source count, src_json (==source counts dict per mk_hash), only_src (if
+    # only one source), has_rd (if the source is in the reading sources),
+    # has_db (if the source is in the db sources)
+    # fixme: What is the proper null value? None, "null", "\\N", 0?
+    null = ""
+    all_sources = list(
+        {[*SOURCE_GROUPS["reading"], *SOURCE_GROUPS["database"]]}
+    )
+    with source_meta_tsv.open("w") as out_fh:
+        writer = csv.writer(out_fh, delimiter="\t")
+        for (mk_hash, ev_count, belief, type_num,
+             activity, is_active, agent_count) in res:
+
+            # Get the source count
+            src_count_dict = source_counts.get(mk_hash)
+            if src_count_dict is None:
+                continue
+
+            num_srcs = len(src_count_dict)
+            has_rd = SOURCE_GROUPS["reading"] in src_count_dict
+            has_db = SOURCE_GROUPS["database"] in src_count_dict
+            only_src = list(src_count_dict.keys())[0] if num_srcs == 1 else None
+            sources_tuple = tuple(
+                src_count_dict.get(src, null) for src in all_sources
+            )
+
+            # Write the following columns:
+            #  - mk_hash
+            #  - *sources (a splat of all sources,
+            #              null if not present in the source count dict)
+            #  - ev_count
+            #  - belief
+            #  - num_srcs
+            #  - src_json  # fixme: Should it be dumped to a string? binary?
+            #  - only_src - if only one source, the name of that source
+            #  - has_rd  boolean - true if any source is from reading
+            #  - has_db  boolean - true if any source is from a database
+            #  - type_num
+            #  - activity
+            #  - is_active
+            #  - agent_count
+
+            # SourceMeta
+            row = [
+                mk_hash,
+                *sources_tuple,
+                ev_count,
+                belief,
+                num_srcs,
+                json.dumps(src_count_dict),  # src_json - fixme: bin? str?
+                only_src,
+                has_rd,
+                has_db,
+                type_num,
+                activity,
+                is_active,
+                agent_count
+            ]
+            writer.writerow(row)
+
+    # Return the column order in the file
+    all_sources_str = ", ".join(all_sources)
+    col_names = (
+        "ev_count, belief, num_srcs, src_json, only_src, has_rd, has_db, "
+        "type_num, activity, is_active, agent_count"
+    )
+    return "mk_hash, " + all_sources_str + ", " + col_names
+
+
+# SourceMeta
+def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
+    col_order = ensure_source_meta_source_files(local_ro_mngr)
+    table_name = "readonly.source_meta"
+
+    logger.info(f"Loading data into {table_name}")
+    load_data_file_into_local_ro(table_name, col_order, source_meta_tsv)
 
     # Build the index
     table: ReadonlyTable = local_ro_mngr.tables[table_name]

@@ -177,9 +177,11 @@ def get_local_ro_uri() -> str:
 
 
 def load_data_file_into_local_ro(
-    table_name: str, column_order: str, tsv_file: str
+    table_name: str, column_order: str, tsv_file: str, null_value: str = None
 ):
     """Load data from a file to the local ro database
+
+    Mental note: COPY FROM copies data from a file to a table
 
     Parameters
     ----------
@@ -191,14 +193,22 @@ def load_data_file_into_local_ro(
         database, e.g. "reading_id, db_info_id, ref_id, ref_type, ref_text"
     tsv_file :
         The path to the tab separated file to be (up)loaded into the database.
+    null_value :
+        The value to be interpreted as null, e.g. "NULL" or "\N". If None,
+        the default value of the database is used and the upload command
+        will be without the 'NULL AS ...' part.
     """
+    # todo: if you want to switch to gzipped files you can do
+    #  "copy table_name from program 'zcat /tmp/tp.tsv.gz';"
+    null_clause = f", NULL AS '{null_value}'" if null_value else ""
     command = [
         "psql",
         get_local_ro_uri(),
         "-c",
         (
             f"\\copy {table_name} ({column_order}) from '{tsv_file}' with "
-            f"(format csv, delimiter E'\t', header)"
+            # fixme: test if the null clause works
+            f"(format csv, delimiter E'\t', header{null_clause})"
         ),
     ]
     logger.info(f"Loading data into table {table_name} from {tsv_file}")

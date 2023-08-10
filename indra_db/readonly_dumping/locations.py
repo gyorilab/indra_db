@@ -49,3 +49,6 @@ pa_meta_fpath = TEMP_DIR.joinpath("pa_meta.tsv.gz")
 name_meta_tsv = TEMP_DIR.joinpath("name_meta.tsv")
 text_meta_tsv = TEMP_DIR.joinpath("text_meta.tsv")
 other_meta_tsv = TEMP_DIR.joinpath("other_meta.tsv")
+
+# SourceMeta
+source_meta_tsv = TEMP_DIR.joinpath("source_meta.tsv")

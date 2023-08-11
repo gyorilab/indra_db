@@ -197,6 +197,34 @@ def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
     reading_ref_link_table.build_indices(local_ro_mngr)
 
 
+# EvidenceCounts (necessary?)
+"""SQL definition:
+SELECT count(id) AS ev_count, mk_hash 
+FROM readonly.fast_raw_pa_link 
+GROUP BY mk_hash
+"""
+
+
+# AgentInteractions
+def agent_interactions(local_ro_mngr: ReadonlyDatabaseManager):
+    # This table depends completely on source_meta and name_meta in the
+    # readonly database, so we can just run the table's create method
+    if not table_has_content(local_ro_mngr, "source_meta") or \
+            not table_has_content(local_ro_mngr, "name_meta"):
+        raise ValueError("source_meta and name_meta must be filled before "
+                         "agent_interactions can be filled")
+    agent_interactions_table: ReadonlyTable = local_ro_mngr.tables[
+        "agent_interactions"]
+
+    # Create the table
+    logger.info(f"Creating table {agent_interactions_table.full_name()}")
+    agent_interactions_table.create(local_ro_mngr)
+
+    # Build the index
+    logger.info(f"Building index for table {agent_interactions_table.full_name()}")
+    agent_interactions_table.build_indices(local_ro_mngr)
+
+
 def get_local_ro_uri() -> str:
     # postgresql://<username>:<password>@localhost[:port]/[name]
     return f"postgresql://{LOCAL_RO_USER}:{LOCAL_RO_PASSWORD}@localhost:" \

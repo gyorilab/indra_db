@@ -36,7 +36,33 @@ LOCAL_RO_PORT = int(os.environ.get("LOCAL_RO_PORT", "5432"))
 LOCAL_RO_DB_NAME = os.environ.get("LOCAL_RO_DB_NAME", "indradb_readonly_local")
 
 
-# Tables to create (currently in no particular order):
+def table_has_content(
+    ro_mngr_local: ReadonlyDatabaseManager,
+    table_name: str,
+    count: int = 0,
+) -> bool:
+    """Check that the table is not empty
+
+    Parameters
+    ----------
+    ro_mngr_local :
+        The local readonly database manager
+    table_name :
+        The name of the table to check
+    count :
+        The number of rows above which the table is considered to have content.
+        Defaults to 0.
+
+    Returns
+    -------
+    :
+        True if the table has content, False otherwise
+    """
+    res = ro_mngr_local.engine.execute(
+        f"SELECT COUNT(*) FROM readonly.{table_name}"
+    )
+    return res.fetchone()[0] > count
+
 
 # Belief
 def belief(local_ro_mngr: ReadonlyDatabaseManager):

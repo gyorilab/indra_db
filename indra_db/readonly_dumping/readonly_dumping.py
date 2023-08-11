@@ -197,12 +197,33 @@ def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
     reading_ref_link_table.build_indices(local_ro_mngr)
 
 
-# EvidenceCounts (necessary?)
-"""SQL definition:
-SELECT count(id) AS ev_count, mk_hash 
-FROM readonly.fast_raw_pa_link 
-GROUP BY mk_hash
-"""
+# EvidenceCounts
+def evidence_counts(local_ro_mngr: ReadonlyDatabaseManager):
+    # Basically just upload the source counts file as a table
+
+    if not source_counts_fpath.exists():
+        raise ValueError(f"Surce counts {source_counts_fpath} does not exist")
+
+    source_counts = pickle.load(source_counts_fpath.open("rb"))
+
+    with evidence_counts_tsv.open("w") as ev_counts_f:
+        writer = csv.writer(ev_counts_f, delimiter="\t")
+
+        for mk_hash, src_counts in tqdm(source_counts.items(),
+                                        desc="EvidenceCounts"):
+            ev_count = sum(src_counts.values())
+            writer.writerow([mk_hash, ev_count])
+
+    load_data_file_into_local_ro(
+        table_name="readonly.evidence_counts",
+        column_order="mk_hash, ev_count",
+        tsv_file=evidence_counts_tsv.absolute().as_posix()
+    )
+
+    # Build the index
+    evidence_counts_table: ReadonlyTable = local_ro_mngr.tables["evidence_counts"]
+    logger.info(f"Building index for table {evidence_counts_table.full_name()}")
+    evidence_counts_table.build_indices(local_ro_mngr)
 
 
 # AgentInteractions

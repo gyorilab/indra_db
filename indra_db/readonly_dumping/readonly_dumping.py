@@ -142,6 +142,36 @@ def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
     raw_stmt_src_table.build_indices(local_ro_mngr)
 
 
+# PaAgentCounts
+def pa_agent_counts(local_ro_mngr: ReadonlyDatabaseManager):
+    """Fill the pa_agent_counts table with data"""
+    # Load cache
+    pa_hash_act_type_ag_count = get_activity_type_ag_count()
+
+    # Loop entries in pa_hash count cache and write to tsv
+    with pa_agents_counts_tsv.open("w") as fh_out:
+        writer = csv.writer(fh_out, delimiter="\t")
+        writer.writerows(
+            (
+                (mk_hash, agent_count)
+                for mk_hash, (_, _, _, agent_count)
+                in (pa_hash_act_type_ag_count.items())
+            )
+        )
+
+    # Load tsv into local readonly db
+    load_data_file_into_local_ro(
+        table_name="readonly.pa_agent_counts",
+        column_order="pa_hash, agent_count",
+        tsv_file=pa_agents_counts_tsv.absolute().as_posix()
+    )
+
+    # Build index
+    pa_agent_counts_table: ReadonlyTable = local_ro_mngr.tables["pa_agent_counts"]
+    logger.info(f"Building index on {pa_agent_counts_table.full_name()}")
+    pa_agent_counts_table.build_indices(local_ro_mngr)
+
+
 # ReadingRefLink
 def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the reading ref link table with data

@@ -52,3 +52,6 @@ other_meta_tsv = TEMP_DIR.joinpath("other_meta.tsv")
 
 # SourceMeta
 source_meta_tsv = TEMP_DIR.joinpath("source_meta.tsv")
+
+# EvidenceCounts
+evidence_counts_tsv = TEMP_DIR.joinpath("evidence_counts.tsv")

@@ -973,8 +973,12 @@ def ensure_pubmed_mesh_data():
     """Get the of PubMed XML gzip files for pmid-mesh processing"""
     # Check if the output files already exist
 
-    if all(f.exists() for f in [mesh_concepts_meta, mesh_terms_meta,
-                                raw_stmt_mesh_concepts, raw_stmt_mesh_terms]):
+    if all(f.exists() for f in [mesh_concepts_meta,
+                                mesh_terms_meta,
+                                raw_stmt_mesh_concepts,
+                                raw_stmt_mesh_terms,
+                                pmid_mesh_map_fpath,
+                                pmid_stmt_hash_fpath]):
         return
 
     def _pmid_mesh_extractor(xml_gz_path: Path) -> Iterable[Tuple[str, str]]:
@@ -982,10 +986,10 @@ def ensure_pubmed_mesh_data():
 
         for article in tree.findall("PubmedArticle"):
             medline_citation = article.find("MedlineCitation")
-            pmid = medline_citation.find("PMID").text
+            pubmed_id = medline_citation.find("PMID").text
 
-            mesh_annotations = _get_annotations(medline_citation)
-            yield pmid, mesh_annotations["mesh_annotations"]
+            mesh_ann = _get_annotations(medline_citation)
+            yield pubmed_id, mesh_ann["mesh_annotations"]
 
     num_files = ensure_pubmed_xml_files(xml_dir=pubmed_xml_gz_dir)
     if num_files == 0:
@@ -1011,25 +1015,40 @@ def ensure_pubmed_mesh_data():
     belief_scores = pickle.load(belief_scores_pkl_fpath.open("rb"))
 
     stmt_hashes = set()
+    pmid_mesh_mapping = {}
+    pmid_stmt_hash = defaultdict(set)
     logger.info("Generating tsv ingestion files")
-    with gzip.open(mesh_concepts_meta.as_posix(), "wt") as concepts_meta_fh,\
-            gzip.open(mesh_terms_meta.as_posix(), "wt") as terms_meta_fh,\
-            gzip.open(raw_stmt_mesh_concepts.as_posix(), "wt") as raw_concepts_fh,\
-            gzip.open(raw_stmt_mesh_terms.as_posix(), "wt") as raw_terms_fh:
+    with (
+        gzip.open(
+            mesh_concepts_meta.as_posix(), "wt") as concepts_meta_fh,
+        gzip.open(
+            mesh_terms_meta.as_posix(), "wt") as terms_meta_fh,
+        gzip.open(
+            raw_stmt_mesh_concepts.as_posix(), "wt") as raw_concepts_fh,
+        gzip.open(
+            raw_stmt_mesh_terms.as_posix(), "wt") as raw_terms_fh
+    ):
         concepts_meta_writer = csv.writer(concepts_meta_fh, delimiter="\t")
         terms_meta_writer = csv.writer(terms_meta_fh, delimiter="\t")
         raw_concepts_writer = csv.writer(raw_concepts_fh, delimiter="\t")
         raw_terms_writer = csv.writer(raw_terms_fh, delimiter="\t")
 
         xml_files = list(pubmed_xml_gz_dir.glob("*.xml.gz"))
-        for xml_file_path in tqdm(xml_files, desc="Pubmed XML files"):
+        for xml_file_path in tqdm(xml_files, desc="Pubmed processing"):
             # Extract the data from the XML file
             for pmid, mesh_annotations in _pmid_mesh_extractor(xml_file_path):
+                pmid_mesh_map = {"concepts": set(), "terms": set()}
                 for annot in mesh_annotations:
                     mesh_id = annot["mesh_id"]
                     mesh_num = int(mesh_id[1:])
                     is_concept = mesh_id.startswith("C")
                     # major_topic = annot["major_topic"]  # Unused
+
+                    # Save each pmid-mesh mapping
+                    if is_concept:
+                        pmid_mesh_map["concepts"].add(mesh_num)
+                    else:
+                        pmid_mesh_map["terms"].add(mesh_num)
 
                     # For each pmid, get the raw statement id
                     for raw_stmt_id in pmid_to_raw_stmt_id.get(pmid, set()):
@@ -1044,6 +1063,11 @@ def ensure_pubmed_mesh_data():
                         # Now write to the meta tables, one row per
                         # (stmt hash, mesh id) pair
                         stmt_hash = raw_stmt_id_to_hash.get(raw_stmt_id)
+
+                        # Save the pmid -> stmt hash mapping
+                        if stmt_hash:
+                            pmid_stmt_hash[pmid].add(stmt_hash)
+
                         if stmt_hash and stmt_hash not in stmt_hashes:
                             tup = \
                                 stmt_hash_to_activity_type_count.get(stmt_hash)
@@ -1078,6 +1102,27 @@ def ensure_pubmed_mesh_data():
                                 terms_meta_writer.writerow(meta_row)
 
                             stmt_hashes.add(stmt_hash)
+
+                # If the pmid is already in pmid_mesh_mapping, update the
+                # mesh concepts and terms
+                if pmid in pmid_mesh_mapping:
+                    pmid_mesh_mapping[pmid]["concepts"].update(
+                        pmid_mesh_map["concepts"]
+                    )
+                    pmid_mesh_mapping[pmid]["terms"].update(
+                        pmid_mesh_map["terms"]
+                    )
+                else:
+                    pmid_mesh_mapping[pmid] = pmid_mesh_map
+
+    # Save the pmid-mesh and pmid-stmt hash mappings to cache
+    logger.info("Saving pmid-stmt hash mappings to cache")
+    pmid_stmt_hash = dict(pmid_stmt_hash)
+    with pmid_stmt_hash_fpath.open("wb") as pmid_stmt_hash_fh:
+        pickle.dump(pmid_stmt_hash, pmid_stmt_hash_fh)
+    logger.info("Saving pmid-mesh mappings to cache")
+    with pmid_mesh_map_fpath.open("wb") as pmid_mesh_mapping_fh:
+        pickle.dump(pmid_mesh_mapping, pmid_mesh_mapping_fh)
 
 
 # RawStmtMeshConcepts

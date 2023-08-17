@@ -36,6 +36,10 @@ raw_stmt_source_tsv_fpath = TEMP_DIR.joinpath("raw_stmt_source.tsv")
 PUBMED_MESH_DIR = TEMP_DIR.joinpath("pubmed_mesh")
 pubmed_xml_gz_dir = PUBMED_MESH_DIR.joinpath("pubmed_xml_gz")
 
+# stmt hash-pmid-MeSH map
+pmid_mesh_map_fpath = PUBMED_MESH_DIR.joinpath("pmid_mesh_map.pkl")
+pmid_stmt_hash_fpath = PUBMED_MESH_DIR.joinpath("pmid_stmt_hash.pkl")
+
 # MeshConceptMeta and MeshTermMeta
 mesh_concepts_meta = PUBMED_MESH_DIR.joinpath("mesh_concepts_meta.tsv")
 mesh_terms_meta = PUBMED_MESH_DIR.joinpath("mesh_terms_meta.tsv")

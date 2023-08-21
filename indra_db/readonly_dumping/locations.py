@@ -38,7 +38,17 @@ pubmed_xml_gz_dir = PUBMED_MESH_DIR.joinpath("pubmed_xml_gz")
 
 # stmt hash-pmid-MeSH map
 pmid_mesh_map_fpath = PUBMED_MESH_DIR.joinpath("pmid_mesh_map.pkl")
+pmid_mesh_mti_fpath = PUBMED_MESH_DIR.joinpath("pmid_mesh_mti.tsv")
 pmid_stmt_hash_fpath = PUBMED_MESH_DIR.joinpath("pmid_stmt_hash.pkl")
+
+# MeshConcept/TermRefCounts
+pmid_mesh_concept_counts_fpath = TEMP_DIR.joinpath(
+    "pmid_mesh_concept_counts.tsv")
+pmid_mesh_term_counts_fpath = TEMP_DIR.joinpath("pmid_mesh_term_counts.tsv")
+mk_hash_pmid_sets_fpath = TEMP_DIR.joinpath("mk_hash_pmid_sets.pkl")
+mesh_concept_ref_counts_fpath = TEMP_DIR.joinpath(
+    "mesh_concept_ref_counts.tsv")
+mesh_term_ref_counts_fpath = TEMP_DIR.joinpath("mesh_term_ref_counts.tsv")
 
 # MeshConceptMeta and MeshTermMeta
 mesh_concepts_meta = PUBMED_MESH_DIR.joinpath("mesh_concepts_meta.tsv")

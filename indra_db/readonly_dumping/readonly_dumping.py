@@ -7,7 +7,7 @@ import pickle
 import re
 import subprocess
 import uuid
-from collections import defaultdict
+from collections import defaultdict, Counter
 from hashlib import md5
 from textwrap import dedent
 from typing import Tuple, Iterable
@@ -62,6 +62,175 @@ def table_has_content(
         f"SELECT COUNT(*) FROM readonly.{table_name}"
     )
     return res.fetchone()[0] > count
+
+
+def get_stmt_hash_mesh_pmid_counts():
+    # Check the existence of the output files
+    if not all(fp.exists() for fp in [pmid_mesh_term_counts_fpath,
+                                      mk_hash_pmid_sets_fpath,
+                                      mesh_term_ref_counts_fpath]):
+
+        # Check the existence of the input files
+        if not pmid_mesh_map_fpath.exists() and pmid_stmt_hash_fpath.exists():
+            ensure_pubmed_mesh_data()
+
+        # dump pmid-mesh from mti_ref_annotations_test for concept and term
+        # separately
+        mti_mesh_query = dedent("""
+        SELECT pmid_num, mesh_num, is_concept 
+        FROM mti_ref_annotations_test""")
+        principal_query_to_csv(
+            query=mti_mesh_query, output_location=pmid_mesh_mti_fpath
+        )
+
+        # Load the pmid-mesh map
+        pmid_mesh_mapping = pickle.load(pmid_mesh_map_fpath.open("rb"))
+
+        # Load the pmid-mesh map from the mti_ref_annotations_test table and
+        # merge it with the existing map
+        with pmid_mesh_mti_fpath.open("r") as fh_in:
+            reader = csv.reader(fh_in, delimiter="\t")
+            for pmid, mesh_num, is_concept in reader:
+                _type = "concept" if is_concept == "t" else "term"
+                if pmid in pmid_mesh_mapping:
+                    if _type in pmid_mesh_mapping[pmid]:
+                        pmid_mesh_mapping[pmid][_type].add(mesh_num)
+                    else:
+                        pmid_mesh_mapping[pmid][_type] = {mesh_num}
+                else:
+                    pmid_mesh_mapping[pmid] = {_type: {mesh_num}}
+
+        # Load the pmid-stmt_hash map
+        pmid_stmt_hashes = pickle.load(pmid_stmt_hash_fpath.open("rb"))
+
+        # Dicts for ref_count (count of PMIDs per mk_hash, mesh_num pair)
+        pmid_mesh_concept_counts = Counter()
+        pmid_mesh_term_counts = Counter()
+
+        # Dict for hash -> pmid set (distinct pmids associated with a hash,
+        # i.e. from multiple sources)
+        mk_hash_pmid_sets = defaultdict(set)
+
+        # Get pmid_count and ref_count (for concept and term separately)
+        for pmid_num, mk_hash_set in tqdm(pmid_stmt_hashes.items(),
+                                          desc="Getting counts"):
+            for mk_hash in mk_hash_set:
+                mk_hash_pmid_sets[mk_hash].add(pmid_num)
+                if pmid_num in pmid_mesh_mapping:
+                    # For concepts
+                    mesh_concepts = pmid_mesh_mapping[pmid_num].get("concept", set())
+                    for mesh_concept in mesh_concepts:
+                        pmid_mesh_concept_counts[(mk_hash, mesh_concept)] += 1
+                    # For terms
+                    mesh_terms = pmid_mesh_mapping[pmid_num].get("term", set())
+                    for mesh_term in mesh_terms:
+                        pmid_mesh_term_counts[(mk_hash, mesh_term)] += 1
+
+        # Cache the results
+        pickle.dump(pmid_mesh_concept_counts,
+                    pmid_mesh_concept_counts_fpath.open("wb"))
+        pickle.dump(pmid_mesh_term_counts,
+                    pmid_mesh_term_counts_fpath.open("wb"))
+        pickle.dump(mk_hash_pmid_sets, mk_hash_pmid_sets_fpath.open("wb"))
+    else:
+        # Load the cached results
+        pmid_mesh_concept_counts = pickle.load(
+            pmid_mesh_concept_counts_fpath.open("rb")
+        )
+        pmid_mesh_term_counts = pickle.load(
+            pmid_mesh_term_counts_fpath.open("rb")
+        )
+        mk_hash_pmid_sets = pickle.load(mk_hash_pmid_sets_fpath.open("rb"))
+
+    return pmid_mesh_concept_counts, pmid_mesh_term_counts, mk_hash_pmid_sets
+
+
+# MeshTerm/ConceptRefCounts
+# These two tables enumerate stmt_hash, mesh_num, ref_count, pmid_count
+# for each stmt_hash, mesh_num pair.
+# - The **ref_count** is the number of distinct PMIDs that support the
+#   stmt_hash, mesh_num pair.
+# - The **pmid_count** is the number of distinct PMIDs that support the
+#   stmt_hash.
+# The PaRefLink table is not generated, but the equivalent contents is
+# generated here to produce the input to the MeshTerm/ConceptRefCounts tables.
+def ensure_pa_ref_link():
+    # Check the existence of the output files
+    if mesh_concept_ref_counts_fpath.exists() and \
+            mesh_term_ref_counts_fpath.exists():
+        return
+    pmid_mesh_concept_counts, pmid_mesh_term_counts, mk_hash_pmid_sets = \
+        get_stmt_hash_mesh_pmid_counts()
+
+    # Dump mk_hash, mesh_num, ref_count, pmid_count for concepts and terms
+    # to separate tsv files
+    with mesh_term_ref_counts_fpath.open("w") as terms_fh:
+        terms_writer = csv.writer(terms_fh, delimiter="\t")
+
+        for (mk_hash, mesh_num), ref_count in tqdm(
+                pmid_mesh_term_counts.items(), desc="MeshTermRefCounts"
+        ):
+            assert ref_count > 0  # Sanity check
+            pmid_set = mk_hash_pmid_sets.get(mk_hash, set())
+            if len(pmid_set) > 0:
+                terms_writer.writerow(
+                    (mk_hash, mesh_num, ref_count, len(pmid_set))
+                )
+
+    with mesh_concept_ref_counts_fpath.open("w") as concepts_fh:
+        concepts_writer = csv.writer(concepts_fh, delimiter="\t")
+        for (mk_hash, mesh_num), ref_count in tqdm(
+                pmid_mesh_concept_counts.items(),
+                desc="MeshConceptRefCounts",
+        ):
+            assert ref_count > 0  # Sanity check
+            pmid_set = mk_hash_pmid_sets.get(mk_hash, set())
+            if len(pmid_set) > 0:
+                concepts_writer.writerow(
+                    (mk_hash, mesh_num, ref_count, len(pmid_set))
+                )
+
+
+# MeshTermRefCounts
+def mesh_term_ref_counts(local_ro_mngr: ReadonlyDatabaseManager):
+    # Create the source tsv file
+    ensure_pa_ref_link()
+
+    # Load the tsv file into the local readonly db
+    load_data_file_into_local_ro(
+        table_name="readonly.mesh_term_ref_counts",
+        column_order="mk_hash, mesh_num, ref_count, pmid_count",
+        tsv_file=mesh_term_ref_counts_fpath.absolute().as_posix(),
+    )
+
+    # Build index
+    mesh_term_ref_counts_table: ReadonlyTable = local_ro_mngr.tables[
+        "mesh_term_ref_counts"]
+    logger.info(
+        f"Building index on {mesh_term_ref_counts_table.full_name()}"
+    )
+    mesh_term_ref_counts_table.build_indices(local_ro_mngr)
+
+
+# MeshConceptRefCounts
+def mesh_concept_ref_counts(local_ro_mngr: ReadonlyDatabaseManager):
+    # Create the source tsv file
+    ensure_pa_ref_link()
+
+    # Load the tsv file into the local readonly db
+    load_data_file_into_local_ro(
+        table_name="readonly.mesh_concept_ref_counts",
+        column_order="mk_hash, mesh_num, ref_count, pmid_count",
+        tsv_file=mesh_concept_ref_counts_fpath.absolute().as_posix(),
+    )
+
+    # Build index
+    mesh_concept_ref_counts_table: ReadonlyTable = local_ro_mngr.tables[
+        "mesh_concept_ref_counts"]
+    logger.info(
+        f"Building index on {mesh_concept_ref_counts_table.full_name()}"
+    )
+    mesh_concept_ref_counts_table.build_indices(local_ro_mngr)
 
 
 # Belief

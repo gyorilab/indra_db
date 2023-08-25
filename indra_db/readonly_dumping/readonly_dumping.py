@@ -1487,12 +1487,19 @@ def create_ro_tables(ro_mngr: ReadonlyDatabaseManager, postgres_url):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(__name__)
-    parser.add_argument("--db-name", default="indradb_readonly_local")
-    parser.add_argument("--user")
-    parser.add_argument("--password")
+    parser.add_argument("--db-name",
+                        default="indradb_readonly_local")
+    parser.add_argument("--user",
+                        help="Username for the local readonly db.")
+    parser.add_argument("--password",
+                        help="Password for the local readonly db.")
     parser.add_argument("--hostname", default="localhost")
     parser.add_argument("--port", default=5432,
                         help="The port the local db server listens to.")
+    parser.add_argument("--force", action="store_true",
+                        help="If set, the script will delete data from "
+                             "tables in the readonly schema if it already "
+                             "exists.")
 
     args = parser.parse_args()
 

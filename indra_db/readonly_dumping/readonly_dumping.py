@@ -502,8 +502,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     raw_stmt_src
 
     (requires statement type map a.k.a ro_type_map.get_with_clause() to be
-    inserted, here only showing the first 5. The full type map has almost 50
-    items)
+    inserted)
 
     Steps:
     Iterate through the grounded statements and:
@@ -650,7 +649,7 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
             #  - ev_count
             #  - belief
             #  - num_srcs
-            #  - src_json  # fixme: Should it be dumped to a string? binary?
+            #  - src_json
             #  - only_src - if only one source, the name of that source
             #  - has_rd  boolean - true if any source is from reading
             #  - has_db  boolean - true if any source is from a database
@@ -752,9 +751,6 @@ def ensure_pa_meta_table():
              pa_agents.stmt_mk_hash = pa_statements.mk_hash
     WHERE LENGTH(pa_agents.db_id) < 2000
     """)
-    # fixme:
-    #  - Add 'LENGTH(pa_agents.db_id) < 2000' as condition to the query??
-    #  - Skip the INNER JOIN and just use the mk_hash from pa_agents?
     principal_query_to_csv(pa_meta_query, pa_meta_fpath)
 
     # Load the belief dump into a dictionary
@@ -1107,6 +1103,8 @@ def _load_pmid_to_raw_stmt_id():
 
 def get_activity_type_ag_count():
     if pa_hash_act_type_ag_count_cache.exists():
+        logger.info("Loading pre-assembled statement hash -> activity type "
+                    "and agent count map from cache")
         cache = pickle.load(pa_hash_act_type_ag_count_cache.open("rb"))
         return cache
 
@@ -1390,6 +1388,10 @@ def principal_query_to_csv(
     except KeyError as err:
         raise KeyError(f"db {db} not available. Check db_config.ini") from err
 
+    # fixme: allow tsv.gz output
+    # Note: 'copy ... to' copies data to a file on the server, while
+    # 'copy ... from' copies data to the client. The former is faster, but
+    # requires from a file on the server. We use the former here.
     command = [
         "psql",
         principal_db_uri,
@@ -1505,6 +1507,7 @@ if __name__ == '__main__':
 
     # Get a ro manager for the local readonly db
     # postgresql://<username>:<password>@localhost[:port]/[name]
+    # todo: allow use of args to create the uri
     postgres_url = get_local_ro_uri()
     ro_manager = ReadonlyDatabaseManager(postgres_url)
 

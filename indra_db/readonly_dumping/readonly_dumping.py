@@ -1481,15 +1481,16 @@ def drop_schema(ro_mngr_local: ReadonlyDatabaseManager):
     ro_mngr_local.drop_schema('readonly')
 
 
-def create_ro_tables(ro_mngr: ReadonlyDatabaseManager, postgres_url):
-    engine = create_engine(postgres_url)
-    logger.info("Connected to local db")
+def create_ro_tables(ro_mngr_local: ReadonlyDatabaseManager):
+    postgres_uri = str(ro_mngr_local.url)
+    engine = create_engine(postgres_uri)
+    logger.info("Connected to db")
 
     # Create schema
-    ro_mngr.create_schema('readonly')
+    ro_mngr_local.create_schema('readonly')
 
     # Create empty tables
-    tables_metadata = ro_mngr.tables['belief'].metadata
+    tables_metadata = ro_mngr_local.tables['belief'].metadata
     logger.info("Creating tables")
     tables_metadata.create_all(bind=engine)
     logger.info("Done creating tables")
@@ -1520,7 +1521,7 @@ if __name__ == '__main__':
     ro_manager = ReadonlyDatabaseManager(postgres_url)
 
     # Create the tables
-    create_ro_tables(ro_manager, postgres_url)
+    create_ro_tables(ro_manager)
 
     # For each table, run the function that will fill out the table with data
     # todo: add all table filling functions

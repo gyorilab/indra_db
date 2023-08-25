@@ -445,10 +445,18 @@ def agent_interactions(local_ro_mngr: ReadonlyDatabaseManager):
     agent_interactions_table.build_indices(local_ro_mngr)
 
 
-def get_local_ro_uri() -> str:
+def get_postgres_uri(
+    username=LOCAL_RO_USER,
+    password=LOCAL_RO_PASSWORD,
+    port=LOCAL_RO_PORT,
+    db_name=LOCAL_RO_DB_NAME,
+) -> str:
     # postgresql://<username>:<password>@localhost[:port]/[name]
-    return f"postgresql://{LOCAL_RO_USER}:{LOCAL_RO_PASSWORD}@localhost:" \
-           f"{LOCAL_RO_PORT}/{LOCAL_RO_DB_NAME}"
+    # username = ro.url.username
+    # password = ro.url.password
+    # port = ro.url.port
+    # db_name = ro.url.database
+    return f"postgresql://{username}:{password}@localhost:{port}/{db_name}"
 
 
 def load_data_file_into_local_ro(
@@ -478,7 +486,7 @@ def load_data_file_into_local_ro(
     null_clause = f", NULL AS '{null_value}'" if null_value else ""
     command = [
         "psql",
-        get_local_ro_uri(),
+        get_postgres_uri(),
         "-c",
         (
             f"\\copy {table_name} ({column_order}) from '{tsv_file}' with "
@@ -1508,7 +1516,7 @@ if __name__ == '__main__':
     # Get a ro manager for the local readonly db
     # postgresql://<username>:<password>@localhost[:port]/[name]
     # todo: allow use of args to create the uri
-    postgres_url = get_local_ro_uri()
+    postgres_url = get_postgres_uri()
     ro_manager = ReadonlyDatabaseManager(postgres_url)
 
     # Create the tables

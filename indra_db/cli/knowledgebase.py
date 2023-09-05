@@ -88,6 +88,7 @@ class KnowledgebaseManager(object):
 
 class TasManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the TAS dataset."""
+    # TODO: Data is simply a CSV from S3
     name = 'TAS'
     short_name = 'tas'
     source = 'tas'
@@ -352,6 +353,7 @@ class HPRDManager(KnowledgebaseManager):
 
 
 class BelLcManager(KnowledgebaseManager):
+    # Todo: New data is available
     name = 'BEL Large Corpus'
     short_name = 'bel_lc'
     source = 'bel'
@@ -371,6 +373,8 @@ class BelLcManager(KnowledgebaseManager):
 
 
 class PhosphositeManager(KnowledgebaseManager):
+    # TODO: New data is available - check
+    #  s3://bigmech/indra-db/Kinase_substrates.owl.gz
     name = 'Phosphosite Plus'
     short_name = 'psp'
     source = 'biopax'

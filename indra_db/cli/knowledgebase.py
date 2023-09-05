@@ -729,12 +729,15 @@ def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
         logger.info(f"Using output file name: {raw_tsvgz_out}")
 
     # Determine which sources we are working with
-    source_set = None
     if sources:
         source_set = {s.lower() for s in sources}
-    selected_kbs = (M for M in KnowledgebaseManager.__subclasses__()
-                    if not source_set or M.name.lower() in source_set
-                    or M.short_name in source_set)
+        selected_kbs = [
+            M for M in KnowledgebaseManager.__subclasses__()
+            if M.name.lower() in source_set or
+            M.short_name.lower() in source_set
+        ]
+    else:
+        selected_kbs = [KnowledgebaseManager.__subclasses__()]
 
     logger.info(f"Selected knowledgebases: "
                 f"{', '.join([M.name for M in selected_kbs])}")

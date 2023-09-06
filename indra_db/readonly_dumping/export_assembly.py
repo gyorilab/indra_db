@@ -23,7 +23,7 @@ from indra.statements import stmts_from_json, stmt_from_json, Statement, \
     Evidence
 from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
-from .util import load_statement_json
+from .util import clean_json_loads
 from .locations import *
 
 
@@ -126,7 +126,7 @@ def sample_unique_stmts(
         reader = csv.reader(f, delimiter="\t")
         for index, (sh, sjs) in enumerate(reader):
             if index in indices:
-                stmts.append((int(sh), stmt_from_json(load_statement_json(sjs))))
+                stmts.append((int(sh), stmt_from_json(clean_json_loads(sjs))))
                 t.update()
                 if len(stmts) == num:
                     break
@@ -317,7 +317,7 @@ def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
                     # Append to info rows
                     info_rows.append((raw_stmt_id_int, db_info_id,
                                       int_reading_id, stmt_json_raw))
-                    stmt_json = load_statement_json(stmt_json_raw)
+                    stmt_json = clean_json_loads(stmt_json_raw)
                     if refs:
                         stmt_json["evidence"][0]["text_refs"] = refs
                         if refs.get("PMID"):
@@ -370,7 +370,7 @@ def ground_deduplicate():
             for sh, stmt_json_str in tqdm(
                 reader, total=60405451, desc="Gathering grounded and unique statements"
             ):
-                stmt = stmts_from_json([load_statement_json(stmt_json_str)])[0]
+                stmt = stmt_from_json(clean_json_loads(stmt_json_str))
                 if all(
                     (set(agent.db_refs) - {"TEXT", "TEXT_NORM"})
                     for agent in stmt.real_agent_list()
@@ -430,7 +430,7 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
                     try:
                         _, sjs = next(reader1)
                         stmt = stmt_from_json(
-                            load_statement_json(sjs, remove_evidence=True)
+                            clean_json_loads(sjs, remove_evidence=True)
                         )
                         stmts1.append(stmt)
                     except StopIteration:
@@ -462,7 +462,7 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
                         for _, sjs in batch:
                             try:
                                 stmt = stmt_from_json(
-                                    load_statement_json(sjs, remove_evidence=True)
+                                    clean_json_loads(sjs, remove_evidence=True)
                                 )
                                 stmts2.append(stmt)
                             except StopIteration:
@@ -585,7 +585,7 @@ def calculate_belief(
                 try:
                     stmt_hash_string, stmt_json_string = next(reader)
                     stmt = stmt_from_json(
-                        load_statement_json(stmt_json_string, remove_evidence=True)
+                        clean_json_loads(stmt_json_string, remove_evidence=True)
                     )
                     this_hash = int(stmt_hash_string)
                     stmt.evidence = _get_support_evidence_for_stmt(this_hash)

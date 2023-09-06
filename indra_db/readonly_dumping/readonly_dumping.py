@@ -26,7 +26,7 @@ from indra_db.schemas.mixins import ReadonlyTable
 from schemas.readonly_schema import ro_type_map, ro_role_map, SOURCE_GROUPS
 
 from .locations import *
-from .util import load_statement_json
+from .util import clean_json_loads
 
 logger = logging.getLogger(__name__)
 
@@ -573,7 +573,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
 
         for statement_hash_string, stmt_json_string in unique_stmts_reader:
             this_hash = int(statement_hash_string)
-            stmt_json = load_statement_json(stmt_json_string)
+            stmt_json = clean_json_loads(stmt_json_string)
             for raw_stmt_id in hash_to_raw_id_map[this_hash]:
                 info_dict = raw_id_to_info.get(raw_stmt_id, {})
                 raw_stmt_src_name = reading_id_source_map[raw_stmt_id]
@@ -1124,7 +1124,7 @@ def get_activity_type_ag_count():
     with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
         reader = csv.reader(fh, delimiter="\t")
         for stmt_hash_string, stmt_json_string in tqdm(reader):
-            stmt_json = load_statement_json(stmt_json_string)
+            stmt_json = clean_json_loads(stmt_json_string)
             stmt = stmt_from_json(stmt_json)
             stmt_hash = int(stmt_hash_string)
             agent_count = len(stmt.agent_list())

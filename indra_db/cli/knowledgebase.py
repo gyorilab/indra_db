@@ -9,7 +9,7 @@ import gzip
 import json
 import os
 import zlib
-from typing import Dict
+from typing import Dict, List, Tuple
 
 import boto3
 import click
@@ -554,8 +554,8 @@ class UbiBrowserManager(KnowledgebaseManager):
 def local_update(
     raw_stmts_tsv_gz_path: str,
     out_tsv_gz_path: str,
-    kb_manager_list,
-    kb_mapping,
+    kb_manager_list: List[KnowledgebaseManager],
+    kb_mapping: Dict[Tuple[str, str], int],
     local_files: Dict[str, Dict] = None,
 ):
     """Update the knowledgebases of a local raw statements file dump
@@ -563,11 +563,12 @@ def local_update(
     Parameters
     ----------
     raw_stmts_tsv_gz_path :
-        Path to the raw statements file dump
+        Path to the raw statements file dump.
     out_tsv_gz_path :
-        Path to the output file
+        Path to the output file.
     kb_manager_list :
-        List of the classes of the knowledgebase managers to use in update
+        List of the (un-instantiated) classes of the knowledgebase managers
+        to use in update.
     kb_mapping :
         Mapping of knowledgebase source api and name, to db info id. Keyed
         by tuple of (source api, db name) from db info table.
@@ -591,7 +592,9 @@ def local_update(
         try:
             kb_id = kb_mapping[(kb_manager.source, kb_manager.short_name)]
             ids_to_update.add(kb_id)
-            logger.info(f"  {kb_manager.name} ({kb_manager.short_name}): {kb_id}")
+            logger.info(
+                f"  {kb_id}: {kb_manager.name} ({kb_manager.short_name})"
+            )
         except KeyError:
             logger.info(f"Detected new knowledgebase: {kb_manager.name} "
                         f"({kb_manager.short_name})")
@@ -668,8 +671,26 @@ def kb():
 @click.option("--raw-tsvgz-out", type=click.STRING, required=False,
               help="Path to the output raw statements tsv.gz file when "
                    "using the local option.")
-def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
+def run(
+    task: str,
+    sources: List[str],
+    raw_stmts_tsvgz: str,
+    raw_tsvgz_out: str
+):
     """Upload/update the knowledge bases used by the database.
+
+    Parameters
+    ----------
+    task :
+        The task to perform. One of: upload, update, local-update
+    sources :
+        The knowledge bases to update. If not specified, all knowledge bases
+        will be updated.
+    raw_stmts_tsvgz :
+        Path to the raw statements tsv.gz file when using the local option.
+    raw_tsvgz_out :
+        Path to the output raw statements tsv.gz file when using the local
+        option.
 
     \b
     Usage tasks are:
@@ -696,9 +717,10 @@ def run(task, sources, raw_stmts_tsvgz, raw_tsvgz_out):
             raise FileNotFoundError("Raw statements tsv.gz file does not "
                                     "exist: %s" % raw_stmts_tsvgz)
         elif not raw_stmts_tsvgz.endswith(".tsv.gz"):
+            suff_ix = max(raw_stmts_tsvgz.find("."), 0)
             raise ValueError("Raw statements file must be tsv gzipped file. "
                              "Expected extension: .tsv.gz - got: "
-                             f"{raw_stmts_tsvgz.split('.')[-1]}")
+                             f"{raw_stmts_tsvgz.split('.')[suff_ix:]}")
 
         if not raw_tsvgz_out:
             # Just add a suffix to the input file name

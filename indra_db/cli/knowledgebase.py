@@ -552,9 +552,7 @@ class UbiBrowserManager(KnowledgebaseManager):
 
 
 def local_update(
-    raw_stmts_tsv_gz_path: str,
-    out_tsv_gz_path: str,
-    kb_manager_list: List[KnowledgebaseManager],
+    kb_manager_list: List[Type[KnowledgebaseManager]],
     kb_mapping: Dict[Tuple[str, str], int],
     local_files: Dict[str, Dict] = None,
 ):
@@ -562,10 +560,6 @@ def local_update(
 
     Parameters
     ----------
-    raw_stmts_tsv_gz_path :
-        Path to the raw statements file dump.
-    out_tsv_gz_path :
-        Path to the output file.
     kb_manager_list :
         List of the (un-instantiated) classes of the knowledgebase managers
         to use in update.
@@ -600,61 +594,24 @@ def local_update(
                         f"({kb_manager.short_name})")
     assert ids_to_update, "No knowledgebases to update"
 
-    logger.info(f"Reading raw statements from {raw_stmts_tsv_gz_path}")
-    logger.info(f"Writing output to {out_tsv_gz_path}")
     counter = Counter()
-    with gzip.open(raw_stmts_tsv_gz_path, 'rt') as in_fh, \
-            gzip.open(out_tsv_gz_path, 'wt') as out_fh:
-        reader = csv.reader(in_fh, delimiter='\t')
-        writer = csv.writer(out_fh, delimiter='\t')
+    logger.info("Updating knowledgebases")
+    for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
+        kbm = Mngr()
+        db_id = kb_mapping.get((kbm.source, kbm.short_name), null)
+        kb_kwargs = local_files.get(kbm.short_name, {})
+        stmts = kbm._get_statements(**kb_kwargs)
+        rows = [
+            # raw stmt id, db info id, reading id, raw stmt json string
+            (null, db_id, null, json.dumps(stmt.to_json()))
+            for stmt in stmts
+        ]
+        counter[(kbm.source, kbm.short_name)] = len(stmts)
 
-        # Filter out old knowledgebase statements
-        rows_deleted = 0
-        rows_kept = 0
-        rows_added = 0
-        for raw_stmt_id, db_info_id, reading_id, rsjs in tqdm(
-                reader, total=75816146, desc="Filtering raw statements"
-        ):
-            # Skip the row if it has a db info ID and that ID is in the list of
-            # IDs to update
-            if db_info_id != null and int(db_info_id) in ids_to_update:
-                rows_deleted += 1
-            else:
-                writer.writerow([raw_stmt_id, db_info_id, reading_id, rsjs])
-                rows_kept += 1
-
-        logger.info("Filtering done")
-        logger.info(f"Rows kept: {rows_kept}")
-        logger.info(f"Rows filtered out: {rows_deleted}")
-
-        # Update the knowledgebases
-        logger.info("Updating knowledgebases")
-        for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
-            kbm = Mngr()
-            db_id = kb_mapping.get((kbm.source, kbm.short_name), null)
-            kb_kwargs = local_files.get(kbm.short_name, {})
-            stmts = kbm._get_statements(**kb_kwargs)
-            logger.info(
-                f"Appending {len(stmts)} raw statements from {kbm.name}"
-            )
-            rows = [
-                # raw stmt id, db info id, reading id, raw stmt json string
-                (null, db_id, null, json.dumps(stmt.to_json()))
-                for stmt in stmts
-            ]
-            writer.writerows(rows)
-            rows_added += len(stmts)
-            counter[(kbm.source, kbm.short_name)] = len(stmts)
-
-    logger.info(f"Rows deleted: {rows_deleted}")
-    logger.info(f"Rows kept: {rows_kept}")
-    logger.info("Rows added by knowledgebase:")
+    logger.info("Statements produced per knowledgebase:")
     for (source, short_name), count in counter.most_common():
         logger.info(f"  - {source} {short_name}: {count}")
-    logger.info(f"Total rows added: {rows_added}")
-    logger.info(
-        f"Net rows (kept-deleted+added): {rows_kept-rows_deleted+rows_added}"
-    )
+    logger.info(f"Total rows added: {sum(counter.values())}")
 
 
 @click.group()
@@ -665,17 +622,9 @@ def kb():
 @kb.command()
 @click.argument("task", type=click.Choice(["upload", "update", "local-update"]))
 @click.argument("sources", nargs=-1, type=click.STRING, required=False)
-@click.option("--raw-stmts-tsvgz", type=click.STRING, required=False,
-              help="Path to the raw statements tsv.gz file when using the "
-                   "local option.")
-@click.option("--raw-tsvgz-out", type=click.STRING, required=False,
-              help="Path to the output raw statements tsv.gz file when "
-                   "using the local option.")
 def run(
     task: str,
     sources: List[str],
-    raw_stmts_tsvgz: str,
-    raw_tsvgz_out: str
 ):
     """Upload/update the knowledge bases used by the database.
 
@@ -686,11 +635,6 @@ def run(
     sources :
         The knowledge bases to update. If not specified, all knowledge bases
         will be updated.
-    raw_stmts_tsvgz :
-        Path to the raw statements tsv.gz file when using the local option.
-    raw_tsvgz_out :
-        Path to the output raw statements tsv.gz file when using the local
-        option.
 
     \b
     Usage tasks are:
@@ -708,26 +652,6 @@ def run(
 
     res = db.select_all(db.DBInfo)
     kb_mapping = {(r.source_api, r.db_name): r.id for r in res}
-
-    if task == "local-update":
-        if not raw_stmts_tsvgz:
-            raise ValueError("Must specify raw statements tsv.gz file when "
-                             "using the local option.")
-        elif not os.path.exists(raw_stmts_tsvgz):
-            raise FileNotFoundError("Raw statements tsv.gz file does not "
-                                    "exist: %s" % raw_stmts_tsvgz)
-        elif not raw_stmts_tsvgz.endswith(".tsv.gz"):
-            suff_ix = max(raw_stmts_tsvgz.find("."), 0)
-            raise ValueError("Raw statements file must be tsv gzipped file. "
-                             "Expected extension: .tsv.gz - got: "
-                             f"{raw_stmts_tsvgz.split('.')[suff_ix:]}")
-
-        if not raw_tsvgz_out:
-            # Just add a suffix to the input file name
-            raw_tsvgz_out = \
-                raw_stmts_tsvgz.split("/")[-1].split(".")[0] + "_updated.tsv.gz"
-
-        logger.info(f"Using output file name: {raw_tsvgz_out}")
 
     # Determine which sources we are working with
     if sources:
@@ -750,10 +674,7 @@ def run(
     # Handle the other tasks.
     logger.info(f"Running {task}...")
     if task == "local-update":
-        local_update(raw_stmts_tsv_gz_path=raw_stmts_tsvgz,
-                     out_tsv_gz_path=raw_tsvgz_out,
-                     kb_manager_list=selected_kbs,
-                     kb_mapping=kb_mapping)
+        local_update(kb_manager_list=selected_kbs, kb_mapping=kb_mapping)
     else:
         for Manager in selected_kbs:
             kbm = Manager()

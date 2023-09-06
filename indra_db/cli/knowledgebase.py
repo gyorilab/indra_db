@@ -38,7 +38,7 @@ class KnowledgebaseManager(object):
     def upload(self, db):
         """Upload the content for this dataset into the database."""
         dbid = self._check_reference(db)
-        stmts = self._get_statements()
+        stmts = self.get_statements()
         # Raise any validity issues with statements as exceptions here
         # to avoid uploading invalid content.
         for stmt in stmts:
@@ -55,7 +55,7 @@ class KnowledgebaseManager(object):
         existing_keys = set(db.select_all([db.RawStatements.mk_hash,
                                            db.RawStatements.source_hash],
                                           db.RawStatements.db_info_id == dbid))
-        stmts = self._get_statements()
+        stmts = self.get_statements()
         filtered_stmts = [s for s in stmts
                           if (s.get_hash(), s.evidence[0].get_source_hash())
                           not in existing_keys]
@@ -88,7 +88,7 @@ class KnowledgebaseManager(object):
                           % dbinfo.db_name)
         return dbid
 
-    def _get_statements(self):
+    def get_statements(self, **kwargs):
         raise NotImplementedError("Statement retrieval must be defined in "
                                   "each child.")
 
@@ -100,7 +100,7 @@ class TasManager(KnowledgebaseManager):
     short_name = 'tas'
     source = 'tas'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import tas
         # The settings we use here are justified as follows:
         # - only affinities that indicate binding are included
@@ -126,7 +126,7 @@ class SignorManager(KnowledgebaseManager):
     short_name = 'signor'
     source = 'signor'
 
-    def _get_statements(self, **kwargs):
+    def get_statements(self, **kwargs):
         from indra.sources.signor import process_from_web, process_from_file
         if kwargs.get("signor_data_file"):
             data_file = kwargs.pop("signor_data_file")
@@ -153,7 +153,7 @@ class CBNManager(KnowledgebaseManager):
             self.archive_url = archive_url
         return
 
-    def _get_statements(self):
+    def get_statements(self):
         import requests
         from zipfile import ZipFile
         from indra.sources.bel.api import process_cbn_jgif_file
@@ -195,7 +195,7 @@ class BiogridManager(KnowledgebaseManager):
     short_name = 'biogrid'
     source = 'biogrid'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import biogrid
         bp = biogrid.BiogridProcessor()
         return list(_expanded(bp.statements))
@@ -222,7 +222,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
 
         return ssid not in self.skips
 
-    def _get_statements(self):
+    def get_statements(self):
         s3 = boto3.client('s3')
 
         logger.info('Loading PC content pickle from S3')
@@ -245,7 +245,7 @@ class CTDManager(KnowledgebaseManager):
     subsets = ['gene_disease', 'chemical_disease',
                'chemical_gene']
 
-    def _get_statements(self):
+    def get_statements(self):
         s3 = boto3.client('s3')
         all_stmts = []
         for subset in self.subsets:
@@ -266,7 +266,7 @@ class DrugBankManager(KnowledgebaseManager):
     short_name = 'drugbank'
     source = 'drugbank'
 
-    def _get_statements(self):
+    def get_statements(self):
         s3 = boto3.client('s3')
         logger.info('Fetching DrugBank statements from S3...')
         key = 'indra-db/drugbank_5.1.pkl'
@@ -285,7 +285,7 @@ class VirHostNetManager(KnowledgebaseManager):
     short_name = 'vhn'
     source = 'virhostnet'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import virhostnet
         vp = virhostnet.process_from_web()
         return [s for s in _expanded(vp.statements)]
@@ -296,7 +296,7 @@ class PhosphoElmManager(KnowledgebaseManager):
     short_name = 'pe'
     source = 'phosphoelm'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import phosphoelm
         logger.info('Fetching PhosphoElm dump from S3...')
         s3 = boto3.resource('s3')
@@ -323,7 +323,7 @@ class HPRDManager(KnowledgebaseManager):
     short_name = 'hprd'
     source = 'hprd'
 
-    def _get_statements(self):
+    def get_statements(self):
         import tarfile
         import requests
         from indra.sources import hprd
@@ -372,7 +372,7 @@ class BelLcManager(KnowledgebaseManager):
     short_name = 'bel_lc'
     source = 'bel'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import bel
 
         pbp = bel.process_large_corpus()
@@ -393,7 +393,7 @@ class PhosphositeManager(KnowledgebaseManager):
     short_name = 'psp'
     source = 'biopax'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import biopax
 
         s3 = boto3.client('s3')
@@ -418,7 +418,7 @@ class RlimspManager(KnowledgebaseManager):
     _rlimsp_files = [('rlims.medline.json', 'pmid'),
                      ('rlims.pmc.json', 'pmcid')]
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import rlimsp
         import requests
 
@@ -445,7 +445,7 @@ class TrrustManager(KnowledgebaseManager):
     short_name = 'trrust'
     source = 'trrust'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import trrust
         tp = trrust.process_from_web()
         unique_stmts, dups = \
@@ -473,7 +473,7 @@ class DgiManager(KnowledgebaseManager):
     short_name = 'dgi'
     source = 'dgi'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import dgi
         logger.info('Processing DGI from web')
         dp = dgi.process_version('2020-Nov')
@@ -490,7 +490,7 @@ class CrogManager(KnowledgebaseManager):
     short_name = 'crog'
     source = 'crog'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import crog
         logger.info('Processing CRoG from web')
         cp = crog.process_from_web()
@@ -507,7 +507,7 @@ class ConibManager(KnowledgebaseManager):
     short_name = 'conib'
     source = 'bel'
 
-    def _get_statements(self):
+    def get_statements(self):
         import pybel
         import requests
         from indra.sources.bel import process_pybel_graph
@@ -540,7 +540,7 @@ class UbiBrowserManager(KnowledgebaseManager):
     short_name = 'ubibrowser'
     source = 'ubibrowser'
 
-    def _get_statements(self):
+    def get_statements(self):
         from indra.sources import ubibrowser
         logger.info('Processing UbiBrowser from web')
         up = ubibrowser.process_from_web()
@@ -600,7 +600,7 @@ def local_update(
         kbm = Mngr()
         db_id = kb_mapping.get((kbm.source, kbm.short_name), null)
         kb_kwargs = local_files.get(kbm.short_name, {})
-        stmts = kbm._get_statements(**kb_kwargs)
+        stmts = kbm.get_statements(**kb_kwargs)
         rows = [
             # raw stmt id, db info id, reading id, raw stmt json string
             (null, db_id, null, json.dumps(stmt.to_json()))

@@ -1,6 +1,7 @@
 __all__ = ['unpack', '_get_trids', '_fix_evidence_refs',
            'get_raw_stmts_frm_db_list', '_set_evidence_text_ref',
-           'get_statement_object']
+           'get_statement_object', 'clean_escaped_stmt_json_string',
+           'clean_json_loads', 'UnicodeEscapeError']
 
 import json
 import zlib

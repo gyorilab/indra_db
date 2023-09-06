@@ -116,13 +116,15 @@ def clean_escaped_stmt_json_string(stmt_json_str: str) -> str:
     return stmt_json_str
 
 
-def clean_json_loads(stmt_json_str: str):
+def clean_json_loads(stmt_json_str: str, remove_evidence: bool = False):
     """Clean up escaped characters in a statement JSON string and load it.
 
     Parameters
     ----------
     stmt_json_str :
         The JSON string to clean up and load.
+    remove_evidence :
+        If True, remove the evidence from the returned statement JSON.
 
     Returns
     -------
@@ -177,4 +179,6 @@ def clean_json_loads(stmt_json_str: str):
                 f"Could not load statement json string:{err}"
             ) from err
 
+    if remove_evidence:
+        stmt_json["evidence"] = []
     return stmt_json

@@ -4,10 +4,8 @@ import itertools
 import json
 import logging
 import math
-import os
 import pickle
 from collections import defaultdict, Counter
-from pathlib import Path
 from typing import Tuple, Set, Dict, List
 
 import networkx as nx
@@ -648,6 +646,7 @@ if __name__ == '__main__':
             f"{', '.join(missing)} missing, please run the dump commands above to get them."
         )
 
+    import os
     if not os.environ.get("INDRA_DB_LITE_LOCATION"):
         raise ValueError("Environment variable 'INDRA_DB_LITE_LOCATION' not set")
 

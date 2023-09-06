@@ -4,7 +4,6 @@ __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
            'CTDManager', 'VirHostNetManager', 'PhosphoElmManager',
            'DrugBankManager']
 
-import codecs
 import csv
 import gzip
 import json
@@ -28,26 +27,6 @@ from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 from .util import format_date
 
 logger = logging.getLogger(__name__)
-
-
-class StatementJSONDecodeError(Exception):
-    pass
-
-
-def load_statement_json(
-        json_str: str, attempt: int = 1, max_attempts: int = 5
-):
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError:
-        if attempt < max_attempts:
-            json_str = codecs.escape_decode(json_str)[0].decode()
-            return load_statement_json(
-                json_str, attempt=attempt + 1, max_attempts=max_attempts
-            )
-    raise StatementJSONDecodeError(
-        f"Could not decode statement JSON after " f"{attempt} attempts: {json_str}"
-    )
 
 
 class KnowledgebaseManager(object):

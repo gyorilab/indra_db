@@ -476,7 +476,7 @@ class DgiManager(KnowledgebaseManager):
     def get_statements(self):
         from indra.sources import dgi
         logger.info('Processing DGI from web')
-        dp = dgi.process_version('2020-Nov')
+        dp = dgi.process_version()
         logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(dp.statements)]
         unique_stmts, _ = extract_duplicates(filtered_stmts,

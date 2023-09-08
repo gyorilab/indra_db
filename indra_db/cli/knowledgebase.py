@@ -331,6 +331,7 @@ class HPRDManager(KnowledgebaseManager):
         # Download the files.
         hprd_base = 'http://www.hprd.org/RELEASE9/'
         resp = requests.get(hprd_base + 'HPRD_FLAT_FILES_041310.tar.gz')
+        resp.raise_for_status()
         tmp_dir = tempfile.mkdtemp('hprd_files')
         tmp_tarfile = os.path.join(tmp_dir, 'hprd_files.tar.gz')
         with open(tmp_tarfile, 'wb') as f:

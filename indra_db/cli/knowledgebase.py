@@ -388,8 +388,6 @@ class BelLcManager(KnowledgebaseManager):
 
 
 class PhosphositeManager(KnowledgebaseManager):
-    # TODO: New data is available - check
-    #  s3://bigmech/indra-db/Kinase_substrates.owl.gz
     name = 'Phosphosite Plus'
     short_name = 'psp'
     source = 'biopax'

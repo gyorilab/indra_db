@@ -209,7 +209,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
              'ctd', 'drugbank'}
 
     def __init__(self, *args, **kwargs):
-        self.counts = defaultdict(lambda: 0)
+        self.counts = Counter()
         super(PathwayCommonsManager, self).__init__(*args, **kwargs)
 
     def _can_include(self, stmt):

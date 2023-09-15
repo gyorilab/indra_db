@@ -450,7 +450,6 @@ class TrrustManager(KnowledgebaseManager):
         unique_stmts, dups = \
             extract_duplicates(_expanded(tp.statements),
                                key_func=KeyFunc.mk_and_one_ev_src)
-        print(len(dups))
         return unique_stmts
 
 

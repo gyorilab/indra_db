@@ -246,14 +246,11 @@ class CTDManager(KnowledgebaseManager):
                'chemical_gene']
 
     def get_statements(self):
-        s3 = boto3.client('s3')
+        from indra.sources.ctd import process_from_web
         all_stmts = []
-        for subset in self.subsets:
-            logger.info('Fetching CTD subset %s from S3...' % subset)
-            key = 'indra-db/ctd_%s.pkl' % subset
-            resp = s3.get_object(Bucket='bigmech', Key=key)
-            stmts = pickle.loads(resp['Body'].read())
-            all_stmts += [s for s in _expanded(stmts)]
+        for subset in tqdm(self.subsets, desc="CTD subsets"):
+            ctd_processor = process_from_web(subset)
+            all_stmts += [s for s in _expanded(ctd_processor.statements)]
         # Return exactly one of multiple statements that are exactly the same
         # in terms of content and evidence.
         unique_stmts, _ = extract_duplicates(all_stmts,

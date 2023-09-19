@@ -425,8 +425,8 @@ class RlimspManager(KnowledgebaseManager):
         for fname, id_type in self._rlimsp_files:
             print("Processing %s..." % fname)
             res = requests.get(self._rlimsp_root + fname)
-            jsonish_str = res.content.decode('utf-8')
-            rp = rlimsp.process_from_jsonish_str(jsonish_str, id_type)
+            jsonl_str = res.content.decode('utf-8')
+            rp = rlimsp.process_jsonl_str(jsonl_str, id_type)
             stmts += rp.statements
             print("Added %d more statements from %s..."
                   % (len(rp.statements), fname))

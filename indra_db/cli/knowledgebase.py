@@ -266,7 +266,7 @@ class DrugBankManager(KnowledgebaseManager):
     def get_statements(self):
         s3 = boto3.client('s3')
         logger.info('Fetching DrugBank statements from S3...')
-        key = 'indra-db/drugbank_5.1.pkl'
+        key = 'indra-db/drugbank_5.1.10.pkl'
         resp = s3.get_object(Bucket='bigmech', Key=key)
         stmts = pickle.loads(resp['Body'].read())
         expanded_stmts = [s for s in _expanded(stmts)]

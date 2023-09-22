@@ -162,6 +162,7 @@ class CBNManager(KnowledgebaseManager):
         logger.info('Retrieving CBN network zip archive')
         tmp_zip = os.path.join(cbn_dir, 'cbn_human.zip')
         resp = requests.get(self.archive_url)
+        resp.raise_for_status()
         with open(tmp_zip, 'wb') as f:
             f.write(resp.content)
 

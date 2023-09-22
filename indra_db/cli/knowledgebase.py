@@ -658,6 +658,11 @@ def run(
     else:
         selected_kbs = [KnowledgebaseManager.__subclasses__()]
 
+    # Always skip HPRD: statements already exist in db, the source data hasn't
+    # been updated since 2009 and the server hosting the source data returns
+    # 500 errors when trying to download it
+    selected_kbs = [M for M in selected_kbs if M.short_name != 'hprd']
+
     logger.info(f"Selected knowledgebases: "
                 f"{', '.join([M.name for M in selected_kbs])}")
 

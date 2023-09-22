@@ -9,7 +9,7 @@ import gzip
 import json
 import os
 import zlib
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Type
 
 import boto3
 import click

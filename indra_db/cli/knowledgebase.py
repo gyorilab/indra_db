@@ -145,13 +145,11 @@ class CBNManager(KnowledgebaseManager):
     short_name = 'cbn'
     source = 'bel'
 
-    def __init__(self, archive_url=None):
-        if not archive_url:
-            self.archive_url = ('http://www.causalbionet.com/Content'
-                                '/jgf_bulk_files/Human-2.0.zip')
-        else:
-            self.archive_url = archive_url
-        return
+    def __init__(
+        self,
+        archive_url='https://www.causalbionet.com/Content/jgf_bulk_files/Human-2.0.zip'
+    ):
+        self.archive_url = archive_url
 
     def get_statements(self):
         import requests

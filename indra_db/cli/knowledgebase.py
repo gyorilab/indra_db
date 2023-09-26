@@ -147,7 +147,7 @@ class CBNManager(KnowledgebaseManager):
 
     def __init__(
         self,
-        archive_url='https://www.causalbionet.com/Content/jgf_bulk_files/Human-2.0.zip'
+        archive_url="https://github.com/pybel/cbn-bel/raw/master/Human-2.0.zip"
     ):
         self.archive_url = archive_url
 

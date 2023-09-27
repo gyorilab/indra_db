@@ -363,7 +363,6 @@ class HPRDManager(KnowledgebaseManager):
 
 
 class BelLcManager(KnowledgebaseManager):
-    # Todo: New data is available
     name = 'BEL Large Corpus'
     short_name = 'bel_lc'
     source = 'bel'

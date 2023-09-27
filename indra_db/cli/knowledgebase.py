@@ -562,7 +562,7 @@ def local_update(
     local_files :
         Dictionary of local files to use in the update. Keys are the
         knowledgebase short names, values are kwargs to pass to the
-        knowledgebase manager _get_statements method.
+        knowledgebase manager get_statements method.
     """
     if raw_stmts_tsv_gz_path == out_tsv_gz_path:
         raise ValueError("Input and output paths cannot be the same")

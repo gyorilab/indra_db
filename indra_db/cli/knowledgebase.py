@@ -173,9 +173,8 @@ class CBNManager(KnowledgebaseManager):
             logger.info('Extracting archive to %s' % tmp_dir)
             zipf.extractall(path=tmp_dir)
             logger.info('Processing jgif files')
-            for jgif in zipf.namelist():
+            for jgif in tqdm(zipf.namelist()):
                 if jgif.endswith('.jgf') or jgif.endswith('.jgif'):
-                    logger.info('Processing %s' % jgif)
                     pbp = process_cbn_jgif_file(os.path.join(tmp_dir, jgif))
                     stmts += pbp.statements
 

@@ -9,18 +9,20 @@ import gzip
 import json
 import os
 import zlib
-from typing import Dict, List, Tuple, Type
+from typing import Dict, List, Type
 
 import boto3
 import click
 import pickle
 import logging
 import tempfile
-from collections import defaultdict, Counter
+from collections import Counter
 
+from indra.util import batch_iter
 from tqdm import tqdm
 
 from indra.statements.validate import assert_valid_statement
+from indra.tools import assemble_corpus as ac
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 
@@ -545,7 +547,6 @@ class UbiBrowserManager(KnowledgebaseManager):
 
 def local_update(
     kb_manager_list: List[Type[KnowledgebaseManager]],
-    kb_mapping: Dict[Tuple[str, str], int],
     local_files: Dict[str, Dict] = None,
 ):
     """Update the knowledgebases of a local raw statements file dump
@@ -555,50 +556,64 @@ def local_update(
     kb_manager_list :
         List of the (un-instantiated) classes of the knowledgebase managers
         to use in update.
-    kb_mapping :
-        Mapping of knowledgebase source api and name, to db info id. Keyed
-        by tuple of (source api, db name) from db info table.
     local_files :
         Dictionary of local files to use in the update. Keys are the
         knowledgebase short names, values are kwargs to pass to the
         knowledgebase manager get_statements method.
     """
-    if raw_stmts_tsv_gz_path == out_tsv_gz_path:
-        raise ValueError("Input and output paths cannot be the same")
     if not kb_manager_list:
         raise ValueError(
             "No knowledgebase managers provided, nothing to update"
         )
-    null = "\\N"
 
     # Get the ids of the knowledgebases to update
     logger.info("Updating the following knowledgebases:")
-    ids_to_update = set()
     for kb_manager in kb_manager_list:
-        try:
-            kb_id = kb_mapping[(kb_manager.source, kb_manager.short_name)]
-            ids_to_update.add(kb_id)
-            logger.info(
-                f"  {kb_id}: {kb_manager.name} ({kb_manager.short_name})"
-            )
-        except KeyError:
-            logger.info(f"Detected new knowledgebase: {kb_manager.name} "
-                        f"({kb_manager.short_name})")
-    assert ids_to_update, "No knowledgebases to update"
+        logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
 
     counter = Counter()
     logger.info("Updating knowledgebases")
-    for Mngr in tqdm(kb_manager_list, desc="Updating knowledgebases"):
+    for ix, Mngr in enumerate(kb_manager_list):
         kbm = Mngr()
-        db_id = kb_mapping.get((kbm.source, kbm.short_name), null)
-        kb_kwargs = local_files.get(kbm.short_name, {})
-        stmts = kbm.get_statements(**kb_kwargs)
-        rows = [
-            # raw stmt id, db info id, reading id, raw stmt json string
-            (null, db_id, null, json.dumps(stmt.to_json()))
-            for stmt in stmts
-        ]
-        counter[(kbm.source, kbm.short_name)] = len(stmts)
+        logger.info(
+            f"[{ix+1}/{len(kb_manager_list)}] {kbm.name} ({kbm.short_name})"
+        )
+
+        # Write statements for this knowledgebase to a file
+        fname = f"processed_statements_{kbm.source}_{kbm.short_name}.tsv.gz"
+        with gzip.open(fname, "wt") as fh:
+            writer = csv.writer(fh, delimiter="\t")
+
+            kb_kwargs = local_files.get(kbm.short_name, {})
+            stmts = kbm.get_statements(**kb_kwargs)
+
+            # Do preassembly
+            if len(stmts) > 100000:
+                stmts_iter = batch_iter(stmts, 100000)
+                batches = True
+                t = tqdm(desc=f"Preassembling {kbm.short_name}",
+                         total=len(stmts)//100000+1)
+            else:
+                stmts_iter = [stmts]
+                batches = False
+                t = None
+                logger.info(f"Preassembling {kbm.short_name}")
+
+            for stmts in stmts_iter:
+                # This part ultimately calls indra_db_lite or the principal db,
+                # depending on which is available
+                stmts = ac.fix_invalidities(stmts, in_place=True)
+                stmts = ac.map_grounding(stmts)
+                stmts = ac.map_sequence(stmts)
+                rows = []
+                for stmt in tqdm(stmts, leave=not batches):
+                    # Get the statement hash and get the source counts
+                    stmt_hash = stmt.get_hash(refresh=True)
+                    rows.append((stmt_hash, json.dumps(stmt.to_json())))
+                writer.writerows(rows)
+                if batches:
+                    t.update(1)
+                counter[(kbm.source, kbm.short_name)] += len(stmts)
 
     logger.info("Statements produced per knowledgebase:")
     for (source, short_name), count in counter.most_common():
@@ -642,9 +657,6 @@ def run(
     from indra_db.util import get_db
     db = get_db('primary')
 
-    res = db.select_all(db.DBInfo)
-    kb_mapping = {(r.source_api, r.db_name): r.id for r in res}
-
     # Determine which sources we are working with
     if sources:
         source_set = {s.lower() for s in sources}
@@ -671,7 +683,7 @@ def run(
     # Handle the other tasks.
     logger.info(f"Running {task}...")
     if task == "local-update":
-        local_update(kb_manager_list=selected_kbs, kb_mapping=kb_mapping)
+        local_update(kb_manager_list=selected_kbs)
     else:
         for Manager in selected_kbs:
             kbm = Manager()

@@ -21,6 +21,8 @@ from indra.statements import stmts_from_json, stmt_from_json, Statement, \
     Evidence
 from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
+
+from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
 from .util import clean_json_loads
 from .locations import *
 
@@ -278,6 +280,37 @@ def distill_statements() -> Tuple[Set, Dict]:
         with reading_to_text_ref_map_fpath.open("rb") as fh:
             reading_id_to_text_ref_id = pickle.load(fh)
     return drop_readings, reading_id_to_text_ref_id
+
+
+def run_kb_pipeline() -> Dict[int, Path]:
+    from indra_db.util import get_db
+    db = get_db('primary')
+
+    res = db.select_all(db.DBInfo)
+    kb_mapping = {(r.source_api, r.db_name): r.id for r in res}
+
+    # Select all knowledgebase managers except HPRD: statements already
+    # exist in db, the source data hasn't been updated since 2009 and the
+    # server hosting the source data returns 500 errors when trying to
+    # download it
+    selected_kbs = []
+    kb_file_mapping = {}
+    for M in KnowledgebaseManager.__subclasses__():
+        m = M()
+        if m.short_name != "hprd":
+            db_id = kb_mapping.get((m.source, m.short_name))
+            if db_id is None:
+                raise ValueError(
+                    f"Could not find db_id for {m.source} {m.short_name} "
+                    f"in the db_info table on the principal database. Please "
+                    f"add it."
+                )
+            selected_kbs.append(M)
+            kb_file_mapping[db_id] = m.get_local_fpath()
+
+    local_update(kb_manager_list=selected_kbs)
+
+    return kb_file_mapping
 
 
 def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):

@@ -6,7 +6,7 @@ import logging
 import math
 import pickle
 from collections import defaultdict, Counter
-from typing import Tuple, Set, Dict, List
+from typing import Tuple, Set, Dict, List, Optional
 
 import networkx as nx
 import numpy as np
@@ -328,14 +328,31 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
     return kb_file_mapping
 
 
-def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
+def preassembly(
+    drop_readings: Set[int],
+    reading_id_to_text_ref_id: Dict,
+    drop_db_info_ids: Optional[Set[int]] = None,
+):
+    # Todo:
+    #  - parallelize, i.e. run different batches in different threads (can
+    #    they write to the same file? If not, have them write to
+    #    different files that are concatenated after all threads are done)
+    """Preassemble statements and collect source counts
+
+    Parameters
+    ----------
+    drop_readings :
+        A set of reading ids to drop
+    reading_id_to_text_ref_id :
+        A dictionary mapping reading ids to text ref ids
+    drop_db_info_ids :
+        A set of db_info ids to drop
+    """
     if not processed_stmts_fpath.exists() or not source_counts_fpath.exists():
         logger.info("Preassembling statements and collecting source counts")
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
         source_counts = defaultdict(lambda: defaultdict(int))
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
-        # Todo:
-        #  - parallelize
         with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
                 gzip.open(processed_stmts_fpath.as_posix(), "wt") as fh_out, \
                 gzip.open(raw_id_info_map_fpath.as_posix(), "wt") as fh_info:
@@ -350,9 +367,12 @@ def preassembly(drop_readings: Set, reading_id_to_text_ref_id: Dict):
                     raw_stmt_id_int = int(raw_stmt_id)
                     db_info_id = int(db_info_id) if db_info_id != "\\N" else None
                     refs = None
-                    int_reading_id = None
+
+                    # Skip if this is for a dropped knowledgebase or reading
+                    if drop_db_info_ids and db_info_id and \
+                            db_info_id in drop_db_info_ids:
+                        continue
                     if reading_id != "\\N":
-                        # Skip if this is for a dropped reading
                         int_reading_id = int(reading_id)
                         if int_reading_id in drop_readings:
                             continue

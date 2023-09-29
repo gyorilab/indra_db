@@ -9,6 +9,7 @@ import gzip
 import json
 import os
 import zlib
+from pathlib import Path
 from typing import Dict, List, Type
 
 import boto3
@@ -25,17 +26,21 @@ from indra.statements.validate import assert_valid_statement
 from indra.tools import assemble_corpus as ac
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
+from indra_db.readonly_dumping.locations import TEMP_DIR
 
 from .util import format_date
 
 logger = logging.getLogger(__name__)
 
 
+KB_DIR = TEMP_DIR.joinpath("knowledgebases")
+
+
 class KnowledgebaseManager(object):
     """This is a class to lay out the methods for updating a dataset."""
-    name = NotImplemented
-    short_name = NotImplemented
-    source = NotImplemented
+    name: str = NotImplemented
+    short_name: str = NotImplemented
+    source: str = NotImplemented
 
     def upload(self, db):
         """Upload the content for this dataset into the database."""
@@ -93,6 +98,18 @@ class KnowledgebaseManager(object):
     def get_statements(self, **kwargs):
         raise NotImplementedError("Statement retrieval must be defined in "
                                   "each child.")
+
+    def get_local_fpath(self) -> Path:
+        """Return the local path to the knowledge base file."""
+        if self.short_name == self.source:
+            local_name = self.short_name
+        elif self.short_name in self.source or self.source in self.short_name:
+            # Pick the longer name
+            local_name = self.short_name \
+                if len(self.short_name) > len(self.source) else self.source
+        else:
+            local_name = f"{self.short_name}_{self.source}"
+        return KB_DIR.joinpath(f"assembled_{local_name}.tsv.gz")
 
 
 class TasManager(KnowledgebaseManager):

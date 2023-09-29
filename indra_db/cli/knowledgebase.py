@@ -360,6 +360,9 @@ class HPRDManager(KnowledgebaseManager):
         for files_dir in dirs:
             if files_dir.startswith('FLAT_FILES'):
                 break
+        else:
+            # Loop doesn't break: FLAT_FILES directory not found
+            raise NotADirectoryError('Could not find FLAT_FILES directory.')
         files_path = os.path.join(tmp_dir, files_dir)
         file_names = {'id_mappings_file': 'HPRD_ID_MAPPINGS',
                       'complexes_file': 'PROTEIN_COMPLEXES',

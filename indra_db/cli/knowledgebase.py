@@ -603,12 +603,11 @@ def local_update(
         logger.info("No knowledgebases to update")
         return
 
-    logger.info("Updating the following knowledgebases:")
+    logger.info("Generating statement from the following knowledgebases:")
     for kb_manager in kbs_to_run:
         logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
 
     counter = Counter()
-    logger.info("Updating knowledgebases")
     for ix, Mngr in enumerate(kb_manager_list):
         kbm = Mngr()
         logger.info(

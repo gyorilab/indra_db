@@ -282,7 +282,22 @@ def distill_statements() -> Tuple[Set, Dict]:
     return drop_readings, reading_id_to_text_ref_id
 
 
-def run_kb_pipeline() -> Dict[int, Path]:
+def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
+    """Run the knowledgebase pipeline
+
+    Parameters
+    ----------
+    refresh :
+        If True, generate new statements for each knowledgebase manager and
+        overwrite any local files. If False (default), the local files will
+        be used if they exist.
+
+    Returns
+    -------
+    :
+        A dictionary mapping db_info ids to the local file paths of the
+        statements for that knowledgebase
+    """
     from indra_db.util import get_db
     db = get_db('primary')
 
@@ -308,7 +323,7 @@ def run_kb_pipeline() -> Dict[int, Path]:
             selected_kbs.append(M)
             kb_file_mapping[db_id] = m.get_local_fpath()
 
-    local_update(kb_manager_list=selected_kbs)
+    local_update(kb_manager_list=selected_kbs, refresh=refresh)
 
     return kb_file_mapping
 

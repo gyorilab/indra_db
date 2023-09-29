@@ -600,7 +600,7 @@ def local_update(
         )
 
         # Write statements for this knowledgebase to a file
-        fname = f"processed_statements_{kbm.source}_{kbm.short_name}.tsv.gz"
+        fname = kbm.get_local_fpath().as_posix()
         with gzip.open(fname, "wt") as fh:
             writer = csv.writer(fh, delimiter="\t")
 

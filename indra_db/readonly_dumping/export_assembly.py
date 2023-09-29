@@ -1,3 +1,4 @@
+import argparse
 import csv
 import gzip
 import itertools
@@ -701,6 +702,11 @@ if __name__ == '__main__':
 
     Time estimate: ~2.5 mins
     """
+    parser = argparse.ArgumentParser("Run the export and assembly pipeline")
+    parser.add_argument("--refresh-kb", action="store_true",
+                        help="If set, overwrite any existing local files "
+                             "with new ones for the knowledgebase statements")
+    args = parser.parse_args()
     logger.info(f"Root data path: {TEMP_DIR}")
 
     # 0. Dump raw data (raw statements, text content + reading, text refs)
@@ -729,6 +735,9 @@ if __name__ == '__main__':
         raise ValueError(
             "No adeft models detected, run 'python -m adeft.download' to download models"
         )
+
+    # Run knowledge base pipeline if the output files don't exist
+    kb_updates = run_kb_pipeline(refresh=args.refresh)
 
     # Check if output from preassembly (step 2) already exists
     if not processed_stmts_fpath.exists() or not source_counts_fpath.exists():

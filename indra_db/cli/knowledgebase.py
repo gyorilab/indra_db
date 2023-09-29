@@ -568,6 +568,7 @@ class UbiBrowserManager(KnowledgebaseManager):
 def local_update(
     kb_manager_list: List[Type[KnowledgebaseManager]],
     local_files: Dict[str, Dict] = None,
+    refresh: bool = False,
 ):
     """Update the knowledgebases of a local raw statements file dump
 
@@ -580,6 +581,8 @@ def local_update(
         Dictionary of local files to use in the update. Keys are the
         knowledgebase short names, values are kwargs to pass to the
         knowledgebase manager get_statements method.
+    refresh :
+        If True, the local files will be recreated even if they already exist.
     """
     if not kb_manager_list:
         raise ValueError(
@@ -587,8 +590,21 @@ def local_update(
         )
 
     # Get the ids of the knowledgebases to update
-    logger.info("Updating the following knowledgebases:")
+    kbs_to_run = []
     for kb_manager in kb_manager_list:
+        kbm = kb_manager()
+        # Add the knowledgebase to the list if it is not already there
+        # or if we are refreshing
+        if refresh or not kbm.get_local_fpath().exists():
+            kbs_to_run.append(kb_manager)
+
+    # If there are no knowledgebases to update, we are done
+    if not kbs_to_run:
+        logger.info("No knowledgebases to update")
+        return
+
+    logger.info("Updating the following knowledgebases:")
+    for kb_manager in kbs_to_run:
         logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
 
     counter = Counter()

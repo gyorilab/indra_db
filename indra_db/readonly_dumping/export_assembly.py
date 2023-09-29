@@ -351,7 +351,7 @@ def preassembly(
     if not processed_stmts_fpath.exists() or not source_counts_fpath.exists():
         logger.info("Preassembling statements and collecting source counts")
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
-        source_counts = defaultdict(lambda: defaultdict(int))
+        source_counts = defaultdict(Counter)
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
         with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
                 gzip.open(processed_stmts_fpath.as_posix(), "wt") as fh_out, \

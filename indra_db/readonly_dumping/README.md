@@ -253,3 +253,56 @@ following arguments:
 Dump a restore file from the readonly database and upload it to S3.
 
 **Status: Not Implemented (code from current setup can be adapted)**
+
+# Graph of the Pipeline
+
+This graph shows the dependencies between the different files in the initial
+part of the pipeline that produces the seed files.
+```mermaid
+graph TD;
+    A[Source Counts] ----> B[Belief Scores];
+    C[Refinement Graph] ----> B;
+    D[Unique Statements] ----> B;
+    D ---> C;
+    E[Processed Statements] ----> D;
+    E ---> F[Grounded Statements];
+    G[KB Source Counts] ----> A;
+    I[Reading Source Counts] ----> A;
+    J[KB Processed Statements] ----> E;
+    L[Reading Processed Statements] ----> I;
+    L ----> E;
+%% Raw statements and Text Refs produce
+%% - processed statements
+%% - raw id info map
+%% - stmt hash to raw id map
+%% - reading source counts
+    M[Raw Statements Dump] ----> I;
+    M ----> L;
+    M ----> N[Reading Raw Id Info Map];
+    N ----> X;
+    M ----> O[Reading Stmt Hash to Raw Id Map];
+    O ----> Y;
+    P[Text Refs Dump] ----> I;
+    P ----> L;
+    P ----> N;
+    P ----> O;
+    Q[Reading Text Content Meta Dump] --> R[Distillation];
+    R --> I;
+    R --> L;
+    R --> N;
+    R --> O;
+%% The Dumps are from the principal database
+    S[Principal Database] ----> M;
+    S ----> P;
+    S ----> Q;
+%% The KB Processes Statements and KB Source Counts are from the KBs
+    T[Knowledge Bases] ----> J;
+    T ----> G;
+    T --TODO--> U[KB Info Id Map];
+    T --TODO--> V[KB Stmt Hash to Raw Id Map];
+%% Merge the Info Id Maps and the Stmt Hash to Raw Id Maps
+    U ----> X[Info Id Map];
+    V ----> Y[Stmt Hash to Raw Id Map];
+```
+
+[//]: # (TODO: Add the second pipeline step to the graph or another graph)

@@ -28,6 +28,8 @@ __all__ = [
     "stmt_hash_to_raw_stmt_ids_reading_fpath",
     "stmt_hash_to_raw_stmt_ids_knowledgebases_fpath",
     "raw_id_info_map_fpath",
+    "raw_id_info_map_reading_fpath",
+    "raw_id_info_map_knowledgebases_fpath",
     "grounded_stmts_fpath",
     "unique_stmts_fpath",
     "refinements_fpath",
@@ -81,6 +83,12 @@ stmt_hash_to_raw_stmt_ids_knowledgebases_fpath = TEMP_DIR.joinpath(
     "stmt_hash_to_raw_stmt_ids_knowledgebases.pkl"
 )
 raw_id_info_map_fpath = TEMP_DIR.joinpath("raw_stmt_id_to_info_map.tsv.gz")
+raw_id_info_map_reading_fpath = TEMP_DIR.joinpath(
+    "raw_stmt_id_to_info_map_reading.tsv.gz"
+)
+raw_id_info_map_knowledgebases_fpath = TEMP_DIR.joinpath(
+    "raw_stmt_id_to_info_map_knowledgebases.tsv.gz"
+)
 grounded_stmts_fpath = TEMP_DIR.joinpath("grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.joinpath("unique_statements.tsv.gz")
 refinements_fpath = TEMP_DIR.joinpath("refinements.tsv.gz")

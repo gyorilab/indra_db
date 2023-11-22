@@ -639,8 +639,7 @@ def local_update(
                 logger.info(f"Preassembling {kbm.short_name}")
 
             for stmts in stmts_iter:
-                # This part ultimately calls indra_db_lite or the principal db,
-                # depending on which is available
+                # Pre-process statements
                 stmts = ac.fix_invalidities(stmts, in_place=True)
                 stmts = ac.map_grounding(stmts)
                 stmts = ac.map_sequence(stmts)

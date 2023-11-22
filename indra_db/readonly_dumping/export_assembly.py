@@ -385,7 +385,7 @@ def preassembly(
                             refs = text_refs.get(text_ref_id)
 
                     # Append to info rows
-                    info_rows.append((raw_stmt_id_int, db_info_id,
+                    info_rows.append((raw_stmt_id_int, db_info_id or "\\N",
                                       int_reading_id, stmt_json_raw))
                     stmt_json = clean_json_loads(stmt_json_raw)
                     if refs:

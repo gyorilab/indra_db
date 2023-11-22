@@ -544,7 +544,7 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
 
     # Open two csv readers to the same file
     if not refinements_fpath.exists():
-        logger.info("Calculating refinements")
+        logger.info("6. Calculating refinements")
         refinements = set()
         # This takes ~9-10 hours to run
         with gzip.open(unique_stmts_fpath, "rt") as fh1:
@@ -605,7 +605,7 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
             tsv_writer = csv.writer(f, delimiter="\t")
             tsv_writer.writerows(refinements)
     else:
-        logger.info(f"Loading refinements from existing file"
+        logger.info(f"6. Loading refinements from existing file"
                     f"{refinements_fpath.as_posix()}")
         with gzip.open(refinements_fpath.as_posix(), "rt") as f:
             tsv_reader = csv.reader(f, delimiter="\t")
@@ -798,7 +798,8 @@ if __name__ == '__main__':
             "No adeft models detected, run 'python -m adeft.download' to download models"
         )
 
-    # Run knowledge base pipeline if the output files don't exist
+    # 1. Run knowledge base pipeline if the output files don't exist
+    logger.info("1. Running knowledgebase pipeline")
     kb_updates = run_kb_pipeline(refresh=args.refresh)
 
     # Check if output from preassembly (step 2) already exists
@@ -806,24 +807,37 @@ if __name__ == '__main__':
         not processed_stmts_reading_fpath.exists() or
         not source_counts_reading_fpath.exists()
     ):
-        # 1. Distill statements
-        logger.info("1. Running statement distillation")
+        # 2. Distill statements
+        logger.info("2. Running statement distillation")
         readings_to_drop, reading_id_textref_id_map = distill_statements()
 
-        # 2. Preassembly (needs indra_db_lite setup)
-        logger.info("2. Running preassembly")
-        preassembly(drop_readings=readings_to_drop, reading_id_to_text_ref_id=reading_id_textref_id_map)
+        # 3. Preassembly (needs indra_db_lite setup)
+        logger.info("3. Running preassembly")
+        preassembly(
+            drop_readings=readings_to_drop,
+            reading_id_to_text_ref_id=reading_id_textref_id_map,
+            drop_db_info_ids=set(kb_updates.keys()),
+        )
     else:
-        logger.info("Output from step 2 already exists, skipping to step 3...")
+        logger.info(
+            "Output from step 2 & 3 already exists, skipping to step 4..."
+        )
 
-    # 3. Ground and deduplicate statements (here don't discard any statements
+    # 4. Merge the processed raw statements with the knowledgebase statements
+    logger.info(
+        "4. Merging processed knowledgebase statements with processed raw statements"
+    )
+    merge_processed_statements(kb_updates)
+
+    # 5. Ground and deduplicate statements (here don't discard any statements
     #    based on number of agents, as is done in cogex)
-    logger.info("3. Running grounding and deduplication")
+    logger.info("5. Running grounding and deduplication")
     ground_deduplicate()
 
-    # Setup bio ontololgy for preassembler
+    # Steps 6 & 7
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():
-        logger.info("4. Running setup for refinement calculation")
+        logger.info("6. Running setup for refinement calculation")
+        # Setup bio ontology for pre-assembler
         bio_ontology.initialize()
         bio_ontology._build_transitive_closure()
         pa = Preassembler(bio_ontology)
@@ -837,7 +851,7 @@ if __name__ == '__main__':
 
         batch_count = math.ceil(num_rows / batch_size)
 
-        # 4. Calculate refinement graph:
+        # 6. Calculate refinement graph:
         cycles_found = False
         ref_graph = get_refinement_graph(batch_size=batch_size,
                                          num_batches=batch_count)
@@ -849,8 +863,8 @@ if __name__ == '__main__':
             )
 
         else:
-            # 5. Get belief scores, if there were no refinement cycles
-            logger.info("5. Calculating belief")
+            # 7. Get belief scores, if there were no refinement cycles
+            logger.info("7. Calculating belief")
             calculate_belief(
                 ref_graph, num_batches=batch_count, batch_size=batch_size
             )

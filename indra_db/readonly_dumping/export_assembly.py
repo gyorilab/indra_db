@@ -349,13 +349,16 @@ def preassembly(
     drop_db_info_ids :
         A set of db_info ids to drop
     """
-    if not processed_stmts_fpath.exists() or not source_counts_fpath.exists():
+    if (
+        not processed_stmts_reading_fpath.exists() or
+        not source_counts_reading_fpath.exists()
+    ):
         logger.info("Preassembling statements and collecting source counts")
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
         source_counts = defaultdict(Counter)
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
         with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
-                gzip.open(processed_stmts_fpath.as_posix(), "wt") as fh_out, \
+                gzip.open(processed_stmts_reading_fpath.as_posix(), "wt") as fh_out, \
                 gzip.open(raw_id_info_map_fpath.as_posix(), "wt") as fh_info:
             raw_stmts_reader = csv.reader(fh, delimiter="\t")
             writer = csv.writer(fh_out, delimiter="\t")
@@ -411,10 +414,10 @@ def preassembly(
                 rows = [(stmt.get_hash(), json.dumps(stmt.to_json())) for stmt in stmts]
                 writer.writerows(rows)
 
-        # Cast defaultdict to dict and pickle the source counts
+        # Cast Counter to dict and pickle the source counts
         logger.info("Dumping source counts")
         source_counts = dict(source_counts)
-        with source_counts_fpath.open("wb") as fh:
+        with source_counts_reading_fpath.open("wb") as fh:
             pickle.dump(source_counts, fh)
 
         # Cast defaultdict to dict and pickle the stmt hash to raw stmt ids
@@ -740,7 +743,10 @@ if __name__ == '__main__':
     kb_updates = run_kb_pipeline(refresh=args.refresh)
 
     # Check if output from preassembly (step 2) already exists
-    if not processed_stmts_fpath.exists() or not source_counts_fpath.exists():
+    if (
+        not processed_stmts_reading_fpath.exists() or
+        not source_counts_reading_fpath.exists()
+    ):
         # 1. Distill statements
         logger.info("1. Running statement distillation")
         readings_to_drop, reading_id_textref_id_map = distill_statements()

@@ -15,7 +15,12 @@ reading_text_content_fpath = TEMP_DIR.joinpath("reading_text_content_meta.tsv.gz
 text_refs_fpath = TEMP_DIR.joinpath("text_refs_principal.tsv.gz")
 drop_readings_fpath = TEMP_DIR.joinpath("drop_readings.pkl")
 reading_to_text_ref_map_fpath = TEMP_DIR.joinpath("reading_to_text_ref_map.pkl")
+processed_stmts_reading_fpath = TEMP_DIR.joinpath("processed_statements_reading.tsv.gz")
 processed_stmts_fpath = TEMP_DIR.joinpath("processed_statements.tsv.gz")
+source_counts_reading_fpath = TEMP_DIR.joinpath("source_counts_reading.pkl")
+source_counts_knowledgebases_fpath = TEMP_DIR.joinpath(
+    "source_counts_knowledgebases.pkl"
+)
 source_counts_fpath = TEMP_DIR.joinpath("source_counts.pkl")
 stmt_hash_to_raw_stmt_ids_fpath = TEMP_DIR.joinpath(
     "stmt_hash_to_raw_stmt_ids.pkl")

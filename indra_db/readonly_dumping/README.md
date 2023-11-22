@@ -2,10 +2,10 @@
 
 This README describes the pipeline used for creating the readonly database.
 
-Todos (as of 2023-11-21):
+Todos (as of 2023-11-22):
 - [ ] Add mappings from KB statements so merge with reading statements can 
   be done
-  - [ ] Source counts
+  - [X] Source counts
   - [ ] Raw statement id to db_info_id, reading_id, and statement json
   - [ ] Statement hash to raw statement id
 - [ ] Write function for merge distilled and preassembled statements from 
@@ -43,7 +43,7 @@ and step 4 is run in `indra_db/readonly_dumping/readonly_dumping.py`.
 
 PostgreSQL is required to run the pipeline. A local instance of the readonly 
 database will be created in the process. Make sure there is enough space on 
-the disk to hold the database, typically XXX GB.
+the disk to hold the database, typically ***XXX*** GB.
 
 #### Installing and Starting PostgreSQL on Ubuntu
 
@@ -176,7 +176,7 @@ principal database. These files are:
 **Status:**
 - [X] Write script for local update
 - [ ] Save statement hash to raw statement id mapping
-- [ ] Save source counts and create code to merge with reading source counts
+- [X] Save source counts and create code to merge with reading source counts
 - [ ] Map "raw id" of kb statements to db_info_id, reading_id, and statement json
 - [X] Add knowledge base update to export_assembly.py
 

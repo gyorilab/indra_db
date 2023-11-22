@@ -26,7 +26,10 @@ from indra.statements.validate import assert_valid_statement
 from indra.tools import assemble_corpus as ac
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
-from indra_db.readonly_dumping.locations import TEMP_DIR
+from indra_db.readonly_dumping.locations import (
+    TEMP_DIR,
+    source_counts_knowledgebases_fpath
+)
 
 from .util import format_date
 
@@ -607,7 +610,7 @@ def local_update(
     for kb_manager in kbs_to_run:
         logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
 
-    counter = Counter()
+    source_counts = Counter()
     for ix, Mngr in enumerate(kb_manager_list):
         kbm = Mngr()
         logger.info(
@@ -648,12 +651,18 @@ def local_update(
                 writer.writerows(rows)
                 if batches:
                     t.update(1)
-                counter[(kbm.source, kbm.short_name)] += len(stmts)
+                source_counts[kbm.source] += len(stmts)
+        if batches:
+            t.close()
 
     logger.info("Statements produced per knowledgebase:")
-    for (source, short_name), count in counter.most_common():
+    for (source, short_name), count in source_counts.most_common():
         logger.info(f"  - {source} {short_name}: {count}")
-    logger.info(f"Total rows added: {sum(counter.values())}")
+    logger.info(f"Total rows added: {sum(source_counts.values())}")
+
+    # Dump source counts
+    with source_counts_knowledgebases_fpath.open("wb") as fh:
+        pickle.dump(source_counts, fh)
 
 
 @click.group()

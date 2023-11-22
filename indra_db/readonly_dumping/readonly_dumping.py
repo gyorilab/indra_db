@@ -3,12 +3,14 @@ import csv
 import gzip
 import json
 import logging
+import os
 import pickle
 import re
 import subprocess
 import uuid
 from collections import defaultdict, Counter
 from hashlib import md5
+from pathlib import Path
 from textwrap import dedent
 from typing import Tuple, Iterable
 
@@ -23,7 +25,11 @@ from indra.statements import stmt_from_json, ActiveForm
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.schemas.mixins import ReadonlyTable
-from schemas.readonly_schema import ro_type_map, ro_role_map, SOURCE_GROUPS
+from indra_db.schemas.readonly_schema import (
+    ro_type_map,
+    ro_role_map,
+    SOURCE_GROUPS
+)
 
 from .locations import *
 from .util import clean_json_loads

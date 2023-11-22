@@ -143,6 +143,11 @@ def load_text_refs_by_trid(fname: str) -> Dict:
         desc="Processing text refs into a lookup dictionary",
     ):
         ids = line.strip().split("\t")
+        # Columns in raw_statements.tsv.gz are:
+        # raw_statement_id, db_info_id, reading_id, raw_json
+        # Columns in reading_text_content_meta.tsv.gz:
+        # reading_id, reader_version, text_content_id, text_ref_id, source, text_type
+        # Columns in text_refs_principal.tsv.gz:
         id_names = ["TRID", "PMID", "PMCID", "DOI", "PII", "URL", "MANUSCRIPT_ID"]
         d = {}
         for id_name, id_val in zip(id_names, ids):
@@ -353,7 +358,9 @@ def preassembly(
         not processed_stmts_reading_fpath.exists() or
         not source_counts_reading_fpath.exists()
     ):
-        logger.info("Preassembling statements and collecting source counts")
+        logger.info("Preassembling statements, collecting source counts, "
+                    "mapping from stmt hash to raw statement ids and mapping "
+                    "from raw statement ids to db info and reading ids")
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
         source_counts = defaultdict(Counter)
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
@@ -547,6 +554,7 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
         logger.info("6. Calculating refinements")
         refinements = set()
         # This takes ~9-10 hours to run
+        # todo: parallelize
         with gzip.open(unique_stmts_fpath, "rt") as fh1:
             reader1 = csv.reader(fh1, delimiter="\t")
             for outer_batch_ix in tqdm(

@@ -253,6 +253,8 @@ class ReadonlySchema(Schema):
         class ReadingRefLink(self.base, ReadonlyTable, IndraDBRefTable):
             __tablename__ = 'reading_ref_link'
             __table_args__ = {'schema': 'readonly'}
+            # Columns:
+            # pmid, pmid_num, pmcid, pmcid_num, pmcid_version, doi, doi_ns, doi_id, tex_ref_id, pii, url, manuscript_id, text_content_id, source, reading_id, reader
             __definition__ = (
                 'SELECT pmid, pmid_num, pmcid, pmcid_num, '
                 'pmcid_version, doi, doi_ns, doi_id, tr.id AS trid,'
@@ -391,6 +393,8 @@ class ReadonlySchema(Schema):
         - **src**
         """
         class RawStmtSrc(self.base, ReadonlyTable):
+            # columns:
+            # raw_statement_id, source (reader/db_name)
             __tablename__ = 'raw_stmt_src'
             __table_args__ = {'schema': 'readonly'}
             __definition__ = ('SELECT raw_statements.id AS sid, '
@@ -697,6 +701,8 @@ class ReadonlySchema(Schema):
         class RawStmtMeshTerms(self.base, ReadonlyTable):
             __tablename__ = 'raw_stmt_mesh_terms'
             __table_args__ = {'schema': 'readonly'}
+            # Columns:
+            # raw_statement_id, mesh_num
             __definition__ = (
                 'SELECT DISTINCT raw_statements.id as sid,\n'
                 '       mesh_num\n'
@@ -731,6 +737,7 @@ class ReadonlySchema(Schema):
         class RawStmtMeshConcepts(self.base, ReadonlyTable):
             __tablename__ = 'raw_stmt_mesh_concepts'
             __table_args__ = {'schema': 'readonly'}
+            # raw_statement_id, mesh_num
             __definition__ = ('SELECT DISTINCT raw_statements.id as sid,\n'
                               '       mesh_num\n'
                               'FROM text_ref\n'
@@ -779,6 +786,19 @@ class ReadonlySchema(Schema):
         - **mk_hash**
         """
         class _PaMeta(self.base, ReadonlyTable):
+            # Depends on:
+            #  - PaActivity (from principal schema)
+            #  - PaAgents (from principal schema)
+            #  - PAStatements (from principal schema)
+            #  - Belief (from readonly schema)
+            #  - EvidenceCounts (from readonly schema)
+            #  - PaAgentCounts (from readonly schema)
+            #  - TypeMap (from ???)
+            #  - RoleMap (from ???)
+            # To get the needed info from the principal schema, select from
+            # the tables on the principal schema, joined by mk_hash and then
+            # read in belief, agent count and evidence count from the
+            # belief dump, unique statement file and source counts file.
             __tablename__ = 'pa_meta'
             __table_args__ = {'schema': 'readonly'}
             __definition__ = (
@@ -876,6 +896,9 @@ class ReadonlySchema(Schema):
         class SourceMeta(self.base, SpecialColumnTable):
             __tablename__ = 'source_meta'
             __table_args__ = {'schema': 'readonly'}
+            # Columns:
+            # mk_hash, ev_count, belief, type_num, activity, is_active,
+            # agent_count, num_srcs, src_json, only_src, has_rd, has_db
             __definition_fmt__ = (
                 'WITH jsonified AS (\n'
                 '    SELECT mk_hash, \n'
@@ -996,6 +1019,8 @@ class ReadonlySchema(Schema):
         - **activity**
         """
         class TextMeta(self.base, NamespaceLookup):
+            # Depends on pa_meta
+            # Selects only pa_meta.db_name = 'TEXT'
             __tablename__ = 'text_meta'
             __table_args__ = {'schema': 'readonly'}
             __dbname__ = 'TEXT'
@@ -1048,6 +1073,8 @@ class ReadonlySchema(Schema):
         - **activity**
         """
         class NameMeta(self.base, NamespaceLookup):
+            # Depends on pa_meta
+            # Selects only pa_meta.db_name = 'NAME'
             __tablename__ = 'name_meta'
             __table_args__ = {'schema': 'readonly'}
             __dbname__ = 'NAME'
@@ -1152,6 +1179,8 @@ class ReadonlySchema(Schema):
         class MeshTermMeta(self.base, ReadonlyTable):
             __tablename__ = 'mesh_term_meta'
             __table_args__ = {'schema': 'readonly'}
+            # Column order:
+            # mk_hash, ev_count, belief, mesh_num, type_num, activity, is_active, agent_count
             __definition__ = ("SELECT DISTINCT meta.mk_hash, meta.ev_count,\n"
                               "       meta.belief, mesh_num, type_num,\n"
                               "       activity, is_active, agent_count\n"
@@ -1200,6 +1229,8 @@ class ReadonlySchema(Schema):
         class MeshConceptMeta(self.base, ReadonlyTable):
             __tablename__ = 'mesh_concept_meta'
             __table_args__ = {'schema': 'readonly'}
+            # Columns:
+            # mk_hash, tr_count, ev_count, belief, mesh_num, type_num, activity, is_active, agent_count
             __definition__ = ("SELECT DISTINCT meta.mk_hash, meta.ev_count,\n"
                               "       meta.belief, mesh_num, type_num,\n"
                               "       activity, is_active, agent_count\n"
@@ -1314,12 +1345,17 @@ class ReadonlySchema(Schema):
             def create(cls, db, commit=True):
                 super(AgentInteractions, cls).create(db, commit)
                 from itertools import permutations
+                # Select all rows in the table that are complexes
                 interactions = db.select_all(
                     db.AgentInteractions,
                     db.AgentInteractions.type_num
                     == ro_type_map.get_int('Complex')
                 )
                 new_interactions = []
+
+                # For each row, create a new row for each pair of agents, if
+                # the interaction is not a self-interaction (i.e., if there
+                # are more than one agent in the interaction)
                 for interaction in interactions:
                     if interaction.agent_count < 2:
                         continue

@@ -8,7 +8,7 @@ Todos (as of 2023-11-22):
   - [X] Source counts
   - [ ] Raw statement id to db_info_id, reading_id, and statement json
   - [ ] Statement hash to raw statement id
-- [ ] Write function for merge distilled and preassembled statements from 
+- [X] Write function for merge distilled and preassembled statements from 
   reading and database sources
 - [ ] Write script to run the table file creations
 - [ ] Add code to dump a restore file from the readonly database and upload 
@@ -204,8 +204,7 @@ done in `export_assembly.py` by calling the function `preassemble_statements`
 
 #### Merging of Knowledge Base and Reading Statements
 
-**Status: Not implemented; Also requires mappings from "_Knowledge Bases 
-Update_"**
+**Status: First iteration implemented**
 
 At this step, the distilled and preassembled statements from both reading and 
 database sources are merged. This is done in the function

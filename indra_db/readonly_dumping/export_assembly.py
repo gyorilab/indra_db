@@ -427,6 +427,65 @@ def preassembly(
             pickle.dump(stmt_hash_to_raw_stmt_ids, fh)
 
 
+def merge_processed_statements(kb_mapping: Dict[int, Path]):
+    """Merge processed statements from reading and knowledgebases
+
+    Parameters
+    ----------
+    kb_mapping :
+        A dictionary mapping db_info ids to the local file paths of the
+        statements for that knowledgebase
+    """
+    # kb_file_mapping[db_id] = m.get_local_fpath()
+    # Run bash to concatenate the processed raw statements and the
+    # knowledgebase statements:
+    # $ cat processed_statements.tsv.gz <kb_files> \
+    #   | gzip > all_processed_statements.tsv.gz
+    # todo: come up with name for the merged statements file
+
+    # Combine the source counts and write knowledgebase in: open the
+    # knowledgebase tsv dumps and count lines. Also write to the
+    # raw_id_info_map file.
+    # fixme: we don't have raw statement IDs for
+    #  knowledgebases, so how can that be solved? Using matches hash? The
+    #  raw statement IDs don't have any downstream usage apart from being
+    #  unique identifiers, so just use an unambiguous index, e.g. negative
+    #  integers starting from -min(raw_stmt_id) - 1
+
+    # List the processed statement file to be merged
+    proc_stmts_reading = processed_stmts_reading_fpath.absolute().as_posix()
+    kb_files = [kb_file.absolute().as_posix() for kb_file in kb_mapping.values()]
+    all_files = proc_stmts_reading + " " + " ".join(kb_files)
+
+    # Merge the processed statements
+    if not processed_stmts_fpath.exists():
+        logger.info("Merging processed statements")
+        cmd = f"cat {all_files} | gzip > {processed_stmts_fpath.absolute().as_posix()}"
+        logger.info(f"Running command: {cmd}")
+        os.system(cmd)
+        assert processed_stmts_fpath.exists()
+    else:
+        logger.info(f"Processed statements already merged at "
+                    f"{processed_stmts_fpath.absolute().as_posix()}, skipping...")
+
+    # Merge source counts
+    if not source_counts_fpath.exists():
+        # Open the reading source counts
+        with source_counts_reading_fpath.open("rb") as f:
+            reading_source_counts = pickle.load(f)
+
+        # Open the knowledgebase source counts
+        with source_counts_knowledgebases_fpath.open("rb") as f:
+            kb_source_counts = pickle.load(f)
+
+        # Merge the source counts
+        reading_source_counts.update(kb_source_counts)
+
+        # Dump the merged source counts
+        with source_counts_fpath.open("wb") as f:
+            pickle.dump(reading_source_counts, f)
+
+
 def ground_deduplicate():
     # ~2.5-3 hours
     if not grounded_stmts_fpath.exists() or not unique_stmts_fpath.exists():

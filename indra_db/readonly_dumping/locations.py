@@ -22,8 +22,13 @@ source_counts_knowledgebases_fpath = TEMP_DIR.joinpath(
     "source_counts_knowledgebases.pkl"
 )
 source_counts_fpath = TEMP_DIR.joinpath("source_counts.pkl")
-stmt_hash_to_raw_stmt_ids_fpath = TEMP_DIR.joinpath(
-    "stmt_hash_to_raw_stmt_ids.pkl")
+stmt_hash_to_raw_stmt_ids_fpath = TEMP_DIR.joinpath("stmt_hash_to_raw_stmt_ids.pkl")
+stmt_hash_to_raw_stmt_ids_reading_fpath = TEMP_DIR.joinpath(
+    "stmt_hash_to_raw_stmt_ids_reading.pkl"
+)
+stmt_hash_to_raw_stmt_ids_knowledgebases_fpath = TEMP_DIR.joinpath(
+    "stmt_hash_to_raw_stmt_ids_knowledgebases.pkl"
+)
 raw_id_info_map_fpath = TEMP_DIR.joinpath("raw_stmt_id_to_info_map.tsv.gz")
 grounded_stmts_fpath = TEMP_DIR.joinpath("grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.joinpath("unique_statements.tsv.gz")

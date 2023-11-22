@@ -17,7 +17,8 @@ import click
 import pickle
 import logging
 import tempfile
-from collections import Counter
+from itertools import count as iter_count
+from collections import Counter, defaultdict
 
 from indra.util import batch_iter
 from tqdm import tqdm
@@ -584,6 +585,15 @@ def local_update(
     refresh :
         If True, the local files will be recreated even if they already exist.
     """
+    def _get_kb_info_map():
+        # Get db info id mapping
+        from indra_db.util import get_db
+        db = get_db('primary')
+
+        res = db.select_all(db.DBInfo)
+        kb_mapping = {(r.source_api, r.db_name): r.id for r in res}
+        return kb_mapping
+
     if not kb_manager_list:
         raise ValueError(
             "No knowledgebase managers provided, nothing to update"
@@ -609,55 +619,76 @@ def local_update(
 
     source_counts = {}
     counts = Counter()
-    for ix, Mngr in enumerate(kb_manager_list):
-        kbm = Mngr()
-        logger.info(
-            f"[{ix+1}/{len(kb_manager_list)}] {kbm.name} ({kbm.short_name})"
-        )
+    stmt_hash_to_raw_id = defaultdict(set)
+    db_info_map = _get_kb_info_map()
 
-        # Write statements for this knowledgebase to a file
-        fname = kbm.get_local_fpath().as_posix()
-        with gzip.open(fname, "wt") as fh:
-            writer = csv.writer(fh, delimiter="\t")
+    # Generate fake raw statement id for each statement, from -1 and down
+    raw_id_ix_generator = iter_count(-1, -1)
+    with gzip.open(
+            raw_id_info_map_knowledgebases_fpath.as_posix(), "wt"
+    ) as fh:
+        kb_info_writer = csv.writer(fh, delimiter="\t")
 
-            kb_kwargs = local_files.get(kbm.short_name, {})
-            stmts = kbm.get_statements(**kb_kwargs)
+        for ix, Mngr in enumerate(tqdm(kb_manager_list)):
+            kbm = Mngr()
+            db_info_id = db_info_map[(kbm.source, kbm.short_name)]
+            tqdm.write(
+                f"[{ix+1}/{len(kb_manager_list)}] {kbm.name} ({kbm.short_name})"
+            )
 
-            # Do preassembly
-            if len(stmts) > 100000:
-                stmts_iter = batch_iter(stmts, 100000)
-                batches = True
-                t = tqdm(desc=f"Preassembling {kbm.short_name}",
-                         total=len(stmts)//100000+1)
-            else:
-                stmts_iter = [stmts]
-                batches = False
-                t = None
-                logger.info(f"Preassembling {kbm.short_name}")
+            # Write statements for this knowledgebase to a file
+            fname = kbm.get_local_fpath().as_posix()
+            with gzip.open(fname, "wt") as fh:
+                writer = csv.writer(fh, delimiter="\t")
 
-            for stmts in stmts_iter:
-                # Pre-process statements
-                stmts = ac.fix_invalidities(stmts, in_place=True)
-                stmts = ac.map_grounding(stmts)
-                stmts = ac.map_sequence(stmts)
-                rows = []
-                for stmt in tqdm(stmts, leave=not batches):
-                    # Get the statement hash and update the source count
-                    stmt_hash = stmt.get_hash(refresh=True)
+                kb_kwargs = local_files.get(kbm.short_name, {})
+                stmts = kbm.get_statements(**kb_kwargs)
 
-                    # Get source count for this statement, or create a new one
-                    # if it doesn't exist, and increment the count
-                    source_count_dict = source_counts.get(stmt_hash, Counter())
-                    source_count_dict[kbm.source] += 1
-                    source_counts[stmt_hash] = source_count_dict
+                # Do preassembly
+                if len(stmts) > 100000:
+                    stmts_iter = batch_iter(stmts, 100000)
+                    batches = True
+                    t = tqdm(desc=f"Preassembling {kbm.short_name}",
+                             total=len(stmts)//100000+1)
+                else:
+                    stmts_iter = [stmts]
+                    batches = False
+                    t = None
+                    logger.info(f"Preassembling {kbm.short_name}")
 
-                    rows.append((stmt_hash, json.dumps(stmt.to_json())))
-                writer.writerows(rows)
-                if batches:
-                    t.update(1)
-                counts[(kbm.source, kbm.short_name)] += len(stmts)
-        if batches:
-            t.close()
+                for stmts in stmts_iter:
+                    # Pre-process statements
+                    stmts = ac.fix_invalidities(stmts, in_place=True)
+                    stmts = ac.map_grounding(stmts)
+                    stmts = ac.map_sequence(stmts)
+                    rows = []
+                    kb_info_rows = []
+                    for stmt in tqdm(stmts, leave=not batches):
+                        raw_id = next(raw_id_ix_generator)
+                        # Get the statement hash and update the source count
+                        stmt_hash = stmt.get_hash(refresh=True)
+
+                        # Get source count for this statement, or create a new one
+                        # if it doesn't exist, and increment the count
+                        source_count_dict = source_counts.get(stmt_hash, Counter())
+                        source_count_dict[kbm.source] += 1
+                        source_counts[stmt_hash] = source_count_dict
+
+                        # Append to various raw id mappings
+                        stmt_hash_to_raw_id[stmt_hash].add(raw_id)
+                        kb_info_rows.append(
+                            # raw_id, db_info_id, (reading_id), stmt_json
+                            (raw_id, db_info_id, "\\N", stmt.to_json())
+                        )
+
+                        rows.append((stmt_hash, json.dumps(stmt.to_json())))
+                    writer.writerows(rows)
+                    kb_info_writer.writerows(kb_info_rows)
+                    if batches:
+                        t.update(1)
+                    counts[(kbm.source, kbm.short_name)] += len(stmts)
+            if batches:
+                t.close()
 
     logger.info("Statements produced per knowledgebase:")
     for (source, short_name), count in counts.most_common():
@@ -667,6 +698,11 @@ def local_update(
     # Dump source counts
     with source_counts_knowledgebases_fpath.open("wb") as fh:
         pickle.dump(source_counts, fh)
+
+    # Dump stmt hash to raw stmt id mapping
+    stmt_hash_to_raw_id = dict(stmt_hash_to_raw_id)
+    with stmt_hash_to_raw_stmt_ids_knowledgebases_fpath.open("wb") as fh:
+        pickle.dump(stmt_hash_to_raw_id, fh)
 
 
 @click.group()

@@ -26,10 +26,7 @@ from indra.statements.validate import assert_valid_statement
 from indra.tools import assemble_corpus as ac
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
-from indra_db.readonly_dumping.locations import (
-    TEMP_DIR,
-    source_counts_knowledgebases_fpath
-)
+from indra_db.readonly_dumping.locations import *
 
 from .util import format_date
 

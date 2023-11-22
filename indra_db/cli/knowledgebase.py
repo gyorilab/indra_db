@@ -109,7 +109,7 @@ class KnowledgebaseManager(object):
                 if len(self.short_name) > len(self.source) else self.source
         else:
             local_name = f"{self.short_name}_{self.source}"
-        return KB_DIR.joinpath(f"assembled_{local_name}.tsv.gz")
+        return KB_DIR.joinpath(f"processed_stmts_{local_name}.tsv.gz")
 
 
 class TasManager(KnowledgebaseManager):

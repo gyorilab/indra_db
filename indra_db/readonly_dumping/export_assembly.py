@@ -367,7 +367,7 @@ def preassembly(
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
         with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
                 gzip.open(processed_stmts_reading_fpath.as_posix(), "wt") as fh_out, \
-                gzip.open(raw_id_info_map_fpath.as_posix(), "wt") as fh_info:
+                gzip.open(raw_id_info_map_reading_fpath.as_posix(), "wt") as fh_info:
             raw_stmts_reader = csv.reader(fh, delimiter="\t")
             writer = csv.writer(fh_out, delimiter="\t")
             info_writer = csv.writer(fh_info, delimiter="\t")

@@ -486,8 +486,12 @@ def merge_processed_statements(kb_mapping: Dict[int, Path]):
         with source_counts_knowledgebases_fpath.open("rb") as f:
             kb_source_counts = pickle.load(f)
 
-        # Merge the source counts
-        reading_source_counts.update(kb_source_counts)
+        # Merge the KB source counts into the reading source counts
+        for stmt_hash, kb_counts in kb_source_counts.items():
+            counts = reading_source_counts.get(stmt_hash, Counter())
+            # This assumes counts is an instance of Counter
+            counts.update(kb_counts)
+            reading_source_counts[stmt_hash] = counts
 
         # Dump the merged source counts
         with source_counts_fpath.open("wb") as f:

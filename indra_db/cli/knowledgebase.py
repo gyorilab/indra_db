@@ -610,7 +610,8 @@ def local_update(
     for kb_manager in kbs_to_run:
         logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
 
-    source_counts = Counter()
+    source_counts = {}
+    counts = Counter()
     for ix, Mngr in enumerate(kb_manager_list):
         kbm = Mngr()
         logger.info(
@@ -645,20 +646,27 @@ def local_update(
                 stmts = ac.map_sequence(stmts)
                 rows = []
                 for stmt in tqdm(stmts, leave=not batches):
-                    # Get the statement hash and get the source counts
+                    # Get the statement hash and update the source count
                     stmt_hash = stmt.get_hash(refresh=True)
+
+                    # Get source count for this statement, or create a new one
+                    # if it doesn't exist, and increment the count
+                    source_count_dict = source_counts.get(stmt_hash, Counter())
+                    source_count_dict[kbm.source] += 1
+                    source_counts[stmt_hash] = source_count_dict
+
                     rows.append((stmt_hash, json.dumps(stmt.to_json())))
                 writer.writerows(rows)
                 if batches:
                     t.update(1)
-                source_counts[kbm.source] += len(stmts)
+                counts[(kbm.source, kbm.short_name)] += len(stmts)
         if batches:
             t.close()
 
     logger.info("Statements produced per knowledgebase:")
-    for (source, short_name), count in source_counts.most_common():
+    for (source, short_name), count in counts.most_common():
         logger.info(f"  - {source} {short_name}: {count}")
-    logger.info(f"Total rows added: {sum(source_counts.values())}")
+    logger.info(f"Total rows added: {sum(counts.values())}")
 
     # Dump source counts
     with source_counts_knowledgebases_fpath.open("wb") as fh:

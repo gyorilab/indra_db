@@ -1424,10 +1424,10 @@ def _find_disallowed_keywords(query: str) -> list:
     database or its settings. The disallowed keywords are:
 
     alter, call, commit, create, delete, drop, explain, grant, insert,
-    lock, merge, rename,  revoke, savepoint, set, rollback, transaction,
+    lock, merge, rename, revoke, savepoint, set, rollback, transaction,
     truncate, update.
 
-    Matching is case insensitive.
+    Matching is case-insensitive.
 
     Parameters
     ----------

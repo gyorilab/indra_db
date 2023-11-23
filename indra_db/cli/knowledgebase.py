@@ -626,8 +626,8 @@ def local_update(
     raw_id_ix_generator = iter_count(-1, -1)
     with gzip.open(
             raw_id_info_map_knowledgebases_fpath.as_posix(), "wt"
-    ) as fh:
-        kb_info_writer = csv.writer(fh, delimiter="\t")
+    ) as info_fh:
+        kb_info_writer = csv.writer(info_fh, delimiter="\t")
 
         for ix, Mngr in enumerate(tqdm(kb_manager_list)):
             kbm = Mngr()
@@ -638,8 +638,8 @@ def local_update(
 
             # Write statements for this knowledgebase to a file
             fname = kbm.get_local_fpath().as_posix()
-            with gzip.open(fname, "wt") as fh:
-                writer = csv.writer(fh, delimiter="\t")
+            with gzip.open(fname, "wt") as proc_stmts_fh:
+                proc_stmts_writer = csv.writer(proc_stmts_fh, delimiter="\t")
 
                 kb_kwargs = local_files.get(kbm.short_name, {})
                 stmts = kbm.get_statements(**kb_kwargs)
@@ -682,7 +682,7 @@ def local_update(
                         )
 
                         rows.append((stmt_hash, json.dumps(stmt.to_json())))
-                    writer.writerows(rows)
+                    proc_stmts_writer.writerows(rows)
                     kb_info_writer.writerows(kb_info_rows)
                     if batches:
                         t.update(1)
@@ -696,13 +696,13 @@ def local_update(
     logger.info(f"Total rows added: {sum(counts.values())}")
 
     # Dump source counts
-    with source_counts_knowledgebases_fpath.open("wb") as fh:
-        pickle.dump(source_counts, fh)
+    with source_counts_knowledgebases_fpath.open("wb") as src_count_fh:
+        pickle.dump(source_counts, src_count_fh)
 
     # Dump stmt hash to raw stmt id mapping
     stmt_hash_to_raw_id = dict(stmt_hash_to_raw_id)
-    with stmt_hash_to_raw_stmt_ids_knowledgebases_fpath.open("wb") as fh:
-        pickle.dump(stmt_hash_to_raw_id, fh)
+    with stmt_hash_to_raw_stmt_ids_knowledgebases_fpath.open("wb") as hr_fh:
+        pickle.dump(stmt_hash_to_raw_id, hr_fh)
 
 
 @click.group()

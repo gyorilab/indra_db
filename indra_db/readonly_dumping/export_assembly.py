@@ -497,6 +497,41 @@ def merge_processed_statements(kb_mapping: Dict[int, Path]):
         with source_counts_fpath.open("wb") as f:
             pickle.dump(reading_source_counts, f)
 
+    # Merge the raw statement id to info map
+    if not raw_id_info_map_fpath.exists():
+        logger.info("Merging raw statement id to info mappings")
+        cmd = (
+            f"cat {raw_id_info_map_reading_fpath.absolute().as_posix()} "
+            f"{raw_id_info_map_knowledgebases_fpath.absolute().as_posix()} "
+            f"| gzip > {raw_id_info_map_fpath.absolute().as_posix()}"
+        )
+        logger.info(f"Running command: {cmd}")
+        os.system(cmd)
+        assert raw_id_info_map_fpath.exists()
+
+    # Merge the stmt hash to raw stmt ids
+    if not stmt_hash_to_raw_stmt_ids_fpath.exists():
+        logger.info("Merging stmt hash to raw stmt ids")
+
+        # Open the reading stmt hash to raw stmt ids
+        with stmt_hash_to_raw_stmt_ids_reading_fpath.open("rb") as f:
+            reading_stmt_hash_to_raw_stmt_ids = pickle.load(f)
+
+        # Open the knowledgebase stmt hash to raw stmt ids
+        with stmt_hash_to_raw_stmt_ids_knowledgebases_fpath.open("rb") as f:
+            kb_stmt_hash_to_raw_stmt_ids = pickle.load(f)
+
+        # Merge the KB stmt hash to raw stmt ids into the reading stmt hash
+        # to raw stmt ids
+        for stmt_hash, kb_raw_stmt_ids in kb_stmt_hash_to_raw_stmt_ids.items():
+            raw_stmt_ids = reading_stmt_hash_to_raw_stmt_ids.get(stmt_hash, set())
+            raw_stmt_ids |= kb_raw_stmt_ids
+            reading_stmt_hash_to_raw_stmt_ids[stmt_hash] = raw_stmt_ids
+
+        # Dump the merged stmt hash to raw stmt ids
+        with stmt_hash_to_raw_stmt_ids_fpath.open("wb") as f:
+            pickle.dump(reading_stmt_hash_to_raw_stmt_ids, f)
+
 
 def ground_deduplicate():
     # ~2.5-3 hours

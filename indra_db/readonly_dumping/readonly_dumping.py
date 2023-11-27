@@ -40,6 +40,7 @@ LOCAL_RO_PASSWORD = os.environ["LOCAL_RO_PASSWORD"]
 LOCAL_RO_USER = os.environ["LOCAL_RO_USER"]
 LOCAL_RO_PORT = int(os.environ.get("LOCAL_RO_PORT", "5432"))
 LOCAL_RO_DB_NAME = os.environ.get("LOCAL_RO_DB_NAME", "indradb_readonly_local")
+SQL_NULL = "\\N"
 
 
 def table_has_content(
@@ -583,6 +584,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
             for raw_stmt_id in hash_to_raw_id_map[this_hash]:
                 info_dict = raw_id_to_info.get(raw_stmt_id, {})
                 raw_stmt_src_name = reading_id_source_map[raw_stmt_id]
+                raw_stmt_src_name = reading_id_source_map.get(raw_stmt_id, SQL_NULL)
                 type_num = ro_type_map._str_to_int(stmt_json["type"])
                 writer.writerow([
                     raw_stmt_id,
@@ -633,8 +635,6 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
     # source count, src_json (==source counts dict per mk_hash), only_src (if
     # only one source), has_rd (if the source is in the reading sources),
     # has_db (if the source is in the db sources)
-    # fixme: What is the proper null value? None, "null", "\\N", 0?
-    null = ""
     all_sources = list(
         {*SOURCE_GROUPS["reader"], *SOURCE_GROUPS["database"]}
     )
@@ -653,7 +653,7 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
             has_db = SOURCE_GROUPS["database"] in src_count_dict
             only_src = list(src_count_dict.keys())[0] if num_srcs == 1 else None
             sources_tuple = tuple(
-                src_count_dict.get(src, null) for src in all_sources
+                src_count_dict.get(src, SQL_NULL) for src in all_sources
             )
 
             # Write the following columns:
@@ -1038,7 +1038,7 @@ def _load_pmid_to_raw_stmt_id():
                 # Rows are:
                 # TRID, PMID, PMCID, DOI, PII, URL, MANUSCRIPT_ID
                 for meta_row in tqdm(reader):
-                    if meta_row[1] != "\\N":
+                    if meta_row[1] != SQL_NULL:
                         # trid values are unique, PMIDs are not
                         trid = int(meta_row[0])
                         pmid = int(meta_row[1])
@@ -1065,7 +1065,7 @@ def _load_pmid_to_raw_stmt_id():
                 # reading_id,  reader_version, text_content_id,
                 # text_ref_id, source,         text_type
                 for meta_row in tqdm(reader):
-                    if meta_row[3] != "\\N":
+                    if meta_row[3] != SQL_NULL:
                         trid = int(meta_row[3])
                         rid = int(meta_row[0])
                         # One text ref id can have multiple reading ids
@@ -1096,7 +1096,7 @@ def _load_pmid_to_raw_stmt_id():
                 # Rows are:
                 # raw_stmt_id_int, db_info_id, int_reading_id, stmt_json_raw
                 for meta_row in tqdm(reader):
-                    if meta_row[2] != "\\N":
+                    if meta_row[2] != SQL_NULL:
                         rid = int(meta_row[2])
                         raw_stmt_id = int(meta_row[0])
                         pmid = reading_id_to_pmid.get(rid)

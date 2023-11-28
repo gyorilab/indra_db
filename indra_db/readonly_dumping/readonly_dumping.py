@@ -274,7 +274,7 @@ def belief(local_ro_mngr: ReadonlyDatabaseManager):
 def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the raw statement source table with data
 
-    Depends on: raw_statements, text_content, reading
+    Depends on: raw_statements, reading, db_info
     Requires assembly: False
 
     Original SQL query to get data:
@@ -289,20 +289,28 @@ def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
         WHERE db_info.id = raw_statements.db_info_id
     """
     dump_file = raw_stmt_source_tsv_fpath
-    principal_dump_sql = dedent(
-        """SELECT raw_statements.id AS sid, lower(reading.reader) AS src 
-           FROM raw_statements, reading 
-           WHERE reading.id = raw_statements.reading_id 
-           UNION 
-           SELECT raw_statements.id AS sid, lower(db_info.db_name) AS src 
-           FROM raw_statements, db_info 
-           WHERE db_info.id = raw_statements.db_info_id"""
-    )
     columns = "sid, src"
 
-    # Dump the query output
-    principal_query_to_csv(query=principal_dump_sql,
-                           output_location=dump_file)
+    # Get the mappings from reading id to source name from the principal db
+    from indra_db import get_db
+    principal_db = get_db("primary")
+    reading_sql_res = principal_db.select_all(principal_db.Reading)
+    reading_id_map = {r.id: r.reader.lower() for r in reading_sql_res}
+    db_info_sql_res = principal_db.select_all(principal_db.DBInfo)
+    db_info_id_map = {r.id: r.source_api.lower() for r in db_info_sql_res}
+
+    with gzip.open(raw_id_info_map_fpath.as_posix(), "rt") as fh, \
+            dump_file.open("w") as out_fh:
+        reader = csv.reader(fh, delimiter="\t")
+        writer = csv.writer(out_fh, delimiter="\t")
+        for raw_stmt_id, db_info_id, reading_id, stmt_json_raw in reader:
+            assert db_info_id or reading_id, \
+                f"raw_stmt_id {raw_stmt_id} has no db_info_id or reading_id"
+            if reading_id:
+                source = reading_id_map[reading_id]
+            else:
+                source = db_info_id_map[db_info_id]
+            writer.writerow([raw_stmt_id, source])
 
     load_data_file_into_local_ro(table_name="readonly.raw_stmt_src",
                                  column_order=columns,

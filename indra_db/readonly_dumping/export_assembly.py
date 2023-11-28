@@ -431,7 +431,7 @@ def preassembly(
         # Cast defaultdict to dict and pickle the stmt hash to raw stmt ids
         logger.info("Dumping stmt hash to raw stmt ids")
         stmt_hash_to_raw_stmt_ids = dict(stmt_hash_to_raw_stmt_ids)
-        with stmt_hash_to_raw_stmt_ids_fpath.open("wb") as fh:
+        with stmt_hash_to_raw_stmt_ids_reading_fpath.open("wb") as fh:
             pickle.dump(stmt_hash_to_raw_stmt_ids, fh)
 
 

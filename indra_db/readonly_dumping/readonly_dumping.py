@@ -536,6 +536,12 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     table_name = "fast_raw_pa_link"
     assert table_name in local_ro_mngr.tables
 
+    from indra_db.util import get_db
+    db = get_db('primary')
+
+    res = db.select_all(db.DBInfo)
+    db_id_to_source = {r.id: r.source_api for r in res}
+
     # Load the raw_stmt_src table into a dictionary
     logger.info("Loading raw_stmt_src table into a dictionary")
     local_ro_mngr.grab_session()
@@ -583,14 +589,23 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
             stmt_json = clean_json_loads(stmt_json_string)
             for raw_stmt_id in hash_to_raw_id_map[this_hash]:
                 info_dict = raw_id_to_info.get(raw_stmt_id, {})
-                raw_stmt_src_name = reading_id_source_map[raw_stmt_id]
-                raw_stmt_src_name = reading_id_source_map.get(raw_stmt_id, SQL_NULL)
+                reading_id = info_dict.get("reading_id", SQL_NULL)
+                db_info_id = info_dict.get("db_info_id", SQL_NULL)
+                if reading_id != SQL_NULL:
+                    raw_stmt_src_name = raw_stmt_id_source_map[raw_stmt_id]
+                elif db_info_id != SQL_NULL:
+                    raw_stmt_src_name = db_id_to_source[db_info_id]
+                else:
+                    raise ValueError(
+                        f"raw_stmt_id {raw_stmt_id} has no reading_id or "
+                        f"db_info_id"
+                    )
                 type_num = ro_type_map._str_to_int(stmt_json["type"])
                 writer.writerow([
                     raw_stmt_id,
-                    info_dict.get("raw_json"),
-                    info_dict.get("reading_id"),
-                    info_dict.get("db_info_id"),
+                    info_dict["raw_json"],
+                    reading_id,
+                    db_info_id,
                     statement_hash_string,
                     stmt_json_string,
                     type_num,

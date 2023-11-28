@@ -1210,16 +1210,14 @@ def ensure_pubmed_mesh_data():
     pmid_mesh_mapping = {}
     pmid_stmt_hash = defaultdict(set)
     logger.info("Generating tsv ingestion files")
-    with (
-        gzip.open(
-            mesh_concepts_meta.as_posix(), "wt") as concepts_meta_fh,
-        gzip.open(
-            mesh_terms_meta.as_posix(), "wt") as terms_meta_fh,
-        gzip.open(
-            raw_stmt_mesh_concepts.as_posix(), "wt") as raw_concepts_fh,
-        gzip.open(
-            raw_stmt_mesh_terms.as_posix(), "wt") as raw_terms_fh
-    ):
+    with gzip.open(
+            mesh_concepts_meta.as_posix(), "wt") as concepts_meta_fh, \
+         gzip.open(
+            mesh_terms_meta.as_posix(), "wt") as terms_meta_fh, \
+         gzip.open(
+            raw_stmt_mesh_concepts.as_posix(), "wt") as raw_concepts_fh,\
+         gzip.open(
+            raw_stmt_mesh_terms.as_posix(), "wt") as raw_terms_fh:
         concepts_meta_writer = csv.writer(concepts_meta_fh, delimiter="\t")
         terms_meta_writer = csv.writer(terms_meta_fh, delimiter="\t")
         raw_concepts_writer = csv.writer(raw_concepts_fh, delimiter="\t")

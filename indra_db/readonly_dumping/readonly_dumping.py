@@ -492,7 +492,7 @@ def load_data_file_into_local_ro(
     tsv_file :
         The path to the tab separated file to be (up)loaded into the database.
     null_value :
-        The value to be interpreted as null, e.g. "NULL" or "\N". If None,
+        The value to be interpreted as null, e.g. "NULL" or "\\N". If None,
         the default value of the database is used and the upload command
         will be without the 'NULL AS ...' part.
     """

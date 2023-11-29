@@ -546,6 +546,10 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
 
     # Load the raw_stmt_src table into a dictionary
     logger.info("Loading raw_stmt_src table into a dictionary")
+    if not table_has_content(local_ro_mngr, "raw_stmt_src"):
+        raise ValueError(
+            "raw_stmt_src must be filled before fast_raw_pa_link can be filled"
+        )
     local_ro_mngr.grab_session()
     query = local_ro_mngr.session.query(local_ro_mngr.RawStmtSrc.sid,
                                         local_ro_mngr.RawStmtSrc.src)

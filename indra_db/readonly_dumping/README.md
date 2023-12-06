@@ -3,11 +3,11 @@
 This README describes the pipeline used for creating the readonly database.
 
 Todos (as of 2023-11-22):
-- [ ] Add mappings from KB statements so merge with reading statements can 
+- [X] Add mappings from KB statements so merge with reading statements can 
   be done
   - [X] Source counts
-  - [ ] Raw statement id to db_info_id, reading_id, and statement json
-  - [ ] Statement hash to raw statement id
+  - [X] Raw statement id to db_info_id, reading_id, and statement json
+  - [X] Statement hash to raw statement id for KB sourced raw statements
 - [X] Write function for merge distilled and preassembled statements from 
   reading and database sources
 - [ ] Write script to run the table file creations

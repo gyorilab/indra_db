@@ -7,6 +7,7 @@ import os
 import pickle
 import re
 import subprocess
+import sys
 import uuid
 from collections import defaultdict, Counter
 from hashlib import md5
@@ -1540,13 +1541,13 @@ def create_ro_tables(ro_mngr_local: ReadonlyDatabaseManager):
     logger.info("Done creating tables")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(__name__)
     parser.add_argument("--db-name",
-                        default="indradb_readonly_local")
-    parser.add_argument("--user",
+                        default=LOCAL_RO_DB_NAME)
+    parser.add_argument("--user", required=True,
                         help="Username for the local readonly db.")
-    parser.add_argument("--password",
+    parser.add_argument("--password", required=True,
                         help="Password for the local readonly db.")
     parser.add_argument("--hostname", default="localhost")
     parser.add_argument("--port", default=5432,
@@ -1561,11 +1562,21 @@ if __name__ == '__main__':
     # Get a ro manager for the local readonly db
     # postgresql://<username>:<password>@localhost[:port]/[name]
     # todo: allow use of args to create the uri
-    postgres_url = get_postgres_uri()
+    postgres_url = get_postgres_uri(
+        username=args.user,
+        password=args.password,
+        port=args.port,
+        db_name=args.db_name,
+    )
     ro_manager = ReadonlyDatabaseManager(postgres_url)
 
     # Create the tables
     create_ro_tables(ro_manager)
 
     # For each table, run the function that will fill out the table with data
-    # todo: add all table filling functions
+    for table_name in tqdm(RUN_ORDER, desc="Creating tables"):
+        if hasattr(sys.modules[__name__], table_name):
+            build_script = getattr(sys.modules[__name__], table_name)
+            build_script(ro_manager)
+        else:
+            raise ValueError(f"Table function for {table_name} not found")

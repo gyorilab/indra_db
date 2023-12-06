@@ -732,7 +732,7 @@ def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
 
 # PaMeta - the table itself is not generated on the readonly db, but the
 # tables derived from it are (NameMeta, TextMeta and OtherMeta)
-def ensure_pa_meta_table():
+def ensure_pa_meta():
     """Generate the source files for the Name/Text/OtherMeta tables"""
     if all([name_meta_tsv.exists(),
             text_meta_tsv.exists(),
@@ -869,7 +869,7 @@ def ensure_pa_meta_table():
 # NameMeta, TextMeta, OtherMeta
 def name_meta(local_ro_mngr: ReadonlyDatabaseManager):
     # Ensure the pa_meta file exists
-    ensure_pa_meta_table()
+    ensure_pa_meta()
     # ag_id, ag_num, db_id, role_num, type_num, mk_hash,
     # ev_count, belief, activity, is_active, agent_count, is_complex_dup
     colum_order = (
@@ -891,7 +891,7 @@ def name_meta(local_ro_mngr: ReadonlyDatabaseManager):
 
 def text_meta(local_ro_mngr: ReadonlyDatabaseManager):
     # Ensure the pa_meta file exists
-    ensure_pa_meta_table()
+    ensure_pa_meta()
     # ag_id, ag_num, db_id, role_num, type_num, mk_hash,
     # ev_count, belief, activity, is_active, agent_count, is_complex_dup
     colum_order = (
@@ -913,7 +913,7 @@ def text_meta(local_ro_mngr: ReadonlyDatabaseManager):
 
 def other_meta(local_ro_mngr: ReadonlyDatabaseManager):
     # Ensure the pa_meta file exists
-    ensure_pa_meta_table()
+    ensure_pa_meta()
     # ag_id, ag_num, db_name, db_id, role_num, type_num, mk_hash,
     # ev_count, belief, activity, is_active, agent_count, is_complex_dup
     colum_order = (
@@ -1320,7 +1320,7 @@ def ensure_pubmed_mesh_data():
 
 
 # RawStmtMeshConcepts
-def create_raw_stmt_mesh_concepts(local_ro_mngr: ReadonlyDatabaseManager):
+def raw_stmt_mesh_concepts(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the raw_stmt_mesh_concepts table."""
     full_table_name = "readonly.raw_stmt_mesh_concepts"
     column_order = "sid, mesh_num"
@@ -1328,7 +1328,7 @@ def create_raw_stmt_mesh_concepts(local_ro_mngr: ReadonlyDatabaseManager):
 
 
 # RawStmtMeshTerms
-def create_raw_stmt_mesh_terms(local_ro_mngr: ReadonlyDatabaseManager):
+def raw_stmt_mesh_terms(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the raw_stmt_mesh_terms table"""
     full_table_name = "readonly.raw_stmt_mesh_terms"
     column_order = "sid, mesh_num"
@@ -1336,7 +1336,7 @@ def create_raw_stmt_mesh_terms(local_ro_mngr: ReadonlyDatabaseManager):
 
 
 # MeshConceptMeta
-def create_mesh_concept_meta(local_ro_mngr: ReadonlyDatabaseManager):
+def mesh_concept_meta(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the mesh_concept_meta table."""
     full_table_name = "readonly.mesh_concept_meta"
     column_order = (
@@ -1347,7 +1347,7 @@ def create_mesh_concept_meta(local_ro_mngr: ReadonlyDatabaseManager):
 
 
 # MeshTermMeta
-def create_mesh_term_meta(local_ro_mngr: ReadonlyDatabaseManager):
+def mesh_term_meta(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the mesh_term_meta table."""
     full_table_name = "readonly.mesh_term_meta"
     column_order = (

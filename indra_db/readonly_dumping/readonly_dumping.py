@@ -1598,7 +1598,7 @@ if __name__ == "__main__":
     ro_manager = ReadonlyDatabaseManager(postgres_url)
 
     # Create the tables
-    create_ro_tables(ro_manager)
+    create_ro_tables(ro_manager, force=args.force)
 
     # For each table, run the function that will fill out the table with data
     for table_name in tqdm(RUN_ORDER, desc="Creating tables"):

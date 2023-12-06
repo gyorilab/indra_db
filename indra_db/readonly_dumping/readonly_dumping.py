@@ -649,7 +649,11 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
 
 def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
     """Generate the source files for the SourceMeta table"""
-    # NOTE: this function depends on the readonly NameMeta table
+    if not table_has_content(local_ro_mngr, "name_meta"):
+        raise ValueError(
+            "name_meta must be filled before source_meta can be filled"
+        )
+
     # Load source_counts
     ro = local_ro_mngr
     source_counts = pickle.load(source_counts_fpath.open("rb"))

@@ -1522,19 +1522,46 @@ def get_temp_file(suffix: str) -> Path:
 
 
 def drop_schema(ro_mngr_local: ReadonlyDatabaseManager):
+    """Drop the readonly schema from the local db.
+
+    This will drop all tables in the readonly schema, so use with caution.
+
+    Parameters
+    ----------
+    ro_mngr_local : ReadonlyDatabaseManager
+        The local readonly database manager.
+    """
     logger.info("Dropping schema 'readonly'")
     ro_mngr_local.drop_schema('readonly')
 
 
-def create_ro_tables(ro_mngr_local: ReadonlyDatabaseManager):
+def create_ro_tables(
+    ro_mngr_local: ReadonlyDatabaseManager,
+    force: bool = False
+):
+    """Create the readonly tables on the local db.
+
+    Parameters
+    ----------
+    ro_mngr_local : ReadonlyDatabaseManager
+        The local readonly database manager.
+    force : bool
+        If True, drop the readonly schema if it already exists before creating
+        the tables.
+    """
     postgres_uri = str(ro_mngr_local.url)
     engine = create_engine(postgres_uri)
     logger.info("Connected to db")
 
-    # Create schema
+    # Drop schema if force is set
+    if force:
+        drop_schema(ro_mngr_local)
+
+    # Create schema, this step uses '... IF NOT EXISTS ...', so it's idempotent
     ro_mngr_local.create_schema('readonly')
 
-    # Create empty tables
+    # Create empty tables if they don't exist - MetaData.create_all() skips
+    # existing tables by default
     tables_metadata = ro_mngr_local.tables['belief'].metadata
     logger.info("Creating tables")
     tables_metadata.create_all(bind=engine)

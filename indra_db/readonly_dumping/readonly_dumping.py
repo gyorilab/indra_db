@@ -43,6 +43,27 @@ LOCAL_RO_DB_NAME = os.environ.get("LOCAL_RO_DB_NAME", "indradb_readonly_local")
 SQL_NULL = "\\N"
 
 
+RUN_ORDER = [
+    "belief",
+    "raw_stmt_src",
+    "reading_ref_link",
+    "evidence_counts",
+    "pa_agent_counts",
+    "mesh_concept_ref_counts",
+    "mesh_term_ref_counts",
+    "name_meta",
+    "text_meta",
+    "other_meta",
+    "source_meta",
+    "agent_interactions",
+    "fast_raw_pa_link",
+    "raw_stmt_mesh_concepts",
+    "raw_stmt_mesh_terms",
+    "mesh_concept_meta",
+    "mesh_term_meta",
+]
+
+
 def table_has_content(
     ro_mngr_local: ReadonlyDatabaseManager,
     table_name: str,

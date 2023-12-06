@@ -48,10 +48,10 @@ __all__ = [
     "mk_hash_pmid_sets_fpath",
     "mesh_concept_ref_counts_fpath",
     "mesh_term_ref_counts_fpath",
-    "mesh_concepts_meta",
-    "mesh_terms_meta",
-    "raw_stmt_mesh_concepts",
-    "raw_stmt_mesh_terms",
+    "mesh_concepts_meta_fpath",
+    "mesh_terms_meta_fpath",
+    "raw_stmt_mesh_concepts_fpath",
+    "raw_stmt_mesh_terms_fpath",
     "pa_meta_fpath",
     "name_meta_tsv",
     "text_meta_tsv",
@@ -120,12 +120,12 @@ mesh_concept_ref_counts_fpath = TEMP_DIR.joinpath(
 mesh_term_ref_counts_fpath = TEMP_DIR.joinpath("mesh_term_ref_counts.tsv")
 
 # MeshConceptMeta and MeshTermMeta
-mesh_concepts_meta = PUBMED_MESH_DIR.joinpath("mesh_concepts_meta.tsv")
-mesh_terms_meta = PUBMED_MESH_DIR.joinpath("mesh_terms_meta.tsv")
+mesh_concepts_meta_fpath = PUBMED_MESH_DIR.joinpath("mesh_concepts_meta.tsv")
+mesh_terms_meta_fpath = PUBMED_MESH_DIR.joinpath("mesh_terms_meta.tsv")
 
 # RawStmtMeshConcepts and RawStmtMeshTerms
-raw_stmt_mesh_concepts = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_concepts.tsv")
-raw_stmt_mesh_terms = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_terms.tsv")
+raw_stmt_mesh_concepts_fpath = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_concepts.tsv")
+raw_stmt_mesh_terms_fpath = PUBMED_MESH_DIR.joinpath("raw_stmt_mesh_terms.tsv")
 
 # PaMeta and derived files
 pa_meta_fpath = TEMP_DIR.joinpath("pa_meta.tsv.gz")

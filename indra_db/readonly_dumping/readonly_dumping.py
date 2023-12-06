@@ -435,10 +435,11 @@ def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
 
 # EvidenceCounts
 def evidence_counts(local_ro_mngr: ReadonlyDatabaseManager):
-    # Basically just upload the source counts file as a table
+    # Basically just upload the source counts, with the counts summed up per
+    # mk_hash, as a table
 
     if not source_counts_fpath.exists():
-        raise ValueError(f"Surce counts {source_counts_fpath} does not exist")
+        raise ValueError(f"Source counts {source_counts_fpath} does not exist")
 
     source_counts = pickle.load(source_counts_fpath.open("rb"))
 
@@ -872,6 +873,7 @@ def ensure_pa_meta():
                 ag_id,
                 ag_num,
             ]
+            # db_name here if "other"
             row_end = [
                 db_id,
                 role_num,
@@ -1080,7 +1082,8 @@ def _load_pmid_to_raw_stmt_id():
                 # TRID, PMID, PMCID, DOI, PII, URL, MANUSCRIPT_ID
                 for meta_row in tqdm(reader):
                     if meta_row[1] != SQL_NULL:
-                        # trid values are unique, PMIDs are not
+                        # In the text_refs table, trid values are unique while
+                        # PMIDs are not
                         trid = int(meta_row[0])
                         pmid = int(meta_row[1])
                         local_dict[trid] = pmid
@@ -1107,8 +1110,8 @@ def _load_pmid_to_raw_stmt_id():
                 # text_ref_id, source,         text_type
                 for meta_row in tqdm(reader):
                     if meta_row[3] != SQL_NULL:
-                        trid = int(meta_row[3])
-                        rid = int(meta_row[0])
+                        trid = int(meta_row[3])  # text_ref_id
+                        rid = int(meta_row[0])  # reading_id
                         # One text ref id can have multiple reading ids
                         # (because one text source can have multiple readings
                         # from different readers and/or reader versions) so
@@ -1405,7 +1408,7 @@ def _mesh_create(
 def principal_query_to_csv(
         query: str, output_location: str, db: str = "primary"
 ) -> None:
-    """Dump results of query into a csv file.
+    """Dump results of a query to the principal database to a tsv file
 
     Parameters
     ----------
@@ -1588,7 +1591,6 @@ if __name__ == "__main__":
 
     # Get a ro manager for the local readonly db
     # postgresql://<username>:<password>@localhost[:port]/[name]
-    # todo: allow use of args to create the uri
     postgres_url = get_postgres_uri(
         username=args.user,
         password=args.password,

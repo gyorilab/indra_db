@@ -449,16 +449,6 @@ def merge_processed_statements(kb_mapping: Dict[int, Path]):
     # knowledgebase statements:
     # $ cat processed_statements.tsv.gz <kb_files> \
     #   | gzip > all_processed_statements.tsv.gz
-    # todo: come up with name for the merged statements file
-
-    # Combine the source counts and write knowledgebase in: open the
-    # knowledgebase tsv dumps and count lines. Also write to the
-    # raw_id_info_map file.
-    # fixme: we don't have raw statement IDs for
-    #  knowledgebases, so how can that be solved? Using matches hash? The
-    #  raw statement IDs don't have any downstream usage apart from being
-    #  unique identifiers, so just use an unambiguous index, e.g. negative
-    #  integers starting from -min(raw_stmt_id) - 1
 
     # List the processed statement file to be merged
     proc_stmts_reading = processed_stmts_reading_fpath.absolute().as_posix()
@@ -489,7 +479,7 @@ def merge_processed_statements(kb_mapping: Dict[int, Path]):
         # Merge the KB source counts into the reading source counts
         for stmt_hash, kb_counts in kb_source_counts.items():
             counts = reading_source_counts.get(stmt_hash, Counter())
-            # This assumes counts is an instance of Counter
+            # NOTE: This assumes `counts` is an instance of Counter
             counts.update(kb_counts)
             reading_source_counts[stmt_hash] = counts
 

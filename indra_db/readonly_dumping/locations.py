@@ -141,3 +141,18 @@ evidence_counts_tsv = TEMP_DIR.joinpath("evidence_counts.tsv")
 
 # PaAgentCounts
 pa_agents_counts_tsv = TEMP_DIR.joinpath("pa_agents_counts.tsv")
+
+
+if __name__ == "__main__":
+    # Print the requested path to stdout if there is a match
+    import sys
+    file_name = sys.argv[1]
+    for file_var in __all__:
+        if file_var.startswith(file_name):
+            if hasattr(sys.modules[__name__], file_var):
+                path = getattr(sys.modules[__name__], file_var)
+                assert isinstance(path, Path)
+                print(path.absolute().as_posix())
+                break
+    else:
+        raise ValueError(f"Could not find file {file_name}")

@@ -48,7 +48,7 @@ RAW_STMTS_FPATH=`python3 -m indra_db.readonly_dumping.locations raw_statements`
 export RAW_STMTS_FPATH
 READING_TEXT_CONTENT_META_FPATH=`python3 -m indra_db.readonly_dumping.locations reading_text_content`
 export READING_TEXT_CONTENT_META_FPATH
-TEXT_REFS_PRINCIPAL_FPATH=`python3 -m indra_db.readonly_dumping.locations text_refs_principal`
+TEXT_REFS_PRINCIPAL_FPATH=`python3 -m indra_db.readonly_dumping.locations text_refs`
 export TEXT_REFS_PRINCIPAL_FPATH
 
 # Exit if any of the file names are empty

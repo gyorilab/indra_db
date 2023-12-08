@@ -10,7 +10,7 @@ Todos (as of 2023-11-22):
   - [X] Statement hash to raw statement id for KB sourced raw statements
 - [X] Write function for merge distilled and preassembled statements from 
   reading and database sources
-- [ ] Write script to run the table file creations
+- [X] Write script to run the table file creations
 - [ ] Add code to dump a restore file from the readonly database and upload 
   it to S3
 
@@ -175,9 +175,9 @@ principal database. These files are:
 
 **Status:**
 - [X] Write script for local update
-- [ ] Save statement hash to raw statement id mapping
+- [X] Save statement hash to raw statement id mapping
 - [X] Save source counts and create code to merge with reading source counts
-- [ ] Map "raw id" of kb statements to db_info_id, reading_id, and statement json
+- [X] Map "raw id" of kb statements to db_info_id, reading_id, and statement json
 - [X] Add knowledge base update to export_assembly.py
 
 _The code for this section is in `indra_db/cli/knowledgebase.py`, but is run 
@@ -231,7 +231,7 @@ respectively.
 
 **Status:**
 - [X] Functions to create files for individual tables
-- [ ] Script to run the file creation functions (some of the tables are 
+- [X] Script to run the file creation functions (some of the tables are 
   dependent on others, so the order of creation matters)
 
 Once the statements are prepared, the files for the read-only database can be

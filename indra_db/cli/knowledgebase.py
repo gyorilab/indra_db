@@ -34,7 +34,7 @@ from .util import format_date
 logger = logging.getLogger(__name__)
 
 
-KB_DIR = TEMP_DIR.joinpath("knowledgebases")
+KB_DIR = TEMP_DIR.module("knowledgebases")
 
 
 class KnowledgebaseManager(object):
@@ -110,7 +110,7 @@ class KnowledgebaseManager(object):
                 if len(self.short_name) > len(self.source) else self.source
         else:
             local_name = f"{self.short_name}_{self.source}"
-        return KB_DIR.joinpath(f"processed_stmts_{local_name}.tsv.gz")
+        return KB_DIR.join(name=f"processed_stmts_{local_name}.tsv.gz")
 
 
 class TasManager(KnowledgebaseManager):

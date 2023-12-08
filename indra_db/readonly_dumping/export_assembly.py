@@ -29,7 +29,7 @@ from .util import clean_json_loads
 from .locations import *
 
 
-refinement_cycles_fpath = TEMP_DIR.joinpath("refinement_cycles.pkl")
+refinement_cycles_fpath = TEMP_DIR.join(name="refinement_cycles.pkl")
 batch_size = int(1e6)
 
 StmtList = List[Statement]
@@ -807,7 +807,7 @@ if __name__ == '__main__':
                         help="If set, overwrite any existing local files "
                              "with new ones for the knowledgebase statements")
     args = parser.parse_args()
-    logger.info(f"Root data path: {TEMP_DIR}")
+    logger.info(f"Root data path: {TEMP_DIR.base}")
 
     # 0. Dump raw data (raw statements, text content + reading, text refs)
     needed_files = [reading_text_content_fpath, text_refs_fpath,

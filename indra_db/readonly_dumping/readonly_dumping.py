@@ -608,7 +608,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     #   - assembled statement json,
     #   - type num (from ro_type_map)
     #   - raw statement source (mapped from the raw_stmt_src dictionary)
-    temp_tsv = TEMP_DIR.joinpath(f"{uuid.uuid4()}.tsv")
+    temp_tsv = TEMP_DIR.join(name=f"{uuid.uuid4()}.tsv")
     logger.info("Iterating over grounded statements")
     with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh,\
             temp_tsv.open("w") as out_fh:
@@ -641,7 +641,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     load_data_file_into_local_ro(table_name, column_order, temp_tsv)
 
     # Remove the temporary file
-    os.remove(temp_tsv)
+    temp_tsv.unlink()
 
     # Build the index
     table: ReadonlyTable = local_ro_mngr.tables[table_name]
@@ -1521,7 +1521,7 @@ def get_temp_file(suffix: str) -> Path:
     :
         A Path object pointing to the temporary file.
     """
-    return TEMP_DIR.joinpath(f"{uuid.uuid4()}{suffix}")
+    return TEMP_DIR.join(name=f"{uuid.uuid4()}{suffix}")
 
 
 def drop_schema(ro_mngr_local: ReadonlyDatabaseManager):

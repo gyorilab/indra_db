@@ -78,7 +78,7 @@ fi
 if [ ! -f "$RAW_STMTS_FPATH" ]
 then
     echo "Dumping raw statements"
-
+    start=$(date +%s)
     psql -d indradb_test \
          -h indradb-refresh.cwcetxbvbgrf.us-east-1.rds.amazonaws.com \
          -U tester \
@@ -88,12 +88,15 @@ then
                    FROM public.raw_statements)
              TO STDOUT" \
           | gzip > "$RAW_STMTS_FPATH"
+    end=$(date +%s)
+    runtime=$((end-start))
+    echo "Dumped raw statements in $runtime seconds"
 fi
 
 if [ ! -f "$READING_TEXT_CONTENT_META_FPATH" ]
 then
     echo "Dumping reading text content meta"
-
+    start=$(date +%s)
     psql -d indradb_test \
          -h indradb-refresh.cwcetxbvbgrf.us-east-1.rds.amazonaws.com \
          -U tester \
@@ -104,12 +107,15 @@ then
                    WHERE tc.id = rd.text_content_id)
              TO STDOUT" \
          | gzip > "$READING_TEXT_CONTENT_META_FPATH"
+    end=$(date +%s)
+    runtime=$((end-start))
+    echo "Dumped reading text content meta in $runtime seconds"
 fi
 
 if [ ! -f "$TEXT_REFS_PRINCIPAL_FPATH" ]
 then
     echo "Dumping text refs principal"
-
+    start=$(date +%s)
     psql -d indradb_test \
          -h indradb-refresh.cwcetxbvbgrf.us-east-1.rds.amazonaws.com \
          -U tester \
@@ -118,6 +124,9 @@ then
                    FROM public.text_ref)
              TO STDOUT" \
          | gzip > text_refs_principal.tsv.gz
+    end=$(date +%s)
+    runtime=$((end-start))
+    echo "Dumped text refs in $runtime seconds"
 fi
 
 # LOCAL DB CREATION AND DUMPING

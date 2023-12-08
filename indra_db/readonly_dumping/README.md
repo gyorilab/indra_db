@@ -60,7 +60,7 @@ sudo apt-get install postgresql-12
 
 Get a local PostgreSQL server running
 ```shell
-sudo -u postgres psql postgres
+sudo -u postgres psql
 ```
 
 If it works, you should see something like:
@@ -88,10 +88,10 @@ In the PostgreSQL terminal, create a user and set its password using
 
 You will be prompted to set a password, e.g. 'my_password'.
 
-To create a database, run the following:
+To create a database, use `sudo -u <username> createdb <db name>`:
 
 ```shell
-sudo -u postgres createdb my_db_name
+sudo -u postgres createdb indradb_readonly_local
 ```
 
 These credentials will be used to connect to the database in the pipeline.

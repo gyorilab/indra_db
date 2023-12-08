@@ -123,7 +123,7 @@ then
          -c "COPY (SELECT id, pmid, pmcid, doi, pii, url, manuscript_id
                    FROM public.text_ref)
              TO STDOUT" \
-         | gzip > text_refs_principal.tsv.gz
+         | gzip > "$TEXT_REFS_PRINCIPAL_FPATH"
     end=$(date +%s)
     runtime=$((end-start))
     echo "Dumped text refs in $runtime seconds"

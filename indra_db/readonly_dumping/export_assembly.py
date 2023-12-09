@@ -838,7 +838,7 @@ if __name__ == '__main__':
 
     # 1. Run knowledge base pipeline if the output files don't exist
     logger.info("1. Running knowledgebase pipeline")
-    kb_updates = run_kb_pipeline(refresh=args.refresh)
+    kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
 
     # Check if output from preassembly (step 2) already exists
     if (

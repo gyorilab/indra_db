@@ -601,39 +601,91 @@ def local_update(
 
     # Get the ids of the knowledgebases to update
     kbs_to_run = []
+    existing_kbs = []
     for kb_manager in kb_manager_list:
         kbm = kb_manager()
         # Add the knowledgebase to the list if it is not already there
         # or if we are refreshing
         if refresh or not kbm.get_local_fpath().exists():
             kbs_to_run.append(kb_manager)
+        else:
+            assert kbm.get_local_fpath().exists()
+            existing_kbs.append(kb_manager)
 
-    # If there are no knowledgebases to update, we are done
-    if not kbs_to_run:
-        logger.info("No knowledgebases to update")
-        return
+    if kbs_to_run:
+        logger.info("Generating new statements from these knowledgebases:")
+        for kb_manager in kbs_to_run:
+            logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
+    else:
+        # If no new KBs need to be run, check if all outputs already exist,
+        # and if so, do nothing
+        if all(
+                of.exist() for of in [
+                    raw_id_info_map_knowledgebases_fpath,
+                    stmt_hash_to_raw_stmt_ids_knowledgebases_fpath,
+                    source_counts_knowledgebases_fpath
+                ]
+        ):
+            logger.info("All knowledgebases already exist, nothing to do.")
+            return
 
-    logger.info("Generating statement from the following knowledgebases:")
-    for kb_manager in kbs_to_run:
-        logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
+    if existing_kbs:
+        logger.info("Using existing statements from the following knowledgebases:")
+        for kb_manager in existing_kbs:
+            logger.info(f"  {kb_manager.name} ({kb_manager.short_name})")
 
+    total = len(kbs_to_run) + len(existing_kbs)
     source_counts = {}
     counts = Counter()
     stmt_hash_to_raw_id = defaultdict(set)
     db_info_map = _get_kb_info_map()
 
     # Generate fake raw statement id for each statement, from -1 and down
-    raw_id_ix_generator = iter_count(-1, -1)
+    fake_raw_id_generator = iter_count(-1, -1)
     with gzip.open(
             raw_id_info_map_knowledgebases_fpath.as_posix(), "wt"
     ) as info_fh:
         kb_info_writer = csv.writer(info_fh, delimiter="\t")
 
-        for ix, Mngr in enumerate(tqdm(kb_manager_list)):
+        outer_tqdm = tqdm(
+            desc="Knowledgebases", total=total, unit="knowledgebase"
+        )
+
+        # First run through the existing knowledgebases
+        logger.info(f"Loading existing statements")
+        for ix, Mngr in enumerate(existing_kbs):
+            kbm = Mngr()
+            tqdm.write(f"[{ix+1}/{total}] {kbm.name} ({kbm.short_name})")
+            with gzip.open(kbm.get_local_fpath(), "rt") as stmts_fh:
+                stmts_reader = csv.reader(stmts_fh, delimiter="\t")
+                for row in tqdm(stmts_reader, leave=False):
+                    stmt_hash_str, stmt_json_str = row
+                    raw_id = next(fake_raw_id_generator)
+                    stmt_hash = int(stmt_hash_str)
+                    db_info_id = db_info_map[(kbm.source, kbm.short_name)]
+
+                    # Add to raw id mappings
+                    stmt_hash_to_raw_id[stmt_hash].add(raw_id)
+                    # raw_id, db_info_id, (reading_id), stmt_json
+                    kb_info_writer.writerow(
+                        (raw_id, db_info_id, "\\N", stmt_json_str)
+                    )
+                    # Update count
+                    counts[(kbm.source, kbm.short_name)] += 1
+
+                    # Get source count for this statement, or create new
+                    # Counter if it doesn't exist, and increment the count
+                    source_count_dict = source_counts.get(stmt_hash, Counter())
+                    source_count_dict[kbm.source] += 1
+                    source_counts[stmt_hash] = source_count_dict
+            outer_tqdm.update(1)
+
+        # Then run through the knowledgebases that are generating new output
+        for ix, Mngr in enumerate(kbs_to_run, start=len(existing_kbs)):
             kbm = Mngr()
             db_info_id = db_info_map[(kbm.source, kbm.short_name)]
             tqdm.write(
-                f"[{ix+1}/{len(kb_manager_list)}] {kbm.name} ({kbm.short_name})"
+                f"[{ix+1}/{total}] {kbm.name} ({kbm.short_name})"
             )
 
             # Write statements for this knowledgebase to a file
@@ -664,12 +716,12 @@ def local_update(
                     rows = []
                     kb_info_rows = []
                     for stmt in tqdm(stmts, leave=not batches):
-                        raw_id = next(raw_id_ix_generator)
+                        raw_id = next(fake_raw_id_generator)
                         # Get the statement hash and update the source count
                         stmt_hash = stmt.get_hash(refresh=True)
 
-                        # Get source count for this statement, or create a new one
-                        # if it doesn't exist, and increment the count
+                        # Get source count for this statement, or create a new
+                        # Counter if it doesn't exist, and increment the count
                         source_count_dict = source_counts.get(stmt_hash, Counter())
                         source_count_dict[kbm.source] += 1
                         source_counts[stmt_hash] = source_count_dict

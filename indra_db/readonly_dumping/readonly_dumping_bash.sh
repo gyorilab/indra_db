@@ -19,7 +19,7 @@ LOCAL_RO_USER="postgres"
 export LOCAL_RO_USER
 
 # Set the password for the local db
-echo "Set password for the local database:"
+echo "Provide password for the local database:"
 read -s LOCAL_RO_PASSWORD
 export LOCAL_RO_PASSWORD
 
@@ -91,6 +91,8 @@ then
     end=$(date +%s)
     runtime=$((end-start))
     echo "Dumped raw statements in $runtime seconds"
+else
+    echo "Raw statements file already exists, skipping dump"
 fi
 
 if [ ! -f "$READING_TEXT_CONTENT_META_FPATH" ]
@@ -110,6 +112,8 @@ then
     end=$(date +%s)
     runtime=$((end-start))
     echo "Dumped reading text content meta in $runtime seconds"
+else
+    echo "Reading text content meta file already exists, skipping dump"
 fi
 
 if [ ! -f "$TEXT_REFS_PRINCIPAL_FPATH" ]
@@ -127,6 +131,8 @@ then
     end=$(date +%s)
     runtime=$((end-start))
     echo "Dumped text refs in $runtime seconds"
+else
+    echo "Text refs principal file already exists, skipping dump"
 fi
 
 # LOCAL DB CREATION AND DUMPING

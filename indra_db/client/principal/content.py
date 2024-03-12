@@ -1,4 +1,4 @@
-__all__ = ['get_reader_output', 'get_content_by_refs']
+__all__ = ['get_reader_output', 'get_content_by_refs', 'get_text']
 
 import logging
 from collections import defaultdict
@@ -132,3 +132,21 @@ def get_content_by_refs(db, pmid_list=None, trid_list=None, sources=None,
     else:
         content_dict = {id_val: content for id_val, content in content_list}
     return content_dict
+
+
+def get_text(db, pmids, text_type):
+    """Return text content of a given type for a list of PMIDs."""
+    # Run a query for text content of the desired type
+    res = (db.session.query(db.TextRef.pmid, db.TextContent.text_type,
+                            db.TextContent.content)
+            .filter(db.TextRef.pmid_in(pmids))
+            .join(db.TextContent)
+            .filter(db.TextContent.text_type == text_type)
+            .all())
+    # Unpack the content, clean it up, and return it as a dictionary keyed
+    # by pmid
+    text_by_pmid = {
+        row.pmid: unpack(row.content).replace("\t", " ").replace("\n", "\t")
+        for row in res
+    }
+    return text_by_pmid

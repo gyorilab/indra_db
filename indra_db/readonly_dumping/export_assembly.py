@@ -523,33 +523,26 @@ def merge_processed_statements(kb_mapping: Dict[int, Path]):
             pickle.dump(reading_stmt_hash_to_raw_stmt_ids, f)
 
 
-def ground_deduplicate():
+def deduplicate():
+    # NOTE: As opposed to INDRA CoGEx we don't filter out statements
+    # without db_refs for the readonly DB
     # ~2.5-3 hours
-    if not grounded_stmts_fpath.exists() or not unique_stmts_fpath.exists():
-        with gzip.open(processed_stmts_fpath, "rt") as fh, gzip.open(
-            grounded_stmts_fpath, "wt"
-        ) as fh_out_gr, gzip.open(unique_stmts_fpath, "wt") as fh_out_uniq:
+    if not unique_stmts_fpath.exists():
+        with gzip.open(processed_stmts_fpath, "rt") as fh, \
+                gzip.open(unique_stmts_fpath, "wt") as fh_out_uniq:
             seen_hashes = set()
             reader = csv.reader(fh, delimiter="\t")
-            writer_gr = csv.writer(fh_out_gr, delimiter="\t")
             writer_uniq = csv.writer(fh_out_uniq, delimiter="\t")
             for sh, stmt_json_str in tqdm(
-                reader, total=60405451, desc="Gathering grounded and unique statements"
+                reader, total=60405451, desc="Gathering unique statements"
             ):
-                stmt = stmt_from_json(clean_json_loads(stmt_json_str))
-                if all(
-                    (set(agent.db_refs) - {"TEXT", "TEXT_NORM"})
-                    for agent in stmt.real_agent_list()
-                ):
-                    writer_gr.writerow((sh, stmt_json_str))
-                    if sh not in seen_hashes:
-                        writer_uniq.writerow((sh, stmt_json_str))
-                seen_hashes.add(sh)
+                if sh not in seen_hashes:
+                    writer_uniq.writerow((sh, stmt_json_str))
+                    seen_hashes.add(sh)
     else:
         logger.info(
-            f"Grounded and unique statements already dumped at "
-            f"{grounded_stmts_fpath.as_posix()} and "
-            f"{unique_stmts_fpath.as_posix()}, skipping..."
+            f"Unique statements already dumped at {unique_stmts_fpath.as_posix()}, "
+            f"skipping..."
         )
 
 
@@ -870,7 +863,7 @@ if __name__ == '__main__':
     # 5. Ground and deduplicate statements (here don't discard any statements
     #    based on number of agents, as is done in cogex)
     logger.info("5. Running grounding and deduplication")
-    ground_deduplicate()
+    deduplicate()
 
     # Steps 6 & 7
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():

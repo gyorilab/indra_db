@@ -377,12 +377,12 @@ def preassembly(
                 info_rows = []
                 for raw_stmt_id, db_info_id, reading_id, stmt_json_raw in lines:
                     raw_stmt_id_int = int(raw_stmt_id)
-                    db_info_id = int(db_info_id) if db_info_id != "\\N" else None
+                    db_info_id_int = int(db_info_id) if db_info_id != "\\N" else None
                     refs = None
 
                     # Skip if this is for a dropped knowledgebase or reading
-                    if drop_db_info_ids and db_info_id and \
-                            db_info_id in drop_db_info_ids:
+                    if drop_db_info_ids and db_info_id_int and \
+                            db_info_id_int in drop_db_info_ids:
                         continue
                     if reading_id != "\\N":
                         int_reading_id = int(reading_id)
@@ -393,7 +393,7 @@ def preassembly(
                             refs = text_refs.get(text_ref_id)
 
                     # Append to info rows
-                    info_rows.append((raw_stmt_id_int, db_info_id or "\\N",
+                    info_rows.append((raw_stmt_id_int, db_info_id_int or "\\N",
                                       int_reading_id, stmt_json_raw))
                     stmt_json = clean_json_loads(stmt_json_raw)
                     if refs:

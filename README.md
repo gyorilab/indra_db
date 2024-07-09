@@ -1,5 +1,3 @@
-[![Documentation Status](https://readthedocs.org/projects/indra-db/badge/?version=latest)](https://indra-db.readthedocs.io/en/latest/?badge=latest)
-
 # INDRA DB
 
 <img align="left" src="https://s3.amazonaws.com/bigmech/indra-db/indra_db_logo.png" width="480" height="200" />

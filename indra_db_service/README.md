@@ -26,18 +26,14 @@ As mentioned, the service is changing rapidly, and this documentation may at
 times be out of date. For the latest, check github or contact us.
 
 You need the following information to access a running web service:
-- The address of the web service (below shown with the placeholder `api.host`)
-- An API key which needs to be sent in the header of each request to the
+- An optional API key which needs to be sent in the header of each request to the
  service, or any other credentials that are implemented.
 
 If you want to use our implementation of the web API, you can contact us for
 the path and an API key.
 
 The code to support the REST service can be found in `api.py`, implemented
-using the Flask Python package. The means of hosting this api are left to
-the user. We have had success using [Zappa](https://github.com/Miserlou/Zappa)
-and AWS Lambda, and recommend it for a quick and efficient way to get the API
-up and running.
+using the Flask Python package.
 
 ## The Statement Endpoints
 
@@ -274,7 +270,7 @@ provide usage examples with the `curl` command line tool and `python` of
 some of the endpoints. This is by no means a comprehensive list, but rather 
 demonstrates some of the crucial features discussed above.
 
-In the examples, we assume the path to the web API is `https://api.host/`, and
+In the examples, we assume the path to the web API is `https://db.indra.bio/`, and
 that the API key is `12345`.
 
 #### Example 1:
@@ -283,7 +279,7 @@ for making calls to this web API.
 
 Using `curl` to query Statements about "MAP2K1 phosphorylates MAPK1":
 ```bash
-curl -X GET "http://api.host/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation&api_key=12345"
+curl -X GET "https://db.indra.bio/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation&api_key=12345"
 ```
 <details><summary>returns the following JSON:</summary>
 
@@ -359,7 +355,7 @@ directly with INDRA tools.
 You can use python to get JSON Statements for the same query:
 ```python
 import requests
-resp = requests.get('http://api.host/statements/from_agents',
+resp = requests.get('https://db.indra.bio/statements/from_agents',
                     params={'subject': 'MAP2K1',
                             'object': 'MAPK1',
                             'type': 'phosphorylation',
@@ -395,7 +391,7 @@ document that presents a graphical user interface when displayed in a web
 browser will be returned. The example below queries for statements where 
 BRCA1 is subject and BRCA2 is object:
 ```url
-http://api.host/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
+https://db.indra.bio/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
 ```
 The interface is restricted to users with login access. If you are not logged 
 in, you will be prompted to so before you can view the loaded statements. 
@@ -413,7 +409,7 @@ the
 Use curl to query for any kind of interaction between SMURF2 and SMAD2, 
 returning at most 10 statements with 3 evidence each:
 ```bash
-curl -X GET "http://api.host/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&limit=10&ev_limit=3"
+curl -X GET "https://db.indra.bio/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&limit=10&ev_limit=3"
 ```
 As above, in python this could be handled using the `requests` module, or with
 the client:
@@ -423,7 +419,7 @@ from indra.statements import stmts_from_json
 from indra.sources import indra_db_rest as idbr
 
 # With requests
-resp = requests.get('http://api.host/statements/from_agents',
+resp = requests.get('https://db.indra.bio/statements/from_agents',
                     params={'agent0': 'SMURF2', 'agent1': 'SMAD',
                             'api_key': 12345, 'limit': 10,
                             'ev_limit': 3})
@@ -439,11 +435,11 @@ stmts = idbr.get_statements(agents=['SMURF2', 'SMAD'], max_stmts=10,
 Note the use of the `@FPLX` suffix to denote the namespace used in identifying
 the agent to query for things that inhibit MEK, using curl:
 ```bash
-curl -X GET "http://api.host/statements/from_agents?object=MEK@FPLX&type=inhibition&api_key=12345"
+curl -X GET "https://db.indra.bio/statements/from_agents?object=MEK@FPLX&type=inhibition&api_key=12345"
 ```
 Python requests:
 ```python
-resp = requests.get('http://api.host/statements/from_agents',
+resp = requests.get('https://db.indra.bio/statements/from_agents',
                     params={'agent': 'MEK@FPLX', 'type': 'inhibition', 
                             'api_key': 12345})
 ```
@@ -456,7 +452,7 @@ stmts = idbr.get_statements(agents=['MEK@FPLX'], stmt_type='inhibition')
 Query for a statement with the hash -1072112758478440, retrieving at most 1000
 evidence, using curl:
 ```bash
-curl -X GET "http://api.host/statements/from_hash/-1072112758478440?api_key=12345&ev_limit=1000"
+curl -X GET "https://db.indra.bio/statements/from_hash/-1072112758478440?api_key=12345&ev_limit=1000"
 ```
 or INDRA's client:
 ```python
@@ -479,7 +475,7 @@ file, call it `papers.json` with the following:
 ```
 and post it to the REST API with curl:
 ```bash
-curl -X POST "http://api.host/statements/from_papers?api_key=12345" -d @papers.json -H "Content-Type: application/json"
+curl -X POST "https://db.indra.bio/statements/from_papers?api_key=12345" -d @papers.json -H "Content-Type: application/json"
 ```
 or just use INDRA's client:
 ```python
@@ -491,7 +487,7 @@ stmts = idbr.get_statments_for_paper([('pmid', '22174878'),
 Curate a Statement at the pre-assembled (pa) level for a Statement with hash
 -1072112758478440, using curl:
 ```bash
-curl -X POST "http://api.host/curation/submit/-1072112758478440?api_key=12345" -d '{"tag": "correct", "text": "This Statement is OK.", "curator": "Alice"}' -H "Content-Type: application/json"
+curl -X POST "https://db.indra.bio/curation/submit/-1072112758478440?api_key=12345" -d '{"tag": "correct", "text": "This Statement is OK.", "curator": "Alice"}' -H "Content-Type: application/json"
 ```
 or INDRA's client:
 ```python

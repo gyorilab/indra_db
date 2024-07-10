@@ -31,6 +31,8 @@ from indra_db.readonly_dumping.locations import *
 
 from .util import format_date
 
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -620,7 +622,7 @@ def local_update(
         # If no new KBs need to be run, check if all outputs already exist,
         # and if so, do nothing
         if all(
-                of.exist() for of in [
+                of.exists() for of in [
                     raw_id_info_map_knowledgebases_fpath,
                     stmt_hash_to_raw_stmt_ids_knowledgebases_fpath,
                     source_counts_knowledgebases_fpath
@@ -693,7 +695,10 @@ def local_update(
             with gzip.open(fname, "wt") as proc_stmts_fh:
                 proc_stmts_writer = csv.writer(proc_stmts_fh, delimiter="\t")
 
-                kb_kwargs = local_files.get(kbm.short_name, {})
+                if local_files is not None:
+                    kb_kwargs = local_files.get(kbm.short_name, {})
+                else:
+                    kb_kwargs = {}
                 stmts = kbm.get_statements(**kb_kwargs)
 
                 # Do preassembly
@@ -710,7 +715,7 @@ def local_update(
 
                 for stmts in stmts_iter:
                     # Pre-process statements
-                    stmts = ac.fix_invalidities(stmts, in_place=True)
+                    stmts = ac.fix_invalidities(list(stmts), in_place=True)
                     stmts = ac.map_grounding(stmts)
                     stmts = ac.map_sequence(stmts)
                     rows = []

@@ -25,8 +25,8 @@ from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
-from .util import clean_json_loads
-from .locations import *
+from indra_db.readonly_dumping.util import clean_json_loads
+from indra_db.readonly_dumping.locations import *
 
 
 refinement_cycles_fpath = TEMP_DIR.join(name="refinement_cycles.pkl")
@@ -60,8 +60,8 @@ reader_versions = {
 }
 
 version_to_reader = {}
-for reader_name, reader_versions in reader_versions.items():
-    for reader_version in reader_versions:
+for reader_name, versions in reader_versions.items():
+    for reader_version in versions:
         version_to_reader[reader_version] = reader_name
 
 
@@ -329,7 +329,6 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
                 )
             selected_kbs.append(M)
             kb_file_mapping[db_id] = m.get_local_fpath()
-
     local_update(kb_manager_list=selected_kbs, refresh=refresh)
 
     return kb_file_mapping
@@ -803,6 +802,7 @@ if __name__ == '__main__':
     logger.info(f"Root data path: {TEMP_DIR.base}")
 
     # 0. Dump raw data (raw statements, text content + reading, text refs)
+
     needed_files = [reading_text_content_fpath, text_refs_fpath,
                     raw_statements_fpath]
 

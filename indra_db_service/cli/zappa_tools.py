@@ -1,5 +1,6 @@
-import os
 import json
+from pathlib import Path
+
 import boto3
 
 from indra_db.config import CONFIG
@@ -14,16 +15,20 @@ aws_primary_function = 'indra-db-api-ROOT'
 ZAPPA_CONFIG = 'zappa_settings.json'
 
 
-def load_zappa_settings() -> dict:
-    if not os.path.exists(ZAPPA_CONFIG):
-        raise Exception(f"No valid zappa config file present. "
-                        f"Expecting: {ZAPPA_CONFIG}")
-    with open('zappa_settings.json', 'r') as f:
+def load_zappa_settings(zappa_config: Path = None) -> dict:
+    """Load the zappa settings file."""
+    if zappa_config is None:
+        zappa_config = Path(ZAPPA_CONFIG)
+    if not zappa_config.exists():
+        raise FileNotFoundError(
+            f"No valid zappa config file present at {zappa_config}"
+        )
+    with zappa_config.open('r') as f:
         zappa_settings = json.load(f)
     return zappa_settings
 
 
-def fix_permissions(deployment) -> None:
+def fix_permissions(deployment, zappa_settings_path: Path = None):
     """Add permissions to the lambda function to allow access from API Gateway.
 
     When Zappa runs, it removes permission for the primary endpoint to call
@@ -31,7 +36,7 @@ def fix_permissions(deployment) -> None:
     permissions, and is intended to be run after a zappa update.
     """
     # Get relevant settings from the zappa config.
-    zappa_settings = load_zappa_settings()
+    zappa_settings = load_zappa_settings(zappa_settings_path)
     project_name = zappa_settings[deployment]['project_name']
     region = zappa_settings[deployment]['aws_region']
     if zappa_settings[deployment]['profile_name'].lower() != aws_role.lower():

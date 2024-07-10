@@ -1533,7 +1533,11 @@ class ReadonlyDatabaseManager(DatabaseManager):
         be missing. This function rebuilds missing indices while skipping
         any existing ones.
         """
-        from psycopg2 import UndefinedTable
+        try:
+            from psycopg2 import UndefinedTable
+        except ImportError:
+            from psycopg2.errors import UndefinedTable
+
         for key, table in self.tables.items():
             try:
                 table.build_indices(self)

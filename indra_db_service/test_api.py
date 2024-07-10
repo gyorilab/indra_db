@@ -615,14 +615,16 @@ class TestDbApi(unittest.TestCase):
         assert 'invalid credentials' in reason.lower()
         assert 'api key' in reason.lower()
 
-    def test_get_all_curations_wrong_auth(self):
-        if TEST_DEPLOYMENT:
-            raise SkipTest("Cannot test particular auth with single API key.")
-        resp = self.app.get('curation/list?api_key=OTHER_API_KEY')
-        assert resp.status_code == 403
-        reason = resp.json['reason']
-        assert 'insufficient permissions' in reason.lower()
-        assert 'get all curations' in reason.lower()
+    # def test_get_all_curations_wrong_auth(self):
+    #     # NOTE: The endpoint has been changed and 403 can no longer be
+    #     # returned by it. This test is kept for reference.
+    #     if TEST_DEPLOYMENT:
+    #         raise SkipTest("Cannot test particular auth with single API key.")
+    #     resp = self.app.get('curation/list?api_key=OTHER_API_KEY')
+    #     assert resp.status_code == 403
+    #     reason = resp.json['reason']
+    #     assert 'insufficient permissions' in reason.lower()
+    #     assert 'get all curations' in reason.lower()
 
     def test_interaction_query(self):
         self.__time_query('get', 'metadata/relations/from_agents',

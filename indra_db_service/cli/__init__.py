@@ -10,15 +10,22 @@ def main():
 
 @main.command()
 @click.argument('deployment', nargs=1)
-def push(deployment):
+@click.option('-s', '--settings', 'zappa_settings_file',
+              default='zappa_settings.json',
+              help="Specify the zappa settings file to use. Default is "
+                   "'zappa_settings.json'.")
+def push(deployment, zappa_settings_file):
     """Push a new deployment to the remote lambdas using zappa."""
-    from indra_db_service.cli.zappa_tools import fix_permissions, ZAPPA_CONFIG
+    import json
+    from pathlib import Path
+    from indra_db_service.cli.zappa_tools import fix_permissions
     click.echo(f"Updating {deployment} deployment.")
-    if ZAPPA_CONFIG not in os.listdir('.'):
-        click.echo(f"Please run in directory with {ZAPPA_CONFIG}.")
+    if not Path(zappa_settings_file).exists():
+        click.echo(f"Zappa settings file not found: {zappa_settings_file}")
         return
+    zappa_settings = json.load(open(zappa_settings_file, 'r'))
     os.system(f'zappa update {deployment}')
-    fix_permissions(deployment)
+    fix_permissions(deployment, zappa_settings=zappa_settings)
 
 
 @main.command()

@@ -371,6 +371,7 @@ def get_statements(result_type, method):
 
 
 @app.route("/expand", methods=["POST"])
+@jwt_nontest_optional
 def expand_meta_row():
     start_time = datetime.now()
 

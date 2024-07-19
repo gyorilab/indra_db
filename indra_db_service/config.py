@@ -12,7 +12,7 @@ __all__ = [
 
 from os import environ
 from pathlib import Path
-from flask_jwt_extended import jwt_optional
+from flask_jwt_extended import jwt_required
 
 TITLE = "The INDRA Database"
 DEPLOYMENT = environ.get("INDRA_DB_API_DEPLOYMENT")
@@ -39,4 +39,4 @@ def jwt_nontest_optional(func):
     if TESTING["status"]:
         return func
     else:
-        return jwt_optional(func)
+        return jwt_required(optional=True)(func)

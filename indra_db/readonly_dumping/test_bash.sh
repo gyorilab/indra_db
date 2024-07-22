@@ -14,7 +14,7 @@ then
     exit 1
 fi
 
-# Set the user for the local db
+#Set the user for the local db
 LOCAL_RO_USER="postgres"
 export LOCAL_RO_USER
 
@@ -176,12 +176,12 @@ END_DATE=`date '+%Y-%m-%d'`
 echo "{\"datetime\": \"$END_DATE_TIME\", \"date_stamp\": \"$END_DATE\"}" > end.json
 aws s3 cp end.json "$S3_PATH/end.json"
 
-# At this point, if a new readonly instance is already created, we could run
-# the following command to update the instance (assuming the password is set
-# in PGPASSWORD, which will be read if -w is set):
-# pg_restore -h <readonly-instance>.us-east-1.rds.amazonaws.com \
-#            -U <user-name> \
-#            -f <dump-file> \
-#            -w \
-#            -d indradb_readonly \
-#            --no-owner
+## At this point, if a new readonly instance is already created, we could run
+## the following command to update the instance (assuming the password is set
+## in PGPASSWORD, which will be read if -w is set):
+## pg_restore -h <readonly-instance>.us-east-1.rds.amazonaws.com \
+##            -U <user-name> \
+##            -f <dump-file> \
+##            -w \
+##            -d indradb_readonly \
+##            --no-owner

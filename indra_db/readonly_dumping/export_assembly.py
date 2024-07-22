@@ -319,7 +319,7 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
     kb_file_mapping = {}
     for M in KnowledgebaseManager.__subclasses__():
         m = M()
-        if m.short_name != "hprd":
+        if m.short_name != "hprd" and m.short_name != "vhn":
             db_id = kb_mapping.get((m.source, m.short_name))
             if db_id is None:
                 raise ValueError(
@@ -333,7 +333,8 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
 
     return kb_file_mapping
 
-
+from memory_profiler import profile
+@profile
 def preassembly(
     drop_readings: Set[int],
     reading_id_to_text_ref_id: Dict,
@@ -370,8 +371,10 @@ def preassembly(
             raw_stmts_reader = csv.reader(fh, delimiter="\t")
             writer = csv.writer(fh_out, delimiter="\t")
             info_writer = csv.writer(fh_info, delimiter="\t")
-            for lines in tqdm(batch_iter(raw_stmts_reader, 10000),
-                              total=7536, desc="Looping raw statements"):
+            for batch_ix, lines in enumerate(tqdm(batch_iter(raw_stmts_reader, 100000),
+                              total=754, desc="Looping raw statements")):
+                if batch_ix != 0:
+                    break
                 paired_stmts_jsons = []
                 info_rows = []
                 for raw_stmt_id, db_info_id, reading_id, stmt_json_raw in lines:
@@ -400,11 +403,10 @@ def preassembly(
                         if refs.get("PMID"):
                             stmt_json["evidence"][0]["pmid"] = refs["PMID"]
                     paired_stmts_jsons.append((raw_stmt_id_int, stmt_json))
-
                 # Write to the info file
                 info_writer.writerows(info_rows)
-
-                raw_ids, stmts_jsons = zip(*paired_stmts_jsons)
+                if paired_stmts_jsons:
+                    raw_ids, stmts_jsons = zip(*paired_stmts_jsons)
                 stmts = stmts_from_json(stmts_jsons)
 
                 # This part ultimately calls indra_db_lite or the principal db,
@@ -426,6 +428,7 @@ def preassembly(
         source_counts = dict(source_counts)
         with source_counts_reading_fpath.open("wb") as fh:
             pickle.dump(source_counts, fh)
+            print("Source count saved")
 
         # Cast defaultdict to dict and pickle the stmt hash to raw stmt ids
         logger.info("Dumping stmt hash to raw stmt ids")
@@ -841,7 +844,6 @@ if __name__ == '__main__':
         # 2. Distill statements
         logger.info("2. Running statement distillation")
         readings_to_drop, reading_id_textref_id_map = distill_statements()
-
         # 3. Preassembly (needs indra_db_lite setup)
         logger.info("3. Running preassembly")
         preassembly(
@@ -853,7 +855,7 @@ if __name__ == '__main__':
         logger.info(
             "Output from step 2 & 3 already exists, skipping to step 4..."
         )
-
+    '''
     # 4. Merge the processed raw statements with the knowledgebase statements
     logger.info(
         "4. Merging processed knowledgebase statements with processed raw statements"
@@ -901,3 +903,4 @@ if __name__ == '__main__':
             )
     else:
         logger.info("Final output already exists, stopping script")
+    '''

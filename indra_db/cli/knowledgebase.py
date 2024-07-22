@@ -29,7 +29,7 @@ from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 from indra_db.readonly_dumping.locations import *
 
-from .util import format_date
+from indra_db.cli.util import format_date
 
 
 
@@ -243,13 +243,13 @@ class PathwayCommonsManager(KnowledgebaseManager):
         return ssid not in self.skips
 
     def get_statements(self):
-        s3 = boto3.client('s3')
+        from indra.sources import biopax
 
-        logger.info('Loading PC content pickle from S3')
-        resp = s3.get_object(Bucket='bigmech',
-                             Key='indra-db/biopax_pc12_pybiopax.pkl')
+        prc = biopax.process_owl('/Users/haohangyan/Desktop/repo/indra_db/pc-biopax.owl')
+        # this file is download from https://download.baderlab.org/PathwayCommons/PC2/v14/pc-biopax.owl.gz
+        stmts=prc.statements
+
         logger.info('Loading PC statements from pickle')
-        stmts = pickle.loads(resp['Body'].read())
 
         logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(stmts) if self._can_include(s)]
@@ -284,12 +284,10 @@ class DrugBankManager(KnowledgebaseManager):
     source = 'drugbank'
 
     def get_statements(self):
-        s3 = boto3.client('s3')
-        logger.info('Fetching DrugBank statements from S3...')
-        key = 'indra-db/drugbank_5.1.10.pkl'
-        resp = s3.get_object(Bucket='bigmech', Key=key)
-        stmts = pickle.loads(resp['Body'].read())
-        expanded_stmts = [s for s in _expanded(stmts)]
+        from indra.sources import drugbank
+        # For now. Load from local since aws is not setted up
+        prc = drugbank.process_xml('/Users/haohangyan/Desktop/repo/indra_db/kb_raw/drugbank.xml')
+        expanded_stmts = [s for s in _expanded(prc.statements)]
         # Return exactly one of multiple statements that are exactly the same
         # in terms of content and evidence.
         unique_stmts, _ = extract_duplicates(expanded_stmts,
@@ -315,18 +313,9 @@ class PhosphoElmManager(KnowledgebaseManager):
 
     def get_statements(self):
         from indra.sources import phosphoelm
-        logger.info('Fetching PhosphoElm dump from S3...')
-        s3 = boto3.resource('s3')
-        tmp_dir = tempfile.mkdtemp('phosphoelm_files')
-        dump_file = os.path.join(tmp_dir, 'phosphoelm.dump')
-        s3.meta.client.download_file('bigmech',
-                                     'indra-db/phosphoELM_all_2015-04.dump',
-                                     dump_file)
-        logger.info('Processing PhosphoElm dump...')
-        pp = phosphoelm.process_from_dump(dump_file)
-        logger.info('Expanding evidences on PhosphoElm statements...')
-        # Expand evidences just in case, though this processor always
-        # produces a single evidence per statement.
+
+        pp = phosphoelm.process_from_dump('/Users/haohangyan/Desktop/repo/indra_db/kb_raw/phosphoELM_all_2015-04.dump')
+
         stmts = [s for s in _expanded(pp.statements)]
         # Return exactly one of multiple statements that are exactly the same
         # in terms of content and evidence.
@@ -414,13 +403,7 @@ class PhosphositeManager(KnowledgebaseManager):
     def get_statements(self):
         from indra.sources import biopax
 
-        s3 = boto3.client('s3')
-        resp = s3.get_object(Bucket='bigmech',
-                             Key='indra-db/Kinase_substrates.owl.gz')
-        owl_gz = resp['Body'].read()
-        owl_str = \
-            zlib.decompress(owl_gz, zlib.MAX_WBITS + 32).decode('utf-8')
-        bp = biopax.process_owl_str(owl_str)
+        bp = biopax.process_owl_gz('/Users/haohangyan/Desktop/repo/indra_db/Kinase_substrates.owl.gz')
         stmts, dups = extract_duplicates(bp.statements,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))
@@ -629,7 +612,6 @@ def local_update(
                 ]
         ):
             logger.info("All knowledgebases already exist, nothing to do.")
-            return
 
     if existing_kbs:
         logger.info("Using existing statements from the following knowledgebases:")
@@ -684,6 +666,7 @@ def local_update(
 
         # Then run through the knowledgebases that are generating new output
         for ix, Mngr in enumerate(kbs_to_run, start=len(existing_kbs)):
+            error_log = []
             kbm = Mngr()
             db_info_id = db_info_map[(kbm.source, kbm.short_name)]
             tqdm.write(
@@ -700,6 +683,12 @@ def local_update(
                 else:
                     kb_kwargs = {}
                 stmts = kbm.get_statements(**kb_kwargs)
+                #Get statement and record failed kb
+                try:
+                    stmts = []
+                    stmts = kbm.get_statements(**kb_kwargs)
+                except Exception as e:
+                    error_log.append((kbm.name, e))
 
                 # Do preassembly
                 if len(stmts) > 100000:
@@ -746,6 +735,13 @@ def local_update(
                     counts[(kbm.source, kbm.short_name)] += len(stmts)
             if batches:
                 t.close()
+
+            if error_log:
+                error_log_path = '../../error_log/kbm_errors.pkl'
+                os.makedirs(os.path.dirname(error_log_path), exist_ok=True)
+                with open(error_log_path, 'wb') as f:
+                    pickle.dump(error_log, f)
+                print(f"Recorded {len(error_log)} errors in 'kbm_errors.pkl'")
 
     logger.info("Statements produced per knowledgebase:")
     for (source, short_name), count in counts.most_common():

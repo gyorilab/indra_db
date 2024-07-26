@@ -775,7 +775,7 @@ def deduplicate():
         )
 
 
-def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
+def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int) -> nx.DiGraph:
     global cycles_found, pa
     """Get refinement pairs as: (more specific, less specific)
 
@@ -875,7 +875,7 @@ def get_refinement_graph(batch_size: int, num_batches: int) -> nx.DiGraph:
 
     # Perform sanity check on the refinements
     logger.info("Checking refinements")
-    sample_stmts = sample_unique_stmts(n_rows=num_rows)
+    sample_stmts = sample_unique_stmts(n_rows=n_rows)
     sample_refinements = get_related([s for _, s in sample_stmts])
     assert sample_refinements.issubset(refinements), (
         f"Refinements are not a subset of the sample. Sample contains "
@@ -1129,7 +1129,8 @@ if __name__ == '__main__':
         # 6. Calculate refinement graph:
         cycles_found = False
         ref_graph = get_refinement_graph(batch_size=batch_size,
-                                         num_batches=batch_count)
+                                         num_batches=batch_count,
+                                         n_rows=num_rows)
         if cycles_found:
             logger.info(
                 f"Refinement graph stored in variable 'ref_graph', "

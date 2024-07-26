@@ -27,7 +27,7 @@ from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
 from indra_db.readonly_dumping.locations import splitted_raw_statements_folder_fpath
-from indra_db.readonly_dumping.util import clean_json_loads
+from indra_db.readonly_dumping.util import clean_json_loads, validate_statement_semantics
 from indra_db.readonly_dumping.locations import *
 import os
 
@@ -749,7 +749,8 @@ def merge_processed_statements():
 
 def deduplicate():
     # NOTE: As opposed to INDRA CoGEx we don't filter out statements
-    # without db_refs for the readonly DB
+    # without db_refs for the readonly DB as we want to allow statements that
+    # are valid but ungrounded
     # ~2.5-3 hours
     if not unique_stmts_fpath.exists():
         with gzip.open(processed_stmts_fpath, "rt") as fh, \
@@ -760,6 +761,10 @@ def deduplicate():
             for sh, stmt_json_str in tqdm(
                     reader, total=60405451, desc="Gathering unique statements"
             ):
+                stmt = stmt_from_json(clean_json_loads(stmt_json_str))
+                if not validate_statement_semantics(stmt):
+                    continue
+
                 if sh not in seen_hashes:
                     writer_uniq.writerow((sh, stmt_json_str))
                     seen_hashes.add(sh)

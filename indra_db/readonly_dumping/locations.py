@@ -57,6 +57,7 @@ __all__ = [
 
 
 # Dump files and their derivatives
+splitted_raw_statements_folder_fpath=TEMP_DIR.join(name="splitted_raw_statements")
 raw_statements_fpath = TEMP_DIR.join(name="raw_statements.tsv.gz")
 reading_text_content_fpath = TEMP_DIR.join(name="reading_text_content_meta.tsv.gz")
 text_refs_fpath = TEMP_DIR.join(name="text_refs_principal.tsv.gz")

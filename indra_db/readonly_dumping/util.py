@@ -1,6 +1,9 @@
 import codecs
 import json
 
+from indra.statements import Statement
+from indra.statements.validate import assert_valid_statement_semantics
+
 
 class StatementJSONDecodeError(Exception):
     pass
@@ -117,3 +120,23 @@ def clean_json_loads(stmt_json_str: str, remove_evidence: bool = False):
     if remove_evidence:
         stmt_json["evidence"] = []
     return stmt_json
+
+
+def validate_statement_semantics(stmt: Statement) -> bool:
+    """Validate the semantics of a statement.
+
+    Parameters
+    ----------
+    stmt :
+        The statement to validate.
+
+    Returns
+    -------
+    :
+        True if the statement is semantically valid, False otherwise.
+    """
+    try:
+        assert_valid_statement_semantics(stmt)
+        return True
+    except ValueError:
+        return False

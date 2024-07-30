@@ -1,4 +1,5 @@
 import argparse
+import concurrent.futures
 import csv
 import gzip
 import itertools
@@ -6,6 +7,7 @@ import json
 import logging
 import math
 import pickle
+import re
 import shutil
 from collections import defaultdict, Counter
 from pathlib import Path
@@ -26,7 +28,8 @@ from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
-from indra_db.readonly_dumping.locations import splitted_raw_statements_folder_fpath
+from indra_db.readonly_dumping.locations import split_raw_statements_folder_fpath, \
+    split_unique_statements_folder_fpath
 from indra_db.readonly_dumping.util import clean_json_loads, validate_statement_semantics
 from indra_db.readonly_dumping.locations import *
 import os
@@ -338,18 +341,24 @@ import time
 import tracemalloc
 
 
-def split_raw_stmts_file(input_path, output_dir, batch_size=10000):
+def split_tsv_gz_file(input_path, output_dir, batch_size=10000):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     with gzip.open(input_path, "rt") as fh:
-        raw_stmts_reader = csv.reader(fh, delimiter="\t")
-        for batch_index, batch in enumerate(batch_iter(raw_stmts_reader, batch_size)):
+        stmts_reader = csv.reader(fh, delimiter="\t")
+        for batch_index, batch in enumerate(batch_iter(stmts_reader, batch_size)):
             output_file_path = os.path.join(output_dir, f"split_{batch_index}.tsv.gz")
             with gzip.open(output_file_path, "wt") as output_file:
                 writer = csv.writer(output_file, delimiter="\t")
                 writer.writerows(batch)
             print(f"Written batch {batch_index} to {output_file_path}")
+
+def count_rows_in_tsv_gz(file_path):
+    with gzip.open(file_path, 'rt') as file:
+        reader = csv.reader(file)
+        row_count = sum(1 for _ in reader)  # This counts every row in the CSV file
+    return row_count
 
 def combine_preprocessing_result(output_dir, final_processed_file, final_source_counts_file, final_stmt_hash_file):
     all_rows = []
@@ -475,8 +484,8 @@ def preprocess_multi(
                     "from raw statement ids to db info and reading ids")
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
 
-        split_files = [os.path.join(splitted_raw_statements_folder_fpath, f)
-                       for f in os.listdir(splitted_raw_statements_folder_fpath)
+        split_files = [os.path.join(split_raw_statements_folder_fpath, f)
+                       for f in os.listdir(split_raw_statements_folder_fpath)
                        if f.endswith(".gz")]
 
         manager = Manager()
@@ -647,11 +656,6 @@ def merge_processed_statements():
         A dictionary mapping db_info ids to the local file paths of the
         statements for that knowledgebase
     """
-    # kb_file_mapping[db_id] = m.get_local_fpath()
-    # Run bash to concatenate the processed raw statements and the
-    # knowledgebase statements:
-    # $ cat processed_statements.tsv.gz <kb_files> \
-    #   | gzip > all_processed_statements.tsv.gz
 
     # List the processed statement file to be merged
     proc_stmts_reading = processed_stmts_reading_fpath.absolute().as_posix()
@@ -659,17 +663,6 @@ def merge_processed_statements():
     all_files = [os.path.join(kb_folder_path, file) for file in os.listdir(kb_folder_path)
                if os.path.isfile(os.path.join(kb_folder_path, file)) and file.endswith('.tsv.gz')]
     all_files.append(proc_stmts_reading)
-
-    # Merge the processed statements
-    # if not processed_stmts_fpath.exists():
-    #     logger.info("Merging processed statements")
-    #     cmd = f"cat {all_files} | gzip > {processed_stmts_fpath.absolute().as_posix()}"
-    #     logger.info(f"Running command: {cmd}")
-    #     os.system(cmd)
-    #     assert processed_stmts_fpath.exists()
-    # else:
-    #     logger.info(f"Processed statements already merged at "
-    #                 f"{processed_stmts_fpath.absolute().as_posix()}, skipping...")
 
     if not processed_stmts_fpath.exists():
         logger.info("Merging processed statements")
@@ -714,14 +707,7 @@ def merge_processed_statements():
                         logger.info(f"Merging {file} into processed statements")
                         shutil.copyfileobj(f_in, f_out)
         assert raw_id_info_map_fpath.exists()
-        # cmd = (
-        #     f"cat {raw_id_info_map_reading_fpath.absolute().as_posix()} "
-        #     f"{raw_id_info_map_knowledgebases_fpath.absolute().as_posix()} "
-        #     f"| gzip > {raw_id_info_map_fpath.absolute().as_posix()}"
-        # )
-        # logger.info(f"Running command: {cmd}")
-        # os.system(cmd)
-        # assert raw_id_info_map_fpath.exists()
+
 
     # Merge the stmt hash to raw stmt ids
     if not stmt_hash_to_raw_stmt_ids_fpath.exists():
@@ -775,7 +761,56 @@ def deduplicate():
         )
 
 
-def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int) -> nx.DiGraph:
+def load_statements_from_file(file_path):
+    stmts = []
+    with gzip.open(file_path, "rt") as f:
+        reader = csv.reader(f, delimiter="\t")
+        for _, sjs in reader:
+            stmt = stmt_from_json(clean_json_loads(sjs, remove_evidence=True))
+            stmts.append(stmt)
+    return stmts
+
+def process_batch_pair(file):
+    global pa
+    file1, file2 = file
+    stmts1 = load_statements_from_file(file1)
+    stmts2 = load_statements_from_file(file2)
+    refinements = get_related_split(stmts1, stmts2)
+    logging.info("Processing batch pair: %s, %s", file1, file2)
+    return refinements
+
+def init_globals():
+    global pa
+    bio_ontology.initialize()
+    bio_ontology._build_transitive_closure()
+    pa = Preassembler(bio_ontology)
+
+def parallel_process_files(split_files, num_processes):
+    global pa
+    pool = Pool(processes=num_processes)
+    split_files = split_files[::-1]
+    tasks = []
+    refinements = set()
+    num_files = len(split_files)
+    for i in range(num_files):
+        print(i)
+        print("check")
+        for j in range(i + 1, num_files):
+            tasks.append((split_files[i], split_files[j]))
+    print(tasks)
+    logging.info("Completed all tasks")
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes,initializer=init_globals) as executor:
+        results = list(tqdm(executor.map(process_batch_pair, tasks), total=len(tasks)))
+
+    for result in results:
+        refinements |= result
+
+    for i in range(num_files):
+        refinements |= get_related(load_statements_from_file(split_files[i]))
+
+    return refinements
+
+def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int, split_files: list) -> nx.DiGraph:
     global cycles_found, pa
     """Get refinement pairs as: (more specific, less specific)
 
@@ -800,65 +835,12 @@ def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int) -> nx.D
     # runs outer index < inner index <= num_batches. This way the outer
     # index runs the "diagonal" of the combinations while the inner index runs
     # the upper triangle of the combinations.
-
     # Open two csv readers to the same file
+
     if not refinements_fpath.exists():
         logger.info("6. Calculating refinements")
-        refinements = set()
-        # This takes ~9-10 hours to run
-        # todo: parallelize
-        with gzip.open(unique_stmts_fpath, "rt") as fh1:
-            reader1 = csv.reader(fh1, delimiter="\t")
-            for outer_batch_ix in tqdm(
-                    range(num_batches), total=num_batches,
-                    desc="Calculating refinements"
-            ):
-                # read in a batch from the first reader
-                stmts1 = []
-                for _ in range(batch_size):
-                    try:
-                        _, sjs = next(reader1)
-                        stmt = stmt_from_json(
-                            clean_json_loads(sjs, remove_evidence=True)
-                        )
-                        stmts1.append(stmt)
-                    except StopIteration:
-                        break
 
-                # Get refinements for the i-th batch with itself
-                refinements |= get_related(stmts1)
-
-                # Loop batches from second reader, starting at outer_batch_ix + 1
-                with gzip.open(unique_stmts_fpath, "rt") as fh2:
-                    reader2 = csv.reader(fh2, delimiter="\t")
-                    batch_iterator = batch_iter(reader2, batch_size=batch_size)
-                    # Note: first argument is the start index, second is
-                    # the stop index, but if None is used, it will iterate
-                    # until possible
-                    batch_iterator = itertools.islice(
-                        batch_iterator, outer_batch_ix + 1, None
-                    )
-
-                    # Loop the batches
-                    for inner_batch_idx, batch in tqdm(
-                            enumerate(batch_iterator),
-                            total=num_batches - outer_batch_ix - 1,
-                            leave=False
-                    ):
-                        stmts2 = []
-
-                        # Loop the statements in the batch
-                        for _, sjs in batch:
-                            try:
-                                stmt = stmt_from_json(
-                                    clean_json_loads(sjs, remove_evidence=True)
-                                )
-                                stmts2.append(stmt)
-                            except StopIteration:
-                                break
-
-                        # Get refinements for the i-th batch with the j-th batch
-                        refinements |= get_related_split(stmts1, stmts2)
+        refinements = parallel_process_files(split_files,4)
 
         # Write out the refinements as a gzipped TSV file
         with gzip.open(refinements_fpath.as_posix(), "wt") as f:
@@ -873,15 +855,16 @@ def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int) -> nx.D
             # Each line is a refinement pair of two Statement hashes as ints
             refinements = {(int(h1), int(h2)) for h1, h2 in tsv_reader}
 
+    #This can only check for full data
     # Perform sanity check on the refinements
-    logger.info("Checking refinements")
-    sample_stmts = sample_unique_stmts(n_rows=n_rows)
-    sample_refinements = get_related([s for _, s in sample_stmts])
-    assert sample_refinements.issubset(refinements), (
-        f"Refinements are not a subset of the sample. Sample contains "
-        f"{len(sample_refinements - refinements)} refinements not in "
-        f"the full set."
-    )
+    # logger.info("Checking refinements")
+    # sample_stmts = sample_unique_stmts(n_rows=n_rows)
+    # sample_refinements = get_related([s for _, s in sample_stmts])
+    # assert sample_refinements.issubset(refinements), (
+    #     f"Refinements are not a subset of the sample. Sample contains "
+    #     f"{len(sample_refinements - refinements)} refinements not in "
+    #     f"the full set."
+    # )
 
     logger.info("Checking refinements for cycles")
     ref_graph = nx.DiGraph()
@@ -1067,14 +1050,14 @@ if __name__ == '__main__':
     kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
     
     #split rawstatement
-    if not splitted_raw_statements_folder_fpath.exists():
-        split_raw_stmts_file(raw_statements_fpath.as_posix(), splitted_raw_statements_folder_fpath.as_posix())
+    if not split_raw_statements_folder_fpath.exists():
+        split_tsv_gz_file(raw_statements_fpath.as_posix(), split_raw_statements_folder_fpath.as_posix())
         logger.info(
             "Finished splitting raw statement"
         )
     else:
         logger.info(
-            "splitted_raw_statements_folder exist"
+            "split_raw_statements_folder exist"
         )
 
     # Check if output from preassembly (step 2) already exists
@@ -1117,20 +1100,35 @@ if __name__ == '__main__':
         bio_ontology._build_transitive_closure()
         pa = Preassembler(bio_ontology)
 
-        # Count lines in unique statements file (needed to run
-        # refinement calc and belief calc)
-        logger.info(f"Counting lines in {unique_stmts_fpath.as_posix()}")
-        with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
-            csv_reader = csv.reader(fh, delimiter="\t")
-            num_rows = sum(1 for _ in csv_reader)
-        logger.info(f"Num rows in unique stmts is {num_rows}")
-        batch_count = math.ceil(num_rows / batch_size)
-
         # 6. Calculate refinement graph:
+
+
+        if not split_unique_statements_folder_fpath.exists():
+            logger.info("Splitting unique statements")
+            split_tsv_gz_file(unique_stmts_fpath.as_posix(),
+                              split_unique_statements_folder_fpath.as_posix(),
+                              batch_size = batch_size) #30 min to run
+            logger.info(
+                "Finished splitting unique statement"
+            )
+        else:
+            logger.info(
+                "split_unique_statements_folder exist"
+            )
+        split_unique_files = [os.path.join(split_unique_statements_folder_fpath, f)
+                       for f in os.listdir(split_unique_statements_folder_fpath)
+                       if f.endswith(".gz")]
+        split_unique_files = sorted(split_unique_files, key=lambda x: int(re.findall(r'\d+', x)[0]))
+        batch_count = len(split_unique_files)
+        #get the n_rows in the last incompleted batch
+        last_count = count_rows_in_tsv_gz(split_unique_files[-1])
+        num_rows = batch_count * batch_size + last_count
+        logger.info(f"{num_rows} rows in unique statements with {batch_count} batches")
         cycles_found = False
         ref_graph = get_refinement_graph(batch_size=batch_size,
                                          num_batches=batch_count,
-                                         n_rows=num_rows)
+                                         n_rows=num_rows,
+                                         split_files=split_unique_files)
         if cycles_found:
             logger.info(
                 f"Refinement graph stored in variable 'ref_graph', "

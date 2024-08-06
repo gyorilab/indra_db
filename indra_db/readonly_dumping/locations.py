@@ -57,7 +57,7 @@ __all__ = [
 
 
 # Dump files and their derivatives
-splitted_raw_statements_folder_fpath=TEMP_DIR.join(name="splitted_raw_statements")
+split_raw_statements_folder_fpath = TEMP_DIR.join(name="split_raw_statements")
 raw_statements_fpath = TEMP_DIR.join(name="raw_statements.tsv.gz")
 reading_text_content_fpath = TEMP_DIR.join(name="reading_text_content_meta.tsv.gz")
 text_refs_fpath = TEMP_DIR.join(name="text_refs_principal.tsv.gz")
@@ -89,6 +89,7 @@ raw_id_info_map_knowledgebases_fpath = TEMP_DIR.join(
 grounded_stmts_fpath = TEMP_DIR.join(name="grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.join(name="unique_statements.tsv.gz")
 refinements_fpath = TEMP_DIR.join(name="refinements.tsv.gz")
+split_unique_statements_folder_fpath = TEMP_DIR.join(name="split_unique_statements_folder_fpath")
 belief_scores_pkl_fpath = TEMP_DIR.join(name="belief_scores.pkl")
 pa_hash_act_type_ag_count_cache = TEMP_DIR.join(
     name="pa_hash_act_type_ag_count_cache.pkl"
@@ -98,6 +99,12 @@ pa_hash_act_type_ag_count_cache = TEMP_DIR.join(
 belief_scores_tsv_fpath = TEMP_DIR.join(name="belief_scores.tsv")
 reading_ref_link_tsv_fpath = TEMP_DIR.join(name="reading_ref_link.tsv")
 raw_stmt_source_tsv_fpath = TEMP_DIR.join(name="raw_stmt_source.tsv")
+
+#raw_stmt_scr table intermediate dict
+reading_id_map_json_fpath = TEMP_DIR.join(name='reading_id_map.json')
+db_info_id_map_json_fpath = TEMP_DIR.join(name='db_info_id_map.json')
+
+
 
 # Pubmed XML files
 PUBMED_MESH_DIR = TEMP_DIR.module("pubmed_mesh")

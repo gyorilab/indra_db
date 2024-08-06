@@ -12,6 +12,7 @@ import shutil
 from collections import defaultdict, Counter
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
+from multiprocessing import Pool, Manager
 
 import networkx as nx
 import numpy as np
@@ -360,201 +361,11 @@ def count_rows_in_tsv_gz(file_path):
         row_count = sum(1 for _ in reader)  # This counts every row in the CSV file
     return row_count
 
-def combine_preprocessing_result(output_dir, final_processed_file, final_source_counts_file, final_stmt_hash_file):
-    all_rows = []
-    all_source_counts = defaultdict(Counter)
-    all_stmt_hash_to_raw_stmt_ids = defaultdict(set)
-    files = os.listdir(output_dir)
-    for file in tqdm(files, desc="Combining files"):
-        if file.startswith("batch_") and file.endswith(".tsv.gz"):
-            with gzip.open(os.path.join(output_dir, file), "rt") as fh:
-                reader = csv.reader(fh, delimiter="\t")
-                all_rows.extend(reader)
-        # elif file.startswith("info_") and file.endswith(".tsv.gz"):
-        #     with gzip.open(os.path.join(output_dir, file), "rt") as fh:
-        #         reader = csv.reader(fh, delimiter="\t")
-        #         all_info_rows.extend(reader)
-        elif file.startswith("source_counts_") and file.endswith(".pkl"):
-            with open(os.path.join(output_dir, file), "rb") as fh:
-                source_counts = pickle.load(fh)
-                for k, v in source_counts.items():
-                    all_source_counts[k].update(v)
-        elif file.startswith("stmt_hash_to_raw_stmt_ids_") and file.endswith(".pkl"):
-            with open(os.path.join(output_dir, file), "rb") as fh:
-                stmt_hash_to_raw_stmt_ids = pickle.load(fh)
-                for k, v in stmt_hash_to_raw_stmt_ids.items():
-                    all_stmt_hash_to_raw_stmt_ids[k].update(v)
-
-    with gzip.open(final_processed_file, "wt") as fh_out:
-        writer = csv.writer(fh_out, delimiter="\t")
-        writer.writerows(all_rows)
-
-    with open(final_source_counts_file, "wb") as fh:
-        pickle.dump(dict(all_source_counts), fh)
-
-    with open(final_stmt_hash_file, "wb") as fh:
-        pickle.dump(dict(all_stmt_hash_to_raw_stmt_ids), fh)
-
-def process_lines(stmts, raw_ids, batch_ix, output_dir):
-    start_time = time.time()
-    #tracemalloc.start()
-    source_counts = defaultdict(Counter)
-    stmt_hash_to_raw_stmt_ids = defaultdict(set)
-    info_rows = []
-    # drop_db_info_ids_check = drop_db_info_ids.keys()
-    # drop_readings_check = drop_readings.keys()
-    print(f"Batch {batch_ix} start")
-
-    step_start_time = time.time()
-    stmts = ac.fix_invalidities(stmts, in_place=True)
-    print(f"Batch {batch_ix}: fix_invalidities took {time.time() - step_start_time:.2f} seconds")
-
-    step_start_time = time.time()
-    stmts = ac.map_grounding(stmts)
-    print(f"Batch {batch_ix}: map_grounding took {time.time() - step_start_time:.2f} seconds")
-
-    step_start_time = time.time()
-    stmts = ac.map_sequence(stmts)
-    print(f"Batch {batch_ix}: map_sequence took {time.time() - step_start_time:.2f} seconds")
-
-    for raw_id, stmt in zip(raw_ids, stmts):
-        stmt_hash = stmt.get_hash(refresh=True)
-        stmt_hash_to_raw_stmt_ids[stmt_hash].add(raw_id)
-        source_counts[stmt_hash][stmt.evidence[0].source_api] += 1
-
-    print(f"Batch {batch_ix} completed with {len(stmts)} statements")
-
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    batch_output_file = output_path / f"batch_{batch_ix}.tsv.gz"
-    with gzip.open(batch_output_file, "wt") as fh:#processed statement
-        writer = csv.writer(fh, delimiter="\t")
-        writer.writerows([(stmt.get_hash(), json.dumps(stmt.to_json())) for stmt in stmts])
-
-    # batch_output_file2 = output_path / f"info_{batch_ix}.tsv.gz"
-    # with gzip.open(batch_output_file2, "wt") as fh:#raw_id_info_map_reading_fpath
-    #     info_writer = csv.writer(fh, delimiter="\t")
-    #     info_writer.writerows(info_rows)
-    step_start_time = time.time()
-    batch_output_file3 = output_path / f"source_counts_{batch_ix}.pkl" #source_counts
-    with open(batch_output_file3, "wb") as fh:
-        pickle.dump(dict(source_counts), fh)
-
-    batch_output_file4 = output_path / f"stmt_hash_to_raw_stmt_ids_{batch_ix}.pkl" #stmt_hash_to_raw_stmt_ids
-    with open(batch_output_file4, "wb") as fh:
-        pickle.dump(dict(stmt_hash_to_raw_stmt_ids), fh)
-
-    print(f"Batch {batch_ix}: writing file took {time.time() - step_start_time:.2f} seconds")
-    #current, peak = tracemalloc.get_traced_memory()
-    #print(f"Batch {batch_ix}: Current memory usage is {current / 10 ** 6}MB; Peak was {peak / 10 ** 6}MB")
-    #tracemalloc.stop()
-
-    print(f"Batch {batch_ix}: Total time taken {time.time() - start_time:.2f} seconds")
-
-
-from multiprocessing import Pool, Manager
-
-def preprocess_multi(
-        drop_readings: Set[int],
-        reading_id_to_text_ref_id: Dict,
-        drop_db_info_ids: Optional[Set[int]] = None,
-):
-    # Todo:
-    #  - parallelize, i.e. run different batches in different threads (can
-    #    they write to the same file? If not, have them write to
-    #    different files that are concatenated after all threads are done)
-    """Preassemble statements and collect source counts
-
-    Parameters
-    ----------
-    drop_readings :
-        A set of reading ids to drop
-    reading_id_to_text_ref_id :
-        A dictionary mapping reading ids to text ref ids
-    drop_db_info_ids :
-        A set of db_info ids to drop
-    """
-    if (
-            not processed_stmts_reading_fpath.exists() or
-            not source_counts_reading_fpath.exists()
-    ):
-        logger.info("Preassembling statements, collecting source counts, "
-                    "mapping from stmt hash to raw statement ids and mapping "
-                    "from raw statement ids to db info and reading ids")
-        text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
-
-        split_files = [os.path.join(split_raw_statements_folder_fpath, f)
-                       for f in os.listdir(split_raw_statements_folder_fpath)
-                       if f.endswith(".gz")]
-
-        manager = Manager()
-        # shared_drop_readings = manager.dict({item: True for item in drop_readings})
-        # shared_reading_id_to_text_ref_id = manager.dict(reading_id_to_text_ref_id)
-        # shared_drop_db_info_ids = manager.dict({item: True for item in drop_db_info_ids})
-        shared_text_refs = manager.dict(text_refs)
-
-        info_rows = []
-        with (Pool(processes=4) as pool):
-            with gzip.open(raw_statements_fpath.as_posix(), "rt", encoding='utf-8') as fh, \
-                    gzip.open(raw_id_info_map_reading_fpath.as_posix(), "wt",encoding='utf-8') as fh_info:
-                raw_stmts_reader = csv.reader(fh, delimiter="\t")
-                for batch_index, lines in enumerate(tqdm(batch_iter(raw_stmts_reader, 10000), total=7727, desc="Looping raw statements")):
-                    paired_stmts_jsons = []
-                    #raw_stmts_reader = csv.reader(fh, delimiter="\t")
-                    #lines = list(raw_stmts_reader)
-                    info_writer = csv.writer(fh_info, delimiter="\t")
-
-                    for raw_stmt_id, db_info_id, reading_id, stmt_json_raw in lines:
-                        raw_stmt_id_int = int(raw_stmt_id)
-                        db_info_id_int = int(db_info_id) if db_info_id != "\\N" else None
-                        refs = None
-
-                        if drop_db_info_ids and db_info_id_int and \
-                                db_info_id_int in drop_db_info_ids:
-                            continue
-                        if reading_id != "\\N":
-                            int_reading_id = int(reading_id)
-                            if int_reading_id in drop_readings:
-                                continue
-                            text_ref_id = reading_id_to_text_ref_id.get(int_reading_id)
-                            if text_ref_id:
-                                refs = text_refs.get(text_ref_id)
-
-                        info_rows.append((raw_stmt_id_int, db_info_id_int or "\\N", int_reading_id, stmt_json_raw))
-                        stmt_json = clean_json_loads(stmt_json_raw)
-                        if refs:
-                            stmt_json["evidence"][0]["text_refs"] = refs
-                            if refs.get("PMID"):
-                                stmt_json["evidence"][0]["pmid"] = refs["PMID"]
-                        paired_stmts_jsons.append((raw_stmt_id_int, stmt_json))
-
-                    info_writer.writerows(info_rows)
-                    if paired_stmts_jsons:
-                        raw_ids, stmts_jsons = zip(*paired_stmts_jsons)
-                    stmts = stmts_from_json(stmts_jsons)
-
-                    pool.apply_async(process_lines, args=(stmts, raw_ids, batch_index, TEMP_DIR.join(name="preprocessed_output")))
-
-            pool.close()
-            pool.join()
-
-        logger.info("Multiprocessing completed")
-        combine_preprocessing_result(TEMP_DIR.join(name="preprocessed_output"),
-                                     processed_stmts_reading_fpath.as_posix(),
-                                     source_counts_reading_fpath.as_posix(),
-                                     stmt_hash_to_raw_stmt_ids_reading_fpath.as_posix())
-        logger.info("Preassembly completed")
-
 def preprocess(
         drop_readings: Set[int],
         reading_id_to_text_ref_id: Dict,
         drop_db_info_ids: Optional[Set[int]] = None,
 ):
-    # Todo:
-    #  - parallelize, i.e. run different batches in different threads (can
-    #    they write to the same file? If not, have them write to
-    #    different files that are concatenated after all threads are done)
     """Preassemble statements and collect source counts
 
     Parameters
@@ -1044,7 +855,7 @@ if __name__ == '__main__':
         raise ValueError(
             "No adeft models detected, run 'python -m adeft.download' to download models"
         )
-    '''
+
     # 1. Run knowledge base pipeline if the output files don't exist
     logger.info("1. Running knowledgebase pipeline")
     kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
@@ -1079,7 +890,7 @@ if __name__ == '__main__':
         logger.info(
             "Output from step 2 & 3 already exists, skipping to step 4..."
         )
-    '''
+
     # 4. Merge the processed raw statements with the knowledgebase statements
     logger.info(
         "4. Merging processed knowledgebase statements with processed raw statements"

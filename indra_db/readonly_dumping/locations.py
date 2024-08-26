@@ -53,6 +53,8 @@ __all__ = [
     "source_meta_tsv",
     "evidence_counts_tsv",
     "pa_agents_counts_tsv",
+    'split_raw_statements_folder_fpath',
+    'split_unique_statements_folder_fpath',
 ]
 
 
@@ -80,6 +82,7 @@ stmt_hash_to_raw_stmt_ids_knowledgebases_fpath = TEMP_DIR.join(
     name="stmt_hash_to_raw_stmt_ids_knowledgebases.pkl"
 )
 raw_id_info_map_fpath = TEMP_DIR.join(name="raw_stmt_id_to_info_map.tsv.gz")
+raw_id_to_info_fpath = TEMP_DIR.join(name="raw_id_to_info.pkl")
 raw_id_info_map_reading_fpath = TEMP_DIR.join(
     name="raw_stmt_id_to_info_map_reading.tsv.gz"
 )
@@ -116,8 +119,8 @@ pmid_mesh_mti_fpath = PUBMED_MESH_DIR.join(name="pmid_mesh_mti.tsv")
 pmid_stmt_hash_fpath = PUBMED_MESH_DIR.join(name="pmid_stmt_hash.pkl")
 
 # MeshConcept/TermRefCounts
-pmid_mesh_concept_counts_fpath = TEMP_DIR.join(name="pmid_mesh_concept_counts.tsv")
-pmid_mesh_term_counts_fpath = TEMP_DIR.join(name="pmid_mesh_term_counts.tsv")
+pmid_mesh_concept_counts_fpath = TEMP_DIR.join(name="pmid_mesh_concept_counts.pkl")
+pmid_mesh_term_counts_fpath = TEMP_DIR.join(name="pmid_mesh_term_counts.pkl")
 mk_hash_pmid_sets_fpath = TEMP_DIR.join(name="mk_hash_pmid_sets.pkl")
 mesh_concept_ref_counts_fpath = TEMP_DIR.join(name="mesh_concept_ref_counts.tsv")
 mesh_term_ref_counts_fpath = TEMP_DIR.join(name="mesh_term_ref_counts.tsv")
@@ -131,7 +134,7 @@ raw_stmt_mesh_concepts_fpath = PUBMED_MESH_DIR.join(name="raw_stmt_mesh_concepts
 raw_stmt_mesh_terms_fpath = PUBMED_MESH_DIR.join(name="raw_stmt_mesh_terms.tsv")
 
 # PaMeta and derived files
-pa_meta_fpath = TEMP_DIR.join(name="pa_meta.tsv.gz")
+pa_meta_fpath = TEMP_DIR.join(name="pa_meta.tsv")
 name_meta_tsv = TEMP_DIR.join(name="name_meta.tsv")
 text_meta_tsv = TEMP_DIR.join(name="text_meta.tsv")
 other_meta_tsv = TEMP_DIR.join(name="other_meta.tsv")
@@ -144,6 +147,10 @@ evidence_counts_tsv = TEMP_DIR.join(name="evidence_counts.tsv")
 
 # PaAgentCounts
 pa_agents_counts_tsv = TEMP_DIR.join(name="pa_agents_counts.tsv")
+
+#table construction
+postgresql_jar= TEMP_DIR.join(name='postgresql-42.7.3.jar')
+split_pa_link_folder_fpath = TEMP_DIR.join(name='split_parquet')
 
 
 if __name__ == "__main__":

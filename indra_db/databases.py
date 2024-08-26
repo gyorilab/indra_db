@@ -1570,3 +1570,13 @@ class ReadonlyDatabaseManager(DatabaseManager):
 
         return
 
+    def execute(self, query, *args, **kwargs):
+        """Perform queries to a certain table
+        Example: ro_mngr_local.execute(
+        f"SELECT COUNT(*) FROM readonly.{table_name}"
+        )
+        """
+        with self.__engine.connect() as connection:
+            result = connection.execute(query, *args, **kwargs)
+            return result
+

@@ -15,6 +15,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Tuple, Iterable
 
+import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -29,7 +30,8 @@ from indra.statements import stmt_from_json, ActiveForm
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.readonly_dumping.locations import reading_id_map_json_fpath, db_info_id_map_json_fpath, postgresql_jar, \
-    raw_id_to_info_fpath, split_pa_link_folder_fpath
+    raw_id_to_info_fpath, split_pa_link_folder_fpath, standard_readonly_snapshot, new_readonly_snapshot, \
+    source_meta_parquet
 from indra_db.schemas.mixins import ReadonlyTable
 from indra_db.schemas.readonly_schema import (
     ro_type_map,
@@ -37,32 +39,35 @@ from indra_db.schemas.readonly_schema import (
     SOURCE_GROUPS
 )
 from sqlalchemy import create_engine
-
+from pyspark.sql.functions import to_json, col
 from .locations import *
-from .util import clean_json_loads
+from .util import clean_json_loads, generate_db_snapshot, compare_snapshots
 
 logger = logging.getLogger(__name__)
 
 SQL_NULL = "\\N"
+LOCAL_RO_DB_NAME = "indradb_readonly_local"
+LOCAL_RO_PASSWORD = "yann"  #os.environ["LOCAL_RO_PASSWORD"]
+LOCAL_RO_USER = "postgres"  #os.environ["LOCAL_RO_USER"]
 
 RUN_ORDER = [
-    "belief",
-    "raw_stmt_src",
-    "reading_ref_link",
-    "evidence_counts",
-    "pa_agent_counts",
-    "mesh_concept_ref_counts",
-    "mesh_term_ref_counts",
-    "name_meta",
-    "text_meta",
-    "other_meta",
-    "source_meta",
+    # "belief",
+    # "raw_stmt_src",
+    # "reading_ref_link",
+    # "evidence_counts",
+    # "pa_agent_counts",
+    # "mesh_concept_ref_counts",
+    # "mesh_term_ref_counts",
+    # "name_meta",
+    # "text_meta",
+    # "other_meta",
+    # "source_meta",
     "agent_interactions",
-    "fast_raw_pa_link",
-    "raw_stmt_mesh_concepts",
-    "raw_stmt_mesh_terms",
-    "mesh_concept_meta",
-    "mesh_term_meta",
+    # "fast_raw_pa_link",
+    # "raw_stmt_mesh_concepts",
+    # "raw_stmt_mesh_terms",
+    # "mesh_concept_meta",
+    # "mesh_term_meta",
 ]
 
 
@@ -352,7 +357,6 @@ def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
     dump_file = raw_stmt_source_tsv_fpath
     columns = "sid, src"
 
-
     with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
             dump_file.open("w") as out_fh:
         reader = csv.reader(fh, delimiter="\t")
@@ -514,6 +518,10 @@ def load_file_to_table_spark(table_name, schema,
         .getOrCreate()
     if table_name == 'readonly.fast_raw_pa_link':
         df = spark.read.parquet(*tsv_file)
+    elif table_name == 'readonly.source_meta':
+        df = spark.read.parquet(tsv_file)
+        df = df.withColumn("src_json", to_json(col("src_json")))
+        df = df.withColumn("belief", col("belief").cast(FloatType()))
     else:
         if null_value:
             df = spark.read.csv(tsv_file, schema=schema, sep='\t', nullValue=null_value, header=header)
@@ -534,9 +542,6 @@ def load_file_to_table_spark(table_name, schema,
     elif table_name in ['readonly.mesh_term_meta',
                         'readonly.mesh_concept_meta']:
         df = df.dropDuplicates(['mk_hash', 'mesh_num'])
-
-
-
 
     properties = {
         "user": LOCAL_RO_USER,
@@ -595,55 +600,55 @@ def agent_interactions(local_ro_mngr: ReadonlyDatabaseManager):
                          "agent_interactions can be filled")
     agent_interactions_table: ReadonlyTable = local_ro_mngr.tables[
         "agent_interactions"]
-    define = ("SELECT\n" 
-                              "  low_level_names.mk_hash AS mk_hash, \n"
-                              "  jsonb_object(\n"
-                              "    array_agg(\n"
-                              "      CAST(\n"
-                              "        low_level_names.ag_num AS VARCHAR)),\n"
-                              "    array_agg(low_level_names.db_id)\n"
-                              "  ) AS agent_json, \n"
-                              "  low_level_names.type_num AS type_num, \n"
-                              "  low_level_names.agent_count AS agent_count, \n"
-                              "  low_level_names.ev_count AS ev_count, \n"
-                              "  low_level_names.belief AS belief, \n"
-                              "  low_level_names.activity AS activity, \n"
-                              "  low_level_names.is_active AS is_active, \n"
-                              "  low_level_names.src_json AS src_json, \n"
-                              "  false AS is_complex_dup\n"
-                              "FROM \n"
-                              "  (\n"
-                              "    SELECT \n"
-                              "      readonly.name_meta.mk_hash AS mk_hash,\n"
-                              "      readonly.name_meta.db_id AS db_id,\n"
-                              "      readonly.name_meta.ag_num AS ag_num,\n"
-                              "      readonly.name_meta.type_num AS type_num,\n"
-                              "      readonly.name_meta.agent_count\n"
-                              "        AS agent_count,\n"
-                              "      readonly.name_meta.ev_count AS ev_count,\n"
-                              "      readonly.name_meta.belief AS belief,\n"
-                              "      readonly.name_meta.activity AS activity,\n"
-                              "      readonly.name_meta.is_active\n"
-                              "        AS is_active,\n"
-                              "      readonly.source_meta.src_json\n"
-                              "        AS src_json\n"
-                              "    FROM \n"
-                              "      readonly.name_meta, \n"
-                              "      readonly.source_meta\n"
-                              "    WHERE \n"
-                              "      readonly.name_meta.mk_hash \n"
-                              "        = readonly.source_meta.mk_hash\n"
-                              "      AND NOT readonly.name_meta.is_complex_dup"
-                              "  ) AS low_level_names \n"
-                              "GROUP BY \n"
-                              "  low_level_names.mk_hash, \n"
-                              "  low_level_names.type_num, \n"
-                              "  low_level_names.agent_count, \n"
-                              "  low_level_names.ev_count, \n"
-                              "  low_level_names.belief, \n"
-                              "  low_level_names.activity, \n"
-                              "  low_level_names.is_active, \n"
-                              "  low_level_names.src_json")
+    define = ("SELECT\n"
+              "  low_level_names.mk_hash AS mk_hash, \n"
+              "  jsonb_object(\n"
+              "    array_agg(\n"
+              "      CAST(\n"
+              "        low_level_names.ag_num AS VARCHAR)),\n"
+              "    array_agg(low_level_names.db_id)\n"
+              "  ) AS agent_json, \n"
+              "  low_level_names.type_num AS type_num, \n"
+              "  low_level_names.agent_count AS agent_count, \n"
+              "  low_level_names.ev_count AS ev_count, \n"
+              "  low_level_names.belief AS belief, \n"
+              "  low_level_names.activity AS activity, \n"
+              "  low_level_names.is_active AS is_active, \n"
+              "  low_level_names.src_json::jsonb AS src_json, \n"
+              "  false AS is_complex_dup\n"
+              "FROM \n"
+              "  (\n"
+              "    SELECT \n"
+              "      readonly.name_meta.mk_hash AS mk_hash,\n"
+              "      readonly.name_meta.db_id AS db_id,\n"
+              "      readonly.name_meta.ag_num AS ag_num,\n"
+              "      readonly.name_meta.type_num AS type_num,\n"
+              "      readonly.name_meta.agent_count\n"
+              "        AS agent_count,\n"
+              "      readonly.name_meta.ev_count AS ev_count,\n"
+              "      readonly.name_meta.belief AS belief,\n"
+              "      readonly.name_meta.activity AS activity,\n"
+              "      readonly.name_meta.is_active\n"
+              "        AS is_active,\n"
+              "      readonly.source_meta.src_json\n"
+              "        AS src_json\n"
+              "    FROM \n"
+              "      readonly.name_meta, \n"
+              "      readonly.source_meta\n"
+              "    WHERE \n"
+              "      readonly.name_meta.mk_hash \n"
+              "        = readonly.source_meta.mk_hash\n"
+              "      AND NOT readonly.name_meta.is_complex_dup"
+              "  ) AS low_level_names \n"
+              "GROUP BY \n"
+              "  low_level_names.mk_hash, \n"
+              "  low_level_names.type_num, \n"
+              "  low_level_names.agent_count, \n"
+              "  low_level_names.ev_count, \n"
+              "  low_level_names.belief, \n"
+              "  low_level_names.activity, \n"
+              "  low_level_names.is_active, \n"
+              "  low_level_names.src_json::jsonb")
 
     # For each row, create a new row for each pair of agents, if
     # the interaction is not a self-interaction (i.e., if there
@@ -717,7 +722,6 @@ def load_data_file_into_local_ro(
 
 # FastRawPaLink
 def fast_raw_pa_link_helper(local_ro_mngr):
-
     local_ro_mngr.grab_session()
     query = local_ro_mngr.session.query(local_ro_mngr.RawStmtSrc.sid,
                                         local_ro_mngr.RawStmtSrc.src)
@@ -763,7 +767,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
     split_unique_files = sorted(split_unique_files, key=lambda x: int(re.findall(r'\d+', x)[0]))
     split_unique_files = split_unique_files[22:]
     for num, f in enumerate(split_unique_files):
-        num = num+22
+        num = num + 22
         rows = []
         with gzip.open(f, "rt") as fh:
             logger.info(f"generating parque{num} from {f}")
@@ -819,6 +823,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
                 df.to_parquet(temp_parquet_file, index=False)
                 rows.clear()  # Clear remaining rows
 
+
 def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     """Fill the fast_raw_pa_link table in the local readonly database
 
@@ -849,7 +854,6 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     table_name = "fast_raw_pa_link"
 
     assert table_name in local_ro_mngr.tables
-
 
     # Load the raw_stmt_src table into a dictionary
     logger.info("Loading raw_stmt_src table into a dictionary")
@@ -899,11 +903,17 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
         raise ValueError(
             "name_meta must be filled before source_meta can be filled"
         )
-    col_names = "mk_hash, ev_count, belief, num_srcs, " \
+    col_names = "ev_count, belief, num_srcs, " \
                 "src_json, only_src, has_rd, has_db, " \
                 "type_num, activity, is_active, agent_count"
-    if source_meta_tsv.exists():
-        return col_names
+    all_sources = list(
+        {*SOURCE_GROUPS["reader"], *SOURCE_GROUPS["database"]}
+    )
+    all_sources_str = ", ".join(all_sources)
+
+    if source_meta_parquet.exists():
+        return "mk_hash, " + all_sources_str + ", " + col_names
+    logger.info("Loading source counts")
     # Load source_counts
     ro = local_ro_mngr
     source_counts = pickle.load(source_counts_fpath.open("rb"))
@@ -926,80 +936,94 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
     # source count, src_json (==source counts dict per mk_hash), only_src (if
     # only one source), has_rd (if the source is in the reading sources),
     # has_db (if the source is in the db sources)
-    mk_hash_set=set()
-    with source_meta_tsv.open("w") as out_fh:
-        writer = csv.writer(out_fh, delimiter="\t")
-        for (mk_hash, ev_count, belief, type_num,
-             activity, is_active, agent_count) in res:
-            if mk_hash in mk_hash_set:
-                continue
-            mk_hash_set.add(mk_hash)
-            # Get the source count
-            src_count_dict = source_counts.get(mk_hash)
-            if src_count_dict is None:
-                continue
+    mk_hash_set = set()
+    rows = []
+    logger.info("Generating source_meta parquet")
+    for (mk_hash, ev_count, belief, type_num,
+         activity, is_active, agent_count) in res:
+        if mk_hash in mk_hash_set:
+            continue
+        mk_hash_set.add(mk_hash)
+        # Get the source count
+        src_count_dict = source_counts.get(mk_hash)
+        if src_count_dict is None:
+            continue
 
-            num_srcs = len(src_count_dict)
-            has_rd = any(source in src_count_dict for source in SOURCE_GROUPS["reader"])
-            has_db = any(source in src_count_dict for source in SOURCE_GROUPS["database"])
-            only_src = list(src_count_dict.keys())[0] if num_srcs == 1 else None
+        num_srcs = len(src_count_dict)
+        has_rd = any(source in src_count_dict for source in SOURCE_GROUPS["reader"])
+        has_db = any(source in src_count_dict for source in SOURCE_GROUPS["database"])
+        only_src = list(src_count_dict.keys())[0] if num_srcs == 1 else None
+        sources_tuple = tuple(
+            src_count_dict.get(src, SQL_NULL) for src in all_sources
+        )
+        #print(len(sources_tuple),sources_tuple)
+        # Write the following columns:
+        #  - mk_hash
+        #  - *sources (a splat of all sources,
+        #              null if not present in the source count dict)
+        #  - ev_count
+        #  - belief
+        #  - num_srcs
+        #  - src_json
+        #  - only_src - if only one source, the name of that source
+        #  - has_rd  boolean - true if any source is from reading
+        #  - has_db  boolean - true if any source is from a database
+        #  - type_num
+        #  - activity
+        #  - is_active
+        #  - agent_count
 
-            # Write the following columns:
-            #  - mk_hash
-            #  - *sources (a splat of all sources,
-            #              null if not present in the source count dict)
-            #  - ev_count
-            #  - belief
-            #  - num_srcs
-            #  - src_json
-            #  - only_src - if only one source, the name of that source
-            #  - has_rd  boolean - true if any source is from reading
-            #  - has_db  boolean - true if any source is from a database
-            #  - type_num
-            #  - activity
-            #  - is_active
-            #  - agent_count
+        # SourceMeta
+        rows.append([
+            mk_hash,
+            *(np.int32(value) if value is not None else None for value in sources_tuple),
+            np.int32(ev_count),
+            belief,
+            np.int32(num_srcs),
+            src_count_dict,
+            only_src,
+            has_rd,
+            has_db,
+            type_num,
+            activity,
+            is_active,
+            np.int32(agent_count)
+        ])
+    columns = ["mk_hash"] + all_sources + [
+        "ev_count", "belief", "num_srcs",
+        "src_json", "only_src", "has_rd", "has_db",
+        "type_num", "activity", "is_active", "agent_count"
+    ]
+    df = pd.DataFrame(rows, columns=columns)
+    df.to_parquet(source_meta_parquet.absolute().as_posix(), index=False)
 
-            # SourceMeta
-            row = [
-                mk_hash,
-                ev_count,
-                belief,
-                num_srcs,
-                json.dumps(src_count_dict).replace('"', '""'),
-                only_src,
-                has_rd,
-                has_db,
-                type_num,
-                activity,
-                is_active,
-                agent_count
-            ]
-            writer.writerow(row)
-    return col_names
+    return "mk_hash, " + all_sources_str + ", " + col_names
 
 
 # SourceMeta
 def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
     col_order = ensure_source_meta_source_files(local_ro_mngr)
     table_name = "readonly.source_meta"
+    source_fields = [StructField(source_name, IntegerType(), True) for source_name in source_names]
+
     schema = StructType([
-        StructField("mk_hash", LongType(), True),
-        StructField("ev_count", IntegerType(), True),
-        StructField("belief", FloatType(), True),
-        StructField("num_srcs", IntegerType(), True),
-        StructField("src_json", StringType(), True),
-        StructField("only_src", StringType(), True),
-        StructField("has_rd", BooleanType(), True),
-        StructField("has_db", BooleanType(), True),
-        StructField("type_num", ShortType(), True),
-        StructField("activity", StringType(), True),
-        StructField("is_active", BooleanType(), True),
-        StructField("agent_count", IntegerType(), True)
-    ])
+                            StructField("mk_hash", LongType(), True)
+                        ] + source_fields + [
+                            StructField("ev_count", IntegerType(), True),
+                            StructField("belief", FloatType(), True),
+                            StructField("num_srcs", IntegerType(), True),
+                            StructField("src_json", StructType(), True),
+                            StructField("only_src", StringType(), True),
+                            StructField("has_rd", BooleanType(), True),
+                            StructField("has_db", BooleanType(), True),
+                            StructField("type_num", ShortType(), True),
+                            StructField("activity", StringType(), True),
+                            StructField("is_active", BooleanType(), True),
+                            StructField("agent_count", IntegerType(), True)
+                        ])
     logger.info(f"Loading data into {table_name}")
     load_file_to_table_spark(
-        table_name, schema, col_order, source_meta_tsv.absolute().as_posix())
+        table_name, schema, col_order, source_meta_parquet.absolute().as_posix())
     create_primary_key(ro_mngr_local=local_ro_mngr,
                        table_name='source_meta',
                        keys='mk_hash')
@@ -1007,6 +1031,9 @@ def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
     table: ReadonlyTable = local_ro_mngr.tables['source_meta']
     logger.info(f"Building index on {table.full_name()}")
     table.build_indices(local_ro_mngr)
+    local_ro_mngr.execute(f"ALTER TABLE {table_name}\
+                          ALTER COLUMN src_json TYPE JSON\
+                          USING src_json::JSON;")
 
 
 # PaMeta - the table itself is not generated on the readonly db, but the
@@ -1790,7 +1817,6 @@ def mesh_term_meta(local_ro_mngr: ReadonlyDatabaseManager):
     table.build_indices(local_ro_mngr)
 
 
-
 def principal_query_to_csv(
         query: str, output_location: str, db: str = "primary"
 ) -> None:
@@ -1986,6 +2012,7 @@ if __name__ == "__main__":
     ro_manager = ReadonlyDatabaseManager(postgres_url, protected=False)
     # Create the tables
     #create_ro_tables(ro_manager, force=args.force)
+
     ro_manager.create_schema('readonly')
     # For each table, run the function that will fill out the table with data
     for table_name in tqdm(RUN_ORDER, desc="Creating tables"):
@@ -1994,3 +2021,12 @@ if __name__ == "__main__":
             build_script(ro_manager)
         else:
             raise ValueError(f"Table function for {table_name} not found")
+
+    if not standard_readonly_snapshot.exists():
+        logger.error("No standard snapshot to compare with")
+    else:
+        logger.info("Extracting new snapshot")
+        generate_db_snapshot(postgres_url, new_readonly_snapshot.absolute().as_posix())
+    if not compare_snapshots(standard_readonly_snapshot.absolute().as_posix(),
+                             new_readonly_snapshot.absolute().as_posix()):
+        raise TypeError(f"Snapshots are not identical")

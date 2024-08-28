@@ -50,7 +50,7 @@ __all__ = [
     "name_meta_tsv",
     "text_meta_tsv",
     "other_meta_tsv",
-    "source_meta_tsv",
+    "source_meta_parquet",
     "evidence_counts_tsv",
     "pa_agents_counts_tsv",
     'split_raw_statements_folder_fpath',
@@ -140,7 +140,7 @@ text_meta_tsv = TEMP_DIR.join(name="text_meta.tsv")
 other_meta_tsv = TEMP_DIR.join(name="other_meta.tsv")
 
 # SourceMeta
-source_meta_tsv = TEMP_DIR.join(name="source_meta.tsv")
+source_meta_parquet = TEMP_DIR.join(name="source_meta.parquet")
 
 # EvidenceCounts
 evidence_counts_tsv = TEMP_DIR.join(name="evidence_counts.tsv")
@@ -149,8 +149,10 @@ evidence_counts_tsv = TEMP_DIR.join(name="evidence_counts.tsv")
 pa_agents_counts_tsv = TEMP_DIR.join(name="pa_agents_counts.tsv")
 
 #table construction
-postgresql_jar= TEMP_DIR.join(name='postgresql-42.7.3.jar')
+postgresql_jar = TEMP_DIR.join(name='postgresql-42.7.3.jar')
 split_pa_link_folder_fpath = TEMP_DIR.join(name='split_parquet')
+standard_readonly_snapshot = TEMP_DIR.join(name='schema_snapshot.sql')
+new_readonly_snapshot=TEMP_DIR.join(name='new_readonly_snapshot.sql')
 
 
 if __name__ == "__main__":

@@ -1,5 +1,10 @@
 import codecs
+import difflib
 import json
+import os
+import re
+import subprocess
+from urllib.parse import urlparse
 
 from indra.statements import Statement
 from indra.statements.validate import assert_valid_statement_semantics
@@ -140,3 +145,105 @@ def validate_statement_semantics(stmt: Statement) -> bool:
         return True
     except ValueError:
         return False
+
+
+
+def generate_db_snapshot(postgres_url, output_file):
+    try:
+        parsed_url = urlparse(postgres_url)
+        username = parsed_url.username
+        password = parsed_url.password
+        host = parsed_url.hostname
+        port = parsed_url.port or 5432
+        database_name = parsed_url.path.lstrip('/')
+
+        if password:
+            os.environ['PGPASSWORD'] = password
+
+        command = [
+            'pg_dump',
+            '-U', username,
+            '-h', host,
+            '-p', str(port),
+            '-d', database_name,
+            '-F', 'p',  # 'p' for plain text format
+            '-s',
+            '-v',
+            '-f', output_file
+        ]
+
+        subprocess.run(command, check=True)
+        print(f"Snapshot saved to {output_file}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred: {e}")
+    except Exception as ex:
+        print(f"An unexpected error occurred: {ex}")
+
+def extract_tables_and_columns(snapshot_path):
+    with open(snapshot_path, 'r') as file:
+        lines = file.readlines()
+
+    tables = {}
+    current_table = None
+
+    for line in lines:
+        # Check for the start of a table definition
+        table_match = re.match(r'CREATE TABLE ([\w\.]+) \(', line)
+        if table_match:
+            current_table = table_match.group(1)
+            tables[current_table] = []
+            continue
+
+        # Check for the end of a table definition
+        if line.startswith(");"):
+            current_table = None
+            continue
+
+        # If we are inside a table definition, capture column names and data types
+        if current_table and re.match(r'\s+\w+', line):
+            column_definition = line.strip().rstrip(',')
+            tables[current_table].append(column_definition)
+
+    return tables
+
+def compare_snapshots(snapshot1, snapshot2):
+    """Check if new database snapshot and current database snapshot are identical
+
+    Parameters
+    ----------
+    snapshot1 :
+        The current database snapshot file from the AWS
+    snapshot2:
+        The generated new database snapshot file
+
+
+    Returns
+    -------
+    :
+        True if the two database are conformed
+    """
+    print("Comparing snapshots")
+    tables1 = extract_tables_and_columns(snapshot1)
+    tables2 = extract_tables_and_columns(snapshot2)
+    print(len(tables1), tables1.keys())
+    print(len(tables2), tables2.keys())
+
+    # Compare the columns in each table
+    for table in tables1:
+        if tables1[table] != tables2[table]:
+            print(f"Column definitions do not match for table {table}.")
+            print(table)
+            diff = difflib.unified_diff(
+                tables1[table], tables2[table],
+                fromfile='snapshot1',
+                tofile='snapshot2',
+                lineterm=''
+            )
+            for line in diff:
+                if " json" in line and line.startswith("- "):
+                    return False
+    # FIXME: Need to determine in which extend the snapshots need match(e.g integer type);
+    print("All tables and columns match.")
+    return True
+

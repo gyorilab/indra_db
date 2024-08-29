@@ -6,8 +6,10 @@ __all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
 
 import csv
 import gzip
+import hashlib
 import json
 import os
+import re
 import zlib
 from pathlib import Path
 from typing import Dict, List, Type
@@ -20,21 +22,21 @@ import tempfile
 from itertools import count as iter_count
 from collections import Counter, defaultdict
 
+import requests
+
 from indra.util import batch_iter
 from tqdm import tqdm
 
 from indra.statements.validate import assert_valid_statement
 from indra.tools import assemble_corpus as ac
+from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 from indra_db.readonly_dumping.locations import *
 
 from indra_db.cli.util import format_date
 
-
-
 logger = logging.getLogger(__name__)
-
 
 KB_DIR = TEMP_DIR.module("knowledgebases")
 
@@ -142,6 +144,12 @@ class TasManager(KnowledgebaseManager):
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
 
+    def get_source_version(self):
+        # In get_statement, it checks the checksum of the source
+        # So the version can be directly used
+        from indra.sources.tas.api import tas_resource_md5
+        return tas_resource_md5
+
 
 class SignorManager(KnowledgebaseManager):
     name = 'Signor'
@@ -160,6 +168,21 @@ class SignorManager(KnowledgebaseManager):
             proc = process_from_web()
         return proc.statements
 
+    def get_source_version(self):
+        data_url = 'https://signor.uniroma2.it/download_entity.php'
+        complex_url = 'https://signor.uniroma2.it/download_complexes.php'
+        res = requests.post(data_url, data={'organism': 'human', 'format': 'csv', 'submit': 'Download'})
+        complex_res = requests.post(complex_url, data={'submit': 'Download complex data'})
+        if res.status_code == 200 and complex_res.status_code == 200:
+            content1 = res.content
+            content2 = complex_res.content
+            checksum1 = hashlib.md5(content1).hexdigest()
+            checksum2 = hashlib.md5(content2).hexdigest()
+            return checksum1+checksum2
+        else:
+            logger.error("Could not get checksum(version)")
+
+
 
 class CBNManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of CBN network files"""
@@ -168,8 +191,8 @@ class CBNManager(KnowledgebaseManager):
     source = 'bel'
 
     def __init__(
-        self,
-        archive_url="https://github.com/pybel/cbn-bel/raw/master/Human-2.0.zip"
+            self,
+            archive_url="https://github.com/pybel/cbn-bel/raw/master/Human-2.0.zip"
     ):
         self.archive_url = archive_url
 
@@ -209,6 +232,14 @@ class CBNManager(KnowledgebaseManager):
 
         return uniques
 
+    def get_source_version(self):
+        start = self.archive_url.find("/raw/")
+        if start != -1:
+            version = self.archive_url[start:]
+        else:
+            version = None
+        return version
+
 
 class BiogridManager(KnowledgebaseManager):
     name = 'BioGRID'
@@ -229,6 +260,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
              'ctd', 'drugbank'}
 
     def __init__(self, *args, **kwargs):
+        self.url = "https://download.baderlab.org/PathwayCommons/PC2/v14/pc-biopax.owl.gz"
         self.counts = Counter()
         super(PathwayCommonsManager, self).__init__(*args, **kwargs)
 
@@ -243,11 +275,21 @@ class PathwayCommonsManager(KnowledgebaseManager):
         return ssid not in self.skips
 
     def get_statements(self):
+        v = self.get_source_version()
         from indra.sources import biopax
+        response = requests.get(self.url, stream=True)
+        if response.status_code == 200:
+            # Open the file in binary write mode and save the content
+            with open(knowledgebase_source_data_fpath.joinpath(
+                    f"{v}_pc-biopax.owl.gz"), 'wb') as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+        else:
+            logger.error(f"Failed to download the file. Status code: {response.status_code}")
 
-        prc = biopax.process_owl('/Users/haohangyan/Desktop/repo/indra_db/pc-biopax.owl')
-        # this file is download from https://download.baderlab.org/PathwayCommons/PC2/v14/pc-biopax.owl.gz
-        stmts=prc.statements
+        prc = biopax.process_owl_gz(knowledgebase_source_data_fpath.joinpath(
+            f"{v}_pc-biopax.owl.gz"))
+        stmts = prc.statements
 
         logger.info('Loading PC statements from pickle')
 
@@ -256,6 +298,15 @@ class PathwayCommonsManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(filtered_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+
+    def get_source_version(self):
+        match = re.search(r'/v\d+/', self.url)
+        if match:
+            version = match.group(0).strip('/')
+            return version
+        else:
+            logger.error("Version not found in the URL")
+
 
 
 class CTDManager(KnowledgebaseManager):
@@ -513,7 +564,7 @@ class ConibManager(KnowledgebaseManager):
         from indra.sources.bel import process_pybel_graph
         logger.info('Processing CONIB from web')
         url = 'https://github.com/pharmacome/conib/raw/master/conib' \
-            '/_cache.bel.nodelink.json'
+              '/_cache.bel.nodelink.json'
         res_json = requests.get(url).json()
         graph = pybel.from_nodelink(res_json)
         # Get INDRA statements
@@ -552,9 +603,9 @@ class UbiBrowserManager(KnowledgebaseManager):
 
 
 def local_update(
-    kb_manager_list: List[Type[KnowledgebaseManager]],
-    local_files: Dict[str, Dict] = None,
-    refresh: bool = False,
+        kb_manager_list: List[Type[KnowledgebaseManager]],
+        local_files: Dict[str, Dict] = None,
+        refresh: bool = False,
 ):
     """Update the knowledgebases of a local raw statements file dump
 
@@ -570,6 +621,7 @@ def local_update(
     refresh :
         If True, the local files will be recreated even if they already exist.
     """
+
     def _get_kb_info_map():
         # Get db info id mapping
         from indra_db.util import get_db
@@ -634,12 +686,12 @@ def local_update(
         outer_tqdm = tqdm(
             desc="Knowledgebases", total=total, unit="knowledgebase"
         )
-
+        '''
         # First run through the existing knowledgebases
         logger.info(f"Loading existing statements")
         for ix, Mngr in enumerate(existing_kbs):
             kbm = Mngr()
-            tqdm.write(f"[{ix+1}/{total}] {kbm.name} ({kbm.short_name})")
+            tqdm.write(f"[{ix + 1}/{total}] {kbm.name} ({kbm.short_name})")
             with gzip.open(kbm.get_local_fpath(), "rt") as stmts_fh:
                 stmts_reader = csv.reader(stmts_fh, delimiter="\t")
                 for row in tqdm(stmts_reader, leave=False):
@@ -663,14 +715,14 @@ def local_update(
                     source_count_dict[kbm.source] += 1
                     source_counts[stmt_hash] = source_count_dict
             outer_tqdm.update(1)
-
+        '''
         # Then run through the knowledgebases that are generating new output
         for ix, Mngr in enumerate(kbs_to_run, start=len(existing_kbs)):
             error_log = []
             kbm = Mngr()
             db_info_id = db_info_map[(kbm.source, kbm.short_name)]
             tqdm.write(
-                f"[{ix+1}/{total}] {kbm.name} ({kbm.short_name})"
+                f"[{ix + 1}/{total}] {kbm.name} ({kbm.short_name})"
             )
 
             # Write statements for this knowledgebase to a file
@@ -695,7 +747,7 @@ def local_update(
                     stmts_iter = batch_iter(stmts, 100000)
                     batches = True
                     t = tqdm(desc=f"Preassembling {kbm.short_name}",
-                             total=len(stmts)//100000+1)
+                             total=len(stmts) // 100000 + 1)
                 else:
                     stmts_iter = [stmts]
                     batches = False
@@ -767,8 +819,8 @@ def kb():
 @click.argument("task", type=click.Choice(["upload", "update", "local-update"]))
 @click.argument("sources", nargs=-1, type=click.STRING, required=False)
 def run(
-    task: str,
-    sources: List[str],
+        task: str,
+        sources: List[str],
 ):
     """Upload/update the knowledge bases used by the database.
 
@@ -800,7 +852,7 @@ def run(
         selected_kbs = [
             M for M in KnowledgebaseManager.__subclasses__()
             if M.name.lower() in source_set or
-            M.short_name.lower() in source_set
+               M.short_name.lower() in source_set
         ]
     else:
         selected_kbs = [KnowledgebaseManager.__subclasses__()]

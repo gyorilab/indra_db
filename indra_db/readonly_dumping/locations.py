@@ -57,6 +57,8 @@ __all__ = [
     'split_unique_statements_folder_fpath',
 ]
 
+# knowledgebase source files
+knowledgebase_source_data_fpath = TEMP_DIR.join(name="kb_source_data")
 
 # Dump files and their derivatives
 split_raw_statements_folder_fpath = TEMP_DIR.join(name="split_raw_statements")

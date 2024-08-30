@@ -23,6 +23,7 @@ from itertools import count as iter_count
 from collections import Counter, defaultdict
 
 import requests
+from bs4 import BeautifulSoup
 
 from indra.util import batch_iter
 from tqdm import tqdm
@@ -251,6 +252,13 @@ class BiogridManager(KnowledgebaseManager):
         bp = biogrid.BiogridProcessor()
         return list(_expanded(bp.statements))
 
+    def get_source_version(self):
+        url = "https://downloads.thebiogrid.org/BioGRID/Release-Archive"
+        soup = BeautifulSoup(requests.get(url).content, "html.parser")
+        version_numbers = re.findall(r'\d+\.\d+\.\d+', soup.text)
+        latest_version = max(version_numbers, key=lambda s: tuple(map(int, s.split('.')))) if version_numbers else None
+        return latest_version
+
 
 class PathwayCommonsManager(KnowledgebaseManager):
     name = 'Pathway Commons'
@@ -279,7 +287,7 @@ class PathwayCommonsManager(KnowledgebaseManager):
         from indra.sources import biopax
         response = requests.get(self.url, stream=True)
         if response.status_code == 200:
-            # Open the file in binary write mode and save the content
+            # download the source file
             with open(knowledgebase_source_data_fpath.joinpath(
                     f"{v}_pc-biopax.owl.gz"), 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -327,6 +335,18 @@ class CTDManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(all_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+    def get_source_version(self):
+        from indra.sources.ctd.api import urls
+        # Check if 'Last-Modified' is in the headers
+        version = ''
+        for subset, url in urls.items():
+            response = requests.head(url)
+            if 'Last-Modified' in response.headers:
+                last_modified = response.headers['Last-Modified']
+                version = version + subset + last_modified
+            else:
+                logger.error("Last-Modified header not found")
+        return version
 
 
 class DrugBankManager(KnowledgebaseManager):
@@ -337,13 +357,22 @@ class DrugBankManager(KnowledgebaseManager):
     def get_statements(self):
         from indra.sources import drugbank
         # For now. Load from local since aws is not setted up
-        prc = drugbank.process_xml('/Users/haohangyan/Desktop/repo/indra_db/kb_raw/drugbank.xml')
+        prc = drugbank.process_xml(knowledgebase_source_data_fpath.joinpath("drugbank.xml"))
         expanded_stmts = [s for s in _expanded(prc.statements)]
         # Return exactly one of multiple statements that are exactly the same
         # in terms of content and evidence.
         unique_stmts, _ = extract_duplicates(expanded_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+    def get_source_data(self):
+        with open(knowledgebase_source_data_fpath.joinpath("drugbank.xml"), 'r', encoding='utf-8') as file:
+            version = None
+            for _ in range(10):
+                line = file.readline()
+                if '<drugbank' in line and 'version=' in line:
+                    version = line.split('version="')[1].split('"')[0]
+                    break
+        return version
 
 
 class VirHostNetManager(KnowledgebaseManager):

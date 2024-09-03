@@ -23,6 +23,7 @@ from itertools import count as iter_count
 from collections import Counter, defaultdict
 
 import requests
+import yaml
 from bs4 import BeautifulSoup
 
 from indra.util import batch_iter
@@ -394,7 +395,7 @@ class PhosphoElmManager(KnowledgebaseManager):
     def get_statements(self):
         from indra.sources import phosphoelm
 
-        pp = phosphoelm.process_from_dump('/Users/haohangyan/Desktop/repo/indra_db/kb_raw/phosphoELM_all_2015-04.dump')
+        pp = phosphoelm.process_from_dump(knowledgebase_source_data_fpath.joinpath("phosphoELM_all_2015-04.dump"))
 
         stmts = [s for s in _expanded(pp.statements)]
         # Return exactly one of multiple statements that are exactly the same
@@ -402,6 +403,15 @@ class PhosphoElmManager(KnowledgebaseManager):
         # Now make sure we don't include exact duplicates
         unique_stmts, _ = extract_duplicates(stmts, KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+
+    def get_source_version(self):
+        latest_file = max(
+            (f for f in knowledgebase_source_data_fpath.glob("phosphoELM*.dump")),
+            key=lambda f: tuple(map(int, f.stem.split('_')[-1].split('-'))),
+            default=None
+        )
+        return latest_file.stem.split('_')[-1]
+
 
 
 class HPRDManager(KnowledgebaseManager):
@@ -474,6 +484,10 @@ class BelLcManager(KnowledgebaseManager):
         print(len(stmts), len(dups))
         return stmts
 
+    def get_source_version(self):
+        from indra.sources.bel.api import version
+        return version
+
 
 class PhosphositeManager(KnowledgebaseManager):
     name = 'Phosphosite Plus'
@@ -482,13 +496,19 @@ class PhosphositeManager(KnowledgebaseManager):
 
     def get_statements(self):
         from indra.sources import biopax
-
-        bp = biopax.process_owl_gz('/Users/haohangyan/Desktop/repo/indra_db/Kinase_substrates.owl.gz')
+        bp = biopax.process_owl_gz(knowledgebase_source_data_fpath.joinpath('Kinase_substrates.owl.gz'))
         stmts, dups = extract_duplicates(bp.statements,
                                          key_func=KeyFunc.mk_and_one_ev_src)
         print('\n'.join(str(dup) for dup in dups))
         print(len(stmts), len(dups))
         return stmts
+
+    def get_source_version(self):
+        md5_hash = hashlib.md5()
+        with open(knowledgebase_source_data_fpath.joinpath('Kinase_substrates.owl.gz'), 'rb') as file:
+            for chunk in iter(lambda: file.read(4096), b""):
+                md5_hash.update(chunk)
+        return md5_hash.hexdigest()
 
 
 class RlimspManager(KnowledgebaseManager):
@@ -520,6 +540,18 @@ class RlimspManager(KnowledgebaseManager):
 
         return stmts
 
+    def get_source_version(self):
+        response = requests.get(self._rlimsp_root)
+        soup = BeautifulSoup(response.content, "html.parser")
+        version=''
+        for row in soup.find_all('tr'):
+            cells = row.find_all('td')
+            if len(cells) >= 4:
+                file_name = cells[1].text.strip()
+                if file_name in [f[0] for f in self._rlimsp_files]:
+                    last_modified = cells[2].text.strip()
+                    version=version+file_name+last_modified
+        return version
 
 class TrrustManager(KnowledgebaseManager):
     name = 'TRRUST'
@@ -533,6 +565,14 @@ class TrrustManager(KnowledgebaseManager):
             extract_duplicates(_expanded(tp.statements),
                                key_func=KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+
+    def get_source_version(self):
+        from indra.sources.trrust.api import trrust_human_url
+        response = requests.get(trrust_human_url, stream=True)
+        md5_hash = hashlib.md5()
+        for chunk in response.iter_content(chunk_size=8192):
+            md5_hash.update(chunk)
+        return md5_hash.hexdigest()
 
 
 def _expanded(stmts):
@@ -563,6 +603,12 @@ class DgiManager(KnowledgebaseManager):
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
 
+    def get_source_version(self):
+        url = "https://raw.githubusercontent.com/dgidb/dgidb-v5/main/server/data_version.yml"
+        response = requests.get(url)
+        version_data = yaml.safe_load(response.text)
+        return version_data['version']
+
 
 class CrogManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of the CRoG dataset."""
@@ -579,6 +625,12 @@ class CrogManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(filtered_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+
+    def get_source_version(self):
+        url = "https://api.github.com/repos/chemical-roles/chemical-roles/commits?path=docs/_data/crog.indra.json"
+        response = requests.get(url)
+        commits = response.json()
+        return commits[0]['commit']['committer']['date']
 
 
 class ConibManager(KnowledgebaseManager):
@@ -613,6 +665,12 @@ class ConibManager(KnowledgebaseManager):
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
 
+    def get_source_version(self):
+        url = "https://api.github.com/repos/pharmacome/conib/commits?path=conib/_cache.bel.nodelink.json"
+        response = requests.get(url)
+        commits = response.json()
+        return commits[0]['commit']['committer']['date']
+
 
 class UbiBrowserManager(KnowledgebaseManager):
     """This manager handles retrieval and processing of UbiBrowser data."""
@@ -629,6 +687,17 @@ class UbiBrowserManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(filtered_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
+
+    def get_source_version(self):
+        from indra.sources.ubibrowser.api import DOWNLOAD_URL
+        E3_URL = DOWNLOAD_URL + 'literature.E3.txt'
+        DUB_URL = DOWNLOAD_URL + 'literature.DUB.txt'
+        e3_response = requests.get(E3_URL)
+        e3_md5 = hashlib.md5(e3_response.content).hexdigest()
+        dub_response = requests.get(DUB_URL)
+        dub_md5 = hashlib.md5(dub_response.content).hexdigest()
+        return e3_md5+dub_md5
+
 
 
 def local_update(

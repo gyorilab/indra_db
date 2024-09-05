@@ -11,6 +11,7 @@ import json
 import os
 import re
 import zlib
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Type
 
@@ -31,7 +32,7 @@ from tqdm import tqdm
 
 from indra.statements.validate import assert_valid_statement
 from indra.tools import assemble_corpus as ac
-from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
+from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath, knowledgebase_version_record
 from indra_db.util import insert_db_stmts
 from indra_db.util.distill_statements import extract_duplicates, KeyFunc
 from indra_db.readonly_dumping.locations import *
@@ -104,6 +105,10 @@ class KnowledgebaseManager(object):
 
     def get_statements(self, **kwargs):
         raise NotImplementedError("Statement retrieval must be defined in "
+                                  "each child.")
+
+    def get_source_version(self):
+        raise NotImplementedError("Version retrieval must be defined in "
                                   "each child.")
 
     def get_local_fpath(self) -> Path:
@@ -365,7 +370,7 @@ class DrugBankManager(KnowledgebaseManager):
         unique_stmts, _ = extract_duplicates(expanded_stmts,
                                              KeyFunc.mk_and_one_ev_src)
         return unique_stmts
-    def get_source_data(self):
+    def get_source_version(self):
         with open(knowledgebase_source_data_fpath.joinpath("drugbank.xml"), 'r', encoding='utf-8') as file:
             version = None
             for _ in range(10):
@@ -385,6 +390,13 @@ class VirHostNetManager(KnowledgebaseManager):
         from indra.sources import virhostnet
         vp = virhostnet.process_from_web()
         return [s for s in _expanded(vp.statements)]
+
+    def get_source_version(self):
+        url = "http://virhostnet.prabi.fr:9090/psicquic/webservices/current/search/query/*"
+        response = requests.get(url)
+        content = response.content
+        md5_checksum = hashlib.md5(content).hexdigest()
+        return md5_checksum
 
 
 class PhosphoElmManager(KnowledgebaseManager):
@@ -737,15 +749,48 @@ def local_update(
     # Get the ids of the knowledgebases to update
     kbs_to_run = []
     existing_kbs = []
+    versions = {}
+    now = datetime.now()
+    modified_date = now.strftime("%b-%d-%y")
+
+    #load kb versions
+    with open(knowledgebase_version_record, 'r') as file:
+        reader = csv.reader(file, delimiter='\t')
+        for row in reader:
+            key, version, date = row
+            versions[key] = (version,date)
+
     for kb_manager in kb_manager_list:
         kbm = kb_manager()
         # Add the knowledgebase to the list if it is not already there
         # or if we are refreshing
-        if refresh or not kbm.get_local_fpath().exists():
+
+        #check if we need updates according to versions
+        old_version, _ = versions.get((kbm.source, kbm.short_name))
+
+        try:
+            #try/except deal with cases when source website is down
+            new_version = kbm.get_source_version()
+        except:
+            new_version = old_version
+
+        if new_version != old_version:
+            versions[(kbm.source,kbm.short_name)] = (new_version, modified_date)
+            need_update = True
+        else:
+            need_update = False
+
+        if refresh or not kbm.get_local_fpath().exists() and need_update:
             kbs_to_run.append(kb_manager)
         else:
             assert kbm.get_local_fpath().exists()
             existing_kbs.append(kb_manager)
+
+    #save the updated kb versions
+    with open(knowledgebase_version_record.absolute().as_posix(), 'w', newline='') as file:
+        writer = csv.writer(file, delimiter='\t')
+        for key, value in versions.items():
+            writer.writerow([key, value[0], value[1]])
 
     if kbs_to_run:
         logger.info("Generating new statements from these knowledgebases:")
@@ -832,7 +877,7 @@ def local_update(
                     kb_kwargs = local_files.get(kbm.short_name, {})
                 else:
                     kb_kwargs = {}
-                stmts = kbm.get_statements(**kb_kwargs)
+                #stmts = kbm.get_statements(**kb_kwargs)
                 #Get statement and record failed kb
                 try:
                     stmts = []

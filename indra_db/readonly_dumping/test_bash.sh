@@ -1,5 +1,5 @@
 # SETUP
-
+set -e
 # Get password to the principal database from the user
 echo "Enter password for the principal database:"
 read -s PGPASSWORD # -s flag hides the password
@@ -13,6 +13,8 @@ then
     echo "Password is empty. Exiting."
     exit 1
 fi
+
+
 
 #Set the user for the local db
 LOCAL_RO_USER="postgres"
@@ -28,18 +30,7 @@ LOCAL_RO_DB_NAME="indradb_readonly_local"
 export LOCAL_RO_DB_NAME
 echo "Local db name: $LOCAL_RO_DB_NAME"
 
-# Upload a JSON file with the start date to S3
-# This is used to keep track of the start date of the dump
-# The file is uploaded to the indra-db/dumps/ directory
-# The file name is the current date and time
 
-# Get the current date and time
-START_DATE_TIME=`date '+%Y-%m-%d %H:%M:%S'`
-START_DATE=`date '+%Y-%m-%d'`
-echo "{\"datetime\": \"$START_DATE_TIME\", \"date_stamp\": \"$START_DATE\"}" > start.json
-S3_PATH="s3://bigmech/indra-db/dumps/$START_DATE"
-aws s3 cp start.json "$S3_PATH/start.json"
-echo "Start date marked as: $START_DATE"
 
 # INITIAL DUMPING
 
@@ -73,76 +64,14 @@ else
     echo "Text refs principal file path: $TEXT_REFS_PRINCIPAL_FPATH"
 fi
 
-# Run dumps
-# Only run the dumps if the files don't exist
-if [ ! -f "$RAW_STMTS_FPATH" ]
-then
-    echo "Dumping raw statements"
-    start=$(date +%s)
-    psql -d indradb_test \
-         -h indradb-refresh.cwcetxbvbgrf.us-east-1.rds.amazonaws.com \
-         -U tester \
-         -w \
-         -c "COPY (SELECT id, db_info_id, reading_id,
-                   convert_from (json::bytea, 'utf-8')
-                   FROM public.raw_statements)
-             TO STDOUT" \
-          | gzip > "$RAW_STMTS_FPATH"
-    end=$(date +%s)
-    runtime=$((end-start))
-    echo "Dumped raw statements in $runtime seconds"
-else
-    echo "Raw statements file already exists, skipping dump"
-fi
-
-if [ ! -f "$READING_TEXT_CONTENT_META_FPATH" ]
-then
-    echo "Dumping reading text content meta"
-    start=$(date +%s)
-    psql -d indradb_test \
-         -h indradb-refresh.cwcetxbvbgrf.us-east-1.rds.amazonaws.com \
-         -U tester \
-         -w \
-         -c "COPY (SELECT rd.id, rd.reader_version, tc.id, tc.text_ref_id,
-                          tc.source, tc.text_type
-                   FROM public.text_content as tc, public.reading as rd
-                   WHERE tc.id = rd.text_content_id)
-             TO STDOUT" \
-         | gzip > "$READING_TEXT_CONTENT_META_FPATH"
-    end=$(date +%s)
-    runtime=$((end-start))
-    echo "Dumped reading text content meta in $runtime seconds"
-else
-    echo "Reading text content meta file already exists, skipping dump"
-fi
-
-if [ ! -f "$TEXT_REFS_PRINCIPAL_FPATH" ]
-then
-    echo "Dumping text refs principal"
-    start=$(date +%s)
-    psql -d indradb_test \
-         -h indradb-refresh.cwcetxbvbgrf.us-east-1.rds.amazonaws.com \
-         -U tester \
-         -w \
-         -c "COPY (SELECT id, pmid, pmcid, doi, pii, url, manuscript_id
-                   FROM public.text_ref)
-             TO STDOUT" \
-         | gzip > "$TEXT_REFS_PRINCIPAL_FPATH"
-    end=$(date +%s)
-    runtime=$((end-start))
-    echo "Dumped text refs in $runtime seconds"
-else
-    echo "Text refs principal file already exists, skipping dump"
-fi
+#get three initial file
 
 # LOCAL DB CREATION AND DUMPING
 
-# Run export assembly script
-python3 -m indra_db.readonly_dumping.export_assembly # --refresh-kb
 
 # Create db;
 # todo: how to pass or set password? Will it interfere with PGPASSWORD set above?
-psql -h localhost -c "create database $LOCAL_RO_DB_NAME" -U postgres
+#psql -h localhost -c "create database $LOCAL_RO_DB_NAME" -U postgres
 
 # Run import script
 python3 -m indra_db.readonly_dumping.readonly_dumping \
@@ -152,15 +81,14 @@ python3 -m indra_db.readonly_dumping.readonly_dumping \
         # --force  # Use if you want to overwrite an existing db, if it exists
 
 # Dump the db, once done importing
-PGPASSWORD=$LOCAL_RO_PASSWORD
-export PGPASSWORD
-pg_dump -h localhost \
-        -U postgres \
-        -w \
-        -f "${LOCAL_RO_DB_NAME}.dump" $LOCAL_RO_DB_NAME
+#PGPASSWORD=$LOCAL_RO_PASSWORD
+#export PGPASSWORD
+#pg_dump -h localhost \
+#        -U postgres \
+#        -w \
+#        -f "${LOCAL_RO_DB_NAME}.dump" $LOCAL_RO_DB_NAME
 
-# copy to s3
-aws s3 cp "${LOCAL_RO_DB_NAME}.dump" "s3://bigmech/indra-db/dumps/"
+
 
 # Remove dump file only after it has been copied to s3 successfully
 #rm "${LOCAL_RO_DB_NAME}.dump"
@@ -169,12 +97,6 @@ aws s3 cp "${LOCAL_RO_DB_NAME}.dump" "s3://bigmech/indra-db/dumps/"
 # This is used to keep track of the end date of the dump
 # The file is uploaded to the indra-db/dumps/ directory
 # The file name is the current date and time
-
-# Get the current date and time
-END_DATE_TIME=`date '+%Y-%m-%d %H:%M:%S'`
-END_DATE=`date '+%Y-%m-%d'`
-echo "{\"datetime\": \"$END_DATE_TIME\", \"date_stamp\": \"$END_DATE\"}" > end.json
-aws s3 cp end.json "$S3_PATH/end.json"
 
 ## At this point, if a new readonly instance is already created, we could run
 ## the following command to update the instance (assuming the password is set

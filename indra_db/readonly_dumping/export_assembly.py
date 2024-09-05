@@ -9,6 +9,7 @@ import math
 import pickle
 import re
 import shutil
+import sys
 from collections import defaultdict, Counter
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
@@ -29,8 +30,8 @@ from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
-from indra_db.readonly_dumping.locations import split_raw_statements_folder_fpath, \
-    split_unique_statements_folder_fpath
+from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
+
 from indra_db.readonly_dumping.util import clean_json_loads, validate_statement_semantics
 from indra_db.readonly_dumping.locations import *
 import os
@@ -323,7 +324,7 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
     kb_file_mapping = {}
     for M in KnowledgebaseManager.__subclasses__():
         m = M()
-        if m.short_name != "hprd" and m.short_name != "vhn":
+        if m.short_name != "hprd":
             db_id = kb_mapping.get((m.source, m.short_name))
             if db_id is None:
                 raise ValueError(
@@ -336,10 +337,6 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
     local_update(kb_manager_list=selected_kbs, refresh=refresh)
 
     return kb_file_mapping
-
-
-import time
-import tracemalloc
 
 
 def split_tsv_gz_file(input_path, output_dir, batch_size=10000):
@@ -511,8 +508,9 @@ def merge_processed_statements():
     if not raw_id_info_map_fpath.exists():
         logger.info("Merging raw statement id to info mappings")
         with gzip.open(raw_id_info_map_fpath.absolute().as_posix(), 'wb') as f_out:
-                for file in [raw_id_info_map_knowledgebases_fpath.absolute().as_posix(),
-                                raw_id_info_map_reading_fpath.absolute().as_posix()
+                for file in [
+                    raw_id_info_map_knowledgebases_fpath.absolute().as_posix(),
+                    raw_id_info_map_reading_fpath.absolute().as_posix()
                                 ]:
                     with gzip.open(file, 'rb') as f_in:
                         logger.info(f"Merging {file} into processed statements")
@@ -668,14 +666,14 @@ def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int, split_f
 
     #This can only check for full data
     # Perform sanity check on the refinements
-    # logger.info("Checking refinements")
-    # sample_stmts = sample_unique_stmts(n_rows=n_rows)
-    # sample_refinements = get_related([s for _, s in sample_stmts])
-    # assert sample_refinements.issubset(refinements), (
-    #     f"Refinements are not a subset of the sample. Sample contains "
-    #     f"{len(sample_refinements - refinements)} refinements not in "
-    #     f"the full set."
-    # )
+    logger.info("Checking refinements")
+    sample_stmts = sample_unique_stmts(n_rows=n_rows)
+    sample_refinements = get_related([s for _, s in sample_stmts])
+    assert sample_refinements.issubset(refinements), (
+        f"Refinements are not a subset of the sample. Sample contains "
+        f"{len(sample_refinements - refinements)} refinements not in "
+        f"the full set."
+    )
 
     logger.info("Checking refinements for cycles")
     ref_graph = nx.DiGraph()
@@ -857,9 +855,14 @@ if __name__ == '__main__':
         )
 
     # 1. Run knowledge base pipeline if the output files don't exist
+    if not knowledgebase_source_data_fpath.exists():
+        os.makedirs(knowledgebase_source_data_fpath.absolute().as_posix())
+
     logger.info("1. Running knowledgebase pipeline")
     kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
-    
+
+
+    '''
     #split rawstatement
     if not split_raw_statements_folder_fpath.exists():
         split_tsv_gz_file(raw_statements_fpath.as_posix(), split_raw_statements_folder_fpath.as_posix())
@@ -955,4 +958,4 @@ if __name__ == '__main__':
             )
     else:
         logger.info("Final output already exists, stopping script")
-
+    '''

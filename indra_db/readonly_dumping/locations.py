@@ -59,6 +59,7 @@ __all__ = [
 
 # knowledgebase source files
 knowledgebase_source_data_fpath = TEMP_DIR.join(name="kb_source_data")
+knowledgebase_version_record = TEMP_DIR.join(name='knowledgebase_version_record.tsv')
 
 # Dump files and their derivatives
 split_raw_statements_folder_fpath = TEMP_DIR.join(name="split_raw_statements")

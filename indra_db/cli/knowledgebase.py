@@ -758,7 +758,7 @@ def local_update(
         reader = csv.reader(file, delimiter='\t')
         for row in reader:
             key, version, date = row
-            versions[key] = (version,date)
+            versions[key] = (version, date)
 
     for kb_manager in kb_manager_list:
         kbm = kb_manager()
@@ -766,7 +766,8 @@ def local_update(
         # or if we are refreshing
 
         #check if we need updates according to versions
-        old_version, _ = versions.get((kbm.source, kbm.short_name))
+        old_version = versions.get(kbm.source+kbm.short_name, (None,))[0]
+
 
         try:
             #try/except deal with cases when source website is down
@@ -775,12 +776,12 @@ def local_update(
             new_version = old_version
 
         if new_version != old_version:
-            versions[(kbm.source,kbm.short_name)] = (new_version, modified_date)
+            versions[kbm.source+kbm.short_name] = (new_version, modified_date)
             need_update = True
         else:
             need_update = False
 
-        if refresh or not kbm.get_local_fpath().exists() and need_update:
+        if refresh or not kbm.get_local_fpath().exists() or need_update:
             kbs_to_run.append(kb_manager)
         else:
             assert kbm.get_local_fpath().exists()
@@ -879,11 +880,11 @@ def local_update(
                     kb_kwargs = {}
                 #stmts = kbm.get_statements(**kb_kwargs)
                 #Get statement and record failed kb
-                try:
+                # try:
                     stmts = []
-                    stmts = kbm.get_statements(**kb_kwargs)
-                except Exception as e:
-                    error_log.append((kbm.name, e))
+                stmts = kbm.get_statements(**kb_kwargs)
+                # except Exception as e:
+                #     error_log.append((kbm.name, e))
 
                 # Do preassembly
                 if len(stmts) > 100000:

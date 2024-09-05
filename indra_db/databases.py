@@ -502,17 +502,18 @@ class DatabaseManager(object):
             raise
 
     def commit_copy(self, err_msg):
-        if self._conn is not None:
-            try:
-                logger.debug('Attempting to commit...')
-                self._conn.commit()
-                self._conn = None
-                logger.debug('Message committed.')
-            except Exception as e:
-                self._conn = None
-                logger.exception(e)
-                logger.error(err_msg)
-                raise
+        if not self._conn:
+            raise Exception("No connection, cannot commit")
+        try:
+            logger.debug('Attempting to commit...')
+            self._conn.commit()
+            logger.debug('Message committed.')
+        except Exception:
+            logger.exception(err_msg)
+            raise
+        finally:
+            self._conn = None
+
 
     def _get_foreign_key_constraint(self, table_name_1, table_name_2):
         cols = self.get_column_objects(self.tables[table_name_1])

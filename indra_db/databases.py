@@ -259,7 +259,16 @@ class DatabaseManager(object):
             return
 
         # Create the engine (connection manager).
-        self.__engine = create_engine(self.url)
+        # Try to use pool_pre_ping=True and increase the pool size from the default 5:
+        # https://docs.sqlalchemy.org/en/14/core/engines.html#sqlalchemy.create_engine
+        # Also try set pool_recycle to 1 hour - this causes the pool to recycle
+        # connections after 1 hour.
+        self.__engine = create_engine(
+            self.url,
+            pool_pre_ping=True,
+            pool_size=10,
+            pool_recycle=3600
+        )
         return
 
     def _init_foreign_key_map(self, foreign_key_map):

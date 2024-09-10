@@ -141,7 +141,8 @@ fi
 python3 -m indra_db.readonly_dumping.export_assembly # --refresh-kb
 
 # Create db;
-# todo: how to pass or set password? Will it interfere with PGPASSWORD set above?
+PGPASSWORD=$LOCAL_RO_PASSWORD
+export PGPASSWORD
 psql -h localhost -c "create database $LOCAL_RO_DB_NAME" -U postgres
 
 # Run import script
@@ -152,8 +153,6 @@ python3 -m indra_db.readonly_dumping.readonly_dumping \
         # --force  # Use if you want to overwrite an existing db, if it exists
 
 # Dump the db, once done importing
-PGPASSWORD=$LOCAL_RO_PASSWORD
-export PGPASSWORD
 pg_dump -h localhost \
         -U postgres \
         -w \

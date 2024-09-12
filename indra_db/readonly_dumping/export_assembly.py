@@ -101,7 +101,7 @@ def get_related_split(stmts1: StmtList, stmts2: StmtList) -> Set[Tuple[int, int]
 
 
 def sample_unique_stmts(
-        num: int = 100000, n_rows: int = None
+        num: int = 100, n_rows: int = None
 ) -> List[Tuple[int, Statement]]:
     """Return a random sample of Statements from unique_statements.tsv.gz
 
@@ -862,7 +862,6 @@ if __name__ == '__main__':
     kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
 
 
-    '''
     #split rawstatement
     if not split_raw_statements_folder_fpath.exists():
         split_tsv_gz_file(raw_statements_fpath.as_posix(), split_raw_statements_folder_fpath.as_posix())
@@ -936,7 +935,7 @@ if __name__ == '__main__':
         batch_count = len(split_unique_files)
         #get the n_rows in the last incompleted batch
         last_count = count_rows_in_tsv_gz(split_unique_files[-1])
-        num_rows = batch_count * batch_size + last_count
+        num_rows = (batch_count-1) * batch_size + last_count
         logger.info(f"{num_rows} rows in unique statements with {batch_count} batches")
         cycles_found = False
         ref_graph = get_refinement_graph(batch_size=batch_size,
@@ -958,4 +957,3 @@ if __name__ == '__main__':
             )
     else:
         logger.info("Final output already exists, stopping script")
-    '''

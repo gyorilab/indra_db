@@ -2,24 +2,24 @@ import argparse
 import concurrent.futures
 import csv
 import gzip
-import itertools
+
 import json
 import logging
-import math
+
 import pickle
 import re
 import shutil
-import sys
+
 from collections import defaultdict, Counter
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool
 
 import networkx as nx
 import numpy as np
 import pandas
 from tqdm import tqdm
-from memory_profiler import profile
+
 from adeft import get_available_models
 from indra.belief import BeliefEngine
 from indra.ontology.bio import bio_ontology
@@ -34,7 +34,7 @@ from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
 
 from indra_db.readonly_dumping.util import clean_json_loads, validate_statement_semantics
 from indra_db.readonly_dumping.locations import *
-import os
+
 
 refinement_cycles_fpath = TEMP_DIR.join(name="refinement_cycles.pkl")
 batch_size = int(1e6)

@@ -13,12 +13,13 @@ import shutil
 from collections import defaultdict, Counter
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
-from multiprocessing import Pool
 
 import networkx as nx
 import numpy as np
 import pandas
+import psutil
 from tqdm import tqdm
+import os
 
 from adeft import get_available_models
 from indra.belief import BeliefEngine
@@ -594,7 +595,7 @@ def init_globals():
     bio_ontology._build_transitive_closure()
     pa = Preassembler(bio_ontology)
 
-def parallel_process_files(split_files, num_processes):
+def parallel_process_files(split_files, num_processes = 1):
     global pa
     split_files = split_files[::-1]
     tasks = []
@@ -617,6 +618,13 @@ def parallel_process_files(split_files, num_processes):
         refinements |= get_related(load_statements_from_file(split_files[i]))
 
     return refinements
+
+def get_n_process():
+    available_memory_gb = psutil.virtual_memory().total / (1024 ** 3)
+    max_processes_by_memory = int(available_memory_gb // 12) #about 12 Gb per each process
+    max_processes_by_cores = os.cpu_count()
+    num_processes = min(max_processes_by_memory, max_processes_by_cores)
+    return num_processes
 
 def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int, split_files: list) -> nx.DiGraph:
     global cycles_found, pa
@@ -648,7 +656,8 @@ def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int, split_f
     if not refinements_fpath.exists():
         logger.info("6. Calculating refinements")
 
-        refinements = parallel_process_files(split_files,4)
+        n_process = get_n_process()
+        refinements = parallel_process_files(split_files, num_processes=n_process)
 
         # Write out the refinements as a gzipped TSV file
         with gzip.open(refinements_fpath.as_posix(), "wt") as f:
@@ -834,8 +843,6 @@ if __name__ == '__main__':
         raise FileNotFoundError(
             f"{', '.join(missing)} missing, please run the dump commands above to get them."
         )
-
-    import os
 
     if not os.environ.get("INDRA_DB_LITE_LOCATION"):
         raise ValueError("Environment variable 'INDRA_DB_LITE_LOCATION' not set")

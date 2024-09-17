@@ -596,7 +596,6 @@ def init_globals():
 
 def parallel_process_files(split_files, num_processes):
     global pa
-    pool = Pool(processes=num_processes)
     split_files = split_files[::-1]
     tasks = []
     refinements = set()
@@ -862,16 +861,6 @@ if __name__ == '__main__':
     kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
 
 
-    #split rawstatement
-    if not split_raw_statements_folder_fpath.exists():
-        split_tsv_gz_file(raw_statements_fpath.as_posix(), split_raw_statements_folder_fpath.as_posix())
-        logger.info(
-            "Finished splitting raw statement"
-        )
-    else:
-        logger.info(
-            "split_raw_statements_folder exist"
-        )
 
     # Check if output from preassembly (step 2) already exists
     if (

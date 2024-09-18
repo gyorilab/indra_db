@@ -33,20 +33,21 @@ def push(deployment, zappa_settings_file):
               help="Override the default port number.")
 @click.option('-h', '--host', default='0.0.0.0',
               help="Override the default host.")
-@click.option('--deployment',
+@click.option('-vd', '--vue-deployment',
               help="Load the vue package from this S3 deployment instead of "
-                   "a local directory.")
-def test_service(port, host, deployment=None):
+                   "a local directory.",
+              required=False)
+def test_service(port, host, vue_deployment):
     """Run the service in test mode locally."""
     from indra_db_service.config import TESTING
     TESTING['status'] = True
-    if deployment is not None:
-        TESTING['deployment'] = deployment
+    if vue_deployment is not None:
+        TESTING['deployment'] = vue_deployment
         TESTING['vue-root'] = (
             f'https://bigmech.s3.amazonaws.com/indra-db/indralabvue-'
-            f'{deployment}'
+            f'{vue_deployment}'
         )
-        click.echo(f'Using deployment {deployment} from S3 at {TESTING["vue-root"]}')
+        click.echo(f'Using deployment {vue_deployment} from S3 at {TESTING["vue-root"]}')
 
     from indra_db_service.api import app
     app.run(host=host, port=port, debug=True)

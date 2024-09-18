@@ -34,6 +34,7 @@ def push(deployment, zappa_settings_file):
 @click.option('-h', '--host', default='0.0.0.0',
               help="Override the default host.")
 @click.option('-vd', '--vue-deployment',
+              type=click.Choice(['stable', 'dev', 'latest', 'test']),
               help="Load the vue package from this S3 deployment instead of "
                    "a local directory.",
               required=False)

@@ -626,7 +626,7 @@ def get_n_process():
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
     return num_processes
 
-def get_refinement_graph(batch_size: int, num_batches: int, n_rows: int, split_files: list) -> nx.DiGraph:
+def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
     global cycles_found, pa
     """Get refinement pairs as: (more specific, less specific)
 
@@ -934,9 +934,7 @@ if __name__ == '__main__':
         num_rows = (batch_count-1) * batch_size + last_count
         logger.info(f"{num_rows} rows in unique statements with {batch_count} batches")
         cycles_found = False
-        ref_graph = get_refinement_graph(batch_size=batch_size,
-                                         num_batches=batch_count,
-                                         n_rows=num_rows,
+        ref_graph = get_refinement_graph(n_rows=num_rows,
                                          split_files=split_unique_files)
         if cycles_found:
             logger.info(

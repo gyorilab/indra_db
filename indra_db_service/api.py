@@ -250,9 +250,12 @@ def serve_data_vis(file_path):
 
 
 if TESTING["status"] and not TESTING["deployment"]:
-    assert (
-        VUE_ROOT.exists() and VUE_ROOT.is_absolute()
-    ), "Cannot test API without absolute path to Vue packages."
+    assert VUE_ROOT and VUE_ROOT.exists(), (
+        "Local Vue package needs to be specified if no S3 deployment is used. Set "
+        "INDRA_DB_API_VUE_ROOT in the environment to specify the path to the local Vue "
+        "package."
+    )
+    assert VUE_ROOT.is_absolute(), "Cannot test API without absolute path to Vue packages."
 
     @app.route("/ilv/<path:file>")
     def serve_indralab_vue(file):

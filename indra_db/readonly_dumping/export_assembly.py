@@ -33,7 +33,8 @@ from indra.tools import assemble_corpus as ac
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
 from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
 
-from indra_db.readonly_dumping.util import clean_json_loads, validate_statement_semantics
+from indra_db.readonly_dumping.util import clean_json_loads, \
+    validate_statement_semantics
 from indra_db.readonly_dumping.locations import *
 
 
@@ -96,7 +97,8 @@ def get_related_split(stmts1: StmtList, stmts2: StmtList) -> Set[Tuple[int, int]
         if not stmts_this_type2:
             continue
         refinements |= pa._generate_relation_tuples(
-            stmts_this_type1 + stmts_this_type2, split_idx=len(stmts_this_type1) - 1
+            stmts_this_type1 + stmts_this_type2,
+            split_idx=len(stmts_this_type1) - 1
         )
     return refinements
 
@@ -285,7 +287,8 @@ def distill_statements() -> Tuple[Set, Dict]:
 
     else:
         logger.info(
-            f"Loading {drop_readings_fpath.as_posix()} and {reading_to_text_ref_map_fpath.as_posix()} from cache"
+            f"Loading {drop_readings_fpath.as_posix()} and "
+            f"{reading_to_text_ref_map_fpath.as_posix()} from cache"
         )
         with drop_readings_fpath.open("rb") as fh:
             drop_readings = pickle.load(fh)
@@ -351,7 +354,7 @@ def split_tsv_gz_file(input_path, output_dir, batch_size=10000):
             with gzip.open(output_file_path, "wt") as output_file:
                 writer = csv.writer(output_file, delimiter="\t")
                 writer.writerows(batch)
-            print(f"Written batch {batch_index} to {output_file_path}")
+            logger.info(f"Written batch {batch_index} to {output_file_path}")
 
 def count_rows_in_tsv_gz(file_path):
     with gzip.open(file_path, 'rt') as file:
@@ -386,13 +389,14 @@ def preprocess(
         source_counts = defaultdict(Counter)
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
         with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
-                gzip.open(processed_stmts_reading_fpath.as_posix(), "wt") as fh_out, \
-                gzip.open(raw_id_info_map_reading_fpath.as_posix(), "wt") as fh_info:
+             gzip.open(processed_stmts_reading_fpath.as_posix(), "wt") as fh_out, \
+             gzip.open(raw_id_info_map_reading_fpath.as_posix(), "wt") as fh_info:
             raw_stmts_reader = csv.reader(fh, delimiter="\t")
             writer = csv.writer(fh_out, delimiter="\t")
             info_writer = csv.writer(fh_info, delimiter="\t")
-            for batch_ix, lines in enumerate(tqdm(batch_iter(raw_stmts_reader, 10000),
-                              total=7727, desc="Looping raw statements")):
+            for batch_ix, lines in enumerate(
+                    tqdm(batch_iter(raw_stmts_reader, 10000),
+                    total=7727, desc="Looping raw statements")):
 
                 paired_stmts_jsons = []
                 info_rows = []
@@ -423,7 +427,8 @@ def preprocess(
                             stmt_json["evidence"][0]["pmid"] = refs["PMID"]
                     paired_stmts_jsons.append((raw_stmt_id_int, stmt_json))
                 # Write to the info file
-                info_writer.writerows(info_rows) #"raw_stmt_id_to_info_map_reading.tsv.gz"
+                # "raw_stmt_id_to_info_map_reading.tsv.gz"
+                info_writer.writerows(info_rows)
                 if paired_stmts_jsons:
                     raw_ids, stmts_jsons = zip(*paired_stmts_jsons)
                 stmts = stmts_from_json(stmts_jsons)
@@ -439,7 +444,8 @@ def preprocess(
                     stmt_hash = stmt.get_hash(refresh=True)
                     stmt_hash_to_raw_stmt_ids[stmt_hash].add(raw_id)
                     source_counts[stmt_hash][stmt.evidence[0].source_api] += 1
-                rows = [(stmt.get_hash(), json.dumps(stmt.to_json())) for stmt in stmts]
+                rows = [(stmt.get_hash(), json.dumps(stmt.to_json()))
+                        for stmt in stmts]
                 writer.writerows(rows)
 
         # Cast Counter to dict and pickle the source counts
@@ -469,8 +475,10 @@ def merge_processed_statements():
     # List the processed statement file to be merged
     proc_stmts_reading = processed_stmts_reading_fpath.absolute().as_posix()
     kb_folder_path = TEMP_DIR.join('knowledgebases').absolute().as_posix()
-    all_files = [os.path.join(kb_folder_path, file) for file in os.listdir(kb_folder_path)
-               if os.path.isfile(os.path.join(kb_folder_path, file)) and file.endswith('.tsv.gz')]
+    all_files = [os.path.join(kb_folder_path, file)
+                 for file in os.listdir(kb_folder_path)
+                 if os.path.isfile(os.path.join(kb_folder_path, file))
+                 and file.endswith('.tsv.gz')]
     all_files.append(proc_stmts_reading)
 
     if not processed_stmts_fpath.exists():
@@ -608,8 +616,10 @@ def parallel_process_files(split_files, num_processes = 1):
             tasks.append((split_files[i], split_files[j]))
     print(tasks)
     logging.info("Completed all tasks")
-    with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes,initializer=init_globals) as executor:
-        results = list(tqdm(executor.map(process_batch_pair, tasks), total=len(tasks)))
+    with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_processes,initializer=init_globals) as executor:
+        results = list(tqdm(executor.map(process_batch_pair, tasks),
+                            total=len(tasks)))
 
     for result in results:
         refinements |= result
@@ -621,7 +631,8 @@ def parallel_process_files(split_files, num_processes = 1):
 
 def get_n_process():
     available_memory_gb = psutil.virtual_memory().total / (1024 ** 3)
-    max_processes_by_memory = int(available_memory_gb // 12) #about 12 Gb per each process
+    # about 12 Gb per each process
+    max_processes_by_memory = int(available_memory_gb // 12)
     max_processes_by_cores = os.cpu_count()
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
     return num_processes
@@ -914,9 +925,10 @@ if __name__ == '__main__':
 
         if not split_unique_statements_folder_fpath.exists():
             logger.info("Splitting unique statements")
+            # time: 30 min
             split_tsv_gz_file(unique_stmts_fpath.as_posix(),
                               split_unique_statements_folder_fpath.as_posix(),
-                              batch_size = batch_size) #30 min to run
+                              batch_size=batch_size)
             logger.info(
                 "Finished splitting unique statement"
             )
@@ -927,12 +939,16 @@ if __name__ == '__main__':
         split_unique_files = [os.path.join(split_unique_statements_folder_fpath, f)
                        for f in os.listdir(split_unique_statements_folder_fpath)
                        if f.endswith(".gz")]
-        split_unique_files = sorted(split_unique_files, key=lambda x: int(re.findall(r'\d+', x)[0]))
+        split_unique_files = sorted(
+            split_unique_files,
+            key=lambda x: int(re.findall(r'\d+', x)[0])
+        )
         batch_count = len(split_unique_files)
         #get the n_rows in the last incompleted batch
         last_count = count_rows_in_tsv_gz(split_unique_files[-1])
         num_rows = (batch_count-1) * batch_size + last_count
-        logger.info(f"{num_rows} rows in unique statements with {batch_count} batches")
+        logger.info(f"{num_rows} rows in unique statements with "
+                    f"{batch_count} batches")
         cycles_found = False
         ref_graph = get_refinement_graph(n_rows=num_rows,
                                          split_files=split_unique_files)

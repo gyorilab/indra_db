@@ -308,7 +308,7 @@ def belief(local_ro_mngr: ReadonlyDatabaseManager):
     logger.info("Reading belief score pickle file")
     with belief_scores_pkl_fpath.open("rb") as pkl_in:
         belief_dict = pickle.load(pkl_in)
-
+    logger.info(ro_manager.url)
     logger.info("Dumping belief scores to tsv file")
     with belief_scores_tsv_fpath.open("w") as fh_out:
         writer = csv.writer(fh_out, delimiter="\t")
@@ -322,10 +322,10 @@ def belief(local_ro_mngr: ReadonlyDatabaseManager):
                              schema=schema,
                              column_order="mk_hash, belief",
                              tsv_file=belief_scores_tsv_fpath.absolute().as_posix())
-
-    create_primary_key(ro_mngr_local=local_ro_mngr,
-                       table_name="belief",
-                       keys="mk_hash")
+    logger.info("Belief loaded")
+    # create_primary_key(ro_mngr_local=local_ro_mngr,
+    #                    table_name="belief",
+    #                    keys="mk_hash")
 
     #logger.info(f"Deleting {belief_scores_tsv_fpath.absolute().as_posix()}")
     #os.remove(belief_scores_tsv_fpath.absolute().as_posix())
@@ -528,7 +528,7 @@ def load_file_to_table_spark(table_name, schema,
         else:
             df = spark.read.csv(tsv_file, schema=schema, sep='\t', header=header)
 
-    url = "jdbc:postgresql://localhost:5432/indradb_readonly_local"
+    url = "jdbc:postgresql://localhost:5432/indradb_readonly_local_test"
 
     custom_column_names = column_order.split(", ")
     df = df.toDF(*custom_column_names)
@@ -1849,13 +1849,14 @@ def principal_query_to_csv(
         raise ValueError(
             f"Query '{query}' uses disallowed keywords: {disallowed_keywords}"
         )
-
+    print("connecting to db")
     defaults = get_databases()
+    print("got connection")
     try:
         principal_db_uri = defaults[db]
     except KeyError as err:
         raise KeyError(f"db {db} not available. Check db_config.ini") from err
-
+    print(principal_db_uri)
     # fixme: allow tsv.gz output
     # Note: 'copy ... to' copies data to a file on the server, while
     # 'copy ... from' copies data to the client. The former is faster, but
@@ -1977,9 +1978,9 @@ def create_ro_tables(
 
     # Create empty tables if they don't exist - MetaData.create_all() skips
     # existing tables by default
-    #tables_metadata = ro_mngr_local.tables['belief'].metadata
+    tables_metadata = ro_mngr_local.tables['belief'].metadata
     logger.info("Creating tables")
-    #tables_metadata.create_all(bind=engine)
+    tables_metadata.create_all(bind=engine)
     logger.info("Done creating tables")
 
 
@@ -2009,9 +2010,11 @@ if __name__ == "__main__":
         port=args.port,
         db_name=args.db_name,
     )
+    print(postgres_url)
     ro_manager = ReadonlyDatabaseManager(postgres_url, protected=False)
     # Create the tables
-    #create_ro_tables(ro_manager, force=args.force)
+    print("DATABASE NAME IS ",args.db_name)
+    create_ro_tables(ro_manager, force=args.force)
 
     ro_manager.create_schema('readonly')
     # For each table, run the function that will fill out the table with data

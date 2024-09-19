@@ -140,48 +140,48 @@ fi
 # Run export assembly script
 python3 -m indra_db.readonly_dumping.export_assembly # --refresh-kb
 
-# Create db;
-PGPASSWORD=$LOCAL_RO_PASSWORD
-export PGPASSWORD
-psql -h localhost -U postgres -c "DROP DATABASE IF EXISTS $LOCAL_RO_DB_NAME"
-psql -h localhost -U postgres -c "CREATE DATABASE $LOCAL_RO_DB_NAME"
-
-# Run import script
-python3 -m indra_db.readonly_dumping.readonly_dumping \
-        --db-name $LOCAL_RO_DB_NAME \
-        --user $LOCAL_RO_USER \
-        --password "$LOCAL_RO_PASSWORD"
-        # --force  # Use if you want to overwrite an existing db, if it exists
-
-# Dump the db, once done importing
-pg_dump -h localhost \
-        -U postgres \
-        -w \
-        -f "${LOCAL_RO_DB_NAME}.dump" $LOCAL_RO_DB_NAME
-
-# copy to s3
-aws s3 cp "${LOCAL_RO_DB_NAME}.dump" "s3://bigmech/indra-db/dumps/"
-
-# Remove dump file only after it has been copied to s3 successfully
-#rm "${LOCAL_RO_DB_NAME}.dump"
-
-# Upload an end date file to S3
-# This is used to keep track of the end date of the dump
-# The file is uploaded to the indra-db/dumps/ directory
-# The file name is the current date and time
-
-# Get the current date and time
-END_DATE_TIME=`date '+%Y-%m-%d %H:%M:%S'`
-END_DATE=`date '+%Y-%m-%d'`
-echo "{\"datetime\": \"$END_DATE_TIME\", \"date_stamp\": \"$END_DATE\"}" > end.json
-aws s3 cp end.json "$S3_PATH/end.json"
-
-# At this point, if a new readonly instance is already created, we could run
-# the following command to update the instance (assuming the password is set
-# in PGPASSWORD, which will be read if -w is set):
-# pg_restore -h <readonly-instance>.us-east-1.rds.amazonaws.com \
-#            -U <user-name> \
-#            -f <dump-file> \
-#            -w \
-#            -d indradb_readonly \
-#            --no-owner
+## Create db;
+#PGPASSWORD=$LOCAL_RO_PASSWORD
+#export PGPASSWORD
+#psql -h localhost -U postgres -c "DROP DATABASE IF EXISTS $LOCAL_RO_DB_NAME"
+#psql -h localhost -U postgres -c "CREATE DATABASE $LOCAL_RO_DB_NAME"
+#
+## Run import script
+#python3 -m indra_db.readonly_dumping.readonly_dumping \
+#        --db-name $LOCAL_RO_DB_NAME \
+#        --user $LOCAL_RO_USER \
+#        --password "$LOCAL_RO_PASSWORD"
+#        # --force  # Use if you want to overwrite an existing db, if it exists
+#
+## Dump the db, once done importing
+#pg_dump -h localhost \
+#        -U postgres \
+#        -w \
+#        -f "${LOCAL_RO_DB_NAME}.dump" $LOCAL_RO_DB_NAME
+#
+## copy to s3
+#aws s3 cp "${LOCAL_RO_DB_NAME}.dump" "s3://bigmech/indra-db/dumps/"
+#
+## Remove dump file only after it has been copied to s3 successfully
+##rm "${LOCAL_RO_DB_NAME}.dump"
+#
+## Upload an end date file to S3
+## This is used to keep track of the end date of the dump
+## The file is uploaded to the indra-db/dumps/ directory
+## The file name is the current date and time
+#
+## Get the current date and time
+#END_DATE_TIME=`date '+%Y-%m-%d %H:%M:%S'`
+#END_DATE=`date '+%Y-%m-%d'`
+#echo "{\"datetime\": \"$END_DATE_TIME\", \"date_stamp\": \"$END_DATE\"}" > end.json
+#aws s3 cp end.json "$S3_PATH/end.json"
+#
+## At this point, if a new readonly instance is already created, we could run
+## the following command to update the instance (assuming the password is set
+## in PGPASSWORD, which will be read if -w is set):
+## pg_restore -h <readonly-instance>.us-east-1.rds.amazonaws.com \
+##            -U <user-name> \
+##            -f <dump-file> \
+##            -w \
+##            -d indradb_readonly \
+##            --no-owner

@@ -1,4 +1,5 @@
 # SETUP
+export INDRADBPRIMARY=postgresql://tester:stoneisagreenbook@principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com/indradb_test
 set -e
 # Get password to the principal database from the user
 echo "Enter password for the principal database:"
@@ -26,11 +27,11 @@ read -s LOCAL_RO_PASSWORD
 export LOCAL_RO_PASSWORD
 
 # Set the name of the local db
-LOCAL_RO_DB_NAME="indradb_readonly_local"
+LOCAL_RO_DB_NAME="indradb_readonly_local_test"
 export LOCAL_RO_DB_NAME
 echo "Local db name: $LOCAL_RO_DB_NAME"
 
-
+# todo Get file paths for initial dump files
 
 # INITIAL DUMPING
 
@@ -42,7 +43,7 @@ export READING_TEXT_CONTENT_META_FPATH
 TEXT_REFS_PRINCIPAL_FPATH=`python3 -m indra_db.readonly_dumping.locations text_refs`
 export TEXT_REFS_PRINCIPAL_FPATH
 
-# Exit if any of the file names are empty
+
 if [ -z "$RAW_STMTS_FPATH" ] || [ -z "$READING_TEXT_CONTENT_META_FPATH" ] || [ -z "$TEXT_REFS_PRINCIPAL_FPATH" ]
 then
     if [ -z "$RAW_STMTS_FPATH" ]
@@ -64,20 +65,83 @@ else
     echo "Text refs principal file path: $TEXT_REFS_PRINCIPAL_FPATH"
 fi
 
-#get three initial file
+export INDRADBPRIMARY=postgresql://tester:stoneisagreenbook@principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com/indradb_test
 
+# Exit if any of the file names are empty
+if [ ! -f "$RAW_STMTS_FPATH" ]
+then
+    echo "Dumping raw statements"
+    start=$(date +%s)
+    psql -d indradb_test \
+         -h principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com \
+         -U tester \
+         -w \
+         -c "COPY (SELECT id, db_info_id, reading_id,
+                   convert_from (json::bytea, 'utf-8')
+                   FROM public.raw_statements)
+             TO STDOUT" \
+          | gzip > "$RAW_STMTS_FPATH"
+    end=$(date +%s)
+    runtime=$((end-start))
+    echo "Dumped raw statements in $runtime seconds"
+else
+    echo "Raw statements file already exists, skipping dump"
+fi
+
+if [ ! -f "$READING_TEXT_CONTENT_META_FPATH" ]
+then
+    echo "Dumping reading text content meta"
+    start=$(date +%s)
+    psql -d indradb_test \
+         -h principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com \
+         -U tester \
+         -w \
+         -c "COPY (SELECT rd.id, rd.reader_version, tc.id, tc.text_ref_id,
+                          tc.source, tc.text_type
+                   FROM public.text_content as tc, public.reading as rd
+                   WHERE tc.id = rd.text_content_id)
+             TO STDOUT" \
+         | gzip > "$READING_TEXT_CONTENT_META_FPATH"
+    end=$(date +%s)
+    runtime=$((end-start))
+    echo "Dumped reading text content meta in $runtime seconds"
+else
+    echo "Reading text content meta file already exists, skipping dump"
+fi
+
+if [ ! -f "$TEXT_REFS_PRINCIPAL_FPATH" ]
+then
+    echo "Dumping text refs principal"
+    start=$(date +%s)
+    psql -d indradb_test \
+         -h principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com \
+         -U tester \
+         -w \
+         -c "COPY (SELECT id, pmid, pmcid, doi, pii, url, manuscript_id
+                   FROM public.text_ref)
+             TO STDOUT" \
+         | gzip > "$TEXT_REFS_PRINCIPAL_FPATH"
+    end=$(date +%s)
+    runtime=$((end-start))
+    echo "Dumped text refs in $runtime seconds"
+else
+    echo "Text refs principal file already exists, skipping dump"
+fi
 # LOCAL DB CREATION AND DUMPING
 
+python -m indra_db.readonly_dumping.export_assembly
 
 # Create db;
-# todo: how to pass or set password? Will it interfere with PGPASSWORD set above?
-#psql -h localhost -c "create database $LOCAL_RO_DB_NAME" -U postgres
+PGPASSWORD=$LOCAL_RO_PASSWORD
+export PGPASSWORD
 
-# Run import script
-python3 -m indra_db.readonly_dumping.readonly_dumping \
-        --db-name $LOCAL_RO_DB_NAME \
-        --user $LOCAL_RO_USER \
-        --password "$LOCAL_RO_PASSWORD"
+#psql -h localhost -U postgres -c "DROP DATABASE IF EXISTS $LOCAL_RO_DB_NAME"
+#psql -h localhost -U postgres -c "CREATE DATABASE $LOCAL_RO_DB_NAME"
+## Run import script
+#python3 -m indra_db.readonly_dumping.readonly_dumping \
+#        --db-name $LOCAL_RO_DB_NAME \
+#        --user $LOCAL_RO_USER \
+#        --password "$LOCAL_RO_PASSWORD"
         # --force  # Use if you want to overwrite an existing db, if it exists
 
 # Dump the db, once done importing

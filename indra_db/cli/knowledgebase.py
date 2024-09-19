@@ -142,9 +142,10 @@ class TasManager(KnowledgebaseManager):
         #   set of drugs to be extracted for which we have a name from CHEBML,
         #   HMS-LINCS, or DrugBank
         logger.info('Processing TAS from web')
-        tp = tas.process_from_web(affinity_class_limit=2,
-                                  named_only=True,
-                                  standardized_only=False)
+        # tp = tas.process_from_web(affinity_class_limit=2,
+        #                           named_only=True,
+        #                           standardized_only=False)
+        tp = tas.process_csv('/Users/haohangyan/.data/readonly_pipeline/kb_source_data/tas.csv')
         logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(tp.statements)]
         unique_stmts, _ = extract_duplicates(filtered_stmts,
@@ -830,7 +831,6 @@ def local_update(
         outer_tqdm = tqdm(
             desc="Knowledgebases", total=total, unit="knowledgebase"
         )
-        '''
         # First run through the existing knowledgebases
         logger.info(f"Loading existing statements")
         for ix, Mngr in enumerate(existing_kbs):
@@ -859,7 +859,7 @@ def local_update(
                     source_count_dict[kbm.source] += 1
                     source_counts[stmt_hash] = source_count_dict
             outer_tqdm.update(1)
-        '''
+
         # Then run through the knowledgebases that are generating new output
         for ix, Mngr in enumerate(kbs_to_run, start=len(existing_kbs)):
             error_log = []
@@ -932,12 +932,12 @@ def local_update(
             if batches:
                 t.close()
 
-            if error_log:
-                error_log_path = '../../error_log/kbm_errors.pkl'
-                os.makedirs(os.path.dirname(error_log_path), exist_ok=True)
-                with open(error_log_path, 'wb') as f:
-                    pickle.dump(error_log, f)
-                print(f"Recorded {len(error_log)} errors in 'kbm_errors.pkl'")
+            # if error_log:
+            #     error_log_path = '../../error_log/kbm_errors.pkl'
+            #     os.makedirs(os.path.dirname(error_log_path), exist_ok=True)
+            #     with open(error_log_path, 'wb') as f:
+            #         pickle.dump(error_log, f)
+            #     print(f"Recorded {len(error_log)} errors in 'kbm_errors.pkl'")
 
     logger.info("Statements produced per knowledgebase:")
     for (source, short_name), count in counts.most_common():

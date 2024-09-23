@@ -313,26 +313,6 @@ def serve_stages(stage):
     return jsonify(json.loads(res["Body"].read()))
 
 
-@app.route("/statements", methods=["GET"])
-@jwt_nontest_optional
-@user_log_endpoint
-def old_search():
-    # Create a template object from the template file, load once
-    url_base = request.url_root
-    if DEPLOYMENT is not None:
-        url_base = f"{url_base}{DEPLOYMENT}/"
-    return render_my_template(
-        "search_statements.html",
-        "Search",
-        message="Welcome! Try asking a question.",
-        old_search_active=True,
-        source_info=SOURCE_INFO,
-        source_colors=DEFAULT_SOURCE_COLORS,
-        endpoint=url_base,
-        reverse_source_mapping=rev_source_mapping,
-    )
-
-
 @app.route("/<result_type>/<path:method>", methods=["GET", "POST"])
 @app.route("/metadata/<result_type>/<path:method>", methods=["GET", "POST"])
 @user_log_endpoint

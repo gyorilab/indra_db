@@ -635,7 +635,8 @@ def get_n_process():
     max_processes_by_memory = int(available_memory_gb // 12)
     max_processes_by_cores = os.cpu_count()
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
-    return num_processes
+    # leave space for memory
+    return num_processes - 1
 
 def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
     global cycles_found, pa

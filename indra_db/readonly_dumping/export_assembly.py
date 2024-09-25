@@ -592,7 +592,6 @@ def load_statements_from_file(file_path):
     return stmts
 
 def process_batch_pair(file):
-    global pa
     file1, file2 = file
     stmts1 = load_statements_from_file(file1)
     stmts2 = load_statements_from_file(file2)
@@ -607,7 +606,6 @@ def init_globals():
     pa = Preassembler(bio_ontology)
 
 def parallel_process_files(split_files, num_processes = 1):
-    global pa
     split_files = split_files[::-1]
     tasks = []
     refinements = set()
@@ -615,7 +613,6 @@ def parallel_process_files(split_files, num_processes = 1):
     for i in range(num_files):
         for j in range(i + 1, num_files):
             tasks.append((split_files[i], split_files[j]))
-    print(tasks)
     logging.info("Completed all tasks")
     with concurrent.futures.ProcessPoolExecutor(
             max_workers=num_processes,initializer=init_globals) as executor:
@@ -637,10 +634,10 @@ def get_n_process():
     max_processes_by_cores = os.cpu_count()
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
     # leave space for memory
-    return num_processes -1
+    return num_processes - 1
 
 def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
-    global cycles_found, pa
+    global cycles_found
     """Get refinement pairs as: (more specific, less specific)
 
     The evidence from the more specific statement is included in the less

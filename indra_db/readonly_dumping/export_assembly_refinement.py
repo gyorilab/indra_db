@@ -10,14 +10,12 @@ from indra_db.readonly_dumping.export_assembly import split_tsv_gz_file, \
 from indra_db.readonly_dumping.locations import refinements_fpath, \
     belief_scores_pkl_fpath, split_unique_statements_folder_fpath, \
     unique_stmts_fpath
+import multiprocessing as mp
 
 if __name__ == '__main__':
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():
+        mp.set_start_method('spawn')
         logger.info("6. Running setup for refinement calculation")
-        # Setup bio ontology for pre-assembler
-        bio_ontology.initialize()
-        bio_ontology._build_transitive_closure()
-        pa = Preassembler(bio_ontology)
 
         # 6. Calculate refinement graph:
 

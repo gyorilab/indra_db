@@ -130,6 +130,7 @@ fi
 # LOCAL DB CREATION AND DUMPING
 
 python -m indra_db.readonly_dumping.export_assembly
+python -m indra_db.readonly_dumping.export_assembly_refinement
 
 # Create db;
 PGPASSWORD=$LOCAL_RO_PASSWORD

@@ -1,6 +1,8 @@
 import argparse
 import concurrent.futures
 import csv
+import ctypes
+import gc
 import gzip
 
 import json
@@ -9,6 +11,7 @@ import logging
 import pickle
 import re
 import shutil
+import subprocess
 
 from collections import defaultdict, Counter
 from pathlib import Path
@@ -610,8 +613,6 @@ def parallel_process_files(split_files, num_processes = 1):
     refinements = set()
     num_files = len(split_files)
     for i in range(num_files):
-        print(i)
-        print("check")
         for j in range(i + 1, num_files):
             tasks.append((split_files[i], split_files[j]))
     print(tasks)
@@ -636,7 +637,7 @@ def get_n_process():
     max_processes_by_cores = os.cpu_count()
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
     # leave space for memory
-    return num_processes - 1
+    return num_processes -1
 
 def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
     global cycles_found, pa
@@ -800,7 +801,13 @@ def calculate_belief(
     # Dump the belief scores
     with belief_scores_pkl_fpath.open("wb") as fo:
         pickle.dump(belief_scores, fo)
-
+def release_memory():
+    # Force garbage collection on Linux system
+    gc.collect()
+    try:
+        ctypes.CDLL('libc.so.6').malloc_trim(0)
+    except OSError:
+        pass
 
 
 if __name__ == '__main__':
@@ -911,60 +918,4 @@ if __name__ == '__main__':
     #    based on number of agents, as is done in cogex)
     logger.info("5. Running grounding and deduplication")
     deduplicate()
-
-
-    # Steps 6 & 7
-    if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():
-        logger.info("6. Running setup for refinement calculation")
-        # Setup bio ontology for pre-assembler
-        bio_ontology.initialize()
-        bio_ontology._build_transitive_closure()
-        pa = Preassembler(bio_ontology)
-
-        # 6. Calculate refinement graph:
-
-
-        if not split_unique_statements_folder_fpath.exists():
-            logger.info("Splitting unique statements")
-            # time: 30 min
-            split_tsv_gz_file(unique_stmts_fpath.as_posix(),
-                              split_unique_statements_folder_fpath.as_posix(),
-                              batch_size=batch_size)
-            logger.info(
-                "Finished splitting unique statement"
-            )
-        else:
-            logger.info(
-                "split_unique_statements_folder exist"
-            )
-        split_unique_files = [os.path.join(split_unique_statements_folder_fpath, f)
-                       for f in os.listdir(split_unique_statements_folder_fpath)
-                       if f.endswith(".gz")]
-        split_unique_files = sorted(
-            split_unique_files,
-            key=lambda x: int(re.findall(r'\d+', x)[0])
-        )
-        batch_count = len(split_unique_files)
-        #get the n_rows in the last incompleted batch
-        last_count = count_rows_in_tsv_gz(split_unique_files[-1])
-        num_rows = (batch_count-1) * batch_size + last_count
-        logger.info(f"{num_rows} rows in unique statements with "
-                    f"{batch_count} batches")
-        cycles_found = False
-        ref_graph = get_refinement_graph(n_rows=num_rows,
-                                         split_files=split_unique_files)
-        if cycles_found:
-            logger.info(
-                f"Refinement graph stored in variable 'ref_graph', "
-                f"edges saved to {refinements_fpath.as_posix()}"
-                f"and cycles saved to {refinement_cycles_fpath.as_posix()}"
-            )
-
-        else:
-            # 7. Get belief scores, if there were no refinement cycles
-            logger.info("7. Calculating belief")
-            calculate_belief(
-                ref_graph, num_batches=batch_count, batch_size=batch_size
-            )
-    else:
-        logger.info("Final output already exists, stopping script")
+    release_memory()

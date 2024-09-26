@@ -63,3 +63,10 @@ statement type for one interaction type.
   :figwidth: 100 %
 
   *Search results view with three levels of nesting expanded for USP15 affecting BARD1*
+
+The search results allows you to curate evidence for each statement. To do this, click
+on the pencil icon next to the piece of evidence you want to curate. This will open a
+curation area where different options for curating the evidence are available. To read
+more about curation, see the
+`curation tutorial <https://indra.readthedocs.io/en/latest/tutorials/html_curation.html>`_
+in the INDRA documentation.

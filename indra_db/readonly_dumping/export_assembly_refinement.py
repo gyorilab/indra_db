@@ -2,8 +2,6 @@ import os
 import re
 
 from indra import logger
-from indra.ontology.bio import bio_ontology
-from indra.preassembler import Preassembler
 from indra_db.readonly_dumping.export_assembly import split_tsv_gz_file, \
     batch_size, count_rows_in_tsv_gz, get_refinement_graph, \
     refinement_cycles_fpath, calculate_belief

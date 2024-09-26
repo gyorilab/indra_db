@@ -591,6 +591,90 @@ def load_statements_from_file(file_path):
             stmts.append(stmt)
     return stmts
 
+def calculate_belief(
+        refinements_graph: nx.DiGraph,
+        num_batches: int,
+        batch_size: int,
+        unique_stmts_path: Path = unique_stmts_fpath,
+):
+    # The refinement set is a set of pairs of hashes, with the *first hash
+    # being more specific than the second hash*, i.e. the evidence for the
+    # first should be included in the evidence for the second
+    #
+    # The BeliefEngine expects the refinement graph to be a directed graph,
+    # with edges pointing from *more specific* to *less specific* statements
+    # (see docstring of indra.belief.BeliefEngine)
+    #
+    # => The edges represented by the refinement set are the *same* as the
+    # edges expected by the BeliefEngine.
+
+    # Initialize a belief engine
+    logger.info("Initializing belief engine")
+    be = BeliefEngine(refinements_graph=refinements_graph)
+
+    # Load the source counts
+    logger.info("Loading source counts")
+    with source_counts_fpath.open("rb") as fh:
+        source_counts = pickle.load(fh)
+
+    # Store hash: belief score
+    belief_scores = {}
+
+    def _get_support_evidence_for_stmt(stmt_hash: int) -> List[Evidence]:
+        # Find all the statements that refine the current
+        # statement, i.e. all the statements that are more
+        # specific than the current statement => look for ancestors
+        # then add up all the source counts for the statement
+        # itself and the statements that refine it
+        summed_source_counts = Counter(source_counts[stmt_hash])
+
+        # If there are refinements, add them to the source counts
+        if stmt_hash in refinements_graph.nodes():
+            refiner_hashes = nx.ancestors(G=refinements_graph,
+                                          source=stmt_hash)
+            for refiner_hash in refiner_hashes:
+                summed_source_counts += Counter(source_counts[refiner_hash])
+
+        # Mock evidence - todo: add annotations?
+        # Add evidence objects for each source's count and each source
+        ev_list = []
+        for source, count in summed_source_counts.items():
+            for _ in range(count):
+                ev_list.append(Evidence(source_api=source))
+        return ev_list
+
+    def _add_belief_scores_for_batch(batch: List[Tuple[int, Statement]]):
+        # Belief calculation for this batch
+        hashes, stmt_list = zip(*batch)
+        be.set_prior_probs(statements=stmt_list)
+        for sh, st in zip(hashes, stmt_list):
+            belief_scores[sh] = st.belief
+
+    # Iterate over each unique statement
+    with gzip.open(unique_stmts_path.as_posix(), "rt") as fh:
+        reader = csv.reader(fh, delimiter="\t")
+
+        for bn in tqdm(range(num_batches), desc="Calculating belief"):
+            stmt_batch = []
+            for _ in tqdm(range(batch_size), leave=False, desc=f"Batch {bn}"):
+                try:
+                    stmt_hash_string, stmt_json_string = next(reader)
+                    stmt = stmt_from_json(
+                        clean_json_loads(stmt_json_string, remove_evidence=True)
+                    )
+                    this_hash = int(stmt_hash_string)
+                    stmt.evidence = _get_support_evidence_for_stmt(this_hash)
+                    stmt_batch.append((this_hash, stmt))
+
+                except StopIteration:
+                    break
+
+            _add_belief_scores_for_batch(stmt_batch)
+
+    # Dump the belief scores
+    with belief_scores_pkl_fpath.open("wb") as fo:
+        pickle.dump(belief_scores, fo)
+
 def process_batch_pair(file):
     file1, file2 = file
     stmts1 = load_statements_from_file(file1)
@@ -714,90 +798,6 @@ def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
 
     return ref_graph
 
-
-def calculate_belief(
-        refinements_graph: nx.DiGraph,
-        num_batches: int,
-        batch_size: int,
-        unique_stmts_path: Path = unique_stmts_fpath,
-):
-    # The refinement set is a set of pairs of hashes, with the *first hash
-    # being more specific than the second hash*, i.e. the evidence for the
-    # first should be included in the evidence for the second
-    #
-    # The BeliefEngine expects the refinement graph to be a directed graph,
-    # with edges pointing from *more specific* to *less specific* statements
-    # (see docstring of indra.belief.BeliefEngine)
-    #
-    # => The edges represented by the refinement set are the *same* as the
-    # edges expected by the BeliefEngine.
-
-    # Initialize a belief engine
-    logger.info("Initializing belief engine")
-    be = BeliefEngine(refinements_graph=refinements_graph)
-
-    # Load the source counts
-    logger.info("Loading source counts")
-    with source_counts_fpath.open("rb") as fh:
-        source_counts = pickle.load(fh)
-
-    # Store hash: belief score
-    belief_scores = {}
-
-    def _get_support_evidence_for_stmt(stmt_hash: int) -> List[Evidence]:
-        # Find all the statements that refine the current
-        # statement, i.e. all the statements that are more
-        # specific than the current statement => look for ancestors
-        # then add up all the source counts for the statement
-        # itself and the statements that refine it
-        summed_source_counts = Counter(source_counts[stmt_hash])
-
-        # If there are refinements, add them to the source counts
-        if stmt_hash in refinements_graph.nodes():
-            refiner_hashes = nx.ancestors(G=refinements_graph,
-                                          source=stmt_hash)
-            for refiner_hash in refiner_hashes:
-                summed_source_counts += Counter(source_counts[refiner_hash])
-
-        # Mock evidence - todo: add annotations?
-        # Add evidence objects for each source's count and each source
-        ev_list = []
-        for source, count in summed_source_counts.items():
-            for _ in range(count):
-                ev_list.append(Evidence(source_api=source))
-        return ev_list
-
-    def _add_belief_scores_for_batch(batch: List[Tuple[int, Statement]]):
-        # Belief calculation for this batch
-        hashes, stmt_list = zip(*batch)
-        be.set_prior_probs(statements=stmt_list)
-        for sh, st in zip(hashes, stmt_list):
-            belief_scores[sh] = st.belief
-
-    # Iterate over each unique statement
-    with gzip.open(unique_stmts_path.as_posix(), "rt") as fh:
-        reader = csv.reader(fh, delimiter="\t")
-
-        for bn in tqdm(range(num_batches), desc="Calculating belief"):
-            stmt_batch = []
-            for _ in tqdm(range(batch_size), leave=False, desc=f"Batch {bn}"):
-                try:
-                    stmt_hash_string, stmt_json_string = next(reader)
-                    stmt = stmt_from_json(
-                        clean_json_loads(stmt_json_string, remove_evidence=True)
-                    )
-                    this_hash = int(stmt_hash_string)
-                    stmt.evidence = _get_support_evidence_for_stmt(this_hash)
-                    stmt_batch.append((this_hash, stmt))
-
-                except StopIteration:
-                    break
-
-            _add_belief_scores_for_batch(stmt_batch)
-
-    # Dump the belief scores
-    with belief_scores_pkl_fpath.open("wb") as fo:
-        pickle.dump(belief_scores, fo)
 def release_memory():
     # Force garbage collection on Linux system
     gc.collect()

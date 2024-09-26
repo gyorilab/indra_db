@@ -31,8 +31,8 @@ The search options are as follows:
     correct entity from a dropdown. Once you click "Search", the DB will be queried
     using the ID selected from the dropdown.
 * Type: the type of statement e.g. Activation, Phosphorylation, DecreaseAmount, Complex,
-  etc. Read more about the types of statements in the INDRA documentation:
-  https://indra.readthedocs.io/en/latest/modules/statements.html
+  etc. Read more about the types of statements in the `INDRA documentation
+  <https://indra.readthedocs.io/en/latest/modules/statements.html>`_.
 * MeSH: a Medical Subject Headings term that the papers retrieved as evidence are
   annotated with. This option also has the option to ground with Gilda if you only know
   the name of the MeSH term.

@@ -39,8 +39,10 @@ The search options are as follows:
   - PMID: PubMed ID
   - PMCID: PubMed Central ID
   - DOI: Digital Object Identifier
-  - TRID: FixMe: what is this?
-  - TCID: FixMe: what is this?
+  - TRID: Internal INDRA DB ID signifying a specific publication regardless of the
+    external identifier (PMID, PMCID, DOI).
+  - TCID: Internal INDRA DB ID signifying a piece of a text retrieved from 
+    a particular source.
 
 ## Search Results
 

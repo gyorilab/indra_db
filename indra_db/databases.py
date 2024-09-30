@@ -18,7 +18,7 @@ from sqlalchemy.sql import expression as sql_expressions
 from sqlalchemy.schema import DropTable
 from sqlalchemy.sql.expression import Delete, Update
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.orm import declarative_base, DeclarativeMeta
+from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy import create_engine, inspect, UniqueConstraint, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
@@ -249,11 +249,10 @@ class DatabaseManager(object):
         # Check to see if the database if available.
         self.available = True
         try:
-            with create_engine(
-                    self.url,
-                    connect_args={'connect_timeout': 1}
-            ).connect() as connection:
-                connection.execute('SELECT 1 AS ping;')
+            create_engine(
+                self.url,
+                connect_args={'connect_timeout': 1}
+            ).execute('SELECT 1 AS ping;')
         except Exception as err:
             logger.warning(f"Database {repr(self.url)} is not available: {err}")
             self.available = False

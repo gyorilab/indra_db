@@ -75,16 +75,6 @@ for reader_name, versions in reader_versions.items():
         version_to_reader[reader_version] = reader_name
 
 
-def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
-    global pa
-    stmts_by_type = defaultdict(list)
-    for stmt in stmts:
-        stmts_by_type[stmt.__class__.__name__].append(stmt)
-    refinements = set()
-    for _, stmts_this_type in stmts_by_type.items():
-        refinements |= pa._generate_relation_tuples(stmts_this_type)
-    return refinements
-
 
 def get_related_split(stmts1: StmtList, stmts2: StmtList) -> Set[Tuple[int, int]]:
     global pa
@@ -676,6 +666,7 @@ def calculate_belief(
         pickle.dump(belief_scores, fo)
 
 def process_batch_pair(file):
+    global pa
     file1, file2 = file
     stmts1 = load_statements_from_file(file1)
     stmts2 = load_statements_from_file(file2)
@@ -683,6 +674,15 @@ def process_batch_pair(file):
     logging.info("Processing batch pair: %s, %s", file1, file2)
     return refinements
 
+def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
+    global pa
+    stmts_by_type = defaultdict(list)
+    for stmt in stmts:
+        stmts_by_type[stmt.__class__.__name__].append(stmt)
+    refinements = set()
+    for _, stmts_this_type in stmts_by_type.items():
+        refinements |= pa._generate_relation_tuples(stmts_this_type)
+    return refinements
 def init_globals():
     global pa
     bio_ontology.initialize()
@@ -690,6 +690,7 @@ def init_globals():
     pa = Preassembler(bio_ontology)
 
 def parallel_process_files(split_files, num_processes = 1):
+    global pa
     split_files = split_files[::-1]
     tasks = []
     refinements = set()
@@ -714,14 +715,14 @@ def parallel_process_files(split_files, num_processes = 1):
 def get_n_process():
     available_memory_gb = psutil.virtual_memory().total / (1024 ** 3)
     # about 12 Gb per each process
-    max_processes_by_memory = int(available_memory_gb // 12)
+    max_processes_by_memory = int(available_memory_gb // 14)
     max_processes_by_cores = os.cpu_count()
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
     # leave space for memory
     return num_processes - 1
 
 def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
-    global cycles_found
+    global cycles_found, pa
     """Get refinement pairs as: (more specific, less specific)
 
     The evidence from the more specific statement is included in the less

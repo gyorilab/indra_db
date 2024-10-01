@@ -232,8 +232,6 @@ def compare_snapshots(snapshot1, snapshot2):
     # Compare the columns in each table
     for table in tables1:
         if tables1[table] != tables2[table]:
-            print(f"Column definitions do not match for table {table}.")
-            print(table)
             diff = difflib.unified_diff(
                 tables1[table], tables2[table],
                 fromfile='snapshot1',

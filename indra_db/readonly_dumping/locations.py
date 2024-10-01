@@ -95,6 +95,7 @@ raw_id_info_map_knowledgebases_fpath = TEMP_DIR.join(
 grounded_stmts_fpath = TEMP_DIR.join(name="grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.join(name="unique_statements.tsv.gz")
 refinements_fpath = TEMP_DIR.join(name="refinements.tsv.gz")
+sql_ontology_db_fpath = TEMP_DIR.join(name='bio_ontology.db')
 split_unique_statements_folder_fpath = TEMP_DIR.join(name="split_unique_statements_folder_fpath")
 belief_scores_pkl_fpath = TEMP_DIR.join(name="belief_scores.pkl")
 pa_hash_act_type_ag_count_cache = TEMP_DIR.join(

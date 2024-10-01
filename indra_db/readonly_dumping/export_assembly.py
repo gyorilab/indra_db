@@ -14,6 +14,7 @@ import shutil
 import subprocess
 
 from collections import defaultdict, Counter
+from functools import partial
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
 
@@ -27,6 +28,7 @@ import os
 from adeft import get_available_models
 from indra.belief import BeliefEngine
 from indra.ontology.bio import bio_ontology
+from indra.ontology.bio.sqlite_ontology import SqliteOntology
 from indra.preassembler import Preassembler
 from indra.statements import stmts_from_json, stmt_from_json, Statement, \
     Evidence
@@ -34,7 +36,8 @@ from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
-from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
+from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath, \
+    sql_ontology_db_fpath
 
 from indra_db.readonly_dumping.util import clean_json_loads, \
     validate_statement_semantics
@@ -76,8 +79,7 @@ for reader_name, versions in reader_versions.items():
 
 
 
-def get_related_split(stmts1: StmtList, stmts2: StmtList) -> Set[Tuple[int, int]]:
-    global pa
+def get_related_split(stmts1: StmtList, stmts2: StmtList, pa: Preassembler) -> Set[Tuple[int, int]]:
     stmts_by_type1 = defaultdict(list)
     stmts_by_type2 = defaultdict(list)
     for stmt in stmts1:
@@ -665,17 +667,20 @@ def calculate_belief(
     with belief_scores_pkl_fpath.open("wb") as fo:
         pickle.dump(belief_scores, fo)
 
+
 def process_batch_pair(file):
-    global pa
+    sqlite_ontology = SqliteOntology(
+        db_path=sql_ontology_db_fpath.absolute().as_posix())
+    sqlite_ontology.initialize()
+    pa = Preassembler(sqlite_ontology)
     file1, file2 = file
     stmts1 = load_statements_from_file(file1)
     stmts2 = load_statements_from_file(file2)
-    refinements = get_related_split(stmts1, stmts2)
+    refinements = get_related_split(stmts1, stmts2, pa)
     logging.info("Processing batch pair: %s, %s", file1, file2)
     return refinements
 
-def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
-    global pa
+def get_related(stmts: StmtList, pa: Preassembler) -> Set[Tuple[int, int]]:
     stmts_by_type = defaultdict(list)
     for stmt in stmts:
         stmts_by_type[stmt.__class__.__name__].append(stmt)
@@ -683,14 +688,12 @@ def get_related(stmts: StmtList) -> Set[Tuple[int, int]]:
     for _, stmts_this_type in stmts_by_type.items():
         refinements |= pa._generate_relation_tuples(stmts_this_type)
     return refinements
-def init_globals():
-    global pa
-    bio_ontology.initialize()
-    bio_ontology._build_transitive_closure()
-    pa = Preassembler(bio_ontology)
 
 def parallel_process_files(split_files, num_processes = 1):
-    global pa
+    sqlite_ontology = SqliteOntology(
+        db_path=sql_ontology_db_fpath.absolute().as_posix())
+    sqlite_ontology.initialize()
+    pa = Preassembler(sqlite_ontology)
     split_files = split_files[::-1]
     tasks = []
     refinements = set()
@@ -700,7 +703,7 @@ def parallel_process_files(split_files, num_processes = 1):
             tasks.append((split_files[i], split_files[j]))
     logging.info("Completed all tasks")
     with concurrent.futures.ProcessPoolExecutor(
-            max_workers=num_processes,initializer=init_globals) as executor:
+            max_workers=num_processes) as executor:
         results = list(tqdm(executor.map(process_batch_pair, tasks),
                             total=len(tasks)))
 
@@ -708,14 +711,14 @@ def parallel_process_files(split_files, num_processes = 1):
         refinements |= result
 
     for i in range(num_files):
-        refinements |= get_related(load_statements_from_file(split_files[i]))
+        refinements |= get_related(load_statements_from_file(split_files[i]), pa=pa)
 
     return refinements
 
 def get_n_process():
     available_memory_gb = psutil.virtual_memory().total / (1024 ** 3)
     # about 12 Gb per each process
-    max_processes_by_memory = int(available_memory_gb // 14)
+    max_processes_by_memory = int(available_memory_gb // 5)
     max_processes_by_cores = os.cpu_count()
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
     # leave space for memory

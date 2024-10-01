@@ -719,7 +719,7 @@ def get_n_process():
     max_processes_by_cores = os.cpu_count()
     num_processes = min(max_processes_by_memory, max_processes_by_cores)
     # leave space for memory
-    return num_processes - 1
+    return num_processes
 
 def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
     global cycles_found, pa
@@ -752,7 +752,9 @@ def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
         logger.info("6. Calculating refinements")
 
         n_process = get_n_process()
-        refinements = parallel_process_files(split_files, num_processes=n_process)
+        logger.info(f"{n_process} processes starting")
+        refinements = parallel_process_files(split_files,
+                                             num_processes=n_process)
 
         # Write out the refinements as a gzipped TSV file
         with gzip.open(refinements_fpath.as_posix(), "wt") as f:

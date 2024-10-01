@@ -100,15 +100,12 @@
     {{ nav_header(identity) }}
 {% endblock %}
 
-{% block header_desc %}
-  <p>{% include "idbr_description.html" %}</p>
-{% endblock %}
 
 {% block body %}
     {{ login_overlay() }}
     {{ super() }}
 {% endblock %}
 
-{% block additional_footer %}
-  <p>{% include "idbr_footer.html" %}</p>
+{% block footer_desc %}
+  <p>{% include "idbr_description.html" %}</p>
 {% endblock %}

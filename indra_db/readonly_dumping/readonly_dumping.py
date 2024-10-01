@@ -46,28 +46,28 @@ from .util import clean_json_loads, generate_db_snapshot, compare_snapshots
 logger = logging.getLogger(__name__)
 
 SQL_NULL = "\\N"
-LOCAL_RO_DB_NAME = "indradb_readonly_local"
-LOCAL_RO_PASSWORD = "yann"  #os.environ["LOCAL_RO_PASSWORD"]
-LOCAL_RO_USER = "postgres"  #os.environ["LOCAL_RO_USER"]
+LOCAL_RO_DB_NAME = os.environ["LOCAL_RO_DB_NAME"]
+LOCAL_RO_PASSWORD = os.environ["LOCAL_RO_PASSWORD"]
+LOCAL_RO_USER = os.environ["LOCAL_RO_USER"]
 
 RUN_ORDER = [
-    # "belief",
-    # "raw_stmt_src",
-    # "reading_ref_link",
-    # "evidence_counts",
-    # "pa_agent_counts",
-    # "mesh_concept_ref_counts",
-    # "mesh_term_ref_counts",
-    # "name_meta",
-    # "text_meta",
-    # "other_meta",
-    # "source_meta",
+    "belief",
+    "raw_stmt_src",
+    "reading_ref_link",
+    "evidence_counts",
+    "pa_agent_counts",
+    "mesh_concept_ref_counts",
+    "mesh_term_ref_counts",
+    "name_meta",
+    "text_meta",
+    "other_meta",
+    "source_meta",
     "agent_interactions",
-    # "fast_raw_pa_link",
-    # "raw_stmt_mesh_concepts",
-    # "raw_stmt_mesh_terms",
-    # "mesh_concept_meta",
-    # "mesh_term_meta",
+    "fast_raw_pa_link",
+    "raw_stmt_mesh_concepts",
+    "raw_stmt_mesh_terms",
+    "mesh_concept_meta",
+    "mesh_term_meta",
 ]
 
 
@@ -564,13 +564,13 @@ def evidence_counts(local_ro_mngr: ReadonlyDatabaseManager):
 
     source_counts = pickle.load(source_counts_fpath.open("rb"))
 
-    # with evidence_counts_tsv.open("w") as ev_counts_f:
-    #     writer = csv.writer(ev_counts_f, delimiter="\t")
-    #
-    #     for mk_hash, src_counts in tqdm(source_counts.items(),
-    #                                     desc="EvidenceCounts"):
-    #         ev_count = sum(src_counts.values())
-    #         writer.writerow([mk_hash, ev_count])
+    with evidence_counts_tsv.open("w") as ev_counts_f:
+        writer = csv.writer(ev_counts_f, delimiter="\t")
+
+        for mk_hash, src_counts in tqdm(source_counts.items(),
+                                        desc="EvidenceCounts"):
+            ev_count = sum(src_counts.values())
+            writer.writerow([mk_hash, ev_count])
     schema = StructType([
         StructField("mk_hash", LongType(), True),
         StructField("ev_count", IntegerType(), True)
@@ -862,7 +862,7 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
             "raw_stmt_src must be filled before fast_raw_pa_link can be filled"
         )
 
-    #fast_raw_pa_link_helper(local_ro_mngr)
+    fast_raw_pa_link_helper(local_ro_mngr)
 
     # Load the data into the fast_raw_pa_link table
     column_order = "id, raw_json, reading_id, db_info_id, mk_hash, pa_json, " \
@@ -881,15 +881,12 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
                           for f in os.listdir(split_pa_link_folder_fpath)
                           if f.endswith(".parquet")]
     split_unique_files = sorted(split_unique_files, key=lambda x: int(re.findall(r'\d+', x)[0]))
-    split_unique_files = split_unique_files
     load_file_to_table_spark("readonly.fast_raw_pa_link",
                              schema, column_order,
                              split_unique_files)
     create_primary_key(ro_mngr_local=local_ro_mngr,
                        table_name='fast_raw_pa_link',
                        keys='id')
-    # Remove the temporary file
-    #temp_tsv_gz.unlink()
 
     # Build the index
     table: ReadonlyTable = local_ro_mngr.tables[table_name]
@@ -1086,7 +1083,7 @@ def ensure_pa_meta():
              pa_agents.stmt_mk_hash = pa_statements.mk_hash
     WHERE LENGTH(pa_agents.db_id) < 2000
     """)
-    #principal_query_to_csv(pa_meta_query, pa_meta_fpath)
+    principal_query_to_csv(pa_meta_query, pa_meta_fpath)
 
     # Load the belief dump into a dictionary
     logger.info("Loading belief scores")

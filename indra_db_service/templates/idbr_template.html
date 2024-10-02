@@ -60,10 +60,16 @@
             Search
           </a>
         </li>
-        <li class="nav-item {% if old_search_active %}active{% endif %}">
-          <a class="nav-link" href="{{ url_for('old_search') }}"
+        <li>
+          <a class="nav-link" href="https://github.com/gyorilab/indra_db/blob/master/indra_db_service/search_introduction.md"
              target="_blank">
-            (Old Search)
+            Documentation
+          </a>
+        </li>
+        <li>
+          <a class="nav-link" href="https://github.com/gyorilab/indra_db/blob/master/indra_db_service/README.md"
+             target="_blank">
+            Rest API
           </a>
         </li>
       </ul>
@@ -94,15 +100,12 @@
     {{ nav_header(identity) }}
 {% endblock %}
 
-{% block header_desc %}
-  <p>{% include "idbr_description.html" %}</p>
-{% endblock %}
 
 {% block body %}
     {{ login_overlay() }}
     {{ super() }}
 {% endblock %}
 
-{% block additional_footer %}
-  <p>{% include "idbr_footer.html" %}</p>
+{% block footer_desc %}
+  <p>{% include "idbr_description.html" %}</p>
 {% endblock %}

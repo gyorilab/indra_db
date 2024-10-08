@@ -136,8 +136,8 @@ fi
 PGPASSWORD=$LOCAL_RO_PASSWORD
 export PGPASSWORD
 
-psql -h localhost -U postgres -c "DROP DATABASE IF EXISTS $LOCAL_RO_DB_NAME"
-psql -h localhost -U postgres -c "CREATE DATABASE $LOCAL_RO_DB_NAME"
+#psql -h localhost -U postgres -c "DROP DATABASE IF EXISTS $LOCAL_RO_DB_NAME"
+#psql -h localhost -U postgres -c "CREATE DATABASE $LOCAL_RO_DB_NAME"
 ## Run import script
 python3 -m indra_db.readonly_dumping.readonly_dumping \
         --db-name $LOCAL_RO_DB_NAME \

@@ -51,18 +51,18 @@ LOCAL_RO_PASSWORD = os.environ["LOCAL_RO_PASSWORD"]
 LOCAL_RO_USER = os.environ["LOCAL_RO_USER"]
 
 RUN_ORDER = [
-    "belief",
-    "raw_stmt_src",
-    "reading_ref_link",
-    "evidence_counts",
-    "pa_agent_counts",
-    "mesh_concept_ref_counts",
-    "mesh_term_ref_counts",
-    "name_meta",
-    "text_meta",
-    "other_meta",
-    "source_meta",
-    "agent_interactions",
+    # "belief",
+    # "raw_stmt_src",
+    # "reading_ref_link",
+    # "evidence_counts",
+    # "pa_agent_counts",
+    # "mesh_concept_ref_counts",
+    # "mesh_term_ref_counts",
+    # "name_meta",
+    # "text_meta",
+    # "other_meta",
+    # "source_meta",
+    # "agent_interactions",
     "fast_raw_pa_link",
     "raw_stmt_mesh_concepts",
     "raw_stmt_mesh_terms",
@@ -323,12 +323,12 @@ def belief(local_ro_mngr: ReadonlyDatabaseManager):
                              column_order="mk_hash, belief",
                              tsv_file=belief_scores_tsv_fpath.absolute().as_posix())
     logger.info("Belief loaded")
-    # create_primary_key(ro_mngr_local=local_ro_mngr,
-    #                    table_name="belief",
-    #                    keys="mk_hash")
+    create_primary_key(ro_mngr_local=local_ro_mngr,
+                       table_name="belief",
+                       keys="mk_hash")
 
-    #logger.info(f"Deleting {belief_scores_tsv_fpath.absolute().as_posix()}")
-    #os.remove(belief_scores_tsv_fpath.absolute().as_posix())
+    logger.info(f"Deleting {belief_scores_tsv_fpath.absolute().as_posix()}")
+    os.remove(belief_scores_tsv_fpath.absolute().as_posix())
 
     # Build index
     belief_table: ReadonlyTable = local_ro_mngr.tables["belief"]
@@ -427,6 +427,9 @@ def pa_agent_counts(local_ro_mngr: ReadonlyDatabaseManager):
     logger.info(f"Building index on {pa_agent_counts_table.full_name()}")
     pa_agent_counts_table.build_indices(local_ro_mngr)
 
+    logger.info(f"Deleting {pa_agents_counts_tsv.absolute().as_posix()}")
+    os.remove(pa_agents_counts_tsv.absolute().as_posix())
+
 
 # ReadingRefLink
 def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
@@ -498,8 +501,8 @@ def reading_ref_link(local_ro_mngr: ReadonlyDatabaseManager):
                        keys='rid')
 
     # Delete the dump file
-    #logger.info(f"Deleting {dump_file.absolute().as_posix()}")
-    #os.remove(dump_file)
+    logger.info(f"Deleting {dump_file.absolute().as_posix()}")
+    os.remove(dump_file)
 
     # Build the index
     reading_ref_link_table: ReadonlyTable = local_ro_mngr.tables["reading_ref_link"]
@@ -514,7 +517,8 @@ def load_file_to_table_spark(table_name, schema,
     spark = SparkSession.builder \
         .appName("TSV to PostgreSQL") \
         .config("spark.jars", postgresql_jar.absolute().as_posix()) \
-        .config("spark.driver.memory", "30g") \
+        .config("spark.driver.memory", "80g") \
+        .config("spark.local.dir", "/data/spark_tmp") \
         .getOrCreate()
     if table_name == 'readonly.fast_raw_pa_link':
         df = spark.read.parquet(*tsv_file)
@@ -765,9 +769,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
                           for f in os.listdir(split_unique_statements_folder_fpath)
                           if f.endswith(".gz")]
     split_unique_files = sorted(split_unique_files, key=lambda x: int(re.findall(r'\d+', x)[0]))
-    split_unique_files = split_unique_files[22:]
     for num, f in enumerate(split_unique_files):
-        num = num + 22
         rows = []
         with gzip.open(f, "rt") as fh:
             logger.info(f"generating parque{num} from {f}")
@@ -884,9 +886,9 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     load_file_to_table_spark("readonly.fast_raw_pa_link",
                              schema, column_order,
                              split_unique_files)
-    create_primary_key(ro_mngr_local=local_ro_mngr,
-                       table_name='fast_raw_pa_link',
-                       keys='id')
+    # create_primary_key(ro_mngr_local=local_ro_mngr,
+    #                    table_name='fast_raw_pa_link',
+    #                    keys='id')
 
     # Build the index
     table: ReadonlyTable = local_ro_mngr.tables[table_name]
@@ -909,7 +911,7 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
     all_sources_str = ", ".join(all_sources)
 
     if source_meta_parquet.exists():
-        return "mk_hash, " + all_sources_str + ", " + col_names
+        return "mk_hash, " + all_sources_str + ", " + col_names, all_sources
     logger.info("Loading source counts")
     # Load source_counts
     ro = local_ro_mngr
@@ -951,7 +953,7 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
         has_db = any(source in src_count_dict for source in SOURCE_GROUPS["database"])
         only_src = list(src_count_dict.keys())[0] if num_srcs == 1 else None
         sources_tuple = tuple(
-            src_count_dict.get(src, SQL_NULL) for src in all_sources
+            src_count_dict.get(src) for src in all_sources
         )
         #print(len(sources_tuple),sources_tuple)
         # Write the following columns:
@@ -994,14 +996,15 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
     df = pd.DataFrame(rows, columns=columns)
     df.to_parquet(source_meta_parquet.absolute().as_posix(), index=False)
 
-    return "mk_hash, " + all_sources_str + ", " + col_names
+    return "mk_hash, " + all_sources_str + ", " + col_names, all_sources
 
 
 # SourceMeta
 def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
-    col_order = ensure_source_meta_source_files(local_ro_mngr)
+    col_order, source_names = ensure_source_meta_source_files(local_ro_mngr)
     table_name = "readonly.source_meta"
-    source_fields = [StructField(source_name, IntegerType(), True) for source_name in source_names]
+    source_fields = [StructField(source_name, IntegerType(), True)
+                     for source_name in source_names]
 
     schema = StructType([
                             StructField("mk_hash", LongType(), True)
@@ -1287,6 +1290,13 @@ def other_meta(local_ro_mngr: ReadonlyDatabaseManager):
     other_meta_table: ReadonlyTable = local_ro_mngr.tables["other_meta"]
     logger.info("Building indices for other_meta")
     other_meta_table.build_indices(local_ro_mngr)
+
+    logger.info(f"Deleting {name_meta_tsv.absolute().as_posix()}")
+    os.remove(name_meta_tsv.absolute().as_posix())
+    logger.info(f"Deleting {text_meta_tsv.absolute().as_posix()}")
+    os.remove(text_meta_tsv.absolute().as_posix())
+    logger.info(f"Deleting {other_meta_tsv.absolute().as_posix()}")
+    os.remove(other_meta_tsv.absolute().as_posix())
 
 
 def ensure_pubmed_xml_files(xml_dir: Path = pubmed_xml_gz_dir,
@@ -2027,6 +2037,6 @@ if __name__ == "__main__":
     else:
         logger.info("Extracting new snapshot")
         generate_db_snapshot(postgres_url, new_readonly_snapshot.absolute().as_posix())
-    if not compare_snapshots(standard_readonly_snapshot.absolute().as_posix(),
-                             new_readonly_snapshot.absolute().as_posix()):
-        raise TypeError(f"Snapshots are not identical")
+        if not compare_snapshots(standard_readonly_snapshot.absolute().as_posix(),
+                                 new_readonly_snapshot.absolute().as_posix()):
+            raise TypeError(f"Snapshots are not identical")

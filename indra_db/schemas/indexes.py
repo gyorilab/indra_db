@@ -14,6 +14,6 @@ class BtreeIndex(object):
 
 class StringIndex(BtreeIndex):
     def __init__(self, name, colname):
-        opts = 'COLLATE "en_US.UTF-8" varchar_ops ASC NULLS LAST'
+        opts = 'COLLATE "en_US.utf8" varchar_ops ASC NULLS LAST'
         super().__init__(name, colname, opts)
 

@@ -99,7 +99,7 @@ def get_related_split(stmts1: StmtList, stmts2: StmtList, pa: Preassembler) -> S
 
 
 def sample_unique_stmts(
-        num: int = 100, n_rows: int = None
+        num: int = 100000, n_rows: int = None
 ) -> List[Tuple[int, Statement]]:
     """Return a random sample of Statements from unique_statements.tsv.gz
 
@@ -711,7 +711,8 @@ def parallel_process_files(split_files, num_processes = 1):
         refinements |= result
 
     for i in range(num_files):
-        refinements |= get_related(load_statements_from_file(split_files[i]), pa=pa)
+        refinements |= get_related(load_statements_from_file(split_files[i]),
+                                   pa=pa)
 
     return refinements
 
@@ -725,7 +726,7 @@ def get_n_process():
     return num_processes
 
 def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
-    global cycles_found, pa
+    global cycles_found
     """Get refinement pairs as: (more specific, less specific)
 
     The evidence from the more specific statement is included in the less
@@ -775,8 +776,12 @@ def get_refinement_graph(n_rows: int, split_files: list) -> nx.DiGraph:
     #This can only check for full data
     # Perform sanity check on the refinements
     logger.info("Checking refinements")
+    sqlite_ontology = SqliteOntology(
+        db_path=sql_ontology_db_fpath.absolute().as_posix())
+    sqlite_ontology.initialize()
+    pa = Preassembler(sqlite_ontology)
     sample_stmts = sample_unique_stmts(n_rows=n_rows)
-    sample_refinements = get_related([s for _, s in sample_stmts])
+    sample_refinements = get_related([s for _, s in sample_stmts], pa=pa)
     assert sample_refinements.issubset(refinements), (
         f"Refinements are not a subset of the sample. Sample contains "
         f"{len(sample_refinements - refinements)} refinements not in "

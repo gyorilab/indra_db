@@ -8,6 +8,7 @@ import pickle
 import re
 import subprocess
 import sys
+import time
 import uuid
 from collections import defaultdict, Counter
 from hashlib import md5
@@ -29,9 +30,11 @@ from indra.literature.pubmed_client import _get_annotations
 from indra.statements import stmt_from_json, ActiveForm
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
-from indra_db.readonly_dumping.locations import reading_id_map_json_fpath, db_info_id_map_json_fpath, postgresql_jar, \
-    raw_id_to_info_fpath, split_pa_link_folder_fpath, standard_readonly_snapshot, new_readonly_snapshot, \
-    source_meta_parquet
+from indra_db.readonly_dumping.locations import reading_id_map_json_fpath, \
+    db_info_id_map_json_fpath, postgresql_jar, \
+    raw_id_to_info_fpath, split_pa_link_folder_fpath, \
+    standard_readonly_snapshot, new_readonly_snapshot, \
+    source_meta_parquet, table_benchmark
 from indra_db.schemas.mixins import ReadonlyTable
 from indra_db.schemas.readonly_schema import (
     ro_type_map,
@@ -51,18 +54,18 @@ LOCAL_RO_PASSWORD = os.environ["LOCAL_RO_PASSWORD"]
 LOCAL_RO_USER = os.environ["LOCAL_RO_USER"]
 
 RUN_ORDER = [
-    # "belief",
-    # "raw_stmt_src",
-    # "reading_ref_link",
-    # "evidence_counts",
-    # "pa_agent_counts",
-    # "mesh_concept_ref_counts",
-    # "mesh_term_ref_counts",
-    # "name_meta",
-    # "text_meta",
-    # "other_meta",
-    # "source_meta",
-    # "agent_interactions",
+    "belief",
+    "raw_stmt_src",
+    "reading_ref_link",
+    "evidence_counts",
+    "pa_agent_counts",
+    "mesh_concept_ref_counts",
+    "mesh_term_ref_counts",
+    "name_meta",
+    "text_meta",
+    "other_meta",
+    "source_meta",
+    "agent_interactions",
     "fast_raw_pa_link",
     "raw_stmt_mesh_concepts",
     "raw_stmt_mesh_terms",
@@ -2025,12 +2028,24 @@ if __name__ == "__main__":
 
     ro_manager.create_schema('readonly')
     # For each table, run the function that will fill out the table with data
+    time_benchmark = {}
     for table_name in tqdm(RUN_ORDER, desc="Creating tables"):
+        start_time = time.time()
         if hasattr(sys.modules[__name__], table_name):
             build_script = getattr(sys.modules[__name__], table_name)
             build_script(ro_manager)
         else:
             raise ValueError(f"Table function for {table_name} not found")
+
+        end_time = time.time()
+        elapsed_time_seconds = end_time - start_time
+        elapsed_time_hours = elapsed_time_seconds / 3600
+        time_benchmark[table_name] = elapsed_time_hours
+
+    with open(table_benchmark.absolute().as_posix(), 'w') as f:
+        f.write("Table Name,Processing Time (hours)\n")
+        for table_name, processing_time in time_benchmark.items():
+            f.write(f"{table_name},{processing_time:.4f}\n")
 
     if not standard_readonly_snapshot.exists():
         logger.error("No standard snapshot to compare with")

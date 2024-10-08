@@ -245,3 +245,7 @@ def compare_snapshots(snapshot1, snapshot2):
     print("All tables and columns match.")
     return True
 
+def record_time(file,time, text='' , mode='w'):
+    with open(file, mode) as f:
+        f.write(f"{text}, {time:.4f}\n")
+

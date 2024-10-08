@@ -9,7 +9,7 @@ import json
 import logging
 
 import pickle
-import re
+import time
 import shutil
 import subprocess
 
@@ -37,10 +37,10 @@ from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
 from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath, \
-    sql_ontology_db_fpath
+    sql_ontology_db_fpath, export_benchmark
 
 from indra_db.readonly_dumping.util import clean_json_loads, \
-    validate_statement_semantics
+    validate_statement_semantics, record_time
 from indra_db.readonly_dumping.locations import *
 
 
@@ -888,13 +888,17 @@ if __name__ == '__main__':
         )
 
     # 1. Run knowledge base pipeline if the output files don't exist
+    start_time = time.time()
     if not knowledgebase_source_data_fpath.exists():
         os.makedirs(knowledgebase_source_data_fpath.absolute().as_posix())
 
     logger.info("1. Running knowledgebase pipeline")
     kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
 
-
+    end_time = time.time()
+    record_time(export_benchmark.absolute().as_posix(),
+                (end_time - start_time) / 3600,
+                'Belief score step', 'w')
 
     # Check if output from preassembly (step 2) already exists
     if (
@@ -902,6 +906,7 @@ if __name__ == '__main__':
             not source_counts_reading_fpath.exists()
     ):
         # 2. Distill statements
+        start_time = time.time()
         logger.info("2. Running statement distillation")
         readings_to_drop, reading_id_textref_id_map = distill_statements()
         # 3. Preassembly (needs indra_db_lite setup)
@@ -911,19 +916,33 @@ if __name__ == '__main__':
             reading_id_to_text_ref_id=reading_id_textref_id_map,
             drop_db_info_ids=set(kb_updates.keys()),
         )
+        end_time = time.time()
+        record_time(export_benchmark.absolute().as_posix(),
+                    (end_time - start_time) / 3600,
+                    'Distill/Preassembly step', 'a')
     else:
         logger.info(
             "Output from step 2 & 3 already exists, skipping to step 4..."
         )
 
     # 4. Merge the processed raw statements with the knowledgebase statements
+    start_time = time.time()
     logger.info(
         "4. Merging processed knowledgebase statements with processed raw statements"
     )
     merge_processed_statements()
+    end_time = time.time()
+    record_time(export_benchmark.absolute().as_posix(),
+                (end_time - start_time) / 3600,
+                'Merge step', 'a')
 
     # 5. Ground and deduplicate statements (here don't discard any statements
     #    based on number of agents, as is done in cogex)
     logger.info("5. Running grounding and deduplication")
+    start_time = time.time()
     deduplicate()
+    end_time = time.time()
+    record_time(export_benchmark.absolute().as_posix(),
+                (end_time - start_time) / 3600,
+                'Deduplicate step', 'a')
     release_memory()

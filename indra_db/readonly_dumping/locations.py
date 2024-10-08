@@ -157,6 +157,7 @@ postgresql_jar = TEMP_DIR.join(name='postgresql-42.7.3.jar')
 split_pa_link_folder_fpath = TEMP_DIR.join(name='split_parquet')
 standard_readonly_snapshot = TEMP_DIR.join(name='schema_snapshot.sql')
 new_readonly_snapshot=TEMP_DIR.join(name='new_readonly_snapshot.sql')
+export_benchmark = TEMP_DIR.join(name='export_benchmark_times.txt')
 table_benchmark = TEMP_DIR.join(name='table_benchmark_times.txt')
 
 

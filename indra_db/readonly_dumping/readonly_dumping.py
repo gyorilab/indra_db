@@ -6,6 +6,7 @@ import logging
 import os
 import pickle
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -25,16 +26,10 @@ from pyspark.sql.types import StructType, IntegerType, StructField, LongType, Fl
     BooleanType, BinaryType
 from tqdm import tqdm
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
 from indra.literature.pubmed_client import _get_annotations
 from indra.statements import stmt_from_json, ActiveForm
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
-from indra_db.readonly_dumping.locations import reading_id_map_json_fpath, \
-    db_info_id_map_json_fpath, postgresql_jar, \
-    raw_id_to_info_fpath, split_pa_link_folder_fpath, \
-    standard_readonly_snapshot, new_readonly_snapshot, \
-    source_meta_parquet, table_benchmark
 from indra_db.schemas.mixins import ReadonlyTable
 from indra_db.schemas.readonly_schema import (
     ro_type_map,
@@ -44,7 +39,8 @@ from indra_db.schemas.readonly_schema import (
 from sqlalchemy import create_engine
 from pyspark.sql.functions import to_json, col
 from .locations import *
-from .util import clean_json_loads, generate_db_snapshot, compare_snapshots
+from .util import clean_json_loads, generate_db_snapshot, compare_snapshots, \
+    pipeline_files_clean_up
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +235,35 @@ def ensure_pa_ref_link():
                     (mk_hash, mesh_num, ref_count, len(pmid_set))
                 )
 
+# MeshConceptRefCounts
+def mesh_concept_ref_counts(local_ro_mngr: ReadonlyDatabaseManager):
+    # Create the source tsv file
+    ensure_pa_ref_link()
+
+    schema = StructType([
+        StructField("mk_hash", LongType(), True),
+        StructField("mesh_num", IntegerType(), True),
+        StructField("ref_count", IntegerType(), True),
+        StructField("pmid_count", IntegerType(), True)
+    ])
+    # Load the tsv file into the local readonly db
+    load_file_to_table_spark(
+        table_name="readonly.mesh_concept_ref_counts",
+        schema=schema,
+        column_order="mk_hash, mesh_num, ref_count, pmid_count",
+        tsv_file=mesh_concept_ref_counts_fpath.absolute().as_posix(),
+    )
+    create_primary_key(ro_mngr_local=local_ro_mngr,
+                       table_name='mesh_concept_ref_counts',
+                       keys=['mk_hash', 'mesh_num'])
+    # Build index
+    mesh_concept_ref_counts_table: ReadonlyTable = local_ro_mngr.tables[
+        "mesh_concept_ref_counts"]
+    logger.info(
+        f"Building index on {mesh_concept_ref_counts_table.full_name()}"
+    )
+    mesh_concept_ref_counts_table.build_indices(local_ro_mngr)
+
 
 # MeshTermRefCounts
 def mesh_term_ref_counts(local_ro_mngr: ReadonlyDatabaseManager):
@@ -269,35 +294,16 @@ def mesh_term_ref_counts(local_ro_mngr: ReadonlyDatabaseManager):
     )
     mesh_term_ref_counts_table.build_indices(local_ro_mngr)
 
-
-# MeshConceptRefCounts
-def mesh_concept_ref_counts(local_ro_mngr: ReadonlyDatabaseManager):
-    # Create the source tsv file
-    ensure_pa_ref_link()
-
-    schema = StructType([
-        StructField("mk_hash", LongType(), True),
-        StructField("mesh_num", IntegerType(), True),
-        StructField("ref_count", IntegerType(), True),
-        StructField("pmid_count", IntegerType(), True)
-    ])
-    # Load the tsv file into the local readonly db
-    load_file_to_table_spark(
-        table_name="readonly.mesh_concept_ref_counts",
-        schema=schema,
-        column_order="mk_hash, mesh_num, ref_count, pmid_count",
-        tsv_file=mesh_concept_ref_counts_fpath.absolute().as_posix(),
-    )
-    create_primary_key(ro_mngr_local=local_ro_mngr,
-                       table_name='mesh_concept_ref_counts',
-                       keys=['mk_hash', 'mesh_num'])
-    # Build index
-    mesh_concept_ref_counts_table: ReadonlyTable = local_ro_mngr.tables[
-        "mesh_concept_ref_counts"]
-    logger.info(
-        f"Building index on {mesh_concept_ref_counts_table.full_name()}"
-    )
-    mesh_concept_ref_counts_table.build_indices(local_ro_mngr)
+    logger.info(f"Deleting {mesh_term_ref_counts_fpath.absolute().as_posix()}")
+    os.remove(mesh_term_ref_counts_fpath.absolute().as_posix())
+    logger.info(f"Deleting {mesh_concept_ref_counts_fpath.absolute().as_posix()}")
+    os.remove(mesh_concept_ref_counts_fpath.absolute().as_posix())
+    logger.info(f"Deleting {mk_hash_pmid_sets_fpath.absolute().as_posix()}")
+    os.remove(mk_hash_pmid_sets_fpath.absolute().as_posix())
+    logger.info(f"Deleting {pmid_mesh_term_counts_fpath.absolute().as_posix()}")
+    os.remove(pmid_mesh_term_counts_fpath.absolute().as_posix())
+    logger.info(f"Deleting {pmid_mesh_concept_counts_fpath.absolute().as_posix()}")
+    os.remove(pmid_mesh_concept_counts_fpath.absolute().as_posix())
 
 
 #Belief
@@ -595,6 +601,9 @@ def evidence_counts(local_ro_mngr: ReadonlyDatabaseManager):
     evidence_counts_table: ReadonlyTable = local_ro_mngr.tables["evidence_counts"]
     logger.info(f"Building index for table {evidence_counts_table.full_name()}")
     evidence_counts_table.build_indices(local_ro_mngr)
+
+    logger.info(f"Deleting {evidence_counts_tsv.absolute().as_posix()}")
+    os.remove(evidence_counts_tsv.absolute().as_posix())
 
 
 # AgentInteractions
@@ -898,6 +907,11 @@ def fast_raw_pa_link(local_ro_mngr: ReadonlyDatabaseManager):
     logger.info(f"Building index on {table.full_name()}")
     table.build_indices(local_ro_mngr)
 
+    logger.info(f"Deleting {split_pa_link_folder_fpath.absolute().as_posix()}")
+    shutil.rmtree(split_pa_link_folder_fpath.absolute().as_posix())
+    logger.info(f"Deleting {pa_hash_act_type_ag_count_cache.absolute().as_posix()}")
+    os.remove(pa_hash_act_type_ag_count_cache.absolute().as_posix())
+
 
 def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
     """Generate the source files for the SourceMeta table"""
@@ -1037,6 +1051,9 @@ def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
     local_ro_mngr.execute(f"ALTER TABLE {table_name}\
                           ALTER COLUMN src_json TYPE JSON\
                           USING src_json::JSON;")
+
+    logger.info(f"Deleting {source_meta_parquet.absolute().as_posix()}")
+    os.remove(source_meta_parquet.absolute().as_posix())
 
 
 # PaMeta - the table itself is not generated on the readonly db, but the
@@ -1300,6 +1317,8 @@ def other_meta(local_ro_mngr: ReadonlyDatabaseManager):
     os.remove(text_meta_tsv.absolute().as_posix())
     logger.info(f"Deleting {other_meta_tsv.absolute().as_posix()}")
     os.remove(other_meta_tsv.absolute().as_posix())
+    logger.info(f"Deleting {pa_meta_fpath.absolute().as_posix()}")
+    os.remove(pa_meta_fpath.absolute().as_posix())
 
 
 def ensure_pubmed_xml_files(xml_dir: Path = pubmed_xml_gz_dir,
@@ -1826,6 +1845,8 @@ def mesh_term_meta(local_ro_mngr: ReadonlyDatabaseManager):
     logger.info(f"Building index for {table.full_name}")
     table.build_indices(local_ro_mngr)
 
+    logger.info(f"Deleting {PUBMED_MESH_DIR.absolute().as_posix()}")
+    shutil.rmtree(PUBMED_MESH_DIR.absolute().as_posix())
 
 def principal_query_to_csv(
         query: str, output_location: str, db: str = "primary"
@@ -2020,7 +2041,7 @@ if __name__ == "__main__":
         port=args.port,
         db_name=args.db_name,
     )
-    print(postgres_url)
+    logger.info(f"postgres_url: {postgres_url}")
     ro_manager = ReadonlyDatabaseManager(postgres_url, protected=False)
     # Create the tables
     print("DATABASE NAME IS ",args.db_name)
@@ -2055,3 +2076,4 @@ if __name__ == "__main__":
         if not compare_snapshots(standard_readonly_snapshot.absolute().as_posix(),
                                  new_readonly_snapshot.absolute().as_posix()):
             raise TypeError(f"Snapshots are not identical")
+    pipeline_files_clean_up()

@@ -3,11 +3,13 @@ import difflib
 import json
 import os
 import re
+import shutil
 import subprocess
 from urllib.parse import urlparse
 
 from indra.statements import Statement
 from indra.statements.validate import assert_valid_statement_semantics
+from indra_db.readonly_dumping.locations import *
 
 
 class StatementJSONDecodeError(Exception):
@@ -245,7 +247,37 @@ def compare_snapshots(snapshot1, snapshot2):
     print("All tables and columns match.")
     return True
 
-def record_time(file,time, text='' , mode='w'):
+
+def record_time(file, time, text='', mode='w'):
     with open(file, mode) as f:
         f.write(f"{text}, {time:.4f}\n")
 
+def pipeline_files_clean_up():
+    file_variable_names = [
+        refinements_fpath,
+        belief_scores_pkl_fpath,
+        stmt_hash_to_raw_stmt_ids_knowledgebases_fpath,
+        source_counts_knowledgebases_fpath,
+        raw_id_info_map_knowledgebases_fpath,
+        unique_stmts_fpath,
+        stmt_hash_to_raw_stmt_ids_fpath,
+        raw_id_info_map_fpath,
+        source_counts_fpath,
+        processed_stmts_fpath,
+        stmt_hash_to_raw_stmt_ids_reading_fpath,
+        source_counts_reading_fpath,
+        processed_stmts_reading_fpath,
+        raw_id_info_map_reading_fpath,
+        reading_to_text_ref_map_fpath,
+        drop_readings_fpath,
+        text_refs_fpath,
+        reading_text_content_fpath,
+        raw_statements_fpath
+    ]
+    for f in file_variable_names:
+        if os.path.exists(f.absolute().as_posix()):
+            os.remove(f.absolute().as_posix())
+        else:
+            print(f"{f.absolute().as_posix()} does not exist.")
+
+    shutil.rmtree(split_unique_statements_folder_fpath.absolute().as_posix())

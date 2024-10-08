@@ -55,6 +55,13 @@ __all__ = [
     "pa_agents_counts_tsv",
     'split_raw_statements_folder_fpath',
     'split_unique_statements_folder_fpath',
+    "sql_ontology_db_fpath",
+    "postgresql_jar",
+    "split_pa_link_folder_fpath",
+    "standard_readonly_snapshot",
+    "new_readonly_snapshot",
+    "export_benchmark",
+    "table_benchmark"
 ]
 
 # knowledgebase source files
@@ -85,7 +92,6 @@ stmt_hash_to_raw_stmt_ids_knowledgebases_fpath = TEMP_DIR.join(
     name="stmt_hash_to_raw_stmt_ids_knowledgebases.pkl"
 )
 raw_id_info_map_fpath = TEMP_DIR.join(name="raw_stmt_id_to_info_map.tsv.gz")
-raw_id_to_info_fpath = TEMP_DIR.join(name="raw_id_to_info.pkl")
 raw_id_info_map_reading_fpath = TEMP_DIR.join(
     name="raw_stmt_id_to_info_map_reading.tsv.gz"
 )
@@ -96,7 +102,7 @@ grounded_stmts_fpath = TEMP_DIR.join(name="grounded_statements.tsv.gz")
 unique_stmts_fpath = TEMP_DIR.join(name="unique_statements.tsv.gz")
 refinements_fpath = TEMP_DIR.join(name="refinements.tsv.gz")
 sql_ontology_db_fpath = TEMP_DIR.join(name='bio_ontology.db')
-split_unique_statements_folder_fpath = TEMP_DIR.join(name="split_unique_statements_folder_fpath")
+split_unique_statements_folder_fpath = TEMP_DIR.join(name="split_unique_statements_folder")
 belief_scores_pkl_fpath = TEMP_DIR.join(name="belief_scores.pkl")
 pa_hash_act_type_ag_count_cache = TEMP_DIR.join(
     name="pa_hash_act_type_ag_count_cache.pkl"
@@ -106,12 +112,6 @@ pa_hash_act_type_ag_count_cache = TEMP_DIR.join(
 belief_scores_tsv_fpath = TEMP_DIR.join(name="belief_scores.tsv")
 reading_ref_link_tsv_fpath = TEMP_DIR.join(name="reading_ref_link.tsv")
 raw_stmt_source_tsv_fpath = TEMP_DIR.join(name="raw_stmt_source.tsv")
-
-#raw_stmt_scr table intermediate dict
-reading_id_map_json_fpath = TEMP_DIR.join(name='reading_id_map.json')
-db_info_id_map_json_fpath = TEMP_DIR.join(name='db_info_id_map.json')
-
-
 
 # Pubmed XML files
 PUBMED_MESH_DIR = TEMP_DIR.module("pubmed_mesh")

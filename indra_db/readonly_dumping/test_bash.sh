@@ -1,3 +1,5 @@
+# shellcheck disable=SC1090
+source ~/.zshrc
 # SETUP
 export INDRADBPRIMARY=postgresql://tester:stoneisagreenbook@principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com/indradb_test
 set -e

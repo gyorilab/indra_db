@@ -280,4 +280,9 @@ def pipeline_files_clean_up():
         else:
             print(f"{f.absolute().as_posix()} does not exist.")
 
-    shutil.rmtree(split_unique_statements_folder_fpath.absolute().as_posix())
+    if os.path.exists(split_unique_statements_folder_fpath.absolute().as_posix()):
+        shutil.rmtree(split_unique_statements_folder_fpath.absolute().as_posix())
+    else:
+        print(f"{split_unique_statements_folder_fpath.absolute().as_posix()} "
+              f"does not exist.")
+

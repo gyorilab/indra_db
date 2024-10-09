@@ -349,7 +349,6 @@ def split_tsv_gz_file(input_path, output_dir, batch_size=10000):
             with gzip.open(output_file_path, "wt") as output_file:
                 writer = csv.writer(output_file, delimiter="\t")
                 writer.writerows(batch)
-            logger.info(f"Written batch {batch_index} to {output_file_path}")
 
 def count_rows_in_tsv_gz(file_path):
     with gzip.open(file_path, 'rt') as file:

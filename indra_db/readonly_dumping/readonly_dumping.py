@@ -42,7 +42,15 @@ from .locations import *
 from .util import clean_json_loads, generate_db_snapshot, compare_snapshots, \
     pipeline_files_clean_up
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("indra_db.readonly_dumping.readonly_dumping")
+logging.basicConfig(
+    filename=os.path.join(TEMP_DIR, 'Pipeline.log'),
+    filemode='a',
+    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+    datefmt='%m-%d %H:%M',
+    level=logging.DEBUG,
+    force=True,
+)
 
 SQL_NULL = "\\N"
 LOCAL_RO_DB_NAME = os.environ["LOCAL_RO_DB_NAME"]

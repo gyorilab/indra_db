@@ -51,6 +51,15 @@ StmtList = List[Statement]
 
 logger = logging.getLogger("indra_db.readonly_dumping.export_assembly")
 
+logging.basicConfig(
+    filename=os.path.join(TEMP_DIR, 'Pipeline.log'),
+    filemode='a',
+    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+    datefmt='%m-%d %H:%M',
+    level=logging.DEBUG,
+    force=True,
+)
+
 reader_versions = {
     "sparser": [
         "sept14-linux\n",
@@ -897,7 +906,7 @@ if __name__ == '__main__':
     end_time = time.time()
     record_time(export_benchmark.absolute().as_posix(),
                 (end_time - start_time) / 3600,
-                'Belief score step', 'w')
+                'Processing knowledgebase step', 'w')
 
     # Check if output from preassembly (step 2) already exists
     if (

@@ -2,16 +2,23 @@ import os
 import re
 import time
 
-from indra import logger
 from indra_db.readonly_dumping.export_assembly import split_tsv_gz_file, \
     batch_size, count_rows_in_tsv_gz, get_refinement_graph, \
     refinement_cycles_fpath, calculate_belief
-from indra_db.readonly_dumping.locations import refinements_fpath, \
-    belief_scores_pkl_fpath, split_unique_statements_folder_fpath, \
-    unique_stmts_fpath, export_benchmark
 import multiprocessing as mp
-
+from .locations import *
 from indra_db.readonly_dumping.util import record_time
+import logging
+
+logger = logging.getLogger("indra_db.readonly_dumping.export_assembly")
+logging.basicConfig(
+    filename=os.path.join(TEMP_DIR, 'Pipeline.log'),
+    filemode='a',
+    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+    datefmt='%m-%d %H:%M',
+    level=logging.DEBUG,
+    force=True,
+)
 
 if __name__ == '__main__':
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():

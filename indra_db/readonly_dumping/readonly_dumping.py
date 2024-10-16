@@ -43,6 +43,7 @@ from .util import clean_json_loads, generate_db_snapshot, compare_snapshots, \
     pipeline_files_clean_up
 
 logger = logging.getLogger("indra_db.readonly_dumping.readonly_dumping")
+logger.propagate = False
 logging.basicConfig(
     filename=pipeline_log_fpath.absolute().as_posix(),
     filemode='a',

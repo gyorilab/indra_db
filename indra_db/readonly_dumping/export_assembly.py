@@ -50,7 +50,7 @@ batch_size = int(1e6)
 StmtList = List[Statement]
 
 logger = logging.getLogger("indra_db.readonly_dumping.export_assembly")
-
+logger.propagate = False
 logging.basicConfig(
     filename=pipeline_log_fpath.absolute().as_posix(),
     filemode='a',

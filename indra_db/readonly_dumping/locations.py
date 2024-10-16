@@ -61,8 +61,10 @@ __all__ = [
     "standard_readonly_snapshot",
     "new_readonly_snapshot",
     "export_benchmark",
-    "table_benchmark"
+    "table_benchmark",
+    "pipeline_log_fpath"
 ]
+pipeline_log_fpath = TEMP_DIR.join(name="Pipeline.log")
 
 # knowledgebase source files
 knowledgebase_source_data_fpath = TEMP_DIR.join(name="kb_source_data")

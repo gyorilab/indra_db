@@ -44,7 +44,7 @@ from .util import clean_json_loads, generate_db_snapshot, compare_snapshots, \
 
 logger = logging.getLogger("indra_db.readonly_dumping.readonly_dumping")
 logging.basicConfig(
-    filename=os.path.join(TEMP_DIR, 'Pipeline.log'),
+    filename=pipeline_log_fpath.absolute().as_posix(),
     filemode='a',
     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
     datefmt='%m-%d %H:%M',

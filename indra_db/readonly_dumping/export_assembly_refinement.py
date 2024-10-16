@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger("indra_db.readonly_dumping.export_assembly")
 logging.basicConfig(
-    filename=os.path.join(TEMP_DIR, 'Pipeline.log'),
+    filename=pipeline_log_fpath.absolute().as_posix(),
     filemode='a',
     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
     datefmt='%m-%d %H:%M',

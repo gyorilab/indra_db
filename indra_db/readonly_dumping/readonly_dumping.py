@@ -42,16 +42,17 @@ from .locations import *
 from .util import clean_json_loads, generate_db_snapshot, compare_snapshots, \
     pipeline_files_clean_up
 
-logger = logging.getLogger("indra_db.readonly_dumping.readonly_dumping")
+logger = logging.getLogger("indra_db.readonly_dumping.export_assembly")
+logger.setLevel(logging.DEBUG)
 logger.propagate = False
-logging.basicConfig(
-    filename=pipeline_log_fpath.absolute().as_posix(),
-    filemode='a',
-    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-    datefmt='%m-%d %H:%M',
-    level=logging.DEBUG,
-    force=True,
-)
+
+file_handler = logging.FileHandler(pipeline_log_fpath.absolute().as_posix(), mode='a')
+file_handler.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%m-%d %H:%M')
+file_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
 
 SQL_NULL = "\\N"
 LOCAL_RO_DB_NAME = os.environ["LOCAL_RO_DB_NAME"]
@@ -1853,9 +1854,9 @@ def mesh_term_meta(local_ro_mngr: ReadonlyDatabaseManager):
     table: ReadonlyTable = local_ro_mngr.tables["mesh_term_meta"]
     logger.info(f"Building index for {table.full_name}")
     table.build_indices(local_ro_mngr)
-
-    logger.info(f"Deleting {PUBMED_MESH_DIR.absolute().as_posix()}")
-    shutil.rmtree(PUBMED_MESH_DIR.absolute().as_posix())
+    pubmed_mesh_path = PUBMED_MESH_DIR.base
+    logger.info(f"Deleting {pubmed_mesh_path.absolute().as_posix()}")
+    shutil.rmtree(pubmed_mesh_path.absolute().as_posix())
 
 def principal_query_to_csv(
         query: str, output_location: str, db: str = "primary"

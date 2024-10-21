@@ -11,15 +11,16 @@ from indra_db.readonly_dumping.util import record_time
 import logging
 
 logger = logging.getLogger("indra_db.readonly_dumping.export_assembly")
+logger.setLevel(logging.DEBUG)
 logger.propagate = False
-logging.basicConfig(
-    filename=pipeline_log_fpath.absolute().as_posix(),
-    filemode='a',
-    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-    datefmt='%m-%d %H:%M',
-    level=logging.DEBUG,
-    force=True,
-)
+
+file_handler = logging.FileHandler(pipeline_log_fpath.absolute().as_posix(), mode='a')
+file_handler.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%m-%d %H:%M')
+file_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
 
 if __name__ == '__main__':
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():

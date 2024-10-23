@@ -1,7 +1,6 @@
 # shellcheck disable=SC1090
 source ~/.zshrc
 # SETUP
-export INDRADBPRIMARY=postgresql://tester:stoneisagreenbook@principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com/indradb_test
 set -e
 # Get password to the principal database from the user
 echo "Enter password for the principal database:"
@@ -67,15 +66,13 @@ else
     echo "Text refs principal file path: $TEXT_REFS_PRINCIPAL_FPATH"
 fi
 
-export INDRADBPRIMARY=postgresql://tester:stoneisagreenbook@principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com/indradb_test
-
 # Exit if any of the file names are empty
 if [ ! -f "$RAW_STMTS_FPATH" ]
 then
     echo "Dumping raw statements"
     start=$(date +%s)
     psql -d indradb_test \
-         -h principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com \
+         -h indradb-refresh.cvyak4iikv71.us-east-1.rds.amazonaws.com \
          -U tester \
          -w \
          -c "COPY (SELECT id, db_info_id, reading_id,
@@ -95,7 +92,7 @@ then
     echo "Dumping reading text content meta"
     start=$(date +%s)
     psql -d indradb_test \
-         -h principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com \
+         -h indradb-refresh.cvyak4iikv71.us-east-1.rds.amazonaws.com \
          -U tester \
          -w \
          -c "COPY (SELECT rd.id, rd.reader_version, tc.id, tc.text_ref_id,
@@ -116,7 +113,7 @@ then
     echo "Dumping text refs principal"
     start=$(date +%s)
     psql -d indradb_test \
-         -h principal-lb-72ef045e383020ba.elb.us-east-1.amazonaws.com \
+         -h indradb-refresh.cvyak4iikv71.us-east-1.rds.amazonaws.com \
          -U tester \
          -w \
          -c "COPY (SELECT id, pmid, pmcid, doi, pii, url, manuscript_id

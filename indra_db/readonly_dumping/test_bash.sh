@@ -1,5 +1,4 @@
 # shellcheck disable=SC1090
-source ~/.zshrc
 # SETUP
 set -e
 # Get password to the principal database from the user

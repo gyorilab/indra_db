@@ -369,6 +369,7 @@ def count_rows_in_tsv_gz(file_path):
 def preprocess(
         drop_readings: Set[int],
         reading_id_to_text_ref_id: Dict,
+        kb_mapping: Dict[Tuple[str, str], int],
         drop_db_info_ids: Optional[Set[int]] = None,
 ):
     """Preassemble statements and collect source counts
@@ -379,6 +380,8 @@ def preprocess(
         A set of reading ids to drop
     reading_id_to_text_ref_id :
         A dictionary mapping reading ids to text ref ids
+    kb_mapping :
+        A dictionary mapping source name and api name tuples to their unique db_info id
     drop_db_info_ids :
         A set of db_info ids to drop
     """
@@ -389,6 +392,9 @@ def preprocess(
         logger.info("Preassembling statements, collecting source counts, "
                     "mapping from stmt hash to raw statement ids and mapping "
                     "from raw statement ids to db info and reading ids")
+        db_info_id_name_map = {
+            db_id: name for (src_api, name), db_id in kb_mapping.items()
+        }
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
         source_counts = defaultdict(Counter)
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
@@ -429,13 +435,19 @@ def preprocess(
                         stmt_json["evidence"][0]["text_refs"] = refs
                         if refs.get("PMID"):
                             stmt_json["evidence"][0]["pmid"] = refs["PMID"]
-                    paired_stmts_jsons.append((raw_stmt_id_int, stmt_json))
+                    paired_stmts_jsons.append((raw_stmt_id_int, stmt_json, db_info_id_int))
                 # Write to the info file
                 # "raw_stmt_id_to_info_map_reading.tsv.gz"
                 info_writer.writerows(info_rows)
                 if paired_stmts_jsons:
-                    raw_ids, stmts_jsons = zip(*paired_stmts_jsons)
+                    raw_ids, stmts_jsons, db_info_ids = zip(*paired_stmts_jsons)
                 stmts = stmts_from_json(stmts_jsons)
+
+                # Use to ensure correct mapping after assemble corpus
+                stmt_uuid_map = {
+                    st.uuid: (rid, dbiid)
+                    for rid, st, dbiid in zip(raw_ids, stmts, db_info_ids)
+                }
 
                 # This part ultimately calls indra_db_lite or the principal db,
                 # depending on which is available
@@ -443,11 +455,21 @@ def preprocess(
 
                 stmts = ac.map_grounding(stmts)
                 stmts = ac.map_sequence(stmts)
-                for raw_id, stmt in zip(raw_ids, stmts):
+                for stmt in stmts:
                     # Get the statement hash and get the source counts
+                    raw_id, dbi_id = stmt_uuid_map[stmt.uuid]
                     stmt_hash = stmt.get_hash(refresh=True)
                     stmt_hash_to_raw_stmt_ids[stmt_hash].add(raw_id)
-                    source_counts[stmt_hash][stmt.evidence[0].source_api] += 1
+
+                    if dbi_id:
+                        # If this is a knowledgebase statement, source_name is
+                        # given by the db_name field in the db_info table,
+                        # here provided by db_info_id_name_map
+                        source_name = db_info_id_name_map[dbi_id]
+                    else:
+                        # For readers, source_api == source name
+                        source_name = stmt.evidence[0].source_api
+                    source_counts[stmt_hash][source_name] += 1
                 rows = [(stmt.get_hash(), json.dumps(stmt.to_json()))
                         for stmt in stmts]
                 writer.writerows(rows)
@@ -930,6 +952,7 @@ if __name__ == '__main__':
         preprocess(
             drop_readings=readings_to_drop,
             reading_id_to_text_ref_id=reading_id_textref_id_map,
+            kb_mapping=db_info_mapping,
             drop_db_info_ids=set(kb_updates.keys()),
         )
         end_time = time.time()

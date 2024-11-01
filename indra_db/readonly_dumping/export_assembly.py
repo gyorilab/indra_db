@@ -303,7 +303,10 @@ def distill_statements() -> Tuple[Set, Dict]:
     return drop_readings, reading_id_to_text_ref_id
 
 
-def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
+def run_kb_pipeline(
+    refresh: bool,
+    kb_mapping: Dict[Tuple[str, str], int]
+) -> Dict[int, Path]:
     """Run the knowledgebase pipeline
 
     Parameters
@@ -312,6 +315,9 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
         If True, generate new statements for each knowledgebase manager and
         overwrite any local files. If False (default), the local files will
         be used if they exist.
+    kb_mapping :
+        A dictionary mapping source name and api name tuples to their unique
+        db_info id
 
     Returns
     -------
@@ -319,12 +325,6 @@ def run_kb_pipeline(refresh: bool) -> Dict[int, Path]:
         A dictionary mapping db_info ids to the local file paths of the
         statements for that knowledgebase
     """
-    from indra_db.util import get_db
-    db = get_db('primary')
-
-    res = db.select_all(db.DBInfo)
-    kb_mapping = {(r.source_api, r.db_name): r.id for r in res}
-
     # Select all knowledgebase managers except HPRD: statements already
     # exist in db, the source data hasn't been updated since 2009 and the
     # server hosting the source data returns 500 errors when trying to
@@ -896,13 +896,20 @@ if __name__ == '__main__':
             "No adeft models detected, run 'python -m adeft.download' to download models"
         )
 
+    # Get the mapping of knowledgebase sources to db_info ids, this is required to get
+    # unique source counts
+    from indra_db.util import get_db
+    db = get_db('primary')
+    res = db.select_all(db.DBInfo)
+    db_info_mapping = {(r.source_api, r.db_name): r.id for r in res}
+
     # 1. Run knowledge base pipeline if the output files don't exist
     start_time = time.time()
     if not knowledgebase_source_data_fpath.exists():
         os.makedirs(knowledgebase_source_data_fpath.absolute().as_posix())
 
     logger.info("1. Running knowledgebase pipeline")
-    kb_updates = run_kb_pipeline(refresh=args.refresh_kb)
+    kb_updates = run_kb_pipeline(refresh=args.refresh_kb, kb_mapping=db_info_mapping)
 
     end_time = time.time()
     record_time(export_benchmark.absolute().as_posix(),

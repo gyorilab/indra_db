@@ -333,9 +333,10 @@ def run_kb_pipeline(
             db_id = kb_mapping.get((m.source, m.short_name))
             if db_id is None:
                 raise ValueError(
-                    f"Could not find db_id for {m.source} {m.short_name} "
-                    f"in the db_info table on the principal database. Please "
-                    f"add it."
+                    f"Could not find db_info id for {m.source} {m.short_name} "
+                    f"in the db_info table on the principal database. If this is a new "
+                    f"source, please add it to the db_info table in the principal "
+                    f"database."
                 )
             selected_kbs.append(M)
             kb_file_mapping[db_id] = m.get_local_fpath()

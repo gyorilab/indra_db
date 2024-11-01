@@ -1,7 +1,6 @@
 import argparse
 import csv
 import gzip
-import json
 import logging
 import os
 import pickle

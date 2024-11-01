@@ -10,12 +10,10 @@ import hashlib
 import json
 import os
 import re
-import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Type
 
-import boto3
 import click
 import pickle
 import logging

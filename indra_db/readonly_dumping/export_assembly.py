@@ -11,10 +11,8 @@ import logging
 import pickle
 import time
 import shutil
-import subprocess
 
 from collections import defaultdict, Counter
-from functools import partial
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
 
@@ -27,7 +25,6 @@ import os
 
 from adeft import get_available_models
 from indra.belief import BeliefEngine
-from indra.ontology.bio import bio_ontology
 from indra.ontology.bio.sqlite_ontology import SqliteOntology
 from indra.preassembler import Preassembler
 from indra.statements import stmts_from_json, stmt_from_json, Statement, \
@@ -36,8 +33,7 @@ from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
-from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath, \
-    sql_ontology_db_fpath, export_benchmark
+from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
 
 from indra_db.readonly_dumping.util import clean_json_loads, \
     validate_statement_semantics, record_time

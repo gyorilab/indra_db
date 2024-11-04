@@ -911,7 +911,7 @@ def local_update(
                         # Get source count for this statement, or create a new
                         # Counter if it doesn't exist, and increment the count
                         source_count_dict = source_counts.get(stmt_hash, Counter())
-                        source_count_dict[kbm.source] += 1
+                        source_count_dict[kbm.short_name] += 1
                         source_counts[stmt_hash] = source_count_dict
 
                         # Append to various raw id mappings

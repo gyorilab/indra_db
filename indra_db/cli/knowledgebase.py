@@ -864,7 +864,6 @@ def local_update(
 
         # Then run through the knowledgebases that are generating new output
         for ix, Mngr in enumerate(kbs_to_run, start=len(existing_kbs)):
-            error_log = []
             kbm = Mngr()
             db_info_id = db_info_map[(kbm.source, kbm.short_name)]
             tqdm.write(
@@ -880,13 +879,7 @@ def local_update(
                     kb_kwargs = local_files.get(kbm.short_name, {})
                 else:
                     kb_kwargs = {}
-                #stmts = kbm.get_statements(**kb_kwargs)
-                #Get statement and record failed kb
-                # try:
-                    stmts = []
                 stmts = kbm.get_statements(**kb_kwargs)
-                # except Exception as e:
-                #     error_log.append((kbm.name, e))
 
                 # Do preassembly
                 if len(stmts) > 100000:

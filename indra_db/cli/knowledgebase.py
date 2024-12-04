@@ -261,9 +261,12 @@ class BiogridManager(KnowledgebaseManager):
     def get_source_version(self):
         url = "https://downloads.thebiogrid.org/BioGRID/Release-Archive"
         soup = BeautifulSoup(requests.get(url).content, "html.parser")
-        version_numbers = re.findall(r'\d+\.\d+\.\d+', soup.text)
-        latest_version = max(version_numbers, key=lambda s: tuple(map(int, s.split('.')))) if version_numbers else None
-        return latest_version
+        matches = re.findall(r'BIOGRID-(\d+\.\d+\.\d+)', soup.text)
+        if matches:
+            latest_version = max(matches,
+                                 key=lambda s: tuple(map(int, s.split('.'))))
+            return latest_version
+        return None
 
 
 class PathwayCommonsManager(KnowledgebaseManager):

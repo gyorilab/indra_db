@@ -352,7 +352,7 @@ class CTDManager(KnowledgebaseManager):
             response = requests.head(url)
             if 'Last-Modified' in response.headers:
                 last_modified = response.headers['Last-Modified']
-                version = version + subset + last_modified
+                version += + subset + last_modified
             else:
                 logger.error("Last-Modified header not found")
         return version

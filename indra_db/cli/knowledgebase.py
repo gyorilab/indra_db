@@ -142,10 +142,9 @@ class TasManager(KnowledgebaseManager):
         #   set of drugs to be extracted for which we have a name from CHEBML,
         #   HMS-LINCS, or DrugBank
         logger.info('Processing TAS from web')
-        # tp = tas.process_from_web(affinity_class_limit=2,
-        #                           named_only=True,
-        #                           standardized_only=False)
-        tp = tas.process_csv('/Users/haohangyan/.data/readonly_pipeline/kb_source_data/tas.csv')
+        tp = tas.process_from_web(affinity_class_limit=2,
+                                  named_only=True,
+                                  standardized_only=False)
         logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(tp.statements)]
         unique_stmts, _ = extract_duplicates(filtered_stmts,

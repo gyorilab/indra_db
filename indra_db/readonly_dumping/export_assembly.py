@@ -36,7 +36,8 @@ from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
 from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
 
 from indra_db.readonly_dumping.util import clean_json_loads, \
-    validate_statement_semantics, record_time
+    validate_statement_semantics, record_time, \
+    download_knowledgebase_files_to_path
 from indra_db.readonly_dumping.locations import *
 
 
@@ -926,6 +927,10 @@ if __name__ == '__main__':
     start_time = time.time()
     if not knowledgebase_source_data_fpath.exists():
         os.makedirs(knowledgebase_source_data_fpath.absolute().as_posix())
+
+    logger.info("Downloading knowlegebase file sources")
+    download_knowledgebase_files_to_path(
+        knowledgebase_source_data_fpath.absolute().as_posix())
 
     logger.info("1. Running knowledgebase pipeline")
     kb_updates = run_kb_pipeline(refresh=args.refresh_kb, kb_mapping=db_info_mapping)

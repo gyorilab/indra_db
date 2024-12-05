@@ -7,6 +7,8 @@ import shutil
 import subprocess
 from urllib.parse import urlparse
 
+import boto3
+
 from indra.statements import Statement
 from indra.statements.validate import assert_valid_statement_semantics
 from indra_db.readonly_dumping.locations import *
@@ -15,6 +17,26 @@ from indra_db.readonly_dumping.locations import *
 class StatementJSONDecodeError(Exception):
     pass
 
+
+def download_knowledgebase_files_to_path(fpath: str):
+    bucket_name = "bigmech"
+    s3_prefix = "indra-db"
+    os.makedirs(fpath, exist_ok=True)
+    s3 = boto3.client('s3')
+    files = [
+        "drugbank.xml",
+        "Kinase_substrates.owl.gz",
+        "phosphoELM_all_2015-04.dump",
+        "tas.csv",
+        "v14_pc-biopax.owl.gz"
+    ]
+    for file_name in files:
+        s3_key = f"{s3_prefix}/{file_name}"
+        local_file_path = os.path.join(fpath, file_name)
+        try:
+            s3.download_file(bucket_name, s3_key, local_file_path)
+        except Exception as e:
+            print(f"Error downloading {file_name}: {e}")
 
 def load_statement_json(
         json_str: str,
@@ -282,6 +304,8 @@ def pipeline_files_clean_up():
 
     if os.path.exists(split_unique_statements_folder_fpath.absolute().as_posix()):
         shutil.rmtree(split_unique_statements_folder_fpath.absolute().as_posix())
+    if os.path.exists(knowledgebase_source_data_fpath.absolute().as_posix()):
+        shutil.rmtree(knowledgebase_source_data_fpath.absolute().as_posix())
     else:
         print(f"{split_unique_statements_folder_fpath.absolute().as_posix()} "
               f"does not exist.")

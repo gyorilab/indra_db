@@ -395,6 +395,7 @@ class VirHostNetManager(KnowledgebaseManager):
     def get_source_version(self):
         url = "http://virhostnet.prabi.fr:9090/psicquic/webservices/current/search/query/*"
         response = requests.get(url)
+        response.raise_for_status()
         content = response.content
         md5_checksum = hashlib.md5(content).hexdigest()
         return md5_checksum
@@ -540,6 +541,7 @@ class RlimspManager(KnowledgebaseManager):
         for fname, id_type in self._rlimsp_files:
             print("Processing %s..." % fname)
             res = requests.get(self._rlimsp_root + fname)
+            res.raise_for_status()
             jsonl_str = res.content.decode('utf-8')
             rp = rlimsp.process_jsonl_str(jsonl_str, id_type)
             stmts += rp.statements
@@ -555,6 +557,7 @@ class RlimspManager(KnowledgebaseManager):
 
     def get_source_version(self):
         response = requests.get(self._rlimsp_root)
+        response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
         version=''
         for row in soup.find_all('tr'):
@@ -582,6 +585,7 @@ class TrrustManager(KnowledgebaseManager):
     def get_source_version(self):
         from indra.sources.trrust.api import trrust_human_url
         response = requests.get(trrust_human_url, stream=True)
+        response.raise_for_status()
         md5_hash = hashlib.md5()
         for chunk in response.iter_content(chunk_size=8192):
             md5_hash.update(chunk)
@@ -619,6 +623,7 @@ class DgiManager(KnowledgebaseManager):
     def get_source_version(self):
         url = "https://raw.githubusercontent.com/dgidb/dgidb-v5/main/server/data_version.yml"
         response = requests.get(url)
+        response.raise_for_status()
         version_data = yaml.safe_load(response.text)
         return version_data['version']
 
@@ -642,6 +647,7 @@ class CrogManager(KnowledgebaseManager):
     def get_source_version(self):
         url = "https://api.github.com/repos/chemical-roles/chemical-roles/commits?path=docs/_data/crog.indra.json"
         response = requests.get(url)
+        response.raise_for_status()
         commits = response.json()
         return commits[0]['commit']['committer']['date']
 
@@ -681,6 +687,7 @@ class ConibManager(KnowledgebaseManager):
     def get_source_version(self):
         url = "https://api.github.com/repos/pharmacome/conib/commits?path=conib/_cache.bel.nodelink.json"
         response = requests.get(url)
+        response.raise_for_status()
         commits = response.json()
         return commits[0]['commit']['committer']['date']
 

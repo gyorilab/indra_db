@@ -2,6 +2,7 @@ import os
 import re
 import time
 
+from indra_db import get_db
 from indra_db.readonly_dumping.export_assembly import split_tsv_gz_file, \
     batch_size, count_rows_in_tsv_gz, get_refinement_graph, \
     refinement_cycles_fpath, calculate_belief
@@ -24,6 +25,12 @@ logger.addHandler(file_handler)
 
 if __name__ == '__main__':
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():
+        # Todo: @Haohang: is this the right place to put the mapping for
+        #  multiprocessing purposes?
+        db = get_db("primary")
+        res = db.select_all(db.DBInfo)
+        db_name_api_mapping = {r.db_name: r.source_api for r in res}
+
         time_benchmark = {}
         start_time = time.time()
         mp.set_start_method('spawn')
@@ -79,7 +86,10 @@ if __name__ == '__main__':
         else:
             logger.info("7. Calculating belief")
             calculate_belief(
-                ref_graph, num_batches=batch_count, batch_size=batch_size
+                refinements_graph=ref_graph,
+                num_batches=batch_count,
+                batch_size=batch_size,
+                source_mapping=db_name_api_mapping,
             )
         end_time = time.time()
         record_time(export_benchmark.absolute().as_posix(),

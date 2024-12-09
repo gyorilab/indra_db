@@ -321,7 +321,7 @@ def belief(local_ro_mngr: ReadonlyDatabaseManager):
 
     depends on: raw_statements, text_content, reading
     requires assembly: True
-    assembly process: (see indra_cogex.sources.indra_db.raw_export)
+    assembly process: (see indra_db.readonly_dumping.export_assembly_refinement)
     """
     logger.info("Reading belief score pickle file")
     with belief_scores_pkl_fpath.open("rb") as pkl_in:

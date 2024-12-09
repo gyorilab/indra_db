@@ -931,8 +931,6 @@ if __name__ == '__main__':
 
     # Get the mapping of knowledgebase sources to db_info ids, this is required to get
     # unique source counts
-    from indra_db.util import get_db
-    db = get_db('primary')
     res = db.select_all(db.DBInfo)
     db_info_mapping = {(r.source_api, r.db_name): r.id for r in res}
 

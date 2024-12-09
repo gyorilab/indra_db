@@ -106,7 +106,7 @@ def get_related_split(stmts1: StmtList, stmts2: StmtList, pa: Preassembler) -> S
 
 
 def sample_unique_stmts(
-        num: int = 100000, n_rows: int = None
+    num: int = 100000, n_rows: int = None
 ) -> List[Tuple[int, Statement]]:
     """Return a random sample of Statements from unique_statements.tsv.gz
 
@@ -441,7 +441,9 @@ def preprocess(
                     raw_ids, stmts_jsons, db_info_ids = zip(*paired_stmts_jsons)
                 stmts = stmts_from_json(stmts_jsons)
 
-                # Use to ensure correct mapping after assemble corpus
+                # Use UUID mapping to keep track of the statements after
+                # assemble corpus is called, since the statements can be
+                # skipped or modified.
                 stmt_uuid_map = {
                     st.uuid: (rid, dbiid)
                     for rid, st, dbiid in zip(raw_ids, stmts, db_info_ids)
@@ -487,14 +489,7 @@ def preprocess(
 
 
 def merge_processed_statements():
-    """Merge processed statements from reading and knowledgebases
-
-    Parameters
-    ----------
-    kb_mapping :
-        A dictionary mapping db_info ids to the local file paths of the
-        statements for that knowledgebase
-    """
+    """Merge processed statements from reading and knowledgebases"""
 
     # List the processed statement file to be merged
     proc_stmts_reading = processed_stmts_reading_fpath.absolute().as_posix()

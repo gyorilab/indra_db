@@ -608,11 +608,28 @@ def load_statements_from_file(file_path):
     return stmts
 
 def calculate_belief(
-        refinements_graph: nx.DiGraph,
-        num_batches: int,
-        batch_size: int,
-        unique_stmts_path: Path = unique_stmts_fpath,
+    refinements_graph: nx.DiGraph,
+    num_batches: int,
+    batch_size: int,
+    source_mapping: Dict[str, str],
+    unique_stmts_path: Path = unique_stmts_fpath,
 ):
+    """Calculate belief scores for unique statements from the refinement graph
+
+    Parameters
+    ----------
+    refinements_graph :
+        A directed graph where the edges point from more specific to less
+        specific statements
+    num_batches :
+        The number of batches to process from the unique statements file
+    batch_size :
+        The number of statements to process in each batch
+    unique_stmts_path :
+        The path to the unique statements file
+    source_mapping :
+        A dictionary mapping source names to source api names
+    """
     # The refinement set is a set of pairs of hashes, with the *first hash
     # being more specific than the second hash*, i.e. the evidence for the
     # first should be included in the evidence for the second
@@ -654,9 +671,10 @@ def calculate_belief(
         # Mock evidence - todo: add annotations?
         # Add evidence objects for each source's count and each source
         ev_list = []
-        for source, count in summed_source_counts.items():
+        for source_name, count in summed_source_counts.items():
             for _ in range(count):
-                ev_list.append(Evidence(source_api=source))
+                source_api = source_mapping.get(source_name, source_name)
+                ev_list.append(Evidence(source_api=source_api))
         return ev_list
 
     def _add_belief_scores_for_batch(batch: List[Tuple[int, Statement]]):

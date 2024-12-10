@@ -27,6 +27,7 @@ from tqdm import tqdm
 from pyspark.sql import SparkSession
 from indra.literature.pubmed_client import _get_annotations
 from indra.statements import stmt_from_json, ActiveForm
+from indra.util.statement_presentation import db_sources, reader_sources
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.schemas.mixins import ReadonlyTable
@@ -975,8 +976,8 @@ def ensure_source_meta_source_files(local_ro_mngr: ReadonlyDatabaseManager):
             continue
 
         num_srcs = len(src_count_dict)
-        has_rd = any(source in src_count_dict for source in SOURCE_GROUPS["reader"])
-        has_db = any(source in src_count_dict for source in SOURCE_GROUPS["database"])
+        has_rd = any(source in src_count_dict for source in reader_sources)
+        has_db = any(source in src_count_dict for source in db_sources)
         only_src = list(src_count_dict.keys())[0] if num_srcs == 1 else None
         sources_tuple = tuple(
             src_count_dict.get(src) for src in all_sources

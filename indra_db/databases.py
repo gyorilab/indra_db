@@ -1231,7 +1231,7 @@ class PrincipalDatabaseManager(DatabaseManager):
     """This class represents the methods special to the principal database."""
 
     # Note that these are NOT guaranteed to apply to older deployed instances.
-    _instance_type = 'db.m5.large'
+    _instance_type = 'db.m5.xlarge'
     _instance_name_fmt = 'indradb-{name}'
     _db_name = 'indradb_principal'
 

@@ -680,8 +680,7 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
     """
     # Check if readonly is needed:
     if not dump_only and readonly_db is None:
-        raise ValueError("readonly_db must be provided with when "
-                         "dump_only == False")
+        raise ValueError("readonly_db must be provided if dump_only == False")
     if not load_only:
         # START THE DUMP
         if delete_existing and 'readonly' in principal_db.get_schemas():

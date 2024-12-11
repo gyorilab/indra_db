@@ -149,13 +149,13 @@ python3 -m indra_db.readonly_dumping.readonly_dumping \
         # --force  # Use if you want to overwrite an existing db, if it exists
 
 # Dump the db, once done importing
-#pg_dump -h localhost \
-#        -U postgres \
-#        -w \
-#        -f "${LOCAL_RO_DB_NAME}.dump" $LOCAL_RO_DB_NAME
-#
+pg_dump -h localhost \
+        -U postgres \
+        -w \
+        -f "${LOCAL_RO_DB_NAME}.dump" $LOCAL_RO_DB_NAME
+
 ## copy to s3
-#aws s3 cp "${LOCAL_RO_DB_NAME}.dump" "s3://bigmech/indra-db/dumps/"
+aws s3 cp "${LOCAL_RO_DB_NAME}.dump" "s3://bigmech/indra-db/dumps/"
 
 # Remove dump file only after it has been copied to s3 successfully
 #rm "${LOCAL_RO_DB_NAME}.dump"
@@ -166,10 +166,10 @@ python3 -m indra_db.readonly_dumping.readonly_dumping \
 # The file name is the current date and time
 
 # Get the current date and time
-#END_DATE_TIME=`date '+%Y-%m-%d %H:%M:%S'`
-#END_DATE=`date '+%Y-%m-%d'`
-#echo "{\"datetime\": \"$END_DATE_TIME\", \"date_stamp\": \"$END_DATE\"}" > end.json
-#aws s3 cp end.json "$S3_PATH/end.json"
+END_DATE_TIME=`date '+%Y-%m-%d %H:%M:%S'`
+END_DATE=`date '+%Y-%m-%d'`
+echo "{\"datetime\": \"$END_DATE_TIME\", \"date_stamp\": \"$END_DATE\"}" > end.json
+aws s3 cp end.json "$S3_PATH/end.json"
 
 # At this point, if a new readonly instance is already created, we could run
 # the following command to update the instance (assuming the password is set

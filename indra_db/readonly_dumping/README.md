@@ -2,17 +2,10 @@
 
 This README describes the pipeline used for creating the readonly database.
 
-Todos (as of 2023-11-22):
-- [X] Add mappings from KB statements so merge with reading statements can 
-  be done
-  - [X] Source counts
-  - [X] Raw statement id to db_info_id, reading_id, and statement json
-  - [X] Statement hash to raw statement id for KB sourced raw statements
-- [X] Write function for merge distilled and preassembled statements from 
-  reading and database sources
-- [X] Write script to run the table file creations
-- [ ] Add code to dump a restore file from the readonly database and upload 
+Todos (as of 2024-12-11):
+- [ ] Test code to dump a restore file from the readonly database and upload 
   it to S3
+- [ ] Restore database dump file from S3 and deploy the database
 
 ## Overview
 
@@ -73,7 +66,13 @@ postgres=#
 
 (`postgres=#` means you're in the PostgreSQL server terminal)
 
-_TODO: add more details on moving data directory_
+Move data directory (needed on EC2):
+```
+sudo mkdir -p /new/storage/postgresql # Usually in folder mounted on EBS column on EC2
+sudo chown -R postgres:postgres /new/storage/postgresql # Set permission
+sudo nano /etc/postgresql/14/main/postgresql.conf # Open config
+```
+and modify `data_directory = '/new/storage/postgresql'`
 
 #### Set Up User and Database
 
@@ -122,6 +121,17 @@ instructions more or less copied from the repository README.
 Install by running `pip install adeft`.
 
 Download resource files using `python -m adeft.download`.
+
+### PySpark & Java
+
+On Ubuntu, Java install by running 
+```
+sudo apt update
+sudo apt install default-jdk
+```
+
+PySpark instll by running  `pip install pyspark` . 
+
 
 ## Pipeline Steps
 
@@ -251,10 +261,10 @@ following arguments:
 
 Dump a restore file from the readonly database and upload it to S3.
 
-**Status: Not Implemented (code from current setup can be adapted)**
+**Status: Implemented (not tested)**
 
 # Graph of the Pipeline
-
+### Step 1 (export_assembly.py)
 This graph shows the dependencies between the different files in the initial
 part of the pipeline that produces the seed files.
 ```mermaid
@@ -297,11 +307,32 @@ graph TD;
 %% The KB Processes Statements and KB Source Counts are from the KBs
     T[Knowledge Bases] ----> J;
     T ----> G;
-    T --TODO--> U[KB Info Id Map];
-    T --TODO--> V[KB Stmt Hash to Raw Id Map];
+    T ----> U[KB Info Id Map];
+    T ----> V[KB Stmt Hash to Raw Id Map];
 %% Merge the Info Id Maps and the Stmt Hash to Raw Id Maps
     U ----> X[Info Id Map];
     V ----> Y[Stmt Hash to Raw Id Map];
 ```
 
 [//]: # (TODO: Add the second pipeline step to the graph or another graph)
+### Step 2 (readonly_dumping.py)
+This is the final output tables
+| **Table Name**           | **Data Source**                                                                 |
+|---------------------------|-------------------------------------------------------------------------------|
+| belief                   | belief_scores.pkl                                                             |
+| raw_stmt_src             | raw_statements.tsv.gz                                                         |
+| reading_ref_link         | principal_dump_sql                                                            |
+| evidence_counts          | source_counts.pkl                                                             |
+| pa_agent_counts          | pa_hash_act_type_ag_count_cache from unique_statements.tsv.gz                 |
+| mesh_concept_ref_counts  | Processed From PubMed articles                                                |
+| mesh_term_ref_counts     | Processed From PubMed articles                                                |
+| name_meta                | principal_dump_sql                                                            |
+| text_meta                | principal_dump_sql                                                            |
+| other_meta               | principal_dump_sql                                                            |
+| source_meta              | From name_meta in readonly database                                           |
+| agent_interactions       | From source_meta and name_meta in the readonly database                       |
+| fast_raw_pa_link         | raw_stmt_id_to_info_map.tsv.gz, unique_statements.tsv.gz, and stmt_hash_to_raw_stmt_ids.pkl |
+| raw_stmt_mesh_concepts   | text_refs_principal.tsv.gz and info from PubMed articles                      |
+| raw_stmt_mesh_terms      | text_refs_principal.tsv.gz and info from PubMed articles                      |
+| mesh_concept_meta        | raw_stmt_mesh_concepts, raw_stmt_id_to_hash, source_counts, belief_scores, stmt_hash_to_activity_type_count |
+| mesh_term_meta           | raw_stmt_id_to_hash, source_counts, belief_scores, stmt_hash_to_activity_type_count |

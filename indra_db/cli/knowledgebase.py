@@ -930,13 +930,6 @@ def local_update(
             if batches:
                 t.close()
 
-            # if error_log:
-            #     error_log_path = '../../error_log/kbm_errors.pkl'
-            #     os.makedirs(os.path.dirname(error_log_path), exist_ok=True)
-            #     with open(error_log_path, 'wb') as f:
-            #         pickle.dump(error_log, f)
-            #     print(f"Recorded {len(error_log)} errors in 'kbm_errors.pkl'")
-
     logger.info("Statements produced per knowledgebase:")
     for (source, short_name), count in counts.most_common():
         logger.info(f"  - {source} {short_name}: {count}")

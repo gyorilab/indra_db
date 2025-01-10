@@ -31,7 +31,7 @@
         queryString += 'format=html';
 
         // Build URL
-        let baseUrl = '{{ endpoint }}statements/from_agents?';
+        let baseUrl = `${window.location.href}/from_agents?`;
 
         let getUrl = baseUrl + queryString;
 

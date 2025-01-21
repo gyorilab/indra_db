@@ -1,3 +1,5 @@
+import os
+
 import sys
 import json
 import logging
@@ -137,6 +139,14 @@ if not TESTING["status"]:
     SC, jwt = config_auth(app)
 else:
     logger.warning("TESTING: No auth will be enabled.")
+
+# Set some URL configs:
+SERVER_NAME = os.environ.get("SERVER_NAME")
+PREFERRED_URL_SCHEME = os.environ.get("PREFERRED_URL_SCHEME")
+if SERVER_NAME is not None:
+    app.config["SERVER_NAME"] = SERVER_NAME
+if PREFERRED_URL_SCHEME is not None:
+    app.config["PREFERRED_URL_SCHEME"] = PREFERRED_URL_SCHEME
 
 # Apply wrappers to the app that will compress responses and enable CORS.
 Compress(app)

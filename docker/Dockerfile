@@ -1,4 +1,4 @@
-FROM 292075781285.dkr.ecr.us-east-1.amazonaws.com/indra:latest
+FROM $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/indra:latest
 
 ARG BUILD_BRANCH
 ARG INDRA_BRANCH

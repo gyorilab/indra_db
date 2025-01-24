@@ -1,5 +1,6 @@
 ARG AWS_ACCOUNT_ID
-FROM $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/indra:latest
+ENV BASE_IMAGE=$AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/indra:latest
+FROM ${BASE_IMAGE}
 
 ARG BUILD_BRANCH
 ARG INDRA_BRANCH

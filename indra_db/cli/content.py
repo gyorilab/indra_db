@@ -1365,11 +1365,18 @@ class PmcOA(PmcManager):
         return self.licenses[pmcid]
 
     def is_archive(self, k):
-        return k.endswith('.xml.tar.gz')
+        return k.endswith('.tar.gz')
 
     def get_all_archives(self):
-        return [path.join('oa_bulk', k) for k in self.ftp.ftp_ls('oa_bulk')
-                if self.is_archive(k)]
+        """Get a list of PMC OA .tar.gz archives in the known subfolders."""
+        archives = []
+        for subf in ['oa_comm', 'oa_noncomm', 'oa_other']:
+            subpath = self.ftp._path_join('oa_bulk', subf, 'xml')
+            all_files = self.ftp.ftp_ls(subpath)
+            for f in all_files:
+                if self.is_archive(f):
+                    archives.append(self.ftp._path_join(subpath, f))
+        return archives
 
     def get_file_data(self):
         """Retrieve the metadata provided by the FTP server for files."""

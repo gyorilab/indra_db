@@ -1407,19 +1407,13 @@ class PmcOA(PmcManager):
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, my_source)
     def update(self, db):
-        min_datetime = self.get_latest_update(db)
-        archive_set = self.get_archives_after_date(min_datetime)
-        logger.info(f"There are {len(archive_set)} new articles since last "
-                    f"full update.")
-        done_sfs = db.select_all(db.SourceFile,
-                                 db.SourceFile.source == self.my_source,
-                                 db.SourceFile.load_date > min_datetime)
-        logger.info(f"Of those, {len(done_sfs)} have already been done.")
-        archive_set -= {sf.name for sf in done_sfs}
+        load_pmcid_set = self.find_all_missing_pmcids(db)
+        archives = self.get_archives_for_pmcids(load_pmcid_set)
 
         # Upload these archives.
-        logger.info(f"Updating the database with {len(archive_set)} articles.")
-        self.upload_archives(db, archive_set, batch_size=5000)
+        logger.info(f"Updating the database with "
+                    f"{len(archives)} changed archives.")
+        self.upload_archives(db, archives, batch_size=5000)
         return True
 
     def find_all_missing_pmcids(self, db):

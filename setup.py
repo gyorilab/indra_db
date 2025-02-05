@@ -10,8 +10,7 @@ def main():
                                   'flask-compress', 'numpy'],
                       'cli': ['click', 'boto3'],
                       'copy': ['pgcopy'],
-                      'misc': ['matplotlib', 'numpy'],
-                      'readonly': ['bs4']}
+                      'misc': ['matplotlib', 'numpy']}
     extras_require['all'] = list({dep for deps in extras_require.values()
                                   for dep in deps})
     setup(name='indra_db',
@@ -24,7 +23,7 @@ def main():
           packages=packages,
           include_package_data=True,
           install_requires=['sqlalchemy<1.4', 'psycopg2', 'cachetools',
-                            'termcolor'],
+                            'termcolor', 'bs4'],
           extras_require=extras_require,
           entry_points="""
           [console_scripts]

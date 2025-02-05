@@ -10,7 +10,8 @@ def main():
                                   'flask-compress', 'numpy'],
                       'cli': ['click', 'boto3'],
                       'copy': ['pgcopy'],
-                      'misc': ['matplotlib', 'numpy']}
+                      'misc': ['matplotlib', 'numpy'],
+                      'readonly': ['bs4']}
     extras_require['all'] = list({dep for deps in extras_require.values()
                                   for dep in deps})
     setup(name='indra_db',

@@ -41,6 +41,9 @@ RUN git clone https://github.com/indralab/covid-19.git
 # version in the indra:db image)
 RUN pip install "sqlalchemy<1.4"
 
+#install bs4
+RUN pip install bs4
+
 # Install indra_db
 RUN git clone https://github.com/indralab/indra_db.git && \
     cd indra_db && \

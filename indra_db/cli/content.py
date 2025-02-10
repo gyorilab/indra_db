@@ -1715,6 +1715,13 @@ class Elsevier(ContentManager):
                              'matched': self.__matched_journal_set}, f)
         return True
 
+    def copy_into_db(self, db, table_name, data, columns):
+        """Write data to the given table using COPY"""
+        logger.info(f"Copying {len(data)} rows into {table_name}.")
+        if not data:
+            return
+        db.copy_report_lazy(table_name, data, columns)
+
     @ContentManager._record_for_review
     def populate(self, db, n_procs=1, continuing=False):
         """Load all available elsevier content for refs with no pmc content."""

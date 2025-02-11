@@ -1408,12 +1408,14 @@ class PmcOA(PmcManager):
     @DGContext.wrap(gatherer, my_source)
     def update(self, db):
         load_pmcid_set = self.find_all_missing_pmcids(db)
-        archives = self.get_archives_for_pmcids(load_pmcid_set)
+        archives_dict = self.get_archives_for_pmcids(load_pmcid_set)
 
         # Upload these archives.
-        logger.info(f"Updating the database with "
-                    f"{len(archives)} changed archives.")
-        self.upload_archives(db, archives, pmcid_set=load_pmcid_set)
+        logger.info("Beginning to upload archives.")
+        for archive, pmcid_set in sorted(archives_dict.items()):
+            logging.info(f"Extracting {len(pmcid_set)} articles from "
+                         f"{archive}.")
+            self.upload_archives(db, [archive], pmcid_set=pmcid_set)
         return True
 
     def find_all_missing_pmcids(self, db):

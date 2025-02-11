@@ -425,7 +425,7 @@ class ContentManager(object):
                 id_updates = {}
                 for i, id_type in enumerate(self.tr_cols):
                     if id_type not in match_id_types:
-                        continue                    
+                        continue
                     # Check if the text ref is missing that id.
                     if getattr(tr, id_type) is None:
                         # If so, and if our new data does have that id, update
@@ -1413,7 +1413,7 @@ class PmcOA(PmcManager):
         # Upload these archives.
         logger.info(f"Updating the database with "
                     f"{len(archives)} changed archives.")
-        self.upload_archives(db, archives, batch_size=5000)
+        self.upload_archives(db, archives, pmcid_set=load_pmcid_set)
         return True
 
     def find_all_missing_pmcids(self, db):
@@ -1666,8 +1666,9 @@ class Elsevier(ContentManager):
         logger.debug("Found %d elsevier text refs." % len(elsevier_trs))
         article_tuples = self.__get_content(elsevier_trs)
         logger.debug("Got %d elsevier results." % len(article_tuples))
-        self.copy_into_db(db, 'text_content', article_tuples, self.tc_cols)
         return
+        # self.copy_into_db(db, 'text_content', article_tuples, self.tc_cols)
+        # return
 
     def _get_elsevier_content(self, db, tr_query, continuing=False):
         """Get the elsevier content given a text ref query object."""

@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from os import path, remove, rename, listdir
 from typing import Tuple
 
+from indra.literature.elsevier_client import has_full_text
 from indra.util import zip_string, batch_iter
 from indra.util import UnicodeXMLTreeBuilder as UTB
 
@@ -1659,9 +1660,13 @@ class Elsevier(ContentManager):
             if id_dict:
                 content_str = download_article_from_ids(**id_dict)
                 if content_str is not None:
+                    if has_full_text(content_str):
+                        text_type = texttypes.FULLTEXT
+                    else:
+                        text_type = texttypes.ABSTRACT
                     content_zip = zip_string(content_str)
                     article_tuples.add((tr.id, self.my_source, formats.TEXT,
-                                        texttypes.FULLTEXT, content_zip))
+                                        text_type, content_zip))
         return article_tuples
 
     def __process_batch(self, db, tr_batch):

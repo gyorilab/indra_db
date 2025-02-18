@@ -1581,7 +1581,7 @@ class Manuscripts(PmcManager):
 
 class Elsevier(ContentManager):
     """Content manager for maintaining content from Elsevier."""
-    my_source = 'elsevier bv'
+    my_source = 'elsevier'
     tc_cols = ('text_ref_id', 'source', 'format', 'text_type',
                'content',)
 
@@ -1611,7 +1611,7 @@ class Elsevier(ContentManager):
             if tr.doi is not None:
                 publisher = get_publisher(tr.doi)
                 if publisher is not None and\
-                   publisher.lower() == self.my_source:
+                   publisher.lower() == "elsevier bv":
                     tr_set.remove(tr)
                     elsevier_tr_set.add(tr)
 

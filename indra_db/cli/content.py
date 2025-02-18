@@ -1581,7 +1581,7 @@ class Manuscripts(PmcManager):
 
 class Elsevier(ContentManager):
     """Content manager for maintaining content from Elsevier."""
-    my_source = 'elsevier'
+    my_source = 'elsevier bv'
     tc_cols = ('text_ref_id', 'source', 'format', 'text_type',
                'content',)
 
@@ -1622,6 +1622,8 @@ class Elsevier(ContentManager):
             meta_data_dict = None
             while num_retries < max_retries:
                 try:
+                    if not pmid_set:
+                        logger.info("Empty pmid_id set")
                     meta_data_dict = get_metadata_for_ids(pmid_set)
                     break
                 except Exception as e:

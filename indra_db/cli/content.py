@@ -1772,6 +1772,45 @@ class Elsevier(ContentManager):
 
         return self._get_elsevier_content(db, tr_query, False)
 
+    def get_elsevier_nlm_ids(self, node_file, journal_set):
+        """Extract NLM IDs of Elsevier journals from node.tsv.gz."""
+        elsevier_nlm_ids = set()
+        print("iterating node.tsv.gz")
+        with gzip.open(node_file, "rt", encoding="utf-8") as f:
+            next(f)  # Skip header
+            for line in f:
+                parts = line.strip().split("\t")
+                nlm_id, label, journal_name = parts[0], parts[1], parts[5]
+                if self.__regularize_title(journal_name) in journal_set:
+                    elsevier_nlm_ids.add(nlm_id)
+        return elsevier_nlm_ids
+
+    def get_elsevier_pmids(self, edge_file, elsevier_nlm_ids):
+        """Extract PMIDs that are published in Elsevier journals."""
+        pmids = set()
+        with gzip.open(edge_file, "rt", encoding="utf-8") as f:
+            next(f)
+            for line in f:
+                pmid, nlm_id, rel_type = line.strip().split("\t")
+                if nlm_id in elsevier_nlm_ids:
+                    pmid = pmid.replace("pubmed:", "")
+                    pmids.add(int(pmid))
+        return pmids
+
+    def get_pmids_without_fulltext(self, db):
+        """Retrieve all PMIDs (DOIs) from text_ref that do not have full text in text_content."""
+        # If the pmid don't have fulltext,
+        # then the leftjoin will make text_ref_id none
+        query = (
+            db.session.query(db.TextRef)
+            .outerjoin(db.TextContent,
+                       (db.TextRef.id == db.TextContent.text_ref_id) &
+                       (db.TextContent.text_type == 'fulltext'))
+            .filter(db.TextContent.text_ref_id.is_(None))
+        )
+        return {tr.id for tr in query.all()}
+
+
 
 @click.group()
 def content():

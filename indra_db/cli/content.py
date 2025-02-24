@@ -1861,7 +1861,7 @@ class Elsevier(ContentManager):
                 self.copy_into_db(db, 'text_content', article_tuples,
                                   self.tc_cols)
         else:
-            if not edge_file or node_file:
+            if not (os.path.exists(edge_file) and os.path.exists(node_file)):
                 logger.error("Missing edge/node file from indra cogex.")
             elsevier_nlm_ids = self.get_elsevier_nlm_ids(node_file, self.__journal_set)
             print("Total Elsevier Journals", len(elsevier_nlm_ids))

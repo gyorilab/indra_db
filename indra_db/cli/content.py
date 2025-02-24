@@ -1852,14 +1852,7 @@ class Elsevier(ContentManager):
                 pmid_set = pickle.load(f)
                 print(f"Loaded {len(pmid_set)} PMIDs from {pmid_set_file}")
             pmid_iter = iter(pmid_set)
-            while True:
-                batch = set(islice(pmid_iter, 1000))
-                if not batch:
-                    break
-                article_tuples = self.get_content_from_pmids(batch)
 
-                self.copy_into_db(db, 'text_content', article_tuples,
-                                  self.tc_cols)
         else:
             if not (os.path.exists(edge_file) and os.path.exists(node_file)):
                 logger.error("Missing edge/node file from indra cogex.")
@@ -1877,14 +1870,15 @@ class Elsevier(ContentManager):
 
             print(f"Saved {len(pmid_results)} PMIDs to {pmid_set_file}")
             pmid_iter = iter(pmid_results)
-            while True:
-                batch = set(islice(pmid_iter, 1000))
-                if not batch:
-                    break
-                article_tuples = self.get_content_from_pmids(batch)
 
-                self.copy_into_db(db, 'text_content', article_tuples,
-                                  self.tc_cols)
+        while True:
+            batch = set(islice(pmid_iter, 1000))
+            if not batch:
+                break
+            article_tuples = self.get_content_from_pmids(batch)
+
+            self.copy_into_db(db, 'text_content', article_tuples,
+                              self.tc_cols)
 
 
 

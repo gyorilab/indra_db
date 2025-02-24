@@ -1,7 +1,10 @@
 import ftplib
+import gzip
+import os
 import re
 import csv
 import tarfile
+from itertools import islice
 import click
 import zlib
 import logging
@@ -16,6 +19,7 @@ from datetime import datetime, timedelta
 from os import path, remove, rename, listdir
 from typing import Tuple
 
+from indra.literature.elsevier_client import has_full_text
 from indra.util import zip_string, batch_iter
 from indra.util import UnicodeXMLTreeBuilder as UTB
 
@@ -425,7 +429,7 @@ class ContentManager(object):
                 id_updates = {}
                 for i, id_type in enumerate(self.tr_cols):
                     if id_type not in match_id_types:
-                        continue                    
+                        continue
                     # Check if the text ref is missing that id.
                     if getattr(tr, id_type) is None:
                         # If so, and if our new data does have that id, update
@@ -1365,11 +1369,18 @@ class PmcOA(PmcManager):
         return self.licenses[pmcid]
 
     def is_archive(self, k):
-        return k.endswith('.xml.tar.gz')
+        return k.endswith('.tar.gz')
 
     def get_all_archives(self):
-        return [path.join('oa_bulk', k) for k in self.ftp.ftp_ls('oa_bulk')
-                if self.is_archive(k)]
+        """Get a list of PMC OA .tar.gz archives in the known subfolders."""
+        archives = []
+        for subf in ['oa_comm', 'oa_noncomm', 'oa_other']:
+            subpath = self.ftp._path_join('oa_bulk', subf, 'xml')
+            all_files = self.ftp.ftp_ls(subpath)
+            for f in all_files:
+                if self.is_archive(f):
+                    archives.append(self.ftp._path_join(subpath, f))
+        return archives
 
     def get_file_data(self):
         """Retrieve the metadata provided by the FTP server for files."""
@@ -1391,8 +1402,8 @@ class PmcOA(PmcManager):
                     "the last update.")
         archive_set = {
             f['archive'] for f in self.file_data
-            if 'Last Updated (YYYY-MM-DD HH:MM:SS)' in f and
-            datetime.strptime(f['Last Updated (YYYY-MM-DD HH:MM:SS)'],
+            if 'LastUpdated (YYYY-MM-DD HH:MM:SS)' in f and
+            datetime.strptime(f['LastUpdated (YYYY-MM-DD HH:MM:SS)'],
                               '%Y-%m-%d %H:%M:%S') > min_date
         }
         return archive_set
@@ -1400,19 +1411,15 @@ class PmcOA(PmcManager):
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, my_source)
     def update(self, db):
-        min_datetime = self.get_latest_update(db)
-        archive_set = self.get_archives_after_date(min_datetime)
-        logger.info(f"There are {len(archive_set)} new articles since last "
-                    f"full update.")
-        done_sfs = db.select_all(db.SourceFile,
-                                 db.SourceFile.source == self.my_source,
-                                 db.SourceFile.load_date > min_datetime)
-        logger.info(f"Of those, {len(done_sfs)} have already been done.")
-        archive_set -= {sf.name for sf in done_sfs}
+        load_pmcid_set = self.find_all_missing_pmcids(db)
+        archives_dict = self.get_archives_for_pmcids(load_pmcid_set)
 
         # Upload these archives.
-        logger.info(f"Updating the database with {len(archive_set)} articles.")
-        self.upload_archives(db, archive_set, batch_size=5000)
+        logger.info("Beginning to upload archives.")
+        for archive, pmcid_set in sorted(archives_dict.items()):
+            logging.info(f"Extracting {len(pmcid_set)} articles from "
+                         f"{archive}.")
+            self.upload_archives(db, [archive], pmcid_set=pmcid_set)
         return True
 
     def find_all_missing_pmcids(self, db):
@@ -1608,7 +1615,7 @@ class Elsevier(ContentManager):
             if tr.doi is not None:
                 publisher = get_publisher(tr.doi)
                 if publisher is not None and\
-                   publisher.lower() == self.my_source:
+                   publisher.lower() == "elsevier bv":
                     tr_set.remove(tr)
                     elsevier_tr_set.add(tr)
 
@@ -1619,6 +1626,8 @@ class Elsevier(ContentManager):
             meta_data_dict = None
             while num_retries < max_retries:
                 try:
+                    if not pmid_set:
+                        logger.info("Empty pmid_id set")
                     meta_data_dict = get_metadata_for_ids(pmid_set)
                     break
                 except Exception as e:
@@ -1654,9 +1663,13 @@ class Elsevier(ContentManager):
             if id_dict:
                 content_str = download_article_from_ids(**id_dict)
                 if content_str is not None:
+                    if has_full_text(content_str):
+                        text_type = texttypes.FULLTEXT
+                    else:
+                        text_type = texttypes.ABSTRACT
                     content_zip = zip_string(content_str)
                     article_tuples.add((tr.id, self.my_source, formats.TEXT,
-                                        texttypes.FULLTEXT, content_zip))
+                                        text_type, content_zip))
         return article_tuples
 
     def __process_batch(self, db, tr_batch):
@@ -1665,8 +1678,9 @@ class Elsevier(ContentManager):
         logger.debug("Found %d elsevier text refs." % len(elsevier_trs))
         article_tuples = self.__get_content(elsevier_trs)
         logger.debug("Got %d elsevier results." % len(article_tuples))
-        self.copy_into_db(db, 'text_content', article_tuples, self.tc_cols)
         return
+        # self.copy_into_db(db, 'text_content', article_tuples, self.tc_cols)
+        # return
 
     def _get_elsevier_content(self, db, tr_query, continuing=False):
         """Get the elsevier content given a text ref query object."""
@@ -1714,6 +1728,13 @@ class Elsevier(ContentManager):
                              'matched': self.__matched_journal_set}, f)
         return True
 
+    def copy_into_db(self, db, table_name, data, columns):
+        """Write data to the given table using COPY"""
+        logger.info(f"Copying {len(data)} rows into {table_name}.")
+        if not data:
+            return
+        db.copy_report_lazy(table_name, data, columns)
+
     @ContentManager._record_for_review
     def populate(self, db, n_procs=1, continuing=False):
         """Load all available elsevier content for refs with no pmc content."""
@@ -1753,6 +1774,113 @@ class Elsevier(ContentManager):
         tr_query = new_trs.except_(tr_w_pmc_q)
 
         return self._get_elsevier_content(db, tr_query, False)
+
+    def get_elsevier_nlm_ids(self, node_file, journal_set):
+        """Extract NLM IDs of Elsevier journals from node.tsv.gz."""
+        elsevier_nlm_ids = set()
+        print("iterating node.tsv.gz")
+        with gzip.open(node_file, "rt", encoding="utf-8") as f:
+            next(f)  # Skip header
+            for line in f:
+                parts = line.strip().split("\t")
+                nlm_id, label, journal_name = parts[0], parts[1], parts[5]
+                if self.__regularize_title(journal_name) in journal_set:
+                    elsevier_nlm_ids.add(nlm_id)
+        return elsevier_nlm_ids
+
+    def get_elsevier_pmids(self, edge_file, elsevier_nlm_ids):
+        """Extract PMIDs that are published in Elsevier journals."""
+        pmids = set()
+        with gzip.open(edge_file, "rt", encoding="utf-8") as f:
+            next(f)
+            for line in f:
+                pmid, nlm_id, rel_type = line.strip().split("\t")
+                if nlm_id in elsevier_nlm_ids:
+                    pmid = pmid.replace("pubmed:", "")
+                    pmids.add(int(pmid))
+        return pmids
+
+    def get_pmids_without_fulltext(self, db):
+        """Retrieve all PMIDs (DOIs) from text_ref that do not have full text in text_content."""
+        # If the pmid don't have fulltext,
+        # then the leftjoin will make text_ref_id none
+        query = (
+            db.session.query(db.TextRef)
+            .outerjoin(db.TextContent,
+                       (db.TextRef.id == db.TextContent.text_ref_id) &
+                       (db.TextContent.text_type == 'fulltext'))
+            .filter(db.TextContent.text_ref_id.is_(None))
+        )
+        return {tr.id for tr in query.all()}
+
+
+    def get_content_from_pmids(self, pmids):
+        from indra.literature.elsevier_client import download_article_from_ids
+        """Load PMIDs from a pickle file and retrieve Elsevier article content."""
+        fulltext_count = 0
+        abstract_count = 0
+        article_tuples = set()
+        for pmid in pmids:
+            id_dict = {"pmid": pmid}
+            content_str = download_article_from_ids(**id_dict)
+            if content_str is not None:
+                if has_full_text(content_str):
+                    fulltext_count += 1
+                    text_type = texttypes.FULLTEXT
+                    content_zip = zip_string(content_str)
+                    article_tuples.add((pmid, self.my_source, formats.TEXT,
+                                        text_type, content_zip))
+                # else:
+                #     abstract_count += 1
+                #     text_type = texttypes.ABSTRACT
+                # content_zip = zip_string(content_str)
+                # article_tuples.add((pmid, self.my_source, formats.TEXT,
+                #                     text_type, content_zip))
+        print(f"Retrieved {len(article_tuples)} articles with "
+              f"{fulltext_count} fulltext and {abstract_count} abstract.")
+        return article_tuples
+
+
+    @ContentManager._record_for_review
+    def update_by_cogex(self, db, edge_file=None, node_file=None):
+        """Load all available new elsevier content from new pmids.
+        Checking against the indra cogex edge and node files"""
+        pmid_set_file = os.path.join(THIS_DIR, 'pmids_elsevier.pkl')
+
+        if os.path.exists(pmid_set_file):
+            with open(pmid_set_file, "rb") as f:
+                pmid_set = pickle.load(f)
+                print(f"Loaded {len(pmid_set)} PMIDs from {pmid_set_file}")
+            pmid_iter = iter(pmid_set)
+
+        else:
+            if not (os.path.exists(edge_file) and os.path.exists(node_file)):
+                logger.error("Missing edge/node file from indra cogex.")
+            elsevier_nlm_ids = self.get_elsevier_nlm_ids(node_file, self.__journal_set)
+            print("Total Elsevier Journals", len(elsevier_nlm_ids))
+
+            elsevier_pmids = self.get_elsevier_pmids(edge_file, elsevier_nlm_ids)
+            print(f"Total Elsevier PMIDs: {len(elsevier_pmids)}")
+
+            all_pmid = self.get_pmids_without_fulltext(db)
+            print("Number of pmid that don't have fulltext", len(all_pmid))
+            pmid_results = all_pmid & elsevier_pmids
+            with open(pmid_set_file, "wb") as f:
+                pickle.dump(pmid_results, f)
+
+            print(f"Saved {len(pmid_results)} PMIDs to {pmid_set_file}")
+            pmid_iter = iter(pmid_results)
+
+        while True:
+            batch = set(islice(pmid_iter, 1000))
+            if not batch:
+                break
+            article_tuples = self.get_content_from_pmids(batch)
+
+            self.copy_into_db(db, 'text_content', article_tuples,
+                              self.tc_cols)
+
+
 
 
 @click.group()

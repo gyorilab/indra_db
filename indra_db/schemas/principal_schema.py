@@ -301,7 +301,7 @@ class PrincipalSchema(Schema):
                                    'mesh_num'),
                         BtreeIndex('mesh_ref_annotations_qual_id_idx',
                                    'qual_num')]
-            id = Column(Integer, primary_key=True)
+            id = Column(BigInteger, primary_key=True)
             pmid_num = Column(Integer, nullable=False)
             mesh_num = Column(Integer, nullable=False)
             qual_num = Column(Integer)

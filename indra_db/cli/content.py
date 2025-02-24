@@ -1,7 +1,10 @@
 import ftplib
+import gzip
+import os
 import re
 import csv
 import tarfile
+from itertools import islice
 import click
 import zlib
 import logging
@@ -1809,6 +1812,80 @@ class Elsevier(ContentManager):
             .filter(db.TextContent.text_ref_id.is_(None))
         )
         return {tr.id for tr in query.all()}
+
+
+    def get_content_from_pmids(self, pmids):
+        from indra.literature.elsevier_client import download_article_from_ids
+        """Load PMIDs from a pickle file and retrieve Elsevier article content."""
+        fulltext_count = 0
+        abstract_count = 0
+        article_tuples = set()
+        for pmid in pmids:
+            id_dict = {"pmid": pmid}
+            content_str = download_article_from_ids(**id_dict)
+            if content_str is not None:
+                if has_full_text(content_str):
+                    fulltext_count += 1
+                    text_type = texttypes.FULLTEXT
+                    content_zip = zip_string(content_str)
+                    article_tuples.add((pmid, self.my_source, formats.TEXT,
+                                        text_type, content_zip))
+                # else:
+                #     abstract_count += 1
+                #     text_type = texttypes.ABSTRACT
+                # content_zip = zip_string(content_str)
+                # article_tuples.add((pmid, self.my_source, formats.TEXT,
+                #                     text_type, content_zip))
+        print(f"Retrieved {len(article_tuples)} articles with "
+              f"{fulltext_count} fulltext and {abstract_count} abstract.")
+        return article_tuples
+
+
+    @ContentManager._record_for_review
+    def update_by_cogex(self, db, edge_file=None, node_file=None):
+        """Load all available new elsevier content from new pmids.
+        Checking against the indra cogex edge and node files"""
+        pmid_set_file = os.path.join(THIS_DIR, 'pmids_elsevier.pkl')
+
+        if os.path.exists(pmid_set_file):
+            with open(pmid_set_file, "rb") as f:
+                pmid_set = pickle.load(f)
+                print(f"Loaded {len(pmid_set)} PMIDs from {pmid_set_file}")
+            pmid_iter = iter(pmid_set)
+            while True:
+                batch = set(islice(pmid_iter, 1000))
+                if not batch:
+                    break
+                article_tuples = self.get_content_from_pmids(batch)
+
+                self.copy_into_db(db, 'text_content', article_tuples,
+                                  self.tc_cols)
+        else:
+            if not edge_file or node_file:
+                logger.error("Missing edge/node file from indra cogex.")
+            elsevier_nlm_ids = self.get_elsevier_nlm_ids(node_file, self.__journal_set)
+            print("Total Elsevier Journals", len(elsevier_nlm_ids))
+
+            elsevier_pmids = self.get_elsevier_pmids(edge_file, elsevier_nlm_ids)
+            print(f"Total Elsevier PMIDs: {len(elsevier_pmids)}")
+
+            all_pmid = self.get_pmids_without_fulltext(db)
+            print("Number of pmid that don't have fulltext", len(all_pmid))
+            pmid_results = all_pmid & elsevier_pmids
+            with open(pmid_set_file, "wb") as f:
+                pickle.dump(pmid_results, f)
+
+            print(f"Saved {len(pmid_results)} PMIDs to {pmid_set_file}")
+            pmid_iter = iter(pmid_results)
+            while True:
+                batch = set(islice(pmid_iter, 1000))
+                if not batch:
+                    break
+                article_tuples = self.get_content_from_pmids(batch)
+
+                self.copy_into_db(db, 'text_content', article_tuples,
+                                  self.tc_cols)
+
 
 
 

@@ -1,6 +1,7 @@
 import ftplib
 import gzip
 import os
+import random
 import re
 import csv
 import tarfile
@@ -1799,7 +1800,7 @@ class Elsevier(ContentManager):
                 pmid, nlm_id, rel_type = line.strip().split("\t")
                 if nlm_id in elsevier_nlm_ids:
                     pmid = pmid.replace("pubmed:", "")
-                    pmids.add(int(pmid))
+                    pmids.add(pmid)
         return pmids
 
     def get_pmids_without_fulltext(self, db):
@@ -1813,10 +1814,11 @@ class Elsevier(ContentManager):
                        (db.TextContent.text_type == 'fulltext'))
             .filter(db.TextContent.text_ref_id.is_(None))
         )
-        return {tr.id for tr in query.all()}
+        pmid_id_dict = {tr.pmid: tr.id for tr in query.all() if tr.pmid is not None}
+        return pmid_id_dict
 
 
-    def get_content_from_pmids(self, pmids):
+    def get_content_from_pmids(self, pmids, pmid_tr_dict):
         from indra.literature.elsevier_client import download_article_from_ids
         """Load PMIDs from a pickle file and retrieve Elsevier article content."""
         fulltext_count = 0
@@ -1830,14 +1832,12 @@ class Elsevier(ContentManager):
                     fulltext_count += 1
                     text_type = texttypes.FULLTEXT
                     content_zip = zip_string(content_str)
-                    article_tuples.add((pmid, self.my_source, formats.TEXT,
+                    article_tuples.add((pmid_tr_dict[pmid], self.my_source, formats.TEXT,
                                         text_type, content_zip))
                 # else:
                 #     abstract_count += 1
                 #     text_type = texttypes.ABSTRACT
-                # content_zip = zip_string(content_str)
-                # article_tuples.add((pmid, self.my_source, formats.TEXT,
-                #                     text_type, content_zip))
+
         logger.info(f"Retrieved {len(article_tuples)} articles with "
               f"{fulltext_count} fulltext and {abstract_count} abstract.")
         return article_tuples
@@ -1847,39 +1847,44 @@ class Elsevier(ContentManager):
     def update_by_cogex(self, db, edge_file=None, node_file=None):
         """Load all available new elsevier content from new pmids.
         Checking against the indra cogex edge and node files"""
-        pmid_set_file = os.path.join(THIS_DIR, 'pmids_elsevier.pkl')
+        pmid_list_file = os.path.join(THIS_DIR, 'pmids_elsevier.pkl')
+        pmid_tr_dict = os.path.join(THIS_DIR, 'pmids_tr_dict_elsevier.pkl')
 
-        if os.path.exists(pmid_set_file):
-            with open(pmid_set_file, "rb") as f:
-                pmid_set = pickle.load(f)
-                logger.info(f"Loaded {len(pmid_set)} PMIDs from {pmid_set_file}")
+        if os.path.exists(pmid_list_file) and os.path.exists(pmid_tr_dict):
+            with open(pmid_list_file, "rb") as f:
+                pmid_list = pickle.load(f)
+                logger.info(f"Loaded {len(pmid_list)} PMIDs from {pmid_list_file}")
+            with open(pmid_tr_dict, "rb") as f:
+                pmid_id_dict = pickle.load(f)
+                logger.info(f"Loaded PMIDs Text ref dict from {pmid_tr_dict}")
 
         else:
             if not (os.path.exists(edge_file) and os.path.exists(node_file)):
                 logger.error("Missing edge/node file from indra cogex.")
             elsevier_nlm_ids = self.get_elsevier_nlm_ids(node_file, self.__journal_set)
-            logger.info("Total Elsevier Journals", len(elsevier_nlm_ids))
+            logger.info(f"Total Elsevier Journals {len(elsevier_nlm_ids)}")
 
             elsevier_pmids = self.get_elsevier_pmids(edge_file, elsevier_nlm_ids)
             logger.info(f"Total Elsevier PMIDs: {len(elsevier_pmids)}")
 
-            all_pmid = self.get_pmids_without_fulltext(db)
-            logger.info("Number of pmid that don't have fulltext", len(all_pmid))
-            pmid_set = all_pmid & elsevier_pmids
-            with open(pmid_set_file, "wb") as f:
-                pickle.dump(pmid_set, f)
+            pmid_id_dict = self.get_pmids_without_fulltext(db)
+            all_pmid = set(pmid_id_dict.keys())
+            logger.info(f"Number of pmid that don't have fulltext {len(all_pmid)}")
+            pmid_set = all_pmid & elsevier_pmids #str
+            pmid_list = list(pmid_set)
+            random.shuffle(pmid_list)
+            with open(pmid_list_file, "wb") as f:
+                pickle.dump(pmid_list, f)
 
-            logger.info(f"Saved {len(pmid_set)} PMIDs to {pmid_set_file}")
-
-        total = len(pmid_set)
-
-        pmid_iter = iter(pmid_set)
+            logger.info(f"Saved {len(pmid_list)} PMIDs to {pmid_list_file}")
+        return
+        total = len(pmid_list)
+        batch_size = 100
         with tqdm(total=total, desc="Processing PMIDs", unit="batch") as pbar:
-            while True:
-                batch = set(islice(pmid_iter, 100))
-                if not batch:
-                    break
-                article_tuples = self.get_content_from_pmids(batch)
+            for i in range(0, total, batch_size):
+                batch = pmid_list[i:i + batch_size]
+                article_tuples = self.get_content_from_pmids(batch,
+                                                             pmid_id_dict)
                 self.copy_into_db(db, 'text_content', article_tuples,
                                   self.tc_cols)
                 pbar.update(len(batch))

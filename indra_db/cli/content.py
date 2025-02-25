@@ -1980,6 +1980,20 @@ def run(task, sources, continuing, debug):
             ContentManager().update(db)
 
 
+@content.command()
+@click.option("--edge-file", type=click.Path(exists=True), required=False,
+              help="Path to the INDRA Cogex edge file.")
+@click.option("--node-file", type=click.Path(exists=True), required=False,
+              help="Path to the INDRA Cogex node file.")
+def update_elsevier(edge_file, node_file):
+    """Run Elsevier update_by_cogex from the command line."""
+    from indra_db.util import get_db
+    db = get_db('primary')
+    manager = Elsevier()
+    manager.update_by_cogex(db=db, edge_file=edge_file, node_file=node_file)
+
+
+
 @content.command('list')
 @click.option('-l', '--long', is_flag=True,
               help="Include a list of the most recently added content for all "

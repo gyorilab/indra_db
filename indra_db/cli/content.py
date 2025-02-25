@@ -1915,7 +1915,7 @@ class Elsevier(ContentManager):
 
         total = len(pmid_list)
         batch_size = 100
-        with tqdm(total=total, desc="Processing PMIDs", unit="batch") as pbar:
+        with tqdm(total=total, desc="Processing PMIDs", unit="paper") as pbar:
             for i in range(0, total, batch_size):
                 batch = pmid_list[i:i + batch_size]
                 article_tuples = self.get_content_from_pmids(batch,

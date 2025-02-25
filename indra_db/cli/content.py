@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 from os import path, remove, rename, listdir
 from typing import Tuple
 
+from tqdm import tqdm
+
 from indra.literature.elsevier_client import has_full_text
 from indra.util import zip_string, batch_iter
 from indra.util import UnicodeXMLTreeBuilder as UTB
@@ -1851,7 +1853,6 @@ class Elsevier(ContentManager):
             with open(pmid_set_file, "rb") as f:
                 pmid_set = pickle.load(f)
                 logger.info(f"Loaded {len(pmid_set)} PMIDs from {pmid_set_file}")
-            pmid_iter = iter(pmid_set)
 
         else:
             if not (os.path.exists(edge_file) and os.path.exists(node_file)):
@@ -1864,22 +1865,24 @@ class Elsevier(ContentManager):
 
             all_pmid = self.get_pmids_without_fulltext(db)
             logger.info("Number of pmid that don't have fulltext", len(all_pmid))
-            pmid_results = all_pmid & elsevier_pmids
+            pmid_set = all_pmid & elsevier_pmids
             with open(pmid_set_file, "wb") as f:
-                pickle.dump(pmid_results, f)
+                pickle.dump(pmid_set, f)
 
-            logger.info(f"Saved {len(pmid_results)} PMIDs to {pmid_set_file}")
-            pmid_iter = iter(pmid_results)
+            logger.info(f"Saved {len(pmid_set)} PMIDs to {pmid_set_file}")
 
-        while True:
-            batch = set(islice(pmid_iter, 1000))
-            if not batch:
-                break
-            article_tuples = self.get_content_from_pmids(batch)
+        total = len(pmid_set)
 
-            self.copy_into_db(db, 'text_content', article_tuples,
-                              self.tc_cols)
-
+        pmid_iter = iter(pmid_set)
+        with tqdm(total=total, desc="Processing PMIDs", unit="batch") as pbar:
+            while True:
+                batch = set(islice(pmid_iter, 100))
+                if not batch:
+                    break
+                article_tuples = self.get_content_from_pmids(batch)
+                self.copy_into_db(db, 'text_content', article_tuples,
+                                  self.tc_cols)
+                pbar.update(len(batch))
 
 
 

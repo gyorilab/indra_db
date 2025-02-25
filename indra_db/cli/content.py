@@ -1842,6 +1842,36 @@ class Elsevier(ContentManager):
               f"{fulltext_count} fulltext and {abstract_count} abstract.")
         return article_tuples
 
+    def filter_existing_articles(self, db, article_tuples):
+        """
+        Filters out articles that already exist in the database with
+         the same text_ref_id and the source is 'elsevier'.
+
+        Parameters:
+        - db: Database
+        - article_tuples: Set of tuples (text_ref_id, source, format, text_type, content_zip).
+        Returns:
+        - A filtered set of article tuples
+        """
+        logger.info("Filtering existing articles...")
+
+        text_ref_ids = {article[0] for article in article_tuples}
+
+        existing_text_ref_ids = set(
+            row[0] for row in db.session.query(db.TextContent.text_ref_id)
+            .filter(db.TextContent.text_ref_id.in_(text_ref_ids),
+                    db.TextContent.source == "elsevier")
+            .all()
+        )
+
+        filtered_articles = {
+            article for article in article_tuples
+            if article[0] not in existing_text_ref_ids
+        }
+
+        logger.info(
+            f"Filtered {len(article_tuples) - len(filtered_articles)} existing articles.")
+        return filtered_articles
 
     @ContentManager._record_for_review
     def update_by_cogex(self, db, edge_file=None, node_file=None):
@@ -1887,8 +1917,9 @@ class Elsevier(ContentManager):
                 batch = pmid_list[i:i + batch_size]
                 article_tuples = self.get_content_from_pmids(batch,
                                                              pmid_id_dict)
-                self.copy_into_db(db, 'text_content', article_tuples,
-                                  self.tc_cols)
+                filtered_article_tuple = self.filter_existing_articles(db, article_tuples)
+                self.copy_into_db(db, 'text_content',
+                                  filtered_article_tuple, self.tc_cols)
                 pbar.update(len(batch))
 
 

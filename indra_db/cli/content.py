@@ -1778,7 +1778,7 @@ class Elsevier(ContentManager):
     def get_elsevier_nlm_ids(self, node_file, journal_set):
         """Extract NLM IDs of Elsevier journals from node.tsv.gz."""
         elsevier_nlm_ids = set()
-        print("iterating node.tsv.gz")
+        logger.info("iterating node.tsv.gz")
         with gzip.open(node_file, "rt", encoding="utf-8") as f:
             next(f)  # Skip header
             for line in f:
@@ -1836,7 +1836,7 @@ class Elsevier(ContentManager):
                 # content_zip = zip_string(content_str)
                 # article_tuples.add((pmid, self.my_source, formats.TEXT,
                 #                     text_type, content_zip))
-        print(f"Retrieved {len(article_tuples)} articles with "
+        logger.info(f"Retrieved {len(article_tuples)} articles with "
               f"{fulltext_count} fulltext and {abstract_count} abstract.")
         return article_tuples
 
@@ -1850,25 +1850,25 @@ class Elsevier(ContentManager):
         if os.path.exists(pmid_set_file):
             with open(pmid_set_file, "rb") as f:
                 pmid_set = pickle.load(f)
-                print(f"Loaded {len(pmid_set)} PMIDs from {pmid_set_file}")
+                logger.info(f"Loaded {len(pmid_set)} PMIDs from {pmid_set_file}")
             pmid_iter = iter(pmid_set)
 
         else:
             if not (os.path.exists(edge_file) and os.path.exists(node_file)):
                 logger.error("Missing edge/node file from indra cogex.")
             elsevier_nlm_ids = self.get_elsevier_nlm_ids(node_file, self.__journal_set)
-            print("Total Elsevier Journals", len(elsevier_nlm_ids))
+            logger.info("Total Elsevier Journals", len(elsevier_nlm_ids))
 
             elsevier_pmids = self.get_elsevier_pmids(edge_file, elsevier_nlm_ids)
-            print(f"Total Elsevier PMIDs: {len(elsevier_pmids)}")
+            logger.info(f"Total Elsevier PMIDs: {len(elsevier_pmids)}")
 
             all_pmid = self.get_pmids_without_fulltext(db)
-            print("Number of pmid that don't have fulltext", len(all_pmid))
+            logger.info("Number of pmid that don't have fulltext", len(all_pmid))
             pmid_results = all_pmid & elsevier_pmids
             with open(pmid_set_file, "wb") as f:
                 pickle.dump(pmid_results, f)
 
-            print(f"Saved {len(pmid_results)} PMIDs to {pmid_set_file}")
+            logger.info(f"Saved {len(pmid_results)} PMIDs to {pmid_set_file}")
             pmid_iter = iter(pmid_results)
 
         while True:

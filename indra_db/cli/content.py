@@ -1875,9 +1875,11 @@ class Elsevier(ContentManager):
             random.shuffle(pmid_list)
             with open(pmid_list_file, "wb") as f:
                 pickle.dump(pmid_list, f)
+            with open(pmid_tr_dict, "wb") as f:
+                pickle.dump(pmid_id_dict, f)
 
             logger.info(f"Saved {len(pmid_list)} PMIDs to {pmid_list_file}")
-        return
+
         total = len(pmid_list)
         batch_size = 100
         with tqdm(total=total, desc="Processing PMIDs", unit="batch") as pbar:

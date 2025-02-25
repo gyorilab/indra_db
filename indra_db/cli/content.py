@@ -1859,8 +1859,11 @@ class Elsevier(ContentManager):
 
         existing_text_ref_ids = set(
             row[0] for row in db.session.query(db.TextContent.text_ref_id)
-            .filter(db.TextContent.text_ref_id.in_(text_ref_ids),
-                    db.TextContent.source == "elsevier")
+            .filter(
+                db.TextContent.text_ref_id.in_(text_ref_ids),
+                db.TextContent.source == "elsevier",
+                db.TextContent.text_type == "fulltext"
+            )
             .all()
         )
 

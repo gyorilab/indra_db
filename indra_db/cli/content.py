@@ -1984,11 +1984,17 @@ def run(task, sources, continuing, debug):
 
 @content.command()
 @click.option("--edge-file", type=click.Path(exists=True), required=False,
-              help="Path to the INDRA Cogex edge file.")
+              help="Path to the INDRA CoGEx PubMed Journal edge file.")
 @click.option("--node-file", type=click.Path(exists=True), required=False,
-              help="Path to the INDRA Cogex node file.")
+              help="Path to the INDRA CoGEx PubMed Journal node file.")
 def update_elsevier(edge_file, node_file):
-    """Run Elsevier update_by_cogex from the command line."""
+    """Run Elsevier update_by_cogex from the command line.
+
+    The goal is to find articles that are Elsevier-published
+    based on the journal's NLM ID and the curated list of relevant
+    Elsevier journals. The node and edge files are typically
+    inside the cogex data folder under the pubmed/journal path.
+    """
     from indra_db.util import get_db
     db = get_db('primary')
     manager = Elsevier()

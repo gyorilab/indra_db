@@ -1681,7 +1681,7 @@ class Elsevier(ContentManager):
         logger.debug("Found %d elsevier text refs." % len(elsevier_trs))
         article_tuples = self.__get_content(elsevier_trs)
         logger.debug("Got %d elsevier results." % len(article_tuples))
-         self.copy_into_db(db, 'text_content', article_tuples, self.tc_cols)
+        self.copy_into_db(db, 'text_content', article_tuples, self.tc_cols)
         return
 
     def _get_elsevier_content(self, db, tr_query, continuing=False):

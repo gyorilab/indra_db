@@ -45,7 +45,7 @@ RUN pip install "sqlalchemy<1.4"
 RUN pip install bs4
 
 # Install indra_db
-RUN git clone --branch pmc_oa https://github.com/haohangyan/indra_db.git && \
+RUN git clone https://github.com/gyorilab/indra_db.git && \
     cd indra_db && \
     pip install -e .[all] && \
     pip list && \

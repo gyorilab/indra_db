@@ -322,25 +322,20 @@ def run_kb_pipeline(
         A dictionary mapping db_info ids to the local file paths of the
         statements for that knowledgebase
     """
-    # Select all knowledgebase managers except HPRD: statements already
-    # exist in db, the source data hasn't been updated since 2009 and the
-    # server hosting the source data returns 500 errors when trying to
-    # download it
     selected_kbs = []
     kb_file_mapping = {}
     for M in KnowledgebaseManager.__subclasses__():
         m = M()
-        if m.short_name != "hprd":
-            db_id = kb_mapping.get((m.source, m.short_name))
-            if db_id is None:
-                raise ValueError(
-                    f"Could not find db_info id for {m.source} {m.short_name} "
-                    f"in the db_info table on the principal database. If this is a new "
-                    f"source, please add it to the db_info table in the principal "
-                    f"database."
-                )
-            selected_kbs.append(M)
-            kb_file_mapping[db_id] = m.get_local_fpath()
+        db_id = kb_mapping.get((m.source, m.short_name))
+        if db_id is None:
+            raise ValueError(
+                f"Could not find db_info id for {m.source} {m.short_name} "
+                f"in the db_info table on the principal database. If this is a new "
+                f"source, please add it to the db_info table in the principal "
+                f"database."
+            )
+        selected_kbs.append(M)
+        kb_file_mapping[db_id] = m.get_local_fpath()
     local_update(kb_manager_list=selected_kbs, refresh=refresh)
 
     return kb_file_mapping

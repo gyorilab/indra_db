@@ -437,8 +437,8 @@ class HPRDManager(KnowledgebaseManager):
         from indra.sources import hprd
 
         # Download the files.
-        hprd_base = 'http://www.hprd.org/RELEASE9/'
-        resp = requests.get(hprd_base + 'HPRD_FLAT_FILES_041310.tar.gz')
+        url = "https://rescued.omnipathdb.org/HPRD_FLAT_FILES_041310.tar.gz"
+        resp = requests.get(url)
         resp.raise_for_status()
         tmp_dir = tempfile.mkdtemp('hprd_files')
         tmp_tarfile = os.path.join(tmp_dir, 'hprd_files.tar.gz')
@@ -447,7 +447,26 @@ class HPRDManager(KnowledgebaseManager):
 
         # Extract the files.
         with tarfile.open(tmp_tarfile, 'r:gz') as tf:
-            tf.extractall(tmp_dir)
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
+                
+            
+            safe_extract(tf, tmp_dir)
 
         # Find the relevant files.
         dirs = os.listdir(tmp_dir)
@@ -991,11 +1010,6 @@ def run(
         ]
     else:
         selected_kbs = [KnowledgebaseManager.__subclasses__()]
-
-    # Always skip HPRD: statements already exist in db, the source data hasn't
-    # been updated since 2009 and the server hosting the source data returns
-    # 500 errors when trying to download it
-    selected_kbs = [M for M in selected_kbs if M.short_name != 'hprd']
 
     logger.info(f"Selected knowledgebases: "
                 f"{', '.join([M.name for M in selected_kbs])}")

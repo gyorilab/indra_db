@@ -437,8 +437,8 @@ class HPRDManager(KnowledgebaseManager):
         from indra.sources import hprd
 
         # Download the files.
-        hprd_base = 'http://www.hprd.org/RELEASE9/'
-        resp = requests.get(hprd_base + 'HPRD_FLAT_FILES_041310.tar.gz')
+        url = "https://rescued.omnipathdb.org/HPRD_FLAT_FILES_041310.tar.gz"
+        resp = requests.get(url)
         resp.raise_for_status()
         tmp_dir = tempfile.mkdtemp('hprd_files')
         tmp_tarfile = os.path.join(tmp_dir, 'hprd_files.tar.gz')

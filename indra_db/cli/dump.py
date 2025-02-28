@@ -59,8 +59,21 @@ def list_dumps(started=None, ended=None):
     res = s3.list_objects_v2(Delimiter='/', **s3_base.kw(prefix=True))
     if res['KeyCount'] == 0:
         return []
-    dumps = [S3Path.from_key_parts(s3_base.bucket, d['Prefix'])
-             for d in res['CommonPrefixes']]
+
+    # List all dump directories where the last subdirectory ends in a
+    # "YYYY-MM-DD" format and is a proper date.
+    dumps = []
+    for d in res['CommonPrefixes']:
+        date_str = d['Prefix'].split('/')[-2]
+        try:
+            # If it's not a date, skip it. This check is better than just
+            # checking for the length of the string or using a regex like
+            # \d{4}-\d{2}-\d{2} because it will also catch things like
+            # 2020-13-36.
+            datetime.strptime(date_str, '%Y-%m-%d')
+            dumps.append(S3Path.from_key_parts(s3_base.bucket, d['Prefix']))
+        except ValueError:
+            continue
 
     # Filter to those that have "started"
     if started is not None:
@@ -305,7 +318,7 @@ class Start(Dumper):
             self.load(latest_dump)
         return
 
-    def load(self, dump_path):
+    def load(self, dump_path: S3Path):
         """Load manifest from the Start of the given dump path."""
         s3 = boto3.client('s3')
         manifest = dump_path.list_objects(s3)
@@ -685,6 +698,7 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
         # START THE DUMP
         if delete_existing and 'readonly' in principal_db.get_schemas():
             principal_db.drop_schema('readonly')
+            logger.info("Deleted existing readonly schema.")
 
         start = Start()
         start.dump(continuing=allow_continue)
@@ -792,8 +806,16 @@ def dump(principal_db, readonly_db=None, delete_existing=False,
               help="If given, the lambda function serving the REST API will not"
                    "be modified to redirect from the readonly database to the"
                    "principal database while readonly is being loaded.")
-def run_all(continuing, delete_existing, load_only, dump_only,
-            no_redirect_to_principal):
+@click.option('--debug-log', is_flag=True,
+              help="If set, the logging level will be set to DEBUG.")
+def run_all(
+    continuing,
+    delete_existing,
+    load_only,
+    dump_only,
+    no_redirect_to_principal,
+    debug_log
+):
     """Generate new dumps and list existing dumps."""
     from indra_db import get_ro
 
@@ -803,10 +825,21 @@ def run_all(continuing, delete_existing, load_only, dump_only,
     else:
         ro_manager = None
 
-    dump(get_db('primary', protected=False),
-         ro_manager, delete_existing,
-         continuing, load_only, dump_only,
-         no_redirect_to_principal=no_redirect_to_principal)
+    # Set the debug level.
+    if debug_log:
+        from indra.belief import logger as indra_belief_logger
+        logger.setLevel(logging.DEBUG)
+        indra_belief_logger.setLevel(logging.DEBUG)
+
+    dump(
+        principal_db=get_db('primary', protected=False),
+        readonly_db=ro_manager,
+        delete_existing=delete_existing,
+        allow_continue=continuing,
+        load_only=load_only,
+        dump_only=dump_only,
+        no_redirect_to_principal=no_redirect_to_principal
+    )
 
 
 @dump_cli.command()

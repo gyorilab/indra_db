@@ -218,7 +218,7 @@ class BulkAwsReadingManager(BulkReadingManager):
         'sparser': 5000,
         'isi': 5000,
         'trips': 500,
-        'eidos': 5000,
+        'eidos': 1000,  # 5000 id jobs were often terminated by BidEvictionEvent
         'mti': None,  # meaning all content run in a single job.
     }
 

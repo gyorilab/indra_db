@@ -395,7 +395,7 @@ def run_local(task, buffer, num_procs):
     readers = ['SPARSER', 'REACH', 'EIDOS', 'TRIPS']
     bulk_manager = BulkLocalReadingManager(readers,
                                            buffer_days=buffer,
-                                           n_procs=num_procs)
+                                           n_proc=num_procs)
     if task == 'all':
         bulk_manager.read_all(db)
     elif task == 'new':

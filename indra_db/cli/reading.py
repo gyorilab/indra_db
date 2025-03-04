@@ -375,7 +375,7 @@ def run(task, buffer, project_name):
 
 @reading.command()
 @click.argument('task', type=click.Choice(["all", "new"]))
-@click.option('-b', '--buffer', type=int, default=1,
+@click.option('-b', '--buffer', type=int, default=-100,
               help='Set the number of buffer days to read prior to the most '
                    'recent update. The default is 1 day.')
 @click.option('-n', '--num-procs', type=int,

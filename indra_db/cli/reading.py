@@ -173,7 +173,7 @@ class BulkReadingManager(ReadingManager):
             db.TextContent.id,
             db.TextContent.insert_date > self.begin_datetime,
             *constraints
-            )
+            ).limit(500)
         if self.only_unread:
             reader_class = get_reader_class(reader_name)
             reader_version = reader_class.get_version()
@@ -181,7 +181,7 @@ class BulkReadingManager(ReadingManager):
                 db.filter_query(db.Reading.text_content_id,
                                 db.Reading.reader == reader_name,
                                 db.Reading.reader_version == reader_version)
-            )
+            ).limit(500)
         tcids = {tcid for tcid, in tcid_q.all()}
         if not tcids:
             logger.info("Nothing new to read with %s." % reader_name)
@@ -392,10 +392,10 @@ def run_local(task, buffer, num_procs):
     db = get_db('primary')
 
     #readers = ['SPARSER', 'REACH', 'TRIPS', 'ISI', 'EIDOS', 'MTI']
-    readers = ['SPARSER', 'REACH', 'EIDOS', 'TRIPS']
+    readers = ['SPARSER']#, 'REACH', 'EIDOS', 'TRIPS']
     bulk_manager = BulkLocalReadingManager(readers,
                                            buffer_days=buffer,
-                                           n_procs=num_procs)
+                                           n_proc=num_procs)
     if task == 'all':
         bulk_manager.read_all(db)
     elif task == 'new':

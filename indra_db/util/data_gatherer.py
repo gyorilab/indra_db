@@ -183,7 +183,7 @@ def digest_s3_files():
     bucket = S3_DATA_LOC['bucket']
     prefix = S3_DATA_LOC['prefix']
 
-    patt = re.compile(prefix + '([0-9]+)/(\w*?)/?(\w+)_([0-9]+).json')
+    patt = re.compile(prefix + r'([0-9]+)/(\w*?)/?(\w+)_([0-9]+).json')
 
     # Get a list of the prefixes for each day.
     res = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter='/')

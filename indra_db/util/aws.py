@@ -3,7 +3,7 @@ import boto3
 
 
 def uncamel(word):
-    return re.sub(r'([a-z])([A-Z])', '\g<1>_\g<2>', word).lower()
+    return re.sub(r'([a-z])([A-Z])', r'\g<1>_\g<2>', word).lower()
 
 
 def get_role_kwargs(role):

@@ -193,7 +193,7 @@ class DatabaseResultData(object):
 class DatabaseStatementData(DatabaseResultData):
     def __init__(self, *args, **kwargs):
         super(DatabaseStatementData, self).__init__(*args, **kwargs)
-        self.__text_patt = re.compile('[\W_]+')
+        self.__text_patt = re.compile(r'[\W_]+')
 
     @staticmethod
     def get_cols():

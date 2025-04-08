@@ -13,6 +13,7 @@ import time
 import shutil
 
 from collections import defaultdict, Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
 
@@ -85,6 +86,20 @@ for reader_name, versions in reader_versions.items():
         version_to_reader[reader_version] = reader_name
 
 
+def upload_file_to_s3(local_path: Path, bucket: str,
+                      s3_prefix: str, timestamp: str):
+    import boto3
+    s3 = boto3.client("s3")
+    local_path = Path(local_path)
+    s3_key = f"{s3_prefix}/{timestamp}/{local_path.name}"
+
+    logger.info(f"Uploading {local_path} to s3://{bucket}/{s3_key}")
+    s3.upload_file(
+        Filename=str(local_path),
+        Bucket=bucket,
+        Key=s3_key
+    )
+    return f"s3://{bucket}/{s3_key}"
 
 def get_related_split(stmts1: StmtList, stmts2: StmtList, pa: Preassembler) -> Set[Tuple[int, int]]:
     stmts_by_type1 = defaultdict(list)
@@ -526,6 +541,23 @@ def merge_processed_statements():
         # Dump the merged source counts
         with source_counts_fpath.open("wb") as f:
             pickle.dump(reading_source_counts, f)
+
+    #upload source_count and processed_statement to S3 for cogex usage
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+    upload_file_to_s3(
+        local_path=source_counts_fpath,
+        bucket="indra-db-readonly",
+        s3_prefix="cogex_files",
+        timestamp=timestamp
+    )
+
+    upload_file_to_s3(
+        local_path=processed_stmts_fpath,
+        bucket="indra-db-readonly",
+        s3_prefix="cogex_files",
+        timestamp=timestamp
+    )
 
     # Merge the raw statement id to info map
     if not raw_id_info_map_fpath.exists():

@@ -13,7 +13,6 @@ import time
 import shutil
 
 from collections import defaultdict, Counter
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple, Set, Dict, List, Optional
 
@@ -542,22 +541,6 @@ def merge_processed_statements():
         with source_counts_fpath.open("wb") as f:
             pickle.dump(reading_source_counts, f)
 
-    #upload source_count and processed_statement to S3 for cogex usage
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-
-    upload_file_to_s3(
-        local_path=source_counts_fpath,
-        bucket="indra-db-readonly",
-        s3_prefix="cogex_files",
-        timestamp=timestamp
-    )
-
-    upload_file_to_s3(
-        local_path=processed_stmts_fpath,
-        bucket="indra-db-readonly",
-        s3_prefix="cogex_files",
-        timestamp=timestamp
-    )
 
     # Merge the raw statement id to info map
     if not raw_id_info_map_fpath.exists():

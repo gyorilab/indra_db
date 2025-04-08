@@ -1,11 +1,12 @@
 import os
 import re
 import time
+from datetime import datetime, timezone
 
 from indra_db import get_db
 from indra_db.readonly_dumping.export_assembly import split_tsv_gz_file, \
     batch_size, count_rows_in_tsv_gz, get_refinement_graph, \
-    refinement_cycles_fpath, calculate_belief
+    refinement_cycles_fpath, calculate_belief, upload_file_to_s3
 import multiprocessing as mp
 from .locations import *
 from indra_db.readonly_dumping.util import record_time
@@ -91,6 +92,31 @@ if __name__ == '__main__':
                 batch_size=batch_size,
                 source_mapping=db_name_api_mapping,
             )
+            # upload source_count, belief_score
+            # and processed_statement to S3 for cogex usage
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+            upload_file_to_s3(
+                local_path=source_counts_fpath,
+                bucket="indra-db-readonly",
+                s3_prefix="cogex_files",
+                timestamp=timestamp
+            )
+
+            upload_file_to_s3(
+                local_path=processed_stmts_fpath,
+                bucket="indra-db-readonly",
+                s3_prefix="cogex_files",
+                timestamp=timestamp
+            )
+
+            upload_file_to_s3(
+                local_path=belief_scores_pkl_fpath,
+                bucket="indra-db-readonly",
+                s3_prefix="cogex_files",
+                timestamp=timestamp
+            )
+
         end_time = time.time()
         record_time(export_benchmark.absolute().as_posix(),
                     (end_time - start_time) / 3600,

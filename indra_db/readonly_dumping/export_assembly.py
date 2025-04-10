@@ -85,21 +85,6 @@ for reader_name, versions in reader_versions.items():
         version_to_reader[reader_version] = reader_name
 
 
-def upload_file_to_s3(local_path: Path, bucket: str,
-                      s3_prefix: str, timestamp: str):
-    import boto3
-    s3 = boto3.client("s3")
-    local_path = Path(local_path)
-    s3_key = f"{s3_prefix}/{timestamp}/{local_path.name}"
-
-    logger.info(f"Uploading {local_path} to s3://{bucket}/{s3_key}")
-    s3.upload_file(
-        Filename=str(local_path),
-        Bucket=bucket,
-        Key=s3_key
-    )
-    return f"s3://{bucket}/{s3_key}"
-
 def get_related_split(stmts1: StmtList, stmts2: StmtList, pa: Preassembler) -> Set[Tuple[int, int]]:
     stmts_by_type1 = defaultdict(list)
     stmts_by_type2 = defaultdict(list)

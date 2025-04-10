@@ -3,11 +3,15 @@ import re
 import time
 from datetime import datetime, timezone
 
+import boto3
+
 from indra_db import get_db
 from indra_db.readonly_dumping.export_assembly import split_tsv_gz_file, \
     batch_size, count_rows_in_tsv_gz, get_refinement_graph, \
     refinement_cycles_fpath, calculate_belief, upload_file_to_s3
 import multiprocessing as mp
+
+from indra_db.util import S3Path
 from .locations import *
 from indra_db.readonly_dumping.util import record_time
 import logging
@@ -96,26 +100,15 @@ if __name__ == '__main__':
             # and processed_statement to S3 for cogex usage
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
-            upload_file_to_s3(
-                local_path=source_counts_fpath,
-                bucket="indra-db-readonly",
-                s3_prefix="cogex_files",
-                timestamp=timestamp
-            )
+            s3 = boto3.client("s3")
+            base_s3_path = S3Path("indra-db-readonly",
+                                  f"cogex_files/{timestamp}")
 
-            upload_file_to_s3(
-                local_path=processed_stmts_fpath,
-                bucket="indra-db-readonly",
-                s3_prefix="cogex_files",
-                timestamp=timestamp
-            )
-
-            upload_file_to_s3(
-                local_path=belief_scores_pkl_fpath,
-                bucket="indra-db-readonly",
-                s3_prefix="cogex_files",
-                timestamp=timestamp
-            )
+            for local_file in [source_counts_fpath, processed_stmts_fpath,
+                               belief_scores_pkl_fpath]:
+                s3_path = base_s3_path.get_element_path(local_file.name)
+                s3_path.upload(s3, body=local_file.read_bytes())
+                logger.info(f"Uploaded {local_file} → {s3_path}")
 
         end_time = time.time()
         record_time(export_benchmark.absolute().as_posix(),

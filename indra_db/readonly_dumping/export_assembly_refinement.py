@@ -96,16 +96,23 @@ if __name__ == '__main__':
                 batch_size=batch_size,
                 source_mapping=db_name_api_mapping,
             )
-            # upload source_count, belief_score
-            # and processed_statement to S3 for cogex usage
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
-            s3 = boto3.client("s3")
-            base_s3_path = S3Path("indra-db-readonly",
-                                  f"cogex_files/{timestamp}")
+        # upload source_count, belief_score
+        # and processed_statement to S3 for cogex usage
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
-            for local_file in [source_counts_fpath, processed_stmts_fpath,
-                               belief_scores_pkl_fpath]:
+        s3 = boto3.client("s3")
+        base_s3_path = S3Path("bigmech",
+                              f"indra-db/dumps/cogex_files/{timestamp}")
+
+        for local_file in [source_counts_fpath, processed_stmts_fpath,
+                           belief_scores_pkl_fpath]:
+            s3_path = base_s3_path.get_element_path(local_file.name)
+            s3_path.upload(s3, body=local_file.read_bytes())
+            logger.info(f"Uploaded {local_file} → {s3_path}")
+
+        if refinements_fpath.exists() or refinement_cycles_fpath.exists():
+            for local_file in [refinements_fpath, refinement_cycles_fpath]:
                 s3_path = base_s3_path.get_element_path(local_file.name)
                 s3_path.upload(s3, body=local_file.read_bytes())
                 logger.info(f"Uploaded {local_file} → {s3_path}")

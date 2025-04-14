@@ -8,7 +8,7 @@ import boto3
 from indra_db import get_db
 from indra_db.readonly_dumping.export_assembly import split_tsv_gz_file, \
     batch_size, count_rows_in_tsv_gz, get_refinement_graph, \
-    refinement_cycles_fpath, calculate_belief, upload_file_to_s3
+    refinement_cycles_fpath, calculate_belief
 import multiprocessing as mp
 
 from indra_db.util import S3Path

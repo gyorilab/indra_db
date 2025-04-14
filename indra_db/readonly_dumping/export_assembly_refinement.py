@@ -28,10 +28,9 @@ file_handler.setFormatter(formatter)
 
 logger.addHandler(file_handler)
 
+#put the rest of export_assembly in a seperate file to ensure memory is released in EC2
 if __name__ == '__main__':
     if not refinements_fpath.exists() or not belief_scores_pkl_fpath.exists():
-        # Todo: @Haohang: is this the right place to put the mapping for
-        #  multiprocessing purposes?
         db = get_db("primary")
         res = db.select_all(db.DBInfo)
         db_name_api_mapping = {r.db_name: r.source_api for r in res}

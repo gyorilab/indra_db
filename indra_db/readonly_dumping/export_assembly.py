@@ -85,7 +85,6 @@ for reader_name, versions in reader_versions.items():
         version_to_reader[reader_version] = reader_name
 
 
-
 def get_related_split(stmts1: StmtList, stmts2: StmtList, pa: Preassembler) -> Set[Tuple[int, int]]:
     stmts_by_type1 = defaultdict(list)
     stmts_by_type2 = defaultdict(list)
@@ -527,6 +526,7 @@ def merge_processed_statements():
         with source_counts_fpath.open("wb") as f:
             pickle.dump(reading_source_counts, f)
 
+
     # Merge the raw statement id to info map
     if not raw_id_info_map_fpath.exists():
         logger.info("Merging raw statement id to info mappings")
@@ -608,6 +608,9 @@ def calculate_belief(
     batch_size: int,
     source_mapping: Dict[str, str],
     unique_stmts_path: Path = unique_stmts_fpath,
+    belief_scores_pkl_path: Path = belief_scores_pkl_fpath,
+    source_counts_path: Path = source_counts_fpath,
+
 ):
     """Calculate belief scores for unique statements from the refinement graph
 
@@ -620,10 +623,14 @@ def calculate_belief(
         The number of batches to process from the unique statements file
     batch_size :
         The number of statements to process in each batch
-    unique_stmts_path :
-        The path to the unique statements file
     source_mapping :
         A dictionary mapping source names to source api names
+    unique_stmts_path :
+        The path to the unique statements file
+    source_counts_path :
+        Pickle mapping ``stmt_hash → {source_name: count}``.
+    belief_scores_pkl_path :
+         ``{stmt_hash: belief}`` dict.
     """
     # The refinement set is a set of pairs of hashes, with the *first hash
     # being more specific than the second hash*, i.e. the evidence for the
@@ -642,7 +649,7 @@ def calculate_belief(
 
     # Load the source counts
     logger.info("Loading source counts")
-    with source_counts_fpath.open("rb") as fh:
+    with source_counts_path.open("rb") as fh:
         source_counts = pickle.load(fh)
 
     # Store hash: belief score
@@ -701,7 +708,7 @@ def calculate_belief(
             _add_belief_scores_for_batch(stmt_batch)
 
     # Dump the belief scores
-    with belief_scores_pkl_fpath.open("wb") as fo:
+    with belief_scores_pkl_path.open("wb") as fo:
         pickle.dump(belief_scores, fo)
 
 

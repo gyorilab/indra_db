@@ -130,7 +130,17 @@ then
 else
     echo "Text refs principal file already exists, skipping dump"
 fi
+
 # LOCAL DB CREATION AND DUMPING
+week_number=$(date +%V)
+#Get a full update using pubmed for corner cases every 10 weeks
+if (( 10#$week_number % 10 == 0 )); then
+  echo "Skipping export"
+  unset MAPPING_SKIP_PUBMED
+else
+  echo "Setting MAPPING_SKIP_PUBMED=false"
+  export MAPPING_SKIP_PUBMED=false
+fi
 
 python -m indra_db.readonly_dumping.export_assembly
 python -m indra_db.readonly_dumping.export_assembly_refinement

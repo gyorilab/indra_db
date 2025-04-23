@@ -2,6 +2,7 @@ import argparse
 import concurrent.futures
 import csv
 import ctypes
+import datetime
 import gc
 import gzip
 
@@ -390,6 +391,15 @@ def preprocess(
         text_refs = load_text_refs_by_trid(text_refs_fpath.as_posix())
         source_counts = defaultdict(Counter)
         stmt_hash_to_raw_stmt_ids = defaultdict(set)
+
+        #Get a full update using pubmed for corner cases every 10 weeks in agent grounding
+        week_number = datetime.date.today().isocalendar().week
+        if week_number % 10 == 0:
+            use_pubmed = True
+            logger.info("Agent grounding will take longer this time (30~40h)")
+        else:
+            use_pubmed = False
+
         with gzip.open(raw_statements_fpath.as_posix(), "rt") as fh, \
              gzip.open(processed_stmts_reading_fpath.as_posix(), "wt") as fh_out, \
              gzip.open(raw_id_info_map_reading_fpath.as_posix(), "wt") as fh_info:
@@ -447,7 +457,7 @@ def preprocess(
                 # depending on which is available
                 stmts = ac.fix_invalidities(stmts, in_place=True)
 
-                stmts = ac.map_grounding(stmts)
+                stmts = ac.map_grounding(stmts, use_pubmed=use_pubmed)
                 stmts = ac.map_sequence(stmts)
                 for stmt in stmts:
                     # Get the statement hash and get the source counts

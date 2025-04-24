@@ -226,7 +226,7 @@ class ContentManager(object):
     tr_cols: Tuple = NotImplemented
     tc_cols: Tuple = NotImplemented
     primary_col: str = NotImplemented
-    err_patt = re.compile('.*?constraint "(.*?)".*?Key \((.*?)\)=\((.*?)\).*?',
+    err_patt = re.compile(r'.*?constraint "(.*?)".*?Key \((.*?)\)=\((.*?)\).*?',
                           re.DOTALL)
 
     def __init__(self):
@@ -1513,7 +1513,7 @@ class Manuscripts(PmcManager):
 
     def get_tarname_from_filename(self, fname):
         "Get the name of the tar file based on the file name (or a pmcid)."
-        re_match = re.match('(PMC00\d).*?', fname)
+        re_match = re.match(r'(PMC00\d).*?', fname)
         if re_match is not None:
             tarname = re_match.group(0) + 6*'X' + '.xml.tar.gz'
         else:

@@ -130,8 +130,8 @@ then
 else
     echo "Text refs principal file already exists, skipping dump"
 fi
-# LOCAL DB CREATION AND DUMPING
 
+# LOCAL DB CREATION AND DUMPING
 python -m indra_db.readonly_dumping.export_assembly
 python -m indra_db.readonly_dumping.export_assembly_refinement
 

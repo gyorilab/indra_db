@@ -567,8 +567,8 @@ class RlimspManager(KnowledgebaseManager):
 
         stmts, dups = extract_duplicates(_expanded(stmts),
                                          key_func=KeyFunc.mk_and_one_ev_src)
-        print('\n'.join(str(dup) for dup in dups))
-        print(len(stmts), len(dups))
+        logger.info(f"Got {len(stmts)} unique statements and{len(dups)} "
+                    f"duplicates from {self.name}")
 
         return stmts
 

@@ -248,7 +248,7 @@ def test_has_readings():
     res = q.get_statements(ro, limit=5, ev_limit=8)
     for sc in res.source_counts.values():
         for src, cnt in sc.items():
-            if src in SOURCE_GROUPS['reading'] and cnt > 0:
+            if src in SOURCE_GROUPS['reader'] and cnt > 0:
                 break
         else:
             assert False, f"No readings found in: {sc}"
@@ -655,7 +655,7 @@ def test_evidence_filtering_has_database():
     assert isinstance(res, StatementQueryResult)
     stmts = res.statements()
     assert len(stmts) == 2
-    assert all(ev.source_api not in SOURCE_GROUPS['reading']
+    assert all(ev.source_api not in SOURCE_GROUPS['reader']
                for s in stmts for ev in s.evidence)
     js = res.json()
     assert 'results' in js
@@ -672,7 +672,7 @@ def test_evidence_filtering_has_readings():
     assert isinstance(res, StatementQueryResult)
     stmts = res.statements()
     assert len(stmts) == 2
-    assert all(ev.source_api in SOURCE_GROUPS['reading']
+    assert all(ev.source_api in SOURCE_GROUPS['reader']
                for s in stmts for ev in s.evidence)
     assert all(len(s.evidence) == 10 for s in stmts)
     js = res.json()

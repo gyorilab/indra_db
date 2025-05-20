@@ -374,7 +374,7 @@ class StatementApiCall(ApiCall):
                 ev_counts = res_json.pop('evidence_counts')
                 beliefs = res_json.pop('belief_scores')
                 stmts = stmts_from_json(stmts_json.values())
-                db_rest_url = BASE_URL or request.url_root[:-1] \
+                db_rest_url = (BASE_URL or request.url_root[:-1]) \
                     + self._env.globals['url_for']('root')[:-1]
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,

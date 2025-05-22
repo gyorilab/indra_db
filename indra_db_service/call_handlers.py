@@ -24,7 +24,7 @@ from indra_db.client.principal.curation import *
 from indralab_auth_tools.log import note_in_log, is_log_running
 
 from indra_db_service.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
-    jwt_nontest_optional, MAX_LIST_LEN
+    jwt_nontest_optional, MAX_LIST_LEN, BASE_URL
 from indra_db_service.errors import HttpUserError, ResultTypeError
 from indra_db_service.util import LogTracker, sec_since, get_source,\
     process_agent,  process_mesh_term, DbAPIError, iter_free_agents, \
@@ -374,7 +374,7 @@ class StatementApiCall(ApiCall):
                 ev_counts = res_json.pop('evidence_counts')
                 beliefs = res_json.pop('belief_scores')
                 stmts = stmts_from_json(stmts_json.values())
-                db_rest_url = request.url_root[:-1] \
+                db_rest_url = (BASE_URL or request.url_root[:-1]) \
                     + self._env.globals['url_for']('root')[:-1]
                 html_assembler = \
                     HtmlAssembler(stmts, summary_metadata=res_json,

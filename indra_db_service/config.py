@@ -1,6 +1,7 @@
 __all__ = [
     "TITLE",
     "DEPLOYMENT",
+    "BASE_URL",
     "VUE_ROOT",
     "MAX_STMTS",
     "MAX_LIST_LEN",
@@ -16,6 +17,7 @@ from flask_jwt_extended import jwt_required
 
 TITLE = "The INDRA Database"
 DEPLOYMENT = environ.get("INDRA_DB_API_DEPLOYMENT")
+BASE_URL = environ.get("INDRA_DB_API_BASE_URL")
 CURATOR_SALT = environ.get("INDRA_DB_API_CURATOR_SALT")
 VUE_ROOT = environ.get("INDRA_DB_API_VUE_ROOT")
 if VUE_ROOT is not None and not VUE_ROOT.startswith("http"):

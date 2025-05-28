@@ -1132,6 +1132,10 @@ def ensure_pa_meta():
     # Loop pa_meta dump and write load files for NameMeta, TextMeta, OtherMeta
     logger.info("Iterating over pa_meta dump")
     nones = (None, None, None, None)
+
+    def db_id_clean(s):
+        return s.replace('\n', ' ').replace('\r', ' ') if s else s
+
     with pa_meta_fpath.open('rt') as fh, \
             name_meta_tsv.open("wt") as name_fh, \
             text_meta_tsv.open("wt") as text_fh, \
@@ -1182,7 +1186,7 @@ def ensure_pa_meta():
             ]
             # db_name here if "other"
             row_end = [
-                db_id,
+                db_id_clean(db_id),
                 role_num,
                 type_num,
                 stmt_hash,
@@ -1202,7 +1206,7 @@ def ensure_pa_meta():
 
             if type_num == ro_type_map.get_int("Complex"):
                 dup1 = [
-                    db_id,
+                    db_id_clean(db_id),
                     -1,  # role_num
                     type_num, stmt_hash,
                     ev_count, belief_score,
@@ -1212,7 +1216,7 @@ def ensure_pa_meta():
                 ]
 
                 dup2 = [
-                    db_id,
+                    db_id_clean(db_id),
                     1,  # role_num
                     type_num, stmt_hash,
                     ev_count, belief_score,
@@ -1267,7 +1271,7 @@ def name_meta(local_ro_mngr: ReadonlyDatabaseManager):
                              name_meta_tsv.absolute().as_posix())
     create_primary_key(ro_mngr_local=local_ro_mngr,
                        table_name='name_meta',
-                       keys='ag_id')
+                       keys=['ag_id', 'mk_hash', 'role_num', 'ag_num'])
     # Build indices
     name_meta_table: ReadonlyTable = local_ro_mngr.tables["name_meta"]
     logger.info("Building indices for name_meta")
@@ -1306,7 +1310,7 @@ def text_meta(local_ro_mngr: ReadonlyDatabaseManager):
 
     create_primary_key(ro_mngr_local=local_ro_mngr,
                        table_name='text_meta',
-                       keys='ag_id')
+                       keys=['ag_id', 'mk_hash', 'role_num', 'ag_num'])
 
     # Build indices
     text_meta_table: ReadonlyTable = local_ro_mngr.tables["text_meta"]
@@ -1347,7 +1351,7 @@ def other_meta(local_ro_mngr: ReadonlyDatabaseManager):
 
     create_primary_key(ro_mngr_local=local_ro_mngr,
                        table_name='other_meta',
-                       keys='ag_id')
+                       keys=['ag_id', 'mk_hash', 'role_num', 'ag_num'])
     # Build indices
     other_meta_table: ReadonlyTable = local_ro_mngr.tables["other_meta"]
     logger.info("Building indices for other_meta")

@@ -6,11 +6,13 @@ from pathlib import Path
 from collections import Counter
 
 import networkx as nx
+from indra.belief.skl import HybridScorer
 
-from indra.belief import BeliefEngine
+from indra.belief import BeliefEngine, default_scorer
 from indra.statements import Agent, Evidence, Activation
 from indra_db import get_db
 from indra_db.readonly_dumping.export_assembly import calculate_belief
+from indra_db.readonly_dumping.locations import cs_belief_score_pkl_fpath
 
 
 def test_unit_belief_calc():
@@ -106,7 +108,12 @@ def test_calculate_belief():
 
     # Calculate the belief scores: Add evidence of supporting statements to the
     # evidence of the supported statement then calculate the prior belief
-    belief_engine = BeliefEngine(refinements_graph=refinement_graph)
+
+    ss = default_scorer
+    with open(cs_belief_score_pkl_fpath.absolute().as_posix(), 'rb') as f:
+        cs = pickle.load(f)
+    hs = HybridScorer(cs, ss)
+    belief_engine = BeliefEngine(scorer=hs, refinements_graph=refinement_graph)
     to_calc_list = []
     local_beliefs = {}
     for st_hash, stmt in stmt_list:
@@ -142,4 +149,4 @@ def test_calculate_belief():
 
     assert len(stmts[2].evidence) == 3
     assert all(ev.source_api == 'reach' for ev in stmts[2].evidence)
-    assert belief_dict[hash3] == 0.923
+    assert round(belief_dict[hash3], 3) == 0.366

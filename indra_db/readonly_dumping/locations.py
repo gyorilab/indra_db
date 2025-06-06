@@ -28,6 +28,7 @@ __all__ = [
     "unique_stmts_fpath",
     "refinements_fpath",
     "belief_scores_pkl_fpath",
+    "cs_belief_score_pkl_fpath",
     "pa_hash_act_type_ag_count_cache",
     "belief_scores_tsv_fpath",
     "reading_ref_link_tsv_fpath",
@@ -107,6 +108,7 @@ refinements_fpath = TEMP_DIR.join(name="refinements.tsv.gz")
 sql_ontology_db_fpath = TEMP_DIR.join(name='bio_ontology.db')
 split_unique_statements_folder_fpath = TEMP_DIR.join(name="split_unique_statements_folder")
 belief_scores_pkl_fpath = TEMP_DIR.join(name="belief_scores.pkl")
+cs_belief_score_pkl_fpath = TEMP_DIR.join(name="sk141_hybrid_rf_2kd13_cs.pkl")
 pa_hash_act_type_ag_count_cache = TEMP_DIR.join(
     name="pa_hash_act_type_ag_count_cache.pkl"
 )
@@ -162,6 +164,8 @@ standard_readonly_snapshot = TEMP_DIR.join(name='schema_snapshot.sql')
 new_readonly_snapshot=TEMP_DIR.join(name='new_readonly_snapshot.sql')
 export_benchmark = TEMP_DIR.join(name='export_benchmark_times.txt')
 table_benchmark = TEMP_DIR.join(name='table_benchmark_times.txt')
+
+
 
 
 if __name__ == "__main__":

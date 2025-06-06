@@ -20,11 +20,12 @@ import networkx as nx
 import numpy as np
 import pandas
 import psutil
+from indra.belief.skl import HybridScorer
 from tqdm import tqdm
 import os
 
 from adeft import get_available_models
-from indra.belief import BeliefEngine
+from indra.belief import BeliefEngine, default_scorer
 from indra.ontology.bio.sqlite_ontology import SqliteOntology
 from indra.preassembler import Preassembler
 from indra.statements import stmts_from_json, stmt_from_json, Statement, \
@@ -645,7 +646,11 @@ def calculate_belief(
 
     # Initialize a belief engine
     logger.info("Initializing belief engine")
-    be = BeliefEngine(refinements_graph=refinements_graph)
+    ss = default_scorer
+    with open(cs_belief_score_pkl_fpath.absolute().as_posix(), 'rb') as f:
+        cs = pickle.load(f)
+    hs = HybridScorer(cs, ss)
+    be = BeliefEngine(scorer=hs, refinements_graph=refinements_graph)
 
     # Load the source counts
     logger.info("Loading source counts")
@@ -682,8 +687,9 @@ def calculate_belief(
     def _add_belief_scores_for_batch(batch: List[Tuple[int, Statement]]):
         # Belief calculation for this batch
         hashes, stmt_list = zip(*batch)
-        be.set_prior_probs(statements=stmt_list)
-        for sh, st in zip(hashes, stmt_list):
+        beliefs = be.scorer.score_statements(stmt_list)
+        for sh, st, belief in zip(hashes, stmt_list, beliefs):
+            st.belief = belief
             belief_scores[sh] = st.belief
 
     # Iterate over each unique statement

@@ -13,6 +13,7 @@ from datetime import datetime
 from indra_db import util as dbu
 from indra_db.util import S3Path
 from indra_db.util.dump_sif import upload_pickle_to_s3, S3_SUBDIR
+from indra.statements import Evidence
 
 logger = logging.getLogger('db_belief')
 
@@ -51,17 +52,18 @@ class MockStatement(object):
         return self.__mk_hash
 
 
-class MockEvidence(object):
+class MockEvidence(Evidence):
     """A class to imitate real INDRA Evidence for calculating belief."""
     def __init__(self, source_api, **annotations):
-        self.source_api = source_api
+        super().__init__(source_api=source_api)
 
         # The belief engine uses `Evidence.epistemics.get('negated')`
         self.epistemics = {}
 
         # Some annotations are used in indra.belief.tag_evidence_subtype.
         # TODO: optionally implement necessary annotations.
-        self.annotations = annotations.copy()
+        self.annotations.update(annotations)
+
 
 
 def populate_support(stmts, links):

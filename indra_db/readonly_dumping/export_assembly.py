@@ -687,8 +687,9 @@ def calculate_belief(
     def _add_belief_scores_for_batch(batch: List[Tuple[int, Statement]]):
         # Belief calculation for this batch
         hashes, stmt_list = zip(*batch)
-        be.set_prior_probs(statements=stmt_list)
-        for sh, st in zip(hashes, stmt_list):
+        beliefs = be.scorer.score_statements(stmt_list)
+        for sh, st, belief in zip(hashes, stmt_list, beliefs):
+            st.belief = belief
             belief_scores[sh] = st.belief
 
     # Iterate over each unique statement

@@ -19,6 +19,7 @@ from indra.sources.indra_db_rest.query_results import QueryResult, \
     StatementQueryResult, AgentQueryResult
 from indra.statements import get_statement_by_name, \
     get_all_descendants, make_statement_camel
+from indra_db.readonly_dumping.util import clean_json_loads
 
 from indra_db.schemas.readonly_schema import ro_role_map, ro_type_map, \
     SOURCE_GROUPS
@@ -588,7 +589,7 @@ class Query(object):
 
             # Add annotations if not present.
             if ev_limit != 0:
-                raw_json = json.loads(raw_json_bts.decode('utf-8'))
+                raw_json = clean_json_loads(raw_json_bts.decode('utf-8'))
                 ev_json = raw_json['evidence'][0]
                 if 'annotations' not in ev_json.keys():
                     ev_json['annotations'] = {}

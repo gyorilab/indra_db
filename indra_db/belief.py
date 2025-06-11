@@ -52,19 +52,17 @@ class MockStatement(object):
         return self.__mk_hash
 
 
-class MockEvidence(Evidence):
+class MockEvidence(object):
     """A class to imitate real INDRA Evidence for calculating belief."""
     def __init__(self, source_api, **annotations):
-        super().__init__(source_api=source_api)
+        self.source_api = source_api
 
         # The belief engine uses `Evidence.epistemics.get('negated')`
         self.epistemics = {}
 
         # Some annotations are used in indra.belief.tag_evidence_subtype.
         # TODO: optionally implement necessary annotations.
-        self.annotations.update(annotations)
-
-
+        self.annotations = annotations.copy()
 
 def populate_support(stmts, links):
     """Populate the supports supported_by lists of statements given links.

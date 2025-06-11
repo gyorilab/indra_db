@@ -1,4 +1,5 @@
 import argparse
+import boto3
 import concurrent.futures
 import csv
 import ctypes
@@ -646,9 +647,19 @@ def calculate_belief(
 
     # Initialize a belief engine
     logger.info("Initializing belief engine")
+
+    # Initialize Hybrid Scorer
     ss = default_scorer
-    with open(cs_belief_score_pkl_fpath.absolute().as_posix(), 'rb') as f:
+    if not cs_belief_score_pkl_fpath.exists():
+        print(
+            f"{cs_belief_score_pkl_fpath.absolute().as_posix()} "
+            f"not found locally. Downloading from S3...")
+        s3 = boto3.client('s3')
+        s3.download_file('indra-belief', '1.20.0/sk141_hybrid_rf_2kd13_cs.pkl',
+                         cs_belief_score_pkl_fpath.as_posix())
+    with open(cs_belief_score_pkl_fpath, 'rb') as f:
         cs = pickle.load(f)
+
     hs = HybridScorer(cs, ss)
     be = BeliefEngine(scorer=hs, refinements_graph=refinements_graph)
 

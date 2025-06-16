@@ -13,6 +13,7 @@ from datetime import datetime
 from indra_db import util as dbu
 from indra_db.util import S3Path
 from indra_db.util.dump_sif import upload_pickle_to_s3, S3_SUBDIR
+from indra.statements import Evidence
 
 logger = logging.getLogger('db_belief')
 
@@ -62,7 +63,6 @@ class MockEvidence(object):
         # Some annotations are used in indra.belief.tag_evidence_subtype.
         # TODO: optionally implement necessary annotations.
         self.annotations = annotations.copy()
-
 
 def populate_support(stmts, links):
     """Populate the supports supported_by lists of statements given links.

@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-
+import pytest
 from indra.belief import BeliefEngine
 from indra_db.belief import MockStatement, MockEvidence, populate_support, \
     load_mock_statements, calculate_belief
@@ -10,10 +9,10 @@ def test_belief_calc_up_to_prior():
     be = BeliefEngine()
     test_stmts = [
         MockStatement(1, [MockEvidence('sparser'), MockEvidence('reach')]),
-        MockStatement(2, MockEvidence('biopax')),
-        MockStatement(3, MockEvidence('signor')),
-        MockStatement(4, MockEvidence('biogrid')),
-        MockStatement(5, MockEvidence('bel')),
+        MockStatement(2, [MockEvidence('biopax')]),
+        MockStatement(3, [MockEvidence('signor')]),
+        MockStatement(4, [MockEvidence('biogrid')]),
+        MockStatement(5, [MockEvidence('bel')]),
         MockStatement(6, [MockEvidence('phosphosite'), MockEvidence('trips')]),
         ]
     be.set_prior_probs(test_stmts)
@@ -27,10 +26,10 @@ def test_belief_calc_up_to_hierarchy():
     be = BeliefEngine()
     test_stmts = [
         MockStatement(1, [MockEvidence('sparser'), MockEvidence('reach')]),
-        MockStatement(2, MockEvidence('biopax')),
-        MockStatement(3, MockEvidence('signor')),
-        MockStatement(4, MockEvidence('biogrid')),
-        MockStatement(5, MockEvidence('bel')),
+        MockStatement(2, [MockEvidence('biopax')]),
+        MockStatement(3, [MockEvidence('signor')]),
+        MockStatement(4, [MockEvidence('biogrid')]),
+        MockStatement(5, [MockEvidence('bel')]),
         MockStatement(6, [MockEvidence('phosphosite'), MockEvidence('trips')]),
         ]
     be.set_prior_probs(test_stmts)
@@ -70,7 +69,7 @@ def test_belief_calc_up_to_hierarchy():
     assert all_deltas_correct, deltas_dict
 
 
-@attr('nonpublic')
+@pytest.mark.nonpublic
 def test_mock_stmt_load_and_belief_calc():
     db = get_prepped_db(1000, with_pa=True)
     stmts = load_mock_statements(db)

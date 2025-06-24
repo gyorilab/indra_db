@@ -805,13 +805,17 @@ def fast_raw_pa_link_helper(local_ro_mngr):
 
                 for raw_stmt_id in hash_to_raw_id_map[this_hash]:
                     info_dict = raw_id_to_info.get(raw_stmt_id, {})
+                    raw_json = info_dict.get("raw_json", "")
                     reading_id = info_dict.get("reading_id")
                     db_info_id = info_dict.get("db_info_id")
                     raw_stmt_src_name = raw_stmt_id_source_map.get(raw_stmt_id)
+                    if not raw_stmt_src_name:
+                        stmt = clean_json_loads(raw_json)
+                        raw_stmt_src_name = stmt['evidence'][0]['source_api']
                     type_num = ro_type_map._str_to_int[stmt_json["type"]]
                     rows.append([
                         raw_stmt_id,
-                        info_dict.get("raw_json", "").encode(encoding="utf-8"),
+                        raw_json.encode(encoding="utf-8"),
                         reading_id,
                         db_info_id,
                         this_hash,

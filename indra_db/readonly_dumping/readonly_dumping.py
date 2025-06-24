@@ -28,6 +28,7 @@ from pyspark.sql import SparkSession
 from indra.literature.pubmed_client import _get_annotations
 from indra.statements import stmt_from_json, ActiveForm
 from indra.util.statement_presentation import db_sources, reader_sources
+from indra_db import get_db
 from indra_db.config import get_databases
 from indra_db.databases import ReadonlyDatabaseManager
 from indra_db.schemas.mixins import ReadonlyTable
@@ -751,6 +752,13 @@ def fast_raw_pa_link_helper(local_ro_mngr):
     local_ro_mngr.grab_session()
     query = local_ro_mngr.session.query(local_ro_mngr.RawStmtSrc.sid,
                                         local_ro_mngr.RawStmtSrc.src)
+    db = get_db("primary")
+
+    # Execute query and get mapping
+    with db.engine.connect() as conn:
+        result = conn.execute("SELECT id, source_api FROM db_info")
+        id_to_source_api = {row["id"]: row["source_api"] for row in result}
+
     raw_stmt_id_source_map = {
         int(raw_stmt_id): src for raw_stmt_id, src in query.all()
     }
@@ -770,6 +778,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
             info = {"raw_json": stmt_json_raw}
             if db_info_id and db_info_id != "\\N":
                 info["db_info_id"] = int(db_info_id)
+                info["src"] = id_to_source_api[db_info_id]
             if reading_id and reading_id != "\\N":
                 info["reading_id"] = int(reading_id)
             raw_id_to_info[int(raw_stmt_id)] = info
@@ -808,10 +817,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
                     raw_json = info_dict.get("raw_json", "")
                     reading_id = info_dict.get("reading_id")
                     db_info_id = info_dict.get("db_info_id")
-                    raw_stmt_src_name = raw_stmt_id_source_map.get(raw_stmt_id)
-                    if not raw_stmt_src_name:
-                        stmt = clean_json_loads(raw_json)
-                        raw_stmt_src_name = stmt['evidence'][0]['source_api']
+                    raw_stmt_src_name = info_dict.get("src")
                     type_num = ro_type_map._str_to_int[stmt_json["type"]]
                     rows.append([
                         raw_stmt_id,

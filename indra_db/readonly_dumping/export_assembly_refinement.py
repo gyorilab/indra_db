@@ -110,11 +110,13 @@ if __name__ == '__main__':
             s3_path.upload(s3, body=local_file.read_bytes())
             logger.info(f"Uploaded {local_file} → {s3_path}")
 
-        if refinements_fpath.exists() or refinement_cycles_fpath.exists():
-            for local_file in [refinements_fpath, refinement_cycles_fpath]:
-                s3_path = base_s3_path.get_element_path(local_file.name)
-                s3_path.upload(s3, body=local_file.read_bytes())
-                logger.info(f"Uploaded {local_file} → {s3_path}")
+        for file in [refinements_fpath, refinement_cycles_fpath]:
+            if file.exists():
+                s3_path = base_s3_path.get_element_path(file.name)
+                s3_path.upload(s3, body=file.read_bytes())
+                logger.info(f"Uploaded {file} → {s3_path}")
+            else:
+                logger.warning(f"Skipped upload: {file} does not exist")
 
         end_time = time.time()
         record_time(export_benchmark.absolute().as_posix(),

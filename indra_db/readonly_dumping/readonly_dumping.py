@@ -757,7 +757,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
     # Execute query to get db_indo_id tp source_api mapping
     with db.engine.connect() as conn:
         result = conn.execute("SELECT id, source_api FROM db_info")
-        id_to_source_api = {row["id"]: row["source_api"] for row in result}
+        id_to_source_api = {row["id"]: row["db_name"] for row in result}
 
     raw_stmt_id_source_map = {
         int(raw_stmt_id): src for raw_stmt_id, src in query.all()

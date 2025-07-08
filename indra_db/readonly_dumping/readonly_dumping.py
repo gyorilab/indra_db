@@ -838,6 +838,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
                     df['reading_id'] = pd.to_numeric(df['reading_id'], errors='coerce').astype('Int64')
                     df['db_info_id'] = pd.to_numeric(df['db_info_id'], errors='coerce').astype('Int32')
                     df['type_num'] = pd.to_numeric(df['type_num'], errors='coerce').astype('Int16')
+                    df['raw_stmt_src_name'] = df['raw_stmt_src_name'].astype('string')
                     df.to_parquet(temp_parquet_file, index=False)
                     rows.clear()  # Clear rows after saving
                     chunk_num += 1  # Increment chunk number

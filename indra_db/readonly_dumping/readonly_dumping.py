@@ -777,7 +777,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
             info = {"raw_json": stmt_json_raw}
             if db_info_id and db_info_id != "\\N":
                 info["db_info_id"] = int(db_info_id)
-                info["src"] = id_to_source_api[db_info_id]
+                info["src"] = id_to_source_api[int(db_info_id)]
             if reading_id and reading_id != "\\N":
                 info["reading_id"] = int(reading_id)
             raw_id_to_info[int(raw_stmt_id)] = info

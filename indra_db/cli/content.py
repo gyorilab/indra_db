@@ -294,7 +294,6 @@ class ContentManager(object):
         skipped_trids = {row[0] for row in skipped}
         batch_trids = {rec[0] for rec in data}
         inserted_trids = batch_trids - skipped_trids
-        print(inserted_trids)
 
         # update the date on the updated fulltext
         if inserted_trids:

@@ -630,7 +630,7 @@ class DgiManager(KnowledgebaseManager):
     def get_statements(self):
         from indra.sources import dgi
         logger.info('Processing DGI from web')
-        dp = dgi.process_version()
+        dp = dgi.process_version('latest')
         logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(dp.statements)]
         unique_stmts, _ = extract_duplicates(filtered_stmts,
@@ -925,7 +925,7 @@ def local_update(
                     for stmt in tqdm(stmts, leave=not batches):
                         raw_id = next(fake_raw_id_generator)
                         # Get the statement hash and update the source count
-                        stmt_hash = stmt.get_hash(refresh=True)
+                        stmt_hash = stmt.get_hash(shallow=False, refresh=True)
 
                         # Get source count for this statement, or create a new
                         # Counter if it doesn't exist, and increment the count
@@ -937,7 +937,7 @@ def local_update(
                         stmt_hash_to_raw_id[stmt_hash].add(raw_id)
                         kb_info_rows.append(
                             # raw_id, db_info_id, (reading_id), stmt_json
-                            (raw_id, db_info_id, "\\N", stmt.to_json())
+                            (raw_id, db_info_id, "\\N", json.dumps(stmt.to_json()))
                         )
 
                         rows.append((stmt_hash, json.dumps(stmt.to_json())))

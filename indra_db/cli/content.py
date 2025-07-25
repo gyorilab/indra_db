@@ -29,7 +29,8 @@ from indra.util import UnicodeXMLTreeBuilder as UTB
 from indra_db.databases import texttypes, formats
 from indra_db.databases import sql_expressions as sql_exp
 from indra_db.util.data_gatherer import DataGatherer, DGContext
-
+from sqlalchemy import exists, and_, literal
+from sqlalchemy.orm import aliased
 from .util import format_date
 
 try:
@@ -277,8 +278,32 @@ class ContentManager(object):
         return id_dict, skipped_rows
 
     def upload_text_content(self, db, data):
-        """Insert text content into the database using COPY."""
-        return db.copy_report_lazy('text_content', data, self.tc_cols)
+        """
+        Insert rows into `text_content` with COPY … ON CONFLICT DO NOTHING
+        and return the set of TextRef IDs whose content was truly inserted.
+        """
+        if not data:
+            return set()
+
+        skipped = db.copy_report_lazy(
+            'text_content',
+            data,
+            self.tc_cols,
+            return_cols=('text_ref_id',)
+        )
+        skipped_trids = {row[0] for row in skipped}
+        batch_trids = {rec[0] for rec in data}
+        inserted_trids = batch_trids - skipped_trids
+        print(inserted_trids)
+
+        # update the date on the updated fulltext
+        if inserted_trids:
+            now = datetime.utcnow()
+            (db.session.query(db.TextRef)
+                .filter(db.TextRef.id.in_(inserted_trids))
+                .update({'last_updated': now}, synchronize_session=False))
+
+        return inserted_trids
 
     def make_text_ref_str(self, tr):
         """Make a string from a text ref using tr_cols."""
@@ -712,8 +737,8 @@ class Pubmed(_NihManager):
         logger.info("Found %d new text content entries."
                     % len(text_content_records))
 
-        self.upload_text_content(db, text_content_records)
-        gatherer.add('content', len(text_content_records))
+        new_trids = self.upload_text_content(db, text_content_records)
+        gatherer.add('content', len(new_trids))
         return
 
     def iter_contents(self, archives=None):
@@ -1039,8 +1064,8 @@ class PmcManager(_NihManager):
         # Upload the text content data.
         logger.info('Adding %d more text content entries...' %
                     len(filtered_tc_records))
-        self.upload_text_content(db, filtered_tc_records)
-        gatherer.add('content', len(filtered_tc_records))
+        new_trids = self.upload_text_content(db, filtered_tc_records)
+        gatherer.add('content', len(new_trids))
         return
 
     def get_data_from_xml_str(self, xml_str, filename):
@@ -1414,7 +1439,9 @@ class PmcOA(PmcManager):
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, my_source)
     def update(self, db):
-        load_pmcid_set = self.find_all_missing_pmcids(db)
+        logger.info("Finding all pmcids need update.")
+        load_pmcid_set = self.find_all_pmcids_need_update(db)
+        logger.info("Getting archives for pmcids.")
         archives_dict = self.get_archives_for_pmcids(load_pmcid_set)
 
         # Upload these archives.
@@ -1425,22 +1452,56 @@ class PmcOA(PmcManager):
             self.upload_archives(db, [archive], pmcid_set=pmcid_set)
         return True
 
-    def find_all_missing_pmcids(self, db):
-        """Find PMCIDs available from the FTP server that are not in the DB."""
+    def find_all_pmcids_need_update(self, db, scope=None):
+        """
+        Find PMCIDs available from the FTP server that are not in the DB.
+        Parameters
+        ----------
+        db : DatabaseManager
+        scope : None | "fulltext"
+            • None  (default) → return PMCIDs not present at all for this source
+            • "fulltext"      → return PMCIDs that EXIST but only have ABSTRACT,
+                                i.e. still missing FULLTEXT
+        """
         logger.info("Getting list of PMC OA content available.")
         ftp_pmcid_set = {entry['AccessionID'] for entry in self.file_data}
+        if scope == "fulltext":
+            # refs that already HAVE full-text from this source
 
-        logger.info("Getting a list of text refs that already correspond to "
-                    "PMC OA content.")
-        tr_list = db.select_all(
-            db.TextRef,
-            db.TextRef.id == db.TextContent.text_ref_id,
-            db.TextContent.source == self.my_source
-            )
-        load_pmcid_set = ftp_pmcid_set - {tr.pmcid for tr in tr_list}
+            # alias avoids name collisions when we join TextContent to itself
+            tc_full = aliased(db.TextContent)
 
-        logger.info("There are %d PMC OA articles to load."
-                    % (len(load_pmcid_set)))
+            pmcids_needing_fulltext = {
+                pmcid for (pmcid,) in (
+                    db.session.query(db.TextRef.pmcid)
+                    .filter(
+                        db.TextRef.pmcid.isnot(None),  # has a PMCID
+                        ~exists().where(  # …but
+                            and_(  # NO row in text_content
+                                tc_full.text_ref_id == db.TextRef.id,
+                                tc_full.text_type == texttypes.FULLTEXT
+                            )
+                        )
+                    )
+                )
+            }
+
+            load_pmcid_set = ftp_pmcid_set & pmcids_needing_fulltext
+            logger.info("Need FULLTEXT for %d PMCIDs.", len(load_pmcid_set))
+
+        else:
+            # refs completely missing for this source
+            logger.info("Getting a list of text refs that already correspond to "
+                        "PMC OA content.")
+            tr_list = db.select_all(
+                db.TextRef,
+                db.TextRef.id == db.TextContent.text_ref_id,
+                db.TextContent.source == self.my_source
+                )
+            load_pmcid_set = ftp_pmcid_set - {tr.pmcid for tr in tr_list}
+
+            logger.info("There are %d PMC OA articles to load."
+                        % (len(load_pmcid_set)))
 
         return load_pmcid_set
 
@@ -1473,7 +1534,7 @@ class PmcOA(PmcManager):
             have some articles that could not be uploaded (e.g. because of
             text ref conflicts, etc.).
         """
-        load_pmcid_set = self.find_all_missing_pmcids(db)
+        load_pmcid_set = self.find_all_pmcids_need_update(db)
         update_archives = self.get_archives_for_pmcids(load_pmcid_set)
 
         logger.info("Beginning to upload archives.")

@@ -755,9 +755,8 @@ def fast_raw_pa_link_helper(local_ro_mngr):
     db = get_db("primary")
 
     # Execute query to get db_indo_id tp source_api mapping
-    with db.engine.connect() as conn:
-        result = conn.execute("SELECT id, source_api FROM db_info")
-        id_to_source_api = {row["id"]: row["source_api"] for row in result}
+    rows = db.select_all(db.DBInfo)
+    id_to_source_api = {r.id: r.db_name for r in rows}
 
     raw_stmt_id_source_map = {
         int(raw_stmt_id): src for raw_stmt_id, src in query.all()
@@ -778,7 +777,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
             info = {"raw_json": stmt_json_raw}
             if db_info_id and db_info_id != "\\N":
                 info["db_info_id"] = int(db_info_id)
-                info["src"] = id_to_source_api[db_info_id]
+                info["src"] = id_to_source_api[int(db_info_id)]
             if reading_id and reading_id != "\\N":
                 info["reading_id"] = int(reading_id)
             raw_id_to_info[int(raw_stmt_id)] = info
@@ -839,6 +838,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
                     df['reading_id'] = pd.to_numeric(df['reading_id'], errors='coerce').astype('Int64')
                     df['db_info_id'] = pd.to_numeric(df['db_info_id'], errors='coerce').astype('Int32')
                     df['type_num'] = pd.to_numeric(df['type_num'], errors='coerce').astype('Int16')
+                    df['raw_stmt_src_name'] = df['raw_stmt_src_name'].astype('string')
                     df.to_parquet(temp_parquet_file, index=False)
                     rows.clear()  # Clear rows after saving
                     chunk_num += 1  # Increment chunk number
@@ -854,6 +854,7 @@ def fast_raw_pa_link_helper(local_ro_mngr):
                 df['reading_id'] = pd.to_numeric(df['reading_id'], errors='coerce').astype('Int64')
                 df['db_info_id'] = pd.to_numeric(df['db_info_id'], errors='coerce').astype('Int32')
                 df['type_num'] = pd.to_numeric(df['type_num'], errors='coerce').astype('Int16')
+                df['raw_stmt_src_name'] = df['raw_stmt_src_name'].astype('string')
                 df.to_parquet(temp_parquet_file, index=False)
                 rows.clear()  # Clear remaining rows
 

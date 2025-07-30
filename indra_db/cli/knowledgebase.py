@@ -880,7 +880,7 @@ def local_update(
                     # Get source count for this statement, or create new
                     # Counter if it doesn't exist, and increment the count
                     source_count_dict = source_counts.get(stmt_hash, Counter())
-                    source_count_dict[kbm.source] += 1
+                    source_count_dict[kbm.short_name] += 1
                     source_counts[stmt_hash] = source_count_dict
             outer_tqdm.update(1)
 
@@ -925,7 +925,7 @@ def local_update(
                     for stmt in tqdm(stmts, leave=not batches):
                         raw_id = next(fake_raw_id_generator)
                         # Get the statement hash and update the source count
-                        stmt_hash = stmt.get_hash(shallow=False, refresh=True)
+                        stmt_hash = stmt.get_hash(refresh=True)
 
                         # Get source count for this statement, or create a new
                         # Counter if it doesn't exist, and increment the count

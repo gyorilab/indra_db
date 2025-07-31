@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
+import zlib
 from collections import defaultdict, Counter
 from hashlib import md5
 from pathlib import Path
@@ -562,7 +563,9 @@ def load_file_to_table_spark(table_name, schema,
         df = df.dropDuplicates(['sid', 'mesh_num'])
     elif table_name in ['readonly.name_meta', 'readonly.text_meta',
                         'readonly.other_meta']:
-        df = df.filter(col("ag_id").isNotNull() & col("ag_num").isNotNull())
+        df = df.filter(col("ag_id").isNotNull() & col("ag_num").isNotNull()
+                       & col("role_num").isNotNull())
+        df = df.dropDuplicates(['ag_id', 'mk_hash', 'role_num', 'ag_num'])
     elif table_name in ['readonly.mesh_term_meta',
                         'readonly.mesh_concept_meta']:
         df = df.dropDuplicates(['mk_hash', 'mesh_num'])
@@ -1127,7 +1130,8 @@ def ensure_pa_meta():
              pa_agents.stmt_mk_hash = pa_statements.mk_hash
     WHERE LENGTH(pa_agents.db_id) < 2000
     """)
-    principal_query_to_csv(pa_meta_query, pa_meta_fpath)
+    if not pa_meta_fpath.absolute().exists():
+        principal_query_to_csv(pa_meta_query, pa_meta_fpath)
 
     # Load the belief dump into a dictionary
     logger.info("Loading belief scores")
@@ -1138,116 +1142,241 @@ def ensure_pa_meta():
     source_counts = pickle.load(source_counts_fpath.open("rb"))
 
     # Load agent count, activity and type mapping
+    logger.info("Loading agent count, activity and type mapping")
     stmt_hash_to_activity_type_count = get_activity_type_ag_count()
 
     # Loop pa_meta dump and write load files for NameMeta, TextMeta, OtherMeta
     logger.info("Iterating over pa_meta dump")
     nones = (None, None, None, None)
 
+    seen_hash = set() #all int
+
     def db_id_clean(s):
         return s.replace('\n', ' ').replace('\r', ' ') if s else s
 
-    with pa_meta_fpath.open('rt') as fh, \
-            name_meta_tsv.open("wt") as name_fh, \
+    def synth_ag_id(mk_hash, ag_num, role_num, db_name, db_id):
+        # Deterministic, compact, and stable across runs
+        h = zlib.crc32(
+            f"{mk_hash}|{ag_num}|{role_num}|{db_name}|{db_id}".encode())
+        return -int(h) - 1
+
+    with name_meta_tsv.open("wt") as name_fh, \
             text_meta_tsv.open("wt") as text_fh, \
             other_meta_tsv.open("wt") as other_fh:
-        reader = csv.reader(fh, delimiter="\t")
         name_writer = csv.writer(name_fh, delimiter="\t")
         text_writer = csv.writer(text_fh, delimiter="\t")
         other_writer = csv.writer(other_fh, delimiter="\t")
-        next(reader)  #skip column name
-        for db_name, db_id, ag_id, ag_num, role, stmt_hash_str in reader:
-            stmt_hash = int(stmt_hash_str)
 
-            # Get the belief score
-            belief_score = belief_dict.get(stmt_hash)
-            if belief_score is None:
-                # todo: debug log, remove later
-                #logger.warning(f"Missing belief score for {stmt_hash}")
-                continue
+        with pa_meta_fpath.open('rt') as fh:
+            reader = csv.reader(fh, delimiter="\t")
+            next(reader)  # skip column name
+            for db_name, db_id, ag_id, ag_num, role, stmt_hash_str in reader:
+                stmt_hash = int(stmt_hash_str)
+                seen_hash.add(stmt_hash)
 
-            # Get the agent count, activity and type count
-            activity, is_active, type_num, agent_count = \
-                stmt_hash_to_activity_type_count.get(stmt_hash, nones)
-            if type_num is None and agent_count is None:
-                continue
+                # Get the belief score
+                belief_score = belief_dict.get(stmt_hash)
+                if belief_score is None:
+                    # todo: debug log, remove later
+                    #logger.warning(f"Missing belief score for {stmt_hash}")
+                    continue
 
-            # Get the evidence count
-            ev_count = sum(
-                source_counts.get(stmt_hash, {}).values()
-            )
-            if ev_count == 0:
-                # todo: debug log, remove later
-                #logger.warning(f"Missing evidence count for {stmt_hash}")
-                continue
+                # Get the agent count, activity and type count
+                activity, is_active, type_num, agent_count = \
+                    stmt_hash_to_activity_type_count.get(stmt_hash, nones)
+                if type_num is None and agent_count is None:
+                    continue
 
-            # Get role num
-            role_num = ro_role_map.get_int(role)
+                # Get the evidence count
+                ev_count = sum(
+                    source_counts.get(stmt_hash, {}).values()
+                )
+                if ev_count == 0:
+                    # todo: debug log, remove later
+                    #logger.warning(f"Missing evidence count for {stmt_hash}")
+                    continue
 
-            # NameMeta - db_name == "NAME"
-            # TextMeta - db_name == "TEXT"
-            # OtherMeta - other db_names not part of ("NAME", "TEXT")
-            # Columns are:
-            # ag_id, ag_num, [db_name,] db_id, role_num, type_num, mk_hash,
-            # ev_count, belief, activity, is_active, agent_count,
-            # is_complex_dup
-            row_start = [
-                ag_id,
-                ag_num,
-            ]
-            # db_name here if "other"
-            row_end = [
-                db_id_clean(db_id),
-                role_num,
-                type_num,
-                stmt_hash,
-                ev_count,
-                belief_score,
-                activity,
-                is_active,
-                agent_count,
-                False,
-            ]
-            if db_name == "NAME":
-                name_writer.writerow(row_start + row_end)
-            elif db_name == "TEXT":
-                text_writer.writerow(row_start + row_end)
-            else:
-                other_writer.writerow(row_start + [db_name] + row_end)
+                # Get role num
+                role_num = ro_role_map.get_int(role)
 
-            if type_num == ro_type_map.get_int("Complex"):
-                dup1 = [
-                    db_id_clean(db_id),
-                    -1,  # role_num
-                    type_num, stmt_hash,
-                    ev_count, belief_score,
-                    activity, is_active,
-                    agent_count,
-                    True  # is_complex_dup = True
+                # NameMeta - db_name == "NAME"
+                # TextMeta - db_name == "TEXT"
+                # OtherMeta - other db_names not part of ("NAME", "TEXT")
+                # Columns are:
+                # ag_id, ag_num, [db_name,] db_id, role_num, type_num, mk_hash,
+                # ev_count, belief, activity, is_active, agent_count,
+                # is_complex_dup
+                row_start = [
+                    ag_id,
+                    ag_num,
                 ]
-
-                dup2 = [
+                # db_name here if "other"
+                row_end = [
                     db_id_clean(db_id),
-                    1,  # role_num
-                    type_num, stmt_hash,
-                    ev_count, belief_score,
-                    activity, is_active,
+                    role_num,
+                    type_num,
+                    stmt_hash,
+                    ev_count,
+                    belief_score,
+                    activity,
+                    is_active,
                     agent_count,
-                    True
+                    False,
                 ]
                 if db_name == "NAME":
-                    name_writer.writerow(
-                        row_start[:1] + [0] + dup1)  # ag_num=0
-                    name_writer.writerow(
-                        row_start[:1] + [1] + dup2)  # ag_num=1
+                    name_writer.writerow(row_start + row_end)
                 elif db_name == "TEXT":
-                    text_writer.writerow(row_start[:1] + [0] + dup1)
-                    text_writer.writerow(row_start[:1] + [1] + dup2)
+                    text_writer.writerow(row_start + row_end)
                 else:
-                    other_writer.writerow(
-                        row_start[:1] + [0] + [db_name] + dup1)
-                    other_writer.writerow(
-                        row_start[:1] + [1] + [db_name] + dup2)
+                    other_writer.writerow(row_start + [db_name] + row_end)
+
+                if type_num == ro_type_map.get_int("Complex"):
+                    dup1 = [
+                        db_id_clean(db_id),
+                        -1,  # role_num
+                        type_num, stmt_hash,
+                        ev_count, belief_score,
+                        activity, is_active,
+                        agent_count,
+                        True  # is_complex_dup = True
+                    ]
+
+                    dup2 = [
+                        db_id_clean(db_id),
+                        1,  # role_num
+                        type_num, stmt_hash,
+                        ev_count, belief_score,
+                        activity, is_active,
+                        agent_count,
+                        True
+                    ]
+                    if db_name == "NAME":
+                        name_writer.writerow(
+                            row_start[:1] + [0] + dup1)  # ag_num=0
+                        name_writer.writerow(
+                            row_start[:1] + [1] + dup2)  # ag_num=1
+                    elif db_name == "TEXT":
+                        text_writer.writerow(row_start[:1] + [0] + dup1)
+                        text_writer.writerow(row_start[:1] + [1] + dup2)
+                    else:
+                        other_writer.writerow(
+                            row_start[:1] + [0] + [db_name] + dup1)
+                        other_writer.writerow(
+                            row_start[:1] + [1] + [db_name] + dup2)
+
+        logger.info(
+            "Augmenting Name/Text/OtherMeta from unique statements for hashes missing in principal")
+        with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh:
+            reader = csv.reader(fh, delimiter="\t")
+            for stmt_hash_string, stmt_json_string in reader:
+                stmt_hash = int(stmt_hash_string)
+                if stmt_hash in seen_hash:
+                    continue
+                ev_count = sum(source_counts.get(stmt_hash, {}).values())
+                if ev_count == 0:
+                    continue
+                belief_score = belief_dict.get(stmt_hash)
+                if belief_score is None:
+                    continue
+                activity, is_active, type_num, agent_count = \
+                    stmt_hash_to_activity_type_count.get(stmt_hash, nones)
+                if type_num is None and agent_count is None:
+                    continue
+                stmt_json = clean_json_loads(stmt_json_string)
+                stmt = stmt_from_json(stmt_json)
+                agents = stmt.agent_list()
+                if not agents:
+                    continue
+                for ag_num, ag in enumerate(agents):
+                    if ag is None:
+                        continue
+
+                    if ag_num == 0:
+                        role_num = -1 #'SUBJECT'
+                    elif ag_num == 1:
+                        role_num = 1 #'OBJECT'
+                    else:
+                        role_num = 0 #'OTHER'
+                    groundings = set()
+
+                    # NAME
+                    if getattr(ag, "name", None):
+                        groundings.add(("NAME", str(ag.name)))
+
+                    # TEXT
+                    text_id = (ag.db_refs or {}).get("TEXT")
+                    if text_id:
+                        groundings.add(("TEXT", str(text_id)))
+
+                    #OTHER
+                    for k, v in (ag.db_refs or {}).items():
+                        if v is None:
+                            continue
+                        v_str = v if isinstance(v, str) else str(v)
+                        groundings.add((k, v_str))
+
+                    for db_name, db_id in groundings:
+                        if not db_id or len(db_id) >= 2000:
+                            continue
+                        ag_id = synth_ag_id(stmt_hash, ag_num, role_num, db_name, db_id)
+                        row_start = [
+                            ag_id,
+                            ag_num,
+                        ]
+                        # db_name here if "other"
+                        row_end = [
+                            db_id_clean(db_id),
+                            role_num,
+                            type_num,
+                            stmt_hash,
+                            ev_count,
+                            belief_score,
+                            activity,
+                            is_active,
+                            agent_count,
+                            False,
+                        ]
+                        if db_name == "NAME":
+                            name_writer.writerow(row_start + row_end)
+                        elif db_name == "TEXT":
+                            text_writer.writerow(row_start + row_end)
+                        else:
+                            other_writer.writerow(
+                                row_start + [db_name] + row_end)
+
+                        if type_num == ro_type_map.get_int("Complex"):
+                            dup1 = [
+                                db_id_clean(db_id),
+                                -1,  # role_num
+                                type_num, stmt_hash,
+                                ev_count, belief_score,
+                                activity, is_active,
+                                agent_count,
+                                True  # is_complex_dup = True
+                            ]
+
+                            dup2 = [
+                                db_id_clean(db_id),
+                                1,  # role_num
+                                type_num, stmt_hash,
+                                ev_count, belief_score,
+                                activity, is_active,
+                                agent_count,
+                                True
+                            ]
+                            if db_name == "NAME":
+                                name_writer.writerow(
+                                    row_start[:1] + [0] + dup1)  # ag_num=0
+                                name_writer.writerow(
+                                    row_start[:1] + [1] + dup2)  # ag_num=1
+                            elif db_name == "TEXT":
+                                text_writer.writerow(row_start[:1] + [0] + dup1)
+                                text_writer.writerow(row_start[:1] + [1] + dup2)
+                            else:
+                                other_writer.writerow(
+                                    row_start[:1] + [0] + [db_name] + dup1)
+                                other_writer.writerow(
+                                    row_start[:1] + [1] + [db_name] + dup2)
 
 
 # NameMeta, TextMeta, OtherMeta

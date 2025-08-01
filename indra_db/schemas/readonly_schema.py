@@ -1367,12 +1367,13 @@ class ReadonlySchema(Schema):
                         new_interactions.append(
                             (interaction.mk_hash, interaction.ev_count,
                              interaction.belief, interaction.type_num, 2,
-                             new_agent_json, interaction.src_json, True)
+                             new_agent_json, interaction.src_json, True,
+                             interaction.activity, interaction.is_active)
                         )
                 db.copy('readonly.agent_interactions', new_interactions,
                         ('mk_hash', 'ev_count', 'belief', 'type_num',
                          'agent_count', 'agent_json', 'src_json',
-                         'is_complex_dup'))
+                         'is_complex_dup', 'activity','is_active'))
                 return
 
             mk_hash = Column(BigInteger, primary_key=True)

@@ -1155,10 +1155,16 @@ def ensure_pa_meta():
         return s.replace('\n', ' ').replace('\r', ' ') if s else s
 
     def synth_ag_id(mk_hash, ag_num, role_num, db_name, db_id):
+        int_mask = 0x7FFFFFFF  # 31 low bits set
         # Deterministic, compact, and stable across runs
-        h = zlib.crc32(
-            f"{mk_hash}|{ag_num}|{role_num}|{db_name}|{db_id}".encode())
-        return -int(h) - 1
+        #The ID is guaranteed to be in the range [-INT32_MAX, -1].
+        crc32_full = zlib.crc32(
+            f"{mk_hash}|{ag_num}|{role_num}|{db_name}|{db_id}".encode()
+        )
+        id_pos = crc32_full & int_mask
+        if id_pos == 0:
+            id_pos = 1
+        return -id_pos
 
     with name_meta_tsv.open("wt") as name_fh, \
             text_meta_tsv.open("wt") as text_fh, \

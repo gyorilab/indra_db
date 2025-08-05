@@ -1692,7 +1692,7 @@ def _load_pmid_to_raw_stmt_id():
                 # Rows are:
                 # raw_stmt_id_int, db_info_id, int_reading_id, stmt_json_raw
                 for meta_row in tqdm(reader):
-                    if meta_row[2] != SQL_NULL:
+                    if meta_row[2] not in (SQL_NULL, '', None):
                         rid = int(meta_row[2])
                         raw_stmt_id = int(meta_row[0])
                         pmid = reading_id_to_pmid.get(rid)

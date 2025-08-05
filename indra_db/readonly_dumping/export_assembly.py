@@ -408,6 +408,7 @@ def preprocess(
                     raw_stmt_id_int = int(raw_stmt_id)
                     db_info_id_int = int(db_info_id) if db_info_id != "\\N" else None
                     refs = None
+                    int_reading_id = None
 
                     # Skip if this is for a dropped knowledgebase or reading
                     if drop_db_info_ids and db_info_id_int and \
@@ -423,7 +424,7 @@ def preprocess(
 
                     # Append to info rows
                     info_rows.append((raw_stmt_id_int, db_info_id_int or "\\N",
-                                      int_reading_id, stmt_json_raw))
+                                      int_reading_id or '\\N', stmt_json_raw))
                     stmt_json = clean_json_loads(stmt_json_raw)
                     if refs:
                         stmt_json["evidence"][0]["text_refs"] = refs

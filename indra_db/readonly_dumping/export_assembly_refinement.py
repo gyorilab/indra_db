@@ -96,16 +96,20 @@ if __name__ == '__main__':
                 source_mapping=db_name_api_mapping,
             )
 
-        # upload source_count, belief_score
-        # and processed_statement to S3 for cogex usage
+        # Upload source_count, belief_score, text_refs and processed_statement
+        # to S3 for cogex usage
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
         s3 = boto3.client("s3")
         base_s3_path = S3Path("bigmech",
                               f"indra-db/dumps/cogex_files/{timestamp}")
 
-        for local_file in [source_counts_fpath, processed_stmts_fpath,
-                           belief_scores_pkl_fpath]:
+        for local_file in [
+            source_counts_fpath,
+            processed_stmts_fpath,
+            text_refs_fpath,
+            belief_scores_pkl_fpath
+        ]:
             s3_path = base_s3_path.get_element_path(local_file.name)
             s3_path.upload(s3, body=local_file.read_bytes())
             logger.info(f"Uploaded {local_file} → {s3_path}")

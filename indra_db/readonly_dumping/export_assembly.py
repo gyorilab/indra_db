@@ -276,6 +276,9 @@ def distill_statements() -> Tuple[Set, Dict]:
                 )
             )
             trid = row.text_ref_id
+        for _, reader_contents in contents.items():
+            if len(reader_contents) > 1:
+                drop_readings |= reader_prioritize(reader_contents)
 
         with drop_readings_fpath.open("wb") as fh:
             logger.info(f"Dumping drop readings set to {drop_readings_fpath}")

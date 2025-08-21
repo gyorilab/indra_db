@@ -276,6 +276,8 @@ def distill_statements() -> Tuple[Set, Dict]:
                 )
             )
             trid = row.text_ref_id
+
+        # Process the last text_ref_id group
         for _, reader_contents in contents.items():
             if len(reader_contents) > 1:
                 drop_readings |= reader_prioritize(reader_contents)

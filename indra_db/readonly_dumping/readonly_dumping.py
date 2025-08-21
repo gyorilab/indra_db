@@ -1192,9 +1192,9 @@ def ensure_pa_meta():
 
                 # Get the belief score
                 belief_score = belief_dict.get(stmt_hash)
+
+                # Skip the dropped statements
                 if belief_score is None:
-                    # todo: debug log, remove later
-                    #logger.warning(f"Missing belief score for {stmt_hash}")
                     continue
 
                 # Get the agent count, activity and type count
@@ -1208,8 +1208,6 @@ def ensure_pa_meta():
                     source_counts.get(stmt_hash, {}).values()
                 )
                 if ev_count == 0:
-                    # todo: debug log, remove later
-                    #logger.warning(f"Missing evidence count for {stmt_hash}")
                     continue
 
                 # Get role num

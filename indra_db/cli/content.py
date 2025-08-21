@@ -1458,8 +1458,8 @@ class PmcOA(PmcManager):
         ----------
         db : DatabaseManager
         scope : None | "fulltext"
-            • None  (default) → return PMCIDs not present at all for this source
-            • "fulltext"      → return PMCIDs that EXIST but only have ABSTRACT,
+            None  (default) : return PMCIDs not present at all for this source
+            "fulltext"     : return PMCIDs that EXIST but only have ABSTRACT,
                                 i.e. still missing FULLTEXT
         """
         logger.info("Getting list of PMC OA content available.")

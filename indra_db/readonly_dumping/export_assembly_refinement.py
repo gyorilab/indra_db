@@ -111,6 +111,7 @@ if __name__ == '__main__':
             logger.info(f"Uploaded {local_file} → {s3_path}")
 
         for file in [refinements_fpath, refinement_cycles_fpath]:
+            # refinement_cycles should not exist if the graph is correct
             if file.exists():
                 s3_path = base_s3_path.get_element_path(file.name)
                 s3_path.upload(s3, body=file.read_bytes())

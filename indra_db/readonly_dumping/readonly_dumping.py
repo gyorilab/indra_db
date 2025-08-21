@@ -1083,7 +1083,17 @@ def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
 # PaMeta - the table itself is not generated on the readonly db, but the
 # tables derived from it are (NameMeta, TextMeta and OtherMeta)
 def ensure_pa_meta():
-    """Generate the source files for the Name/Text/OtherMeta tables"""
+    """Generate the source files for the Name/Text/OtherMeta tables
+    Process and update agent metadata from principal and unique statement sources.
+
+    This function performs the following steps:
+    1. Iterate through the query results from the principal (canonical) database to
+       collect existing statement metadata.
+    2. Identify new statements in the unique statements file that are not already
+       present in the principal database.
+    3. For these new statements, reprocess and regenerate agent-related metadata
+       such as `ag_id`, `role_num`, `db_name`, `db_id`, and others as needed.
+    """
     if all([name_meta_tsv.exists(),
             text_meta_tsv.exists(),
             other_meta_tsv.exists()]):

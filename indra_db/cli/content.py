@@ -278,9 +278,10 @@ class ContentManager(object):
         return id_dict, skipped_rows
 
     def upload_text_content(self, db, data):
-        """
-        Insert rows into `text_content` with COPY … ON CONFLICT DO NOTHING
-        and return the set of TextRef IDs whose content was truly inserted.
+        """Insert rows into the `text_content` table.
+
+        It uses COPY ... ON CONFLICT DO NOTHING
+        and returns the set of TextRef IDs whose content was truly inserted.
         """
         if not data:
             return set()
@@ -1438,9 +1439,9 @@ class PmcOA(PmcManager):
     @ContentManager._record_for_review
     @DGContext.wrap(gatherer, my_source)
     def update(self, db):
-        logger.info("Finding all pmcids need update.")
+        logger.info("Finding all the PMC IDs that need to be updated.")
         load_pmcid_set = self.find_all_pmcids_need_update(db)
-        logger.info("Getting archives for pmcids.")
+        logger.info("Getting archives for PMC IDs.")
         archives_dict = self.get_archives_for_pmcids(load_pmcid_set)
 
         # Upload these archives.
@@ -1452,15 +1453,15 @@ class PmcOA(PmcManager):
         return True
 
     def find_all_pmcids_need_update(self, db, scope=None):
-        """
-        Find PMCIDs available from the FTP server that are not in the DB.
+        """Find PMC IDs available from the FTP server that are not in the DB.
+
         Parameters
         ----------
         db : DatabaseManager
-        scope : None | "fulltext"
-            None  (default) : return PMCIDs not present at all for this source
-            "fulltext"     : return PMCIDs that EXIST but only have ABSTRACT,
-                                i.e. still missing FULLTEXT
+        scope : Optional[str]
+            The value is either None (default) to return PMC IDs not present
+            at all for this source or "fulltext" to return PMC IDs that
+            EXIST but only have ABSTRACT, i.e. are still missing FULLTEXT.
         """
         logger.info("Getting list of PMC OA content available.")
         ftp_pmcid_set = {entry['AccessionID'] for entry in self.file_data}

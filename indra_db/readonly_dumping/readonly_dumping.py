@@ -1083,7 +1083,8 @@ def source_meta(local_ro_mngr: ReadonlyDatabaseManager):
 # PaMeta - the table itself is not generated on the readonly db, but the
 # tables derived from it are (NameMeta, TextMeta and OtherMeta)
 def ensure_pa_meta():
-    """Generate the source files for the Name/Text/OtherMeta tables
+    """Generate the source files for the Name/Text/OtherMeta tables.
+
     Process and update agent metadata from principal and unique statement sources.
 
     This function performs the following steps:
@@ -1159,7 +1160,7 @@ def ensure_pa_meta():
     logger.info("Iterating over pa_meta dump")
     nones = (None, None, None, None)
 
-    seen_hash = set() #all int
+    seen_hash = set()  # all int
 
     def db_id_clean(s):
         return s.replace('\n', ' ').replace('\r', ' ') if s else s
@@ -1167,7 +1168,7 @@ def ensure_pa_meta():
     def synth_ag_id(mk_hash, ag_num, role_num, db_name, db_id):
         int_mask = 0x7FFFFFFF  # 31 low bits set
         # Deterministic, compact, and stable across runs
-        #The ID is guaranteed to be in the range [-INT32_MAX, -1].
+        # The ID is guaranteed to be in the range [-INT32_MAX, -1].
         crc32_full = zlib.crc32(
             f"{mk_hash}|{ag_num}|{role_num}|{db_name}|{db_id}".encode()
         )
@@ -1306,11 +1307,11 @@ def ensure_pa_meta():
                         continue
 
                     if ag_num == 0:
-                        role_num = -1 #'SUBJECT'
+                        role_num = -1  # 'SUBJECT'
                     elif ag_num == 1:
-                        role_num = 1 #'OBJECT'
+                        role_num = 1  # 'OBJECT'
                     else:
-                        role_num = 0 #'OTHER'
+                        role_num = 0  # 'OTHER'
                     groundings = set()
 
                     # NAME

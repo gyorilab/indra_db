@@ -105,7 +105,7 @@ if __name__ == '__main__':
                               f"indra-db/dumps/cogex_files/{timestamp}")
 
         for local_file in [source_counts_fpath, processed_stmts_fpath,
-                           belief_scores_pkl_fpath]:
+                           belief_scores_pkl_fpath, reading_text_content_fpath]:
             s3_path = base_s3_path.get_element_path(local_file.name)
             s3_path.upload(s3, body=local_file.read_bytes())
             logger.info(f"Uploaded {local_file} → {s3_path}")

@@ -1,8 +1,10 @@
+import tracemalloc
+
 import sys
 import json
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 from collections import defaultdict
 from hashlib import md5
 
@@ -184,6 +186,10 @@ def render_my_template(template, title, **kwargs):
 # Here begins the API proper
 # ==========================
 
+# Set start snapshot for tracemalloc
+tracemalloc.start()
+start_snapshot = tracemalloc.take_snapshot()
+
 
 @app.route("/", methods=["GET"])
 def root():
@@ -281,6 +287,23 @@ def serve_runtime():
         Bucket=S3_DATA_LOC["bucket"], Key=S3_DATA_LOC["prefix"] + "runtimes.json"
     )
     return jsonify(json.loads(res["Body"].read()))
+
+
+@app.route("/monitor/app_memory_usage")
+def serve_app_memory_usage():
+    datatime_now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S") + " (UTC)"
+    top_n = request.args.get("top_n", 50, type=int)
+    snapshot = tracemalloc.take_snapshot()
+
+    top_diff = snapshot.compare_to(start_snapshot, "lineno")[:top_n]
+    top_current = snapshot.statistics("lineno")[:top_n]
+
+    return env.get_template("memory_snapshot.html").render(
+        top_n=top_n,
+        top_diff=top_diff,
+        top_current=top_current,
+        current_dt=datatime_now,
+    )
 
 
 @app.route("/monitor/data/liststages")

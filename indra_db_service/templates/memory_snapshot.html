@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>INDRA DB memory usage</title>
+</head>
+<body>
+    <h1>Memory usage stats as of {{ current_dt }}</h1>
+    <h2>Top {{ top_n }} overall memory usage objects</h2>
+    <ul>
+    {% for item in top_current %}
+        <li>{{ item }}</li>
+    {% endfor %}
+    </ul>
+    <h2>Top {{ top_n }} memory increase since start</h2>
+    <ul>
+    {% for item in top_diff %}
+        <li>{{ item }}</li>
+    {% endfor %}
+    </ul>
+</body>
+</html>

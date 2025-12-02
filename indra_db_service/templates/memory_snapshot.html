@@ -8,14 +8,14 @@
     <h1>Memory usage stats as of {{ current_dt }}</h1>
     <h2>Top {{ top_n }} overall memory usage objects</h2>
     <ul>
-    {% for item in top_current %}
-        <li>{{ item }}</li>
+    {% for path, size, count, average in top_current %}
+        <li>{{ path }}: {{ size }} B in {{ count }} objects (avg {{ average }} B)</li>
     {% endfor %}
     </ul>
     <h2>Top {{ top_n }} memory increase since start</h2>
     <ul>
-    {% for item in top_diff %}
-        <li>{{ item }}</li>
+    {% for path, size, size_diff, count, count_diff, average in top_diff %}
+        <li>{{ path }}: {{ size }} B ({{ size_diff }} B) in {{ count }} objects ({{ count_diff }} objects, avg {{ average }} B)</li>
     {% endfor %}
     </ul>
 </body>

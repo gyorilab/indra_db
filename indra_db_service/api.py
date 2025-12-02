@@ -295,8 +295,26 @@ def serve_app_memory_usage():
     top_n = request.args.get("top_n", 50, type=int)
     snapshot = tracemalloc.take_snapshot()
 
-    top_diff = snapshot.compare_to(start_snapshot, "lineno")[:top_n]
-    top_current = snapshot.statistics("lineno")[:top_n]
+    top_diff = [
+        (
+            f"{stat.traceback[0].filename.split('python3.12')[-1]}:{stat.traceback[0].lineno}",
+            stat.size,
+            stat.size_diff,
+            stat.count,
+            stat.count_diff,
+            stat.size // stat.count if stat.count > 0 else 0
+         )
+        for stat in snapshot.compare_to(start_snapshot, "lineno")[:top_n]
+    ]
+    top_current = [
+        (
+            f"{stat.traceback[0].filename.split('python3.12')[-1]}:{stat.traceback[0].lineno}",
+            stat.size,
+            stat.count,
+            stat.size // stat.count if stat.count > 0 else 0
+         )
+        for stat in snapshot.statistics("lineno")[:top_n]
+    ]
 
     return env.get_template("memory_snapshot.html").render(
         top_n=top_n,

@@ -92,15 +92,26 @@ class LogTracker(object):
     log_path = '.rest_api_tracker.log'
 
     def __init__(self):
-        root_logger = logging.getLogger()
         self.stream = StringIO()
-        sh = logging.StreamHandler(self.stream)
+        self.handler = logging.StreamHandler(self.stream)
         formatter = logging.Formatter('%(levelname)s: %(name)s %(message)s')
-        sh.setFormatter(formatter)
-        sh.setLevel(logging.WARNING)
-        root_logger.addHandler(sh)
-        self.root_logger = root_logger
+        self.handler.setFormatter(formatter)
+        self.handler.setLevel(logging.WARNING)
+
+        # Add handler to root logger temporarily to capture all messages
+        self.root_logger = logging.getLogger()
+        self.root_logger.addHandler(self.handler)
+        self.added_to_root = True
         return
+
+    def __del__(self):
+        # Remove handler when LogTracker is destroyed
+        if hasattr(self, 'added_to_root') and self.added_to_root:
+            try:
+                self.root_logger.removeHandler(self.handler)
+            except ValueError:
+                # Handler may have already been removed
+                pass
 
     def get_messages(self):
         conts = self.stream.getvalue()

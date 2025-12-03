@@ -324,6 +324,36 @@ def serve_app_memory_usage():
     )
 
 
+@app.route("/monitor/logging_handlers")
+def serve_logging_handlers():
+    handlers_info = []
+
+    # Check root logger
+    for handler in logging.root.handlers:
+        handlers_info.append(
+            {
+                "logger": "root",
+                "handler": str(handler),
+                "type": type(handler).__name__,
+                "level": handler.level,
+            }
+        )
+
+    # Check your specific logger
+    db_logger = logging.getLogger("db rest api")
+    for handler in db_logger.handlers:
+        handlers_info.append(
+            {
+                "logger": "db rest api",
+                "handler": str(handler),
+                "type": type(handler).__name__,
+                "level": handler.level,
+            }
+        )
+
+    return jsonify(handlers_info)
+
+
 @app.route("/monitor/data/liststages")
 def list_stages():
     from indra_db.util.data_gatherer import S3_DATA_LOC

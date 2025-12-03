@@ -12,7 +12,7 @@
         <li>{{ path }}: {{ size }} B in {{ count }} objects (avg {{ average }} B)</li>
     {% endfor %}
     </ul>
-    <h2>Top {{ top_n }} memory increase since start</h2>
+    <h2>Top {{ top_n }} memory increase since previous check</h2>
     <ul>
     {% for path, size, size_diff, count, count_diff, average in top_diff %}
         <li>{{ path }}: {{ size }} B ({{ size_diff }} B) in {{ count }} objects ({{ count_diff }} objects, avg {{ average }} B)</li>

@@ -188,7 +188,7 @@ def render_my_template(template, title, **kwargs):
 
 # Set start snapshot for tracemalloc
 tracemalloc.start()
-start_snapshot = tracemalloc.take_snapshot()
+previous_snapshot = tracemalloc.take_snapshot()
 
 
 @app.route("/", methods=["GET"])
@@ -291,6 +291,7 @@ def serve_runtime():
 
 @app.route("/monitor/app_memory_usage")
 def serve_app_memory_usage():
+    global previous_snapshot
     datatime_now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S") + " (UTC)"
     top_n = request.args.get("top_n", 50, type=int)
     snapshot = tracemalloc.take_snapshot()
@@ -304,7 +305,7 @@ def serve_app_memory_usage():
             stat.count_diff,
             stat.size // stat.count if stat.count > 0 else 0
          )
-        for stat in snapshot.compare_to(start_snapshot, "lineno")[:top_n]
+        for stat in snapshot.compare_to(previous_snapshot, "lineno")[:top_n]
     ]
     top_current = [
         (
@@ -315,6 +316,9 @@ def serve_app_memory_usage():
          )
         for stat in snapshot.statistics("lineno")[:top_n]
     ]
+
+    # Update previous snapshot to current snapshot
+    previous_snapshot = snapshot
 
     return env.get_template("memory_snapshot.html").render(
         top_n=top_n,

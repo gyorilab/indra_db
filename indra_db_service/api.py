@@ -225,6 +225,7 @@ def search():
     return render_my_template(
         "search.html",
         "Search",
+        main_tag_class="container-fluid",
         source_colors=DEFAULT_SOURCE_COLORS,
         source_info=SOURCE_INFO,
         search_active=True,

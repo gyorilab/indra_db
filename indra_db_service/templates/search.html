@@ -63,6 +63,124 @@
 
 {% endblock %}
 
+{% block mid_right_styles %}
+  .mid-right {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 20em;
+    background: #fff;
+    padding-top: 85px;
+    overflow-y: auto;
+  }
+  .mid-right { box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); }
+{% endblock %}
+
+{% block layout_media_queries %}
+  .content {
+    margin-right: calc(15% + 20%);
+  }
+
+  @media (min-width: 1500px) {
+    .right     { width: 15%; }
+    .mid-right { width: 20%; right: 15%; }
+    .content   { margin-right: calc(15% + 20%); }
+    .footer    { right: calc(15% + 20%); }
+  }
+
+  @media (max-width: 1500px) {
+    .right     { width: 15%; }
+    .mid-right { width: 20%; right: 15%; }
+    .content   { margin-right: calc(15% + 20%); }
+    .footer    { right: calc(15% + 20%); }
+  }
+
+  @media (max-width: 1100px) {
+    .right, .mid-right { display: none; }
+    .content { margin-right: 0; }
+    .footer  { right: 0; }
+  }
+{% endblock %}
+
+{% block mid_right_panel %}
+<div class="side-info mid-right" id="mid-right-panel">
+  <h3 class="bg-white">Summary</h3>
+  <p>On this page, you can search for statements from the INDRA Database by applying different filters such as agents, relation types, MeSH terms, or papers.</p>
+  <h4>Examples</h4>
+    <!-- Examples -->
+    <span style="color:#888;">•</span>
+    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+          data-agent1="DUSP1"
+          data-agent2="MAPK1"
+          data-preset="s-o"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            agent2: this.dataset.agent2,
+            preset: this.dataset.preset
+          }}))">
+      How does DUSP1 affect MAPK1?
+    </span>
+
+    <br/>
+
+    <span style="color:#888;">•</span>
+    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+          data-agent1="CDK12"
+          data-stmt-type="Phosphorylation"
+          data-preset="s-o"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            stmtType: this.dataset.stmtType,
+            preset: this.dataset.preset
+          }}))">
+      What does CDK12 phosphorylate?
+    </span>
+
+    <br/>
+
+    <span style="color:#888;">•</span>
+    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+          data-agent1="MTOR"
+          data-stmt-type="Inhibition"
+          data-preset="o-s"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            stmtType: this.dataset.stmtType,
+            preset: this.dataset.preset
+          }}))">
+      What is known to inhibit mTOR?
+    </span>
+
+    <br/>
+
+    <span style="color:#888;">•</span>
+    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+          data-agent1="PIK3CA"
+          data-preset="any-any"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            preset: this.dataset.preset
+          }}))">
+      Show all interactions involving PIK3CA.
+    </span>
+
+    <br/>
+
+    <span style="color:#888;">•</span>
+    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+          data-agent1="Seliciclib"
+          data-stmt-type="Inhibition"
+          data-preset="s-o"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            stmtType: this.dataset.stmtType,
+            preset: this.dataset.preset
+          }}))">
+      What does Seliciclib inhibit?
+    </span>
+</div>
+{% endblock %}
+
 {% block body %}
   {{ super() }}
   <div id="app">

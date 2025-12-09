@@ -12,7 +12,7 @@
 
 <!-- indralab vue package, sourced from either S3 or locally when developing -->
 <script src="{{ vue_src }}"></script>
-<link href="{{  vue_style }}" rel="stylesheet">
+<link href="{{ vue_style }}" rel="stylesheet">
 
 <style>
   {% for category, data in source_colors %}
@@ -164,11 +164,7 @@
           }}))">
       How does DUSP1 affect MAPK1?
     </span>
-
-    <br/>
-
-    <span style="color:#888;">•</span>
-    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+    <span class="example-link"
           data-agent1="CDK12"
           data-stmt-type="Phosphorylation"
           data-preset="s-o"
@@ -179,11 +175,7 @@
           }}))">
       What does CDK12 phosphorylate?
     </span>
-
-    <br/>
-
-    <span style="color:#888;">•</span>
-    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+    <span class="example-link"
           data-agent1="MTOR"
           data-stmt-type="Inhibition"
           data-preset="o-s"
@@ -194,11 +186,7 @@
           }}))">
       What is known to inhibit mTOR?
     </span>
-
-    <br/>
-
-    <span style="color:#888;">•</span>
-    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+    <span class="example-link"
           data-agent1="PIK3CA"
           data-preset="any-any"
           onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
@@ -207,11 +195,7 @@
           }}))">
       Show all interactions involving PIK3CA.
     </span>
-
-    <br/>
-
-    <span style="color:#888;">•</span>
-    <span style="cursor:pointer; color:#256DC5; text-decoration:underline;"
+    <span class="example-link"
           data-agent1="Seliciclib"
           data-stmt-type="Inhibition"
           data-preset="s-o"

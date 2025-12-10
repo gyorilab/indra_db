@@ -60,20 +60,22 @@
     padding-right: 0;
   }
 
-  .search-card-container {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    padding: 20px 0;
-  }
-
-  .search-card {
+  #app .search-form-section {
     background-color: #fff;
     border: 1px solid #dee2e6;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 30px;
     width: 100%;
+    max-width: 1140px;
+    margin: 0 auto 20px;
+  }
+
+  #app .results-section {
+    width: 100%;
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 0;
   }
 
   .sidebar-summary {
@@ -213,12 +215,8 @@
   {{ super() }}
   <div class="row justify-content-center" style="margin-top: 20px; margin-bottom: 20px">
     <div class="col-md-10 col-lg-10">
-      <div class="search-card-container">
-        <div class="search-card">
-          <div id="app">
-            <relation-search></relation-search>
-          </div>
-        </div>
+      <div id="app">
+        <relation-search></relation-search>
       </div>
     </div>
   </div>

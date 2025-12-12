@@ -12,7 +12,7 @@
 
 <!-- indralab vue package, sourced from either S3 or locally when developing -->
 <script src="{{ vue_src }}"></script>
-<link href="{{  vue_style }}" rel="stylesheet">
+<link href="{{ vue_style }}" rel="stylesheet">
 
 <style>
   {% for category, data in source_colors %}
@@ -59,14 +59,166 @@
     padding-left: 0;
     padding-right: 0;
   }
+
+  #app .search-form-section {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 30px;
+    width: 100%;
+    max-width: 1140px;
+    margin: 0 auto 20px;
+  }
+
+  #app .results-section {
+    width: 100%;
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .sidebar-summary {
+    margin-top: 20px;
+  }
+
+  .sidebar-summary h3 {
+    font-size: 13pt;
+    margin-bottom: 10px;
+  }
+
+  .sidebar-summary p {
+    margin-bottom: 15px;
+    color: #606060;
+    font-size: 10pt;
+  }
+
+  .sidebar-summary h4 {
+    font-size: 10pt;
+    margin-top: 15px;
+    margin-bottom: 10px;
+  }
+
+  .sidebar-summary .example-link {
+    display: block;
+    margin: 5px 0;
+    color: #256DC5;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 10pt;
+  }
+
+  .sidebar-summary .example-link:hover {
+    color: #007bff;
+  }
 </style>
 
 {% endblock %}
 
+{% block mid_right_styles %}
+{% endblock %}
+
+{% block layout_media_queries %}
+  .content {
+    margin-right: 15%;
+  }
+
+  .footer {
+    left: 0;
+    right: 15%;
+  }
+
+  @media (min-width: 1500px) {
+    .right     { width: 15%; }
+    .content   { margin-right: 15%; }
+    .footer    { left: 0; right: 15%; }
+  }
+
+  @media (max-width: 1500px) {
+    .right     { width: 15%; }
+    .content   { margin-right: 15%; }
+    .footer    { left: 0; right: 15%; }
+  }
+
+  @media (max-width: 1100px) {
+    .right { display: none; }
+    .content { margin-right: 0; }
+    .footer  { left: 0; right: 0; }
+  }
+{% endblock %}
+
+{% block mid_right_panel %}
+{% endblock %}
+
+{% block right_sidebar_extra %}
+  <div class="side-info-block sidebar-summary">
+    <h3 class="bg-white">Summary</h3>
+    <p>On this page, you can search for statements from the INDRA Database by applying different filters such as agents, relation types, MeSH terms, or papers.</p>
+    <h4>Examples</h4>
+    <span class="example-link"
+          data-agent1="DUSP1"
+          data-agent2="MAPK1"
+          data-preset="s-o"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            agent2: this.dataset.agent2,
+            preset: this.dataset.preset
+          }}))">
+      How does DUSP1 affect MAPK1?
+    </span>
+    <span class="example-link"
+          data-agent1="CDK12"
+          data-stmt-type="Phosphorylation"
+          data-preset="s-o"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            stmtType: this.dataset.stmtType,
+            preset: this.dataset.preset
+          }}))">
+      What does CDK12 phosphorylate?
+    </span>
+    <span class="example-link"
+          data-agent1="MTOR"
+          data-stmt-type="Inhibition"
+          data-preset="o-s"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            stmtType: this.dataset.stmtType,
+            preset: this.dataset.preset
+          }}))">
+      What is known to inhibit mTOR?
+    </span>
+    <span class="example-link"
+          data-agent1="PIK3CA"
+          data-preset="any-any"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            preset: this.dataset.preset
+          }}))">
+      Show all interactions involving PIK3CA.
+    </span>
+    <span class="example-link"
+          data-agent1="Seliciclib"
+          data-stmt-type="Inhibition"
+          data-preset="s-o"
+          onclick="window.dispatchEvent(new CustomEvent('indra:example', { detail: {
+            agent1: this.dataset.agent1,
+            stmtType: this.dataset.stmtType,
+            preset: this.dataset.preset
+          }}))">
+      What does Seliciclib inhibit?
+    </span>
+  </div>
+{% endblock %}
+
 {% block body %}
   {{ super() }}
-  <div id="app">
-    <relation-search></relation-search>
+  <div class="row justify-content-center" style="margin-top: 20px; margin-bottom: 20px">
+    <div class="col-md-10 col-lg-10">
+      <div id="app">
+        <relation-search></relation-search>
+      </div>
+    </div>
   </div>
   <script>
     Vue.prototype.$ground_url = "{{ url_for('ground') }}";

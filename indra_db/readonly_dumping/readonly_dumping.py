@@ -385,12 +385,20 @@ def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
     # Load statement hash - raw statement id mapping into a dictionary
     hash_to_raw_id_map = pickle.load(stmt_hash_to_raw_stmt_ids_fpath.open("rb"))
 
-    logger.info("Creating raw_id_to_db_info")
+    logger.info("Creating raw_id_to_source_info")
     with gzip.open(raw_id_info_map_fpath.as_posix(), "rt") as fh:
         reader = csv.reader(fh, delimiter="\t")
-        raw_id_to_db_info = {}
-        for raw_stmt_id, db_info_id, _, _ in reader:
-            raw_id_to_db_info[int(raw_stmt_id)] = id_to_source_api[int(db_info_id)]
+        raw_id_to_source_info = {}
+
+        for raw_stmt_id, db_info_id, reading_id, stmt_json_raw in reader:
+            # reader source name is from stmt_json
+            if reading_id:
+                stmt = clean_json_loads(stmt_json_raw)
+                source = stmt['evidence'][0]['source_api']
+                raw_id_to_source_info[int(raw_stmt_id)] = source
+            # db source name is from id_to_source_api dict
+            else:
+                raw_id_to_source_info[int(raw_stmt_id)] = id_to_source_api[int(db_info_id)]
 
     logger.info("Writing raw_stmt_id and source into dump file")
     with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fh,\
@@ -400,7 +408,7 @@ def raw_stmt_src(local_ro_mngr: ReadonlyDatabaseManager):
         for statement_hash_string, stmt_json_string in reader:
             this_hash = int(statement_hash_string)
             for raw_stmt_id in hash_to_raw_id_map[this_hash]:
-                source = raw_id_to_db_info.get(raw_stmt_id)
+                source = raw_id_to_source_info.get(raw_stmt_id)
                 writer.writerow([raw_stmt_id, source])
 
     schema = StructType([

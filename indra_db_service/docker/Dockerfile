@@ -32,7 +32,11 @@ RUN mkdir -p /root/.config/indra && \
     # Install gilda
     pip install git+https://github.com/gyorilab/gilda.git && \
     # Install things related to API deployment
-    pip install gunicorn psycopg2-binary
+    pip install gunicorn psycopg2-binary && \
+    git clone https://github.com/gyorilab/ui_util.git && \
+    cd ui_util/indralab_auth_tools && \
+    pip install . && \
+    cd ../..
 
 # Download resources
 RUN \

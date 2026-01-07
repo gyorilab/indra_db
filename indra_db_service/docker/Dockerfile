@@ -52,8 +52,12 @@ RUN \
     python -m gilda.resources
 
 # INDRA DB Service setup
-RUN pip install git+https://github.com/gyorilab/indra_db.git#egg=indra_db[service]
+RUN git clone https://github.com/gyorilab/indra_db.git && \
+    cd indra_db && \
+    pip install -e .[service] && \
+    cd ..
 
-ENV GUNICORN_CONF /usr/local/lib/python3.10/dist-packages/indra_db_service/gunicorn.conf.py
+RUN mkdir /app
+WORKDIR /app
 
-ENTRYPOINT ["/bin/sh", "-c", "exec gunicorn -w 2 -c $GUNICORN_CONF -t 330 -b 0.0.0.0:8090 indra_db_service.api:app"]
+ENTRYPOINT ["gunicorn", "-w", "2", "-c", "/sw/indra_db/indra_db_service/gunicorn.conf.py", "-t", "330", "-b", "0.0.0.0:8090", "indra_db_service.api:app"]

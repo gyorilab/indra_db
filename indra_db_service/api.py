@@ -9,7 +9,7 @@ from hashlib import md5
 from flask_cors import CORS
 from flask_compress import Compress
 from flask import url_for as base_url_for
-from jinja2 import Environment, ChoiceLoader
+from jinja2 import Environment, ChoiceLoader, FileSystemLoader
 from flask_jwt_extended import get_jwt_identity
 from flask import Flask, request, abort, Response, redirect, jsonify
 
@@ -145,9 +145,17 @@ CORS(app)
 # The directory path to this location (works in any file system).
 HERE = Path(__file__).parent.absolute()
 
+# Get the templates directory path
+TEMPLATES_DIR = HERE / "templates"
+
 # Instantiate a jinja2 env.
 env = Environment(
-    loader=ChoiceLoader([app.jinja_loader, auth.jinja_loader, indra_loader])
+    loader=ChoiceLoader([
+        FileSystemLoader(str(TEMPLATES_DIR)),
+        app.jinja_loader,
+        auth.jinja_loader,
+        indra_loader
+    ])
 )
 
 

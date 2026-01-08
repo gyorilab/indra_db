@@ -22,7 +22,7 @@ def main():
           author_email='patrick_greene@hms.harvard.edu',
           packages=packages,
           include_package_data=True,
-          install_requires=['sqlalchemy<1.4', 'psycopg2', 'cachetools',
+          install_requires=['sqlalchemy<2', 'psycopg2-binary', 'cachetools',
                             'termcolor', 'bs4', 'pyyaml'],
           extras_require=extras_require,
           entry_points="""

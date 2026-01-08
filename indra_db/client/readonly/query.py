@@ -15,6 +15,7 @@ from collections import OrderedDict, defaultdict
 from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
     String, union, intersect
 
+from indra import get_config
 from indra.sources.indra_db_rest.query_results import QueryResult, \
     StatementQueryResult, AgentQueryResult
 from indra.statements import get_statement_by_name, \
@@ -1583,8 +1584,12 @@ class NoGroundingFound(Exception):
 
 def gilda_ground(agent_text):
     try:
-        from gilda.api import ground
-        gilda_list = [r.to_json() for r in ground(agent_text)]
+        from gilda.api import get_grounder, make_grounder
+        if get_config("GILDA_TERMS") is not None:
+            grounder = make_grounder(get_config("GILDA_TERMS"))
+        else:
+            grounder = get_grounder()
+        gilda_list = [r.to_json() for r in grounder.ground(agent_text)]
     except ImportError:
         import requests
         res = requests.post('https://grounding.indra.bio/ground',

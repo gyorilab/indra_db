@@ -23,11 +23,7 @@ def post_fork(server, worker):
     thread.start()
     print(f"Started database connection monitor thread in worker {worker.pid}.")
 
-     # Warm up gilda grounding to load resources into memory
-    try:
-        from indra_db.client.readonly.query import gilda_ground
-        gilda_ground("test")
-        print(f"Warmed up gilda grounding in worker {worker.pid}.")
-    except Exception as e:
-        # Don't fail startup if gilda warmup fails
-        print(f"Warning: Failed to warm up gilda in worker {worker.pid}: {e}")
+    # Warm up gilda grounding
+    from indra_db.client.readonly.query import gilda_ground
+    gilda_ground("test")
+    print(f"Warmed up gilda grounding in worker {worker.pid}.")

@@ -1587,7 +1587,7 @@ def gilda_ground(agent_text):
         gilda_list = [r.to_json() for r in ground(agent_text)]
     except ImportError:
         import requests
-        res = requests.post('http://grounding.indra.bio/ground',
+        res = requests.post('https://grounding.indra.bio/ground',
                             json={'text': agent_text})
         gilda_list = res.json()
     return gilda_list

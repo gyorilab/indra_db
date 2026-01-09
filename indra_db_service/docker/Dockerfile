@@ -49,7 +49,9 @@ RUN \
     # Download Adeft models
     python -m adeft.download && \
     # Download gilda resources
-    python -m gilda.resources
+    python -m gilda.resources && \
+    # Set up SQLite adapter for Gilda
+    python -m gilda.resources.sqlite_adapter
 
 # INDRA DB Service setup
 RUN git clone https://github.com/gyorilab/indra_db.git && \

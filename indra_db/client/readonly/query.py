@@ -8,6 +8,7 @@ __all__ = ['Query', 'Intersection', 'Union', 'MergeQuery', 'HasAgent',
 import re
 import json
 import logging
+from functools import lru_cache
 from itertools import combinations
 from typing import Optional, Iterable
 from typing import Union as TypeUnion
@@ -1582,13 +1583,19 @@ class NoGroundingFound(Exception):
     pass
 
 
+@lru_cache(maxsize=1)
+def get_gilda_grounder():
+    from gilda.api import get_grounder, make_grounder
+    if get_config("GILDA_TERMS") is not None:
+        grounder = make_grounder(get_config("GILDA_TERMS"))
+    else:
+        grounder = get_grounder()
+    return grounder
+
+
 def gilda_ground(agent_text):
     try:
-        from gilda.api import get_grounder, make_grounder
-        if get_config("GILDA_TERMS") is not None:
-            grounder = make_grounder(get_config("GILDA_TERMS"))
-        else:
-            grounder = get_grounder()
+        grounder = get_gilda_grounder()
         gilda_list = [r.to_json() for r in grounder.ground(agent_text)]
     except ImportError:
         import requests

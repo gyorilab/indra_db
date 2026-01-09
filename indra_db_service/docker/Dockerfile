@@ -62,6 +62,8 @@ RUN git clone https://github.com/gyorilab/indra_db.git && \
 RUN mkdir /app
 WORKDIR /app
 
-ENV GILDA_TERMS /root/.data/gilda/1.5.0/grounding_terms.db
+# Copy startup script that dynamically sets GILDA_TERMS based on installed version
+COPY docker_startup.sh /app/docker_startup.sh
+RUN chmod +x /app/docker_startup.sh
 
-ENTRYPOINT ["gunicorn", "-w", "2", "-c", "/sw/indra_db/indra_db_service/gunicorn.conf.py", "-t", "330", "-b", "0.0.0.0:8090", "indra_db_service.api:app"]
+ENTRYPOINT ["/app/docker_startup.sh"]

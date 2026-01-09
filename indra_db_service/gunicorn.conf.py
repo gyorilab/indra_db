@@ -22,3 +22,8 @@ def post_fork(server, worker):
     )
     thread.start()
     print(f"Started database connection monitor thread in worker {worker.pid}.")
+
+    # Warm up gilda grounding
+    from indra_db.client.readonly.query import gilda_ground
+    gilda_ground("test")
+    print(f"Warmed up gilda grounding in worker {worker.pid}.")

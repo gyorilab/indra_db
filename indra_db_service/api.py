@@ -576,41 +576,44 @@ def submit_curation_endpoint(hash_val):
     return jsonify(res)
 
 
-@app.route(
-    "/curation/list", methods=["GET"], defaults={"stmt_hash": None, "src_hash": None}
-)
 @app.route("/curation/list/<stmt_hash>", methods=["GET"], defaults={"src_hash": None})
 @app.route("/curation/list/<stmt_hash>/<src_hash>", methods=["GET"])
-@jwt_nontest_optional
 @user_log_endpoint
 def list_curations(stmt_hash, src_hash):
-    # In order of priority: we need a hash, and then we can look for a src_hash.
-    params = {}
-    if stmt_hash is not None:
-        params["pa_hash"] = stmt_hash
-        if src_hash is not None:
-            params["source_hash"] = src_hash
-    else:
-        assert src_hash is None, "Somehow someone broke our URL system."
+    """Public endpoint to get curations for a specific statement hash (and optionally source hash)."""
+    params = {"pa_hash": stmt_hash}
+    if src_hash is not None:
+        params["source_hash"] = src_hash
 
+    # Get the curations - no authentication required, curator names visible
+    curations = get_curations(**params)
+    return jsonify(curations), 200
+
+
+@app.route("/curation/list", methods=["GET"])
+@jwt_nontest_optional
+@user_log_endpoint
+def list_all_curations():
+    """Authenticated endpoint to get all curations. Requires get_curations permission for non-anonymized data."""
     # The user needs to have an account to get curations at all.
     user, roles = auth_curation()
 
-    # The user needs extra permission to load all curations.
-    can_load = True
-    if not params:
-        can_load = False
-        for role in roles:
-            can_load |= role.permissions.get("get_curations", False)
+    # The user needs extra permission to load all curations without anonymization.
+    can_load = False
+    for role in roles:
+        can_load |= role.permissions.get("get_curations", False)
 
-    # Get the curations.
-    curations = get_curations(**params)
+    # Get all curations
+    curations = get_curations()
+
+    # Anonymize curator names if user doesn't have permission
     if not can_load:
         for curation in curations:
             s = curation["curator"]
             if CURATOR_SALT:
                 s += CURATOR_SALT
             curation["curator"] = md5(s.encode("utf-8")).hexdigest()[:16]
+
     return jsonify(curations), 200
 
 

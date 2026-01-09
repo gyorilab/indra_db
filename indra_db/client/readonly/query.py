@@ -1585,26 +1585,30 @@ class NoGroundingFound(Exception):
 
 @lru_cache(maxsize=1)
 def get_gilda_grounder():
-    from gilda.api import get_grounder, make_grounder
-    if get_config("GILDA_TERMS") is not None:
-        gilda_terms = get_config("GILDA_TERMS")
-        grounder = make_grounder(gilda_terms)
-        print(f"GILDA grounder initialized with terms from {gilda_terms}.")
-    else:
-        grounder = get_grounder()
-        print("GILDA grounder initialized with default terms.")
-    return grounder
+    try:
+        from gilda.api import get_grounder, make_grounder
+        if get_config("GILDA_TERMS") is not None:
+            gilda_terms = get_config("GILDA_TERMS")
+            grounder = make_grounder(gilda_terms)
+            logger.info(f"GILDA grounder initialized with terms from {gilda_terms}.")
+        else:
+            grounder = get_grounder()
+            logger.info("GILDA grounder initialized with default terms.")
+        return grounder
+    except ImportError:
+        logger.info("GILDA not installed locally, will use remote grounding service.")
+        return None
 
 
 def gilda_ground(agent_text):
-    try:
-        grounder = get_gilda_grounder()
-        gilda_list = [r.to_json() for r in grounder.ground(agent_text)]
-    except ImportError:
+    grounder = get_gilda_grounder()
+    if grounder is None:
         import requests
         res = requests.post('https://grounding.indra.bio/ground',
                             json={'text': agent_text})
         gilda_list = res.json()
+    else:
+        gilda_list = [r.to_json() for r in grounder.ground(agent_text)]
     return gilda_list
 
 

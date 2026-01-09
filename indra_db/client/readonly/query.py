@@ -1587,9 +1587,12 @@ class NoGroundingFound(Exception):
 def get_gilda_grounder():
     from gilda.api import get_grounder, make_grounder
     if get_config("GILDA_TERMS") is not None:
-        grounder = make_grounder(get_config("GILDA_TERMS"))
+        gilda_terms = get_config("GILDA_TERMS")
+        grounder = make_grounder(gilda_terms)
+        print(f"GILDA grounder initialized with terms from {gilda_terms}.")
     else:
         grounder = get_grounder()
+        print("GILDA grounder initialized with default terms.")
     return grounder
 
 

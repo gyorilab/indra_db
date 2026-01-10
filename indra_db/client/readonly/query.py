@@ -8,6 +8,7 @@ __all__ = ['Query', 'Intersection', 'Union', 'MergeQuery', 'HasAgent',
 import re
 import json
 import logging
+from functools import lru_cache
 from itertools import combinations
 from typing import Optional, Iterable
 from typing import Union as TypeUnion
@@ -15,6 +16,7 @@ from collections import OrderedDict, defaultdict
 from sqlalchemy import desc, true, select, or_, except_, func, null, and_, \
     String, union, intersect
 
+from indra import get_config
 from indra.sources.indra_db_rest.query_results import QueryResult, \
     StatementQueryResult, AgentQueryResult
 from indra.statements import get_statement_by_name, \
@@ -1581,15 +1583,32 @@ class NoGroundingFound(Exception):
     pass
 
 
-def gilda_ground(agent_text):
+@lru_cache(maxsize=1)
+def get_gilda_grounder():
     try:
-        from gilda.api import ground
-        gilda_list = [r.to_json() for r in ground(agent_text)]
+        from gilda.api import get_grounder, make_grounder
+        if get_config("GILDA_TERMS") is not None:
+            gilda_terms = get_config("GILDA_TERMS")
+            grounder = make_grounder(gilda_terms)
+            logger.info(f"GILDA grounder initialized with terms from {gilda_terms}.")
+        else:
+            grounder = get_grounder()
+            logger.info("GILDA grounder initialized with default terms.")
+        return grounder
     except ImportError:
+        logger.info("GILDA not installed locally, will use remote grounding service.")
+        return None
+
+
+def gilda_ground(agent_text):
+    grounder = get_gilda_grounder()
+    if grounder is None:
         import requests
-        res = requests.post('http://grounding.indra.bio/ground',
+        res = requests.post('https://grounding.indra.bio/ground',
                             json={'text': agent_text})
         gilda_list = res.json()
+    else:
+        gilda_list = [r.to_json() for r in grounder.ground(agent_text)]
     return gilda_list
 
 

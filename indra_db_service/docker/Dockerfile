@@ -49,7 +49,9 @@ RUN \
     # Download Adeft models
     python -m adeft.download && \
     # Download gilda resources
-    python -m gilda.resources
+    python -m gilda.resources && \
+    # Set up SQLite adapter for Gilda
+    python -m gilda.resources.sqlite_adapter
 
 # INDRA DB Service setup
 RUN git clone https://github.com/gyorilab/indra_db.git && \
@@ -60,4 +62,8 @@ RUN git clone https://github.com/gyorilab/indra_db.git && \
 RUN mkdir /app
 WORKDIR /app
 
-ENTRYPOINT ["gunicorn", "-w", "2", "-c", "/sw/indra_db/indra_db_service/gunicorn.conf.py", "-t", "330", "-b", "0.0.0.0:8090", "indra_db_service.api:app"]
+# Copy startup script that dynamically sets GILDA_TERMS based on installed version
+COPY docker_startup.sh /app/docker_startup.sh
+RUN chmod +x /app/docker_startup.sh
+
+ENTRYPOINT ["/app/docker_startup.sh"]

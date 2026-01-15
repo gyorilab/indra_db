@@ -1,3 +1,5 @@
+import pickle
+
 import pandas as pd
 from indra_db import get_db
 import matplotlib.pyplot as plt
@@ -9,12 +11,11 @@ from indra_db.readonly_dumping.locations import *
 
 from collections import Counter
 from tqdm import tqdm
-from indra.statements import stmt_from_json
 from indra_db.readonly_dumping.util import clean_json_loads
 
 
 def statement_type_distribution():
-    '''Generate the statement distribution in terms of statements types'''
+    """Generate the statement distribution in terms of statements types"""
     stmt_type_counter = Counter()
 
     with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
@@ -147,4 +148,55 @@ def abstract_fulltext_trends_by_year():
         fontsize=12
     )
 
+    plt.show()
+
+
+def belief_score_distribution():
+
+    with open(belief_scores_pkl_fpath, "rb") as f:
+        belief_scores = pickle.load(f)
+
+    n_bins = 100
+    hist = np.zeros(n_bins, dtype=np.int64)
+
+    for belief in belief_scores.values():
+        if belief is None:
+            continue
+
+        idx = int(belief * n_bins)
+        if idx == n_bins:
+            idx = n_bins - 1
+
+        hist[idx] += 1
+    bin_width = 1.0 / n_bins
+
+    df = pd.DataFrame({
+        "bin_start": np.arange(len(hist)) * bin_width,
+        "bin_end": (np.arange(len(hist)) + 1) * bin_width,
+        "count": hist
+    })
+
+    bin_width = df["bin_end"].iloc[0] - df["bin_start"].iloc[0]
+
+    plt.figure(figsize=(10, 5))
+
+    plt.bar(
+        df["bin_start"],
+        df["count"],
+        width=bin_width,
+        align="edge",
+        color="#bdbdbd",
+        edgecolor="black",
+        linewidth=0.3
+    )
+
+    xticks = np.linspace(0, 1, 21)
+    plt.xticks(xticks, [f"{x:.2f}" for x in xticks])
+
+    plt.yscale("log")
+    plt.xlabel("Belief score")
+    plt.ylabel("Number of statements (log scale)")
+    plt.title("Distribution of INDRA Statement Belief Scores")
+
+    plt.tight_layout()
     plt.show()

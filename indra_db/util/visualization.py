@@ -3,11 +3,48 @@ from indra_db import get_db
 import matplotlib.pyplot as plt
 import numpy as np
 
+import csv
+import gzip
+from indra_db.readonly_dumping.locations import *
+
+from collections import Counter
+from tqdm import tqdm
+from indra.statements import stmt_from_json
+from indra_db.readonly_dumping.util import clean_json_loads
+
+
+def statement_type_distribution():
+    '''Generate the statement distribution in terms of statements types'''
+    stmt_type_counter = Counter()
+
+    with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
+        reader = csv.reader(file, delimiter='\t')
+        for sh_str, stmt_json_str in tqdm(reader, total=47_956_726):
+            stmt_json = clean_json_loads(stmt_json_str)
+            stmt_type = stmt_json['type']
+            stmt_type_counter[stmt_type] += 1
+
+    df = pd.DataFrame(stmt_type_counter.most_common(),
+                      columns=["stmt_type", "count"])
+
+    plt.figure(figsize=(12, 6))
+
+    plt.bar(df["stmt_type"], df["count"])
+    plt.yscale("log")
+
+    plt.xlabel("Statement type")
+    plt.ylabel("Number of statements (log scale)")
+    plt.title("Distribution of INDRA Statement Types")
+
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
+
 
 def abstract_fulltext_trends_by_year():
     """Generate visualization for the abstract and full text count trends by
-    year from 1970 to 2025. Between year 1780 and 1970 there are 52779 abstract
-    and 226925 full text"""
+    year from 1970 to 2025. Before year 1970, starting year 1780, there are 52779
+    abstract and 226925 full text"""
 
     db = get_db("primary")
 

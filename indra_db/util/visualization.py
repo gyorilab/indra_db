@@ -154,10 +154,23 @@ def abstract_fulltext_trends_by_year():
         fontsize=12
     )
 
-    plt.show()
+    return fig, axes, df, pivot
 
 
 def belief_score_distribution():
+    """
+    Load belief scores from `belief_scores_pkl_fpath` and build a log-scaled bar plot.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure object save/embed via `fig.savefig(...)`
+    ax : matplotlib.axes.Axes
+        The axes object for further edits/annotations
+    df : pandas.DataFrame
+        Columns: bin_start, bin_end, count
+    """
+
     with open(belief_scores_pkl_fpath, "rb") as f:
         belief_scores = pickle.load(f)
 
@@ -181,11 +194,9 @@ def belief_score_distribution():
         "count": hist
     })
 
-    bin_width = df["bin_end"].iloc[0] - df["bin_start"].iloc[0]
+    fig, ax = plt.subplots(figsize=(10, 5))
 
-    plt.figure(figsize=(10, 5))
-
-    plt.bar(
+    ax.bar(
         df["bin_start"],
         df["count"],
         width=bin_width,
@@ -196,15 +207,16 @@ def belief_score_distribution():
     )
 
     xticks = np.linspace(0, 1, 21)
-    plt.xticks(xticks, [f"{x:.2f}" for x in xticks])
+    ax.set_xticks(xticks)
+    ax.set_xticklabels([f"{x:.2f}" for x in xticks])
 
-    plt.yscale("log")
-    plt.xlabel("Belief score")
-    plt.ylabel("Number of statements (log scale)")
-    plt.title("Distribution of INDRA Statement Belief Scores")
+    ax.set_yscale("log")
+    ax.set_xlabel("Belief score")
+    ax.set_ylabel("Number of statements (log scale)")
+    ax.set_title("Distribution of INDRA Statement Belief Scores")
+    fig.tight_layout()
 
-    plt.tight_layout()
-    plt.show()
+    return fig, ax, df
 
 
 

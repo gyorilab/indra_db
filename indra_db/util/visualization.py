@@ -28,24 +28,26 @@ def statement_type_distribution():
         reader = csv.reader(file, delimiter='\t')
         for sh_str, stmt_json_str in tqdm(reader, total=47_956_726):
             stmt_json = clean_json_loads(stmt_json_str)
-            stmt_type = stmt_json['type']
+            stmt_type = stmt_json["type"]
             stmt_type_counter[stmt_type] += 1
 
     df = pd.DataFrame(stmt_type_counter.most_common(),
                       columns=["stmt_type", "count"])
 
-    plt.figure(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.bar(df["stmt_type"], df["count"])
+    ax.set_yscale("log")
 
-    plt.bar(df["stmt_type"], df["count"])
-    plt.yscale("log")
+    ax.set_xlabel("Statement type")
+    ax.set_ylabel("Number of statements (log scale)")
+    ax.set_title("Distribution of INDRA Statement Types")
 
-    plt.xlabel("Statement type")
-    plt.ylabel("Number of statements (log scale)")
-    plt.title("Distribution of INDRA Statement Types")
+    ax.tick_params(axis="x", rotation=45)
+    for label in ax.get_xticklabels():
+        label.set_ha("right")
 
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    plt.show()
+    fig.tight_layout()
+    return fig, ax, df
 
 
 def abstract_fulltext_trends_by_year():

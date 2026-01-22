@@ -1,3 +1,5 @@
+import logging
+
 import csv
 import gzip
 import json
@@ -11,13 +13,15 @@ from sqlalchemy import text
 from tqdm import tqdm
 
 from indra_db import get_db, get_ro
+from indra_db.client import HasHash
 from indra_db.readonly_dumping.locations import *
 from indra_db.readonly_dumping.util import clean_json_loads
 from indra.databases.mesh_client import get_mesh_name, is_disease
 
 from indra_cogex.client import Neo4jClient
-from indra_cogex.client.queries import get_mesh_ids_for_pmids, get_pmids_for_stmt_hash, logger
+from indra_cogex.client.queries import get_mesh_ids_for_pmids
 
+logger = logging.getLogger(__name__)
 
 
 def statement_type_distribution():
@@ -239,6 +243,17 @@ def get_stmt_hahes_for_gene_from_db(gene):
     return stmt_hashes
 
 
+def get_pmids_for_stmt_hash(hash:int):
+    ro = get_ro("primary")
+    res = HasHash([hash]).get_statements(ro)
+    pmids = {
+        getattr(ev, "pmid", None)
+        for s in res.statements()
+        for ev in s.evidence
+    }
+    return pmids
+
+
 def get_mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int = 30, plot: bool = True):
     """
     mesh_type: 'all' or 'disease'
@@ -253,7 +268,7 @@ def get_mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: 
     client = Neo4jClient()
 
     for h in tqdm(list(stmt_hashes), desc=f"{gene}: collecting PMIDs"):
-        pmids = get_pmids_for_stmt_hash(h, client=client)
+        pmids = get_pmids_for_stmt_hash(h)
         pmid_set.update(pmids)
 
     logger.info(f"Got {len(pmid_set)} unique PMIDs for gene {gene}")

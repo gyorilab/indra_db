@@ -4,7 +4,7 @@ import csv
 import gzip
 import json
 import pickle
-from collections import Counter
+from collections import Counter, defaultdict
 
 import numpy as np
 import pandas as pd
@@ -13,13 +13,9 @@ from sqlalchemy import text
 from tqdm import tqdm
 
 from indra_db import get_db, get_ro
-from indra_db.client import HasHash
 from indra_db.readonly_dumping.locations import *
 from indra_db.readonly_dumping.util import clean_json_loads
 from indra.databases.mesh_client import get_mesh_name, is_disease
-
-from indra_cogex.client import Neo4jClient
-from indra_cogex.client.queries import get_mesh_ids_for_pmids
 
 logger = logging.getLogger(__name__)
 
@@ -243,43 +239,48 @@ def get_stmt_hahes_for_gene_from_db(gene):
     return stmt_hashes
 
 
-def get_pmids_for_stmt_hash(hash:int):
-    ro = get_ro("primary")
-    res = HasHash([hash]).get_statements(ro)
-    pmids = {
-        getattr(ev, "pmid", None)
-        for s in res.statements()
-        for ev in s.evidence
-    }
-    return pmids
+def get_mesh_ids_for_stmt_hashes(stmt_hashes, *, db):
+    """
+       Return {mk_hash: ["D000123", ...]} by joining:
+         readonly.fast_raw_pa_link (mk_hash, id=raw_stmt_id)
+         readonly.raw_stmt_mesh_terms (sid=raw_stmt_id, mesh_num)
+    """
+    stmt_hashes = list(map(int, stmt_hashes))
+
+    q = (
+        db.session.query(db.FastRawPaLink.mk_hash, db.RawStmtMeshTerms.mesh_num)
+        .join(db.RawStmtMeshTerms,
+              db.RawStmtMeshTerms.sid == db.FastRawPaLink.id)
+        .filter(db.FastRawPaLink.mk_hash.in_(stmt_hashes))
+        .distinct()
+    )
+
+    out = defaultdict(set)
+    for h, mesh_num in q.all():
+        if mesh_num is not None:
+            out[int(h)].add(f"D{int(mesh_num):06d}")
+
+    return {h: sorted(s) for h, s in out.items()}
 
 
-def get_mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int = 30, plot: bool = True):
+def mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int = 30, plot: bool = True):
     """
     mesh_type: 'all' or 'disease'
     return: df with columns ['mesh_id','count'] sorted by count desc
     """
     assert mesh_type in ("all", "disease")
+    db = get_ro('primary')
 
     stmt_hashes = get_stmt_hahes_for_gene_from_db(gene)
-    logger.info(f"Got {len(stmt_hashes)} stmt_hashes for gene {gene}")
+    logger.info(f"{gene}: total hashes: {len(stmt_hashes)}")
 
-    pmid_set = set()
-    client = Neo4jClient()
-
-    for h in tqdm(list(stmt_hashes), desc=f"{gene}: collecting PMIDs"):
-        pmids = get_pmids_for_stmt_hash(h)
-        pmid_set.update(pmids)
-
-    logger.info(f"Got {len(pmid_set)} unique PMIDs for gene {gene}")
-
-    pmid_to_mesh = get_mesh_ids_for_pmids(list(pmid_set), client=client)
+    mesh_by_hash = get_mesh_ids_for_stmt_hashes(stmt_hashes, db=db)
 
     all_mesh_ids = []
-    for mesh_ids in tqdm(pmid_to_mesh.values(), desc=f"{gene}: collecting MeSH IDs"):
-        all_mesh_ids.extend(mesh_ids)
+    for ids in mesh_by_hash.values():
+        all_mesh_ids.extend(ids)
 
-    logger.info(f"{gene}: total mesh id occurrences: {len(all_mesh_ids)}")
+    logger.info(f"{gene} total mesh id occurrences: {len(all_mesh_ids)}")
 
     if mesh_type == "disease":
         mesh_ids_used = [m for m in all_mesh_ids if is_disease(m)]

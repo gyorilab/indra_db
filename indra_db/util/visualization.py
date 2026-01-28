@@ -20,7 +20,7 @@ from indra.databases.mesh_client import get_mesh_name, is_disease
 logger = logging.getLogger(__name__)
 
 
-def statement_type_distribution():
+def statement_type_distribution_graph():
     """Generate the statement distribution in terms of statements types"""
     stmt_type_counter = Counter()
 
@@ -50,7 +50,7 @@ def statement_type_distribution():
     return fig, ax, df
 
 
-def abstract_fulltext_trends_by_year():
+def abstract_fulltext_trends_by_year_graph():
     """Generate visualization for the abstract and full text count trends by
     year from 1970 to 2025. Before year 1970, starting year 1780, there are 52779
     abstract and 226925 full text"""
@@ -159,7 +159,7 @@ def abstract_fulltext_trends_by_year():
     return fig, axes, df, pivot
 
 
-def belief_score_distribution():
+def belief_score_distribution_graph():
     """
     Load belief scores from `belief_scores_pkl_fpath` and build a log-scaled bar plot.
 
@@ -306,3 +306,90 @@ def mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int 
         plt.show()
 
     return df
+
+def evidence_vs_statement_graph():
+    """
+    Plot the distribution of statements by total evidence count.
+
+    X-axis: total evidence count per statement (log scale).
+    Y-axis: number of statements with that evidence count (log scale).
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The created matplotlib Figure object.
+    """
+    with open(source_counts_fpath.as_posix(), 'rb') as f:
+        source_count = pickle.load(f)
+    with open(belief_scores_pkl_fpath, "rb") as f:
+        belief_scores = pickle.load(f)
+    logger.info("belief scores and source counts loaded ")
+
+    total_evs = {h: sum(v.values()) for h, v in source_count.items()}
+    freq = Counter(total_evs.values())
+
+    x = sorted(freq)
+    y = [freq[k] for k in x]
+
+    beliefs_by_evcount = defaultdict(list)
+
+    for h, evc in total_evs.items():
+        b = belief_scores.get(h)
+        if b is not None:
+            beliefs_by_evcount[evc].append(b)
+
+    fig = plt.figure()
+    plt.scatter(x, y, s=8, c="black")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.xlabel("Number of Evidence")
+    plt.ylabel("Number of statements")
+    plt.title("Statements by total evidence count")
+    plt.tight_layout()
+    plt.show()
+    return fig
+
+
+def pmid_vs_statement_graph():
+    """
+        Plot the distribution of statements by unique PubMed ID (PMID) count.
+
+        X-axis: number of unique PMIDs per statement (log scale).
+        Y-axis: number of statements with that PMID count (log scale).
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The created matplotlib Figure object.
+        """
+    pmids_by_hash = defaultdict(set)
+
+    with gzip.open(processed_stmts_fpath.as_posix(), "rt") as f:
+        reader = csv.reader(f, delimiter="\t")
+        for sh_str, stmt_json_str in tqdm(reader, total=47_956_726,
+                                          desc="Collecting PMIDs"):
+            stmt_json = clean_json_loads(stmt_json_str)
+            h = stmt_json.get("matches_hash")
+            if not h:
+                continue
+            ev = stmt_json.get('evidence')
+            tr = ev[0].get('text_refs')
+            if tr:
+                pmid = tr.get("PMID")
+            if pmid:
+                pmids_by_hash[h].add(str(pmid))
+
+    pmid_counts = {h: len(s) for h, s in pmids_by_hash.items()}
+    freq = Counter(pmid_counts.values())
+    x = np.array(sorted(k for k in freq.keys()))
+    y = np.array([freq[k] for k in x])
+
+    fig = plt.figure()
+    plt.scatter(x, y, s=7)
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.xlabel("Unique PMIDs per statement")
+    plt.ylabel("Number of statements")
+    plt.tight_layout()
+    plt.show()
+    return fig

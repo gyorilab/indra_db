@@ -344,7 +344,6 @@ def evidence_vs_statement_graph():
     plt.yscale("log")
     plt.xlabel("Number of Evidence")
     plt.ylabel("Number of statements")
-    plt.title("Statements by total evidence count")
     plt.tight_layout()
     plt.show()
     return fig

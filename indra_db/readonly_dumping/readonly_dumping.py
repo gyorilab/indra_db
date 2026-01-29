@@ -1903,7 +1903,6 @@ def ensure_pubmed_mesh_data():
                             if not is_concept:
                                 terms_meta_writer.writerow(meta_row)
 
-                            stmt_hashes.add(stmt_hash)
 
                 # If the pmid is already in pmid_mesh_mapping, update the
                 # mesh concepts and terms

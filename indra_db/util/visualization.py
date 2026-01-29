@@ -1,0 +1,394 @@
+import logging
+
+import csv
+import gzip
+import json
+import pickle
+from collections import Counter, defaultdict
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sqlalchemy import text
+from tqdm import tqdm
+
+from indra_db import get_db, get_ro
+from indra_db.readonly_dumping.locations import *
+from indra_db.readonly_dumping.util import clean_json_loads
+from indra.databases.mesh_client import get_mesh_name, is_disease
+
+logger = logging.getLogger(__name__)
+
+
+def statement_type_distribution_graph():
+    """Generate the statement distribution in terms of statements types"""
+    stmt_type_counter = Counter()
+
+    with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
+        reader = csv.reader(file, delimiter='\t')
+        for sh_str, stmt_json_str in tqdm(reader, total=47_956_726):
+            stmt_json = clean_json_loads(stmt_json_str)
+            stmt_type = stmt_json["type"]
+            stmt_type_counter[stmt_type] += 1
+
+    df = pd.DataFrame(stmt_type_counter.most_common(),
+                      columns=["stmt_type", "count"])
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.bar(df["stmt_type"], df["count"])
+    ax.set_yscale("log")
+
+    ax.set_xlabel("Statement type")
+    ax.set_ylabel("Number of statements (log scale)")
+    ax.set_title("Distribution of INDRA Statement Types")
+
+    ax.tick_params(axis="x", rotation=45)
+    for label in ax.get_xticklabels():
+        label.set_ha("right")
+
+    fig.tight_layout()
+    return fig, ax, df
+
+
+def abstract_fulltext_trends_by_year_graph():
+    """Generate visualization for the abstract and full text count trends by
+    year from 1970 to 2025. Before year 1970, starting year 1780, there are 52779
+    abstract and 226925 full text"""
+
+    db = get_db("primary")
+
+    #10 min to run
+    sql = """
+    SELECT
+      tr.pub_year,
+      tc.text_type,
+      COUNT(*) AS row_count
+    FROM text_ref tr
+    JOIN text_content tc
+      ON tc.text_ref_id = tr.id
+    WHERE tr.pub_year IS NOT NULL
+      AND tc.text_type IN ('abstract', 'fulltext')
+    GROUP BY tr.pub_year, tc.text_type
+    ORDER BY tr.pub_year;
+    """
+
+    with db._DatabaseManager__engine.connect() as connection:
+        result = connection.execute(sql)
+        rows = result.fetchall()
+        columns = result.keys()
+    df = pd.DataFrame(rows, columns=columns)
+
+    pivot = (
+        df.pivot(index="pub_year", columns="text_type", values="row_count")
+        .fillna(0)
+        .sort_index()
+    )
+
+    # only keep paper count after 1970+
+    pivot = pivot[pivot.index >= 1970]
+
+    years = pivot.index.values
+    x = np.arange(len(years))
+
+    fig, axes = plt.subplots(
+        nrows=2,
+        ncols=1,
+        figsize=(14, 8),
+        sharex=True
+    )
+    abstract_color = "#DD8452"
+    fulltext_color = "#4C72B0"
+    # --- Abstract ---
+    axes[0].bar(x, pivot["abstract"], color=abstract_color)
+    axes[0].set_ylabel("Count")
+    axes[0].text(
+        0.02, 0.90,
+        "Abstract records per year",
+        transform=axes[0].transAxes,
+        fontsize=12,
+        fontweight="bold",
+        va="top"
+    )
+    # --- Full text ---
+    axes[1].bar(x, pivot["fulltext"], color=fulltext_color)
+    axes[1].set_ylabel("Count")
+    axes[1].set_xlabel("Publication year")
+    axes[1].text(
+        0.02, 0.90,
+        "Full text records per year",
+        transform=axes[1].transAxes,
+        fontsize=12,
+        fontweight="bold",
+        va="top"
+    )
+
+    for ax in axes:
+        ax.set_xticks(x)
+        ax.set_xticklabels(years, rotation=45)
+        ax.tick_params(axis="x", labelbottom=True)
+
+    year_2025_idx = np.where(years == 2025)[0]
+    if len(year_2025_idx) > 0:
+        idx = year_2025_idx[0]
+
+        axes[0].text(
+            idx,
+            pivot.loc[2025, "abstract"] * 1.05,
+            "*",
+            ha="center",
+            va="bottom",
+            fontsize=14
+        )
+        axes[1].text(
+            idx,
+            pivot.loc[2025, "fulltext"] * 1.05,
+            "*",
+            ha="center",
+            va="bottom",
+            fontsize=14
+        )
+    plt.tight_layout()
+    fig.text(
+        0.5,
+        -0.08,
+        "* Data for 2025 reflect content by May 2025 and do not represent a complete calendar year.",
+        ha="center",
+        fontsize=12
+    )
+
+    return fig, axes, df, pivot
+
+
+def belief_score_distribution_graph():
+    """
+    Load belief scores from `belief_scores_pkl_fpath` and build a log-scaled bar plot.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure object save/embed via `fig.savefig(...)`
+    ax : matplotlib.axes.Axes
+        The axes object for further edits/annotations
+    df : pandas.DataFrame
+        Columns: bin_start, bin_end, count
+    """
+
+    with open(belief_scores_pkl_fpath, "rb") as f:
+        belief_scores = pickle.load(f)
+
+    n_bins = 100
+    hist = np.zeros(n_bins, dtype=np.int64)
+
+    for belief in belief_scores.values():
+        if belief is None:
+            continue
+
+        idx = int(belief * n_bins)
+        if idx == n_bins:
+            idx = n_bins - 1
+
+        hist[idx] += 1
+    bin_width = 1.0 / n_bins
+
+    df = pd.DataFrame({
+        "bin_start": np.arange(len(hist)) * bin_width,
+        "bin_end": (np.arange(len(hist)) + 1) * bin_width,
+        "count": hist
+    })
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    ax.bar(
+        df["bin_start"],
+        df["count"],
+        width=bin_width,
+        align="edge",
+        color="#bdbdbd",
+        edgecolor="black",
+        linewidth=0.3
+    )
+
+    xticks = np.linspace(0, 1, 21)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels([f"{x:.2f}" for x in xticks])
+
+    ax.set_yscale("log")
+    ax.set_xlabel("Belief score")
+    ax.set_ylabel("Number of statements (log scale)")
+    ax.set_title("Distribution of INDRA Statement Belief Scores")
+    fig.tight_layout()
+
+    return fig, ax, df
+
+
+
+def get_stmt_hahes_for_gene_from_db(gene):
+    readonly = get_ro("primary")
+    sql = text("""
+    SELECT DISTINCT mk_hash
+    FROM readonly.agent_interactions
+    WHERE agent_json::text LIKE :g;
+    """)
+
+    with readonly._DatabaseManager__engine.connect() as connection:
+        result = connection.execute(sql, {"g": f'%"{gene}"%'})
+        rows = result.fetchall()
+
+    hashes = [r[0] for r in rows]
+    stmt_hashes = set(hashes)
+    return stmt_hashes
+
+
+def get_mesh_ids_for_stmt_hashes(stmt_hashes, *, db):
+    """
+       Return {mk_hash: ["D000123", ...]} by joining:
+         readonly.fast_raw_pa_link (mk_hash, id=raw_stmt_id)
+         readonly.raw_stmt_mesh_terms (sid=raw_stmt_id, mesh_num)
+    """
+    stmt_hashes = list(map(int, stmt_hashes))
+
+    q = (
+        db.session.query(db.FastRawPaLink.mk_hash, db.RawStmtMeshTerms.mesh_num)
+        .join(db.RawStmtMeshTerms,
+              db.RawStmtMeshTerms.sid == db.FastRawPaLink.id)
+        .filter(db.FastRawPaLink.mk_hash.in_(stmt_hashes))
+        .distinct()
+    )
+
+    out = defaultdict(set)
+    for h, mesh_num in q.all():
+        if mesh_num is not None:
+            out[int(h)].add(f"D{int(mesh_num):06d}")
+
+    return {h: sorted(s) for h, s in out.items()}
+
+
+def mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int = 30, plot: bool = True):
+    """
+    mesh_type: 'all' or 'disease'
+    return: df with columns ['mesh_id','count'] sorted by count desc
+    """
+    assert mesh_type in ("all", "disease")
+    db = get_ro('primary')
+
+    stmt_hashes = get_stmt_hahes_for_gene_from_db(gene)
+    logger.info(f"{gene}: total hashes: {len(stmt_hashes)}")
+
+    mesh_by_hash = get_mesh_ids_for_stmt_hashes(stmt_hashes, db=db)
+
+    all_mesh_ids = []
+    for ids in mesh_by_hash.values():
+        all_mesh_ids.extend(ids)
+
+    logger.info(f"{gene} total mesh id occurrences: {len(all_mesh_ids)}")
+
+    if mesh_type == "disease":
+        mesh_ids_used = [m for m in all_mesh_ids if is_disease(m)]
+    else:
+        mesh_ids_used = all_mesh_ids
+
+    counts = Counter(mesh_ids_used)
+    df = pd.DataFrame(counts.items(), columns=["mesh_id", "count"]).sort_values("count", ascending=False)
+
+    if plot:
+        top = df.head(top_n)
+
+        labels = [get_mesh_name(m) or m for m in top["mesh_id"]][::-1]
+        vals = top["count"].values[::-1]
+
+        plt.figure(figsize=(10, 8))
+        plt.barh(range(len(labels)), vals)
+        plt.yticks(range(len(labels)), labels)
+        plt.xlabel("Count")
+        title_type = "Disease MeSH Terms" if mesh_type == "disease" else "MeSH Terms"
+        plt.title(f"Top {top_n} {title_type} for {gene} (PMID associations)")
+        plt.tight_layout()
+        plt.show()
+
+    return df
+
+def evidence_vs_statement_graph():
+    """
+    Plot the distribution of statements by total evidence count.
+
+    X-axis: total evidence count per statement (log scale).
+    Y-axis: number of statements with that evidence count (log scale).
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The created matplotlib Figure object.
+    """
+    with open(source_counts_fpath.as_posix(), 'rb') as f:
+        source_count = pickle.load(f)
+    with open(belief_scores_pkl_fpath, "rb") as f:
+        belief_scores = pickle.load(f)
+    logger.info("belief scores and source counts loaded ")
+
+    total_evs = {h: sum(v.values()) for h, v in source_count.items()}
+    freq = Counter(total_evs.values())
+
+    x = sorted(freq)
+    y = [freq[k] for k in x]
+
+    beliefs_by_evcount = defaultdict(list)
+
+    for h, evc in total_evs.items():
+        b = belief_scores.get(h)
+        if b is not None:
+            beliefs_by_evcount[evc].append(b)
+
+    fig = plt.figure()
+    plt.scatter(x, y, s=8, c="black")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.xlabel("Number of Evidence")
+    plt.ylabel("Number of statements")
+    plt.tight_layout()
+    plt.show()
+    return fig
+
+
+def pmid_vs_statement_graph():
+    """
+        Plot the distribution of statements by unique PubMed ID (PMID) count.
+
+        X-axis: number of unique PMIDs per statement (log scale).
+        Y-axis: number of statements with that PMID count (log scale).
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The created matplotlib Figure object.
+        """
+    pmids_by_hash = defaultdict(set)
+
+    with gzip.open(processed_stmts_fpath.as_posix(), "rt") as f:
+        reader = csv.reader(f, delimiter="\t")
+        for sh_str, stmt_json_str in tqdm(reader, total=47_956_726,
+                                          desc="Collecting PMIDs"):
+            stmt_json = clean_json_loads(stmt_json_str)
+            h = stmt_json.get("matches_hash")
+            if not h:
+                continue
+            ev = stmt_json.get('evidence')
+            tr = ev[0].get('text_refs')
+            if tr:
+                pmid = tr.get("PMID")
+            if pmid:
+                pmids_by_hash[h].add(str(pmid))
+
+    pmid_counts = {h: len(s) for h, s in pmids_by_hash.items()}
+    freq = Counter(pmid_counts.values())
+    x = np.array(sorted(k for k in freq.keys()))
+    y = np.array([freq[k] for k in x])
+
+    fig = plt.figure()
+    plt.scatter(x, y, s=7)
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.xlabel("Unique PMIDs per statement")
+    plt.ylabel("Number of statements")
+    plt.tight_layout()
+    plt.show()
+    return fig

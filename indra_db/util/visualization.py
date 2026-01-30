@@ -1,13 +1,16 @@
+import argparse
 import logging
 
 import csv
 import gzip
 import json
+import os
 import pickle
 from collections import Counter, defaultdict
 
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 from sqlalchemy import text
 from tqdm import tqdm
@@ -21,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def statement_type_distribution_graph():
-    """Generate the statement distribution in terms of statements types"""
+    """Generate the statement distribution in terms of statement types"""
     stmt_type_counter = Counter()
 
     with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
@@ -296,16 +299,17 @@ def mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int 
         labels = [get_mesh_name(m) or m for m in top["mesh_id"]][::-1]
         vals = top["count"].values[::-1]
 
-        plt.figure(figsize=(10, 8))
+        fig = plt.figure(figsize=(10, 8))
         plt.barh(range(len(labels)), vals)
         plt.yticks(range(len(labels)), labels)
         plt.xlabel("Count")
         title_type = "Disease MeSH Terms" if mesh_type == "disease" else "MeSH Terms"
         plt.title(f"Top {top_n} {title_type} for {gene} (PMID associations)")
         plt.tight_layout()
-        plt.show()
+        return df, fig
 
-    return df
+    return df, None
+
 
 def evidence_vs_statement_graph():
     """
@@ -392,3 +396,90 @@ def pmid_vs_statement_graph():
     plt.tight_layout()
     plt.show()
     return fig
+
+
+def generate_all_plots(output_dir, refresh=False):
+    """Generate all static plots for the monitor page."""
+    matplotlib.use('Agg')
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        logger.info(f"Created directory: {output_dir}")
+
+    logger.info(f"Saving plots to {output_dir} (Refresh={refresh})")
+
+    def should_skip(filename):
+        filepath = os.path.join(output_dir, filename)
+        if os.path.exists(filepath) and not refresh:
+            logger.info(f"Skipping {filename} (already exists).")
+            return True
+        return False
+
+    tasks = [
+        ('stmt_type_dist.png', statement_type_distribution_graph, "Statement Type Distribution"),
+        ('belief_score_dist.png', belief_score_distribution_graph, "Belief Score Distribution"),
+        ('paper_trends.png', abstract_fulltext_trends_by_year_graph, "Paper Trends"),
+        ('evidence_vs_stmt.png', evidence_vs_statement_graph, "Evidence vs Statement"),
+        ('pmid_vs_stmt.png', pmid_vs_statement_graph, "PMID vs Statement"),
+    ]
+
+    for filename, func, description in tasks:
+        if should_skip(filename):
+            continue
+        
+        logger.info(f"Generating {description}...")
+        try:
+            result = func()
+
+            if isinstance(result, tuple):
+                fig = result[0]
+            else:
+                fig = result
+            
+            save_path = os.path.join(output_dir, filename)
+            fig.savefig(save_path, bbox_inches='tight')
+            logger.info(f"Saved {save_path}")
+            plt.close(fig)
+
+        except Exception as e:
+            logger.error(f"Error generating {description}: {e}")
+
+
+    target_genes = ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF']
+    logger.info(f"Generating MeSH distributions for genes: {target_genes}")
+    
+    for gene in target_genes:
+        filename = f'mesh_dist_{gene}.png'
+        if should_skip(filename):
+            continue
+        
+        logger.info(f"Processing {gene}...")
+        try:
+            df, fig = mesh_distribution_by_gene(gene, mesh_type="disease", plot=True)
+            save_path = os.path.join(output_dir, filename)
+            fig.savefig(save_path, bbox_inches='tight')
+            logger.info(f"Saved {save_path}")
+            plt.close(fig)
+        except Exception as e:
+            logger.error(f"Error generating MeSH plot for {gene}: {e}")
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Generate plots for INDRA DB Monitor")
+
+    # Path: ../../indra_db_service/static/plots
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    default_path = os.path.join(root_dir, 'indra_db_service', 'static', 'plots')
+
+    parser.add_argument('--output-dir', '-o', default=default_path,
+                        help=f'Directory to save plots. Default: {default_path}')
+
+
+    parser.add_argument('--refresh', '-r', action='store_true',
+                        help='Force regenerate all plots even if they exist.')
+
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    generate_all_plots(args.output_dir, refresh=args.refresh)

@@ -243,11 +243,12 @@ suf_ct_map = {".js": "application/javascript", ".css": "text/css"}
 @app.route("/data-vis/<path:file_path>")
 def serve_data_vis(file_path):
     full_path = HERE / "data-vis" / "dist" / file_path
-    logger.info("data-vis: " + full_path)
+    logger.info("data-vis: " + str(full_path))
     if not full_path.exists():
         return abort(404)
     with full_path.open("rb") as f:
         return Response(f.read(), content_type=suf_ct_map.get(full_path.suffix))
+
 
 
 if TESTING["status"] and not TESTING["deployment"]:

@@ -2,7 +2,7 @@
 
 {% block scripts %}
   {{ super() }}
-  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+  <script src="https://unpkg.com/vue@3.0.11/dist/vue.global.js"></script>
 {% endblock %}
 
 {% block body %}
@@ -18,8 +18,15 @@
   <link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}"
         rel="stylesheet">
   <script>
-    Vue.prototype.$time_view_url = "{{ url_for('serve_runtime') }}";
-    Vue.prototype.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
-    var app = new Vue({el: '#app'});
+    // Vue 3 initialization
+    const app = Vue.createApp({});
+    
+    app.use(DataVis); 
+
+    // Set global properties
+    app.config.globalProperties.$time_view_url = "{{ url_for('serve_runtime') }}";
+    app.config.globalProperties.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
+
+    app.mount('#app');
   </script>
 {% endblock %}

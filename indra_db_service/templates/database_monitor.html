@@ -18,27 +18,27 @@
       <!-- Row 1: Stmt Types & Belief Scores -->
       <div class="col-md-6 text-center mb-4">
         <h4>Statement Type Distribution</h4>
-        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" class="img-fluid border" alt="Statement Types">
+        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" class="img-fluid" alt="Statement Types">
       </div>
       <div class="col-md-6 text-center mb-4">
         <h4>Belief Score Distribution</h4>
-        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" class="img-fluid border" alt="Belief Scores">
+        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" class="img-fluid" alt="Belief Scores">
       </div>
 
       <!-- Row 2: Paper Trends -->
       <div class="col-12 text-center mb-4">
         <h4>Paper Trends (Abstracts vs Fulltext)</h4>
-        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" class="img-fluid border" alt="Paper Trends">
+        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" class="img-fluid" alt="Paper Trends">
       </div>
 
       <!-- Row 3: Evidence & PMIDs -->
       <div class="col-md-6 text-center mb-4">
         <h4>Evidence vs Statement Count</h4>
-        <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" class="img-fluid border" alt="Evidence vs Stmt">
+        <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" class="img-fluid" alt="Evidence vs Stmt">
       </div>
       <div class="col-md-6 text-center mb-4">
         <h4>PMID vs Statement Count</h4>
-        <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" class="img-fluid border" alt="PMID vs Stmt">
+        <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" class="img-fluid" alt="PMID vs Stmt">
       </div>
     </div>
     
@@ -49,7 +49,7 @@
         </div>
         {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
         <div class="col-md-6 text-center mb-4">
-            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" class="img-fluid border" alt="{{ gene }} MeSH">
+            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" class="img-fluid" alt="{{ gene }} MeSH">
         </div>
         {% endfor %}
     </div>

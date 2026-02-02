@@ -19,6 +19,7 @@ from indra_db import get_db, get_ro
 from indra_db.readonly_dumping.locations import *
 from indra_db.readonly_dumping.util import clean_json_loads
 from indra.databases.mesh_client import get_mesh_name, is_disease
+from indra.statements import stmt_from_json
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +312,74 @@ def mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int 
     return df, None
 
 
+def grounding_distribution_graph():
+    """
+    Generate a pie chart showing the distribution of grounding status
+    (Fully Grounded, Ungrounded, Partially Grounded) for unique statements.
+    """
+    stmt_count = defaultdict(int)
+
+    logger.info("Reading unique statements to calculate grounding distribution...")
+    with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
+        reader = csv.reader(file, delimiter='\t')
+        for _, stmt_json_str in tqdm(reader, total=47_956_726, desc="Checking Grounding"):
+            stmt = stmt_from_json(clean_json_loads(stmt_json_str))
+            
+            real_agents = stmt.real_agent_list()
+            # Skip statements with no agents if any
+            if not real_agents:
+                continue
+
+            # An agent is considered grounded if it has db_refs other than TEXT/TEXT_NORM
+            is_grounded_list = [
+                bool(set(a.db_refs.keys()) - {"TEXT", "TEXT_NORM"}) 
+                for a in real_agents
+            ]
+            
+            num_grounded = sum(is_grounded_list)
+            num_agents = len(real_agents)
+
+            if num_grounded == num_agents:
+                stmt_count["full"] += 1
+            elif num_grounded == 0:
+                stmt_count[0] += 1
+            else:
+                stmt_count["partial"] += 1
+
+    fully_grounded = stmt_count["full"]
+    ungrounded = stmt_count[0]
+    partially_grounded = stmt_count["partial"]
+
+    total = fully_grounded + ungrounded + partially_grounded
+    if total == 0:
+        logger.warning("No statements found for grounding distribution.")
+        return None
+
+    pct_full = fully_grounded / total * 100
+    pct_un = ungrounded / total * 100
+    pct_part = partially_grounded / total * 100
+
+    logger.info(f"Fully grounded: {pct_full:.1f}%")
+    logger.info(f"Ungrounded: {pct_un:.1f}%")
+    logger.info(f"Partially grounded: {pct_part:.1f}%")
+
+    # Plot
+    labels = ['Fully Grounded', 'Ungrounded', 'Partially Grounded']
+    sizes = [pct_full, pct_un, pct_part]
+    colors = ['#66c2a5', '#fc8d62', '#8da0cb']
+
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=120)
+    wedges, texts, autotexts = ax.pie(
+        sizes, labels=labels, autopct='%1.1f%%',
+        startangle=90, colors=colors, textprops={'fontsize': 10}
+    )
+
+    ax.set_title("Grounding Distribution", fontsize=12)
+    plt.tight_layout()
+
+    return fig
+
+
 def evidence_vs_statement_graph():
     """
     Plot the distribution of statements by total evidence count.
@@ -419,6 +488,7 @@ def generate_all_plots(output_dir, refresh=False):
         ('stmt_type_dist.png', statement_type_distribution_graph, "Statement Type Distribution"),
         ('belief_score_dist.png', belief_score_distribution_graph, "Belief Score Distribution"),
         ('paper_trends.png', abstract_fulltext_trends_by_year_graph, "Paper Trends"),
+        ('grounding_dist.png', grounding_distribution_graph, "Grounding Distribution"),
         ('evidence_vs_stmt.png', evidence_vs_statement_graph, "Evidence vs Statement"),
         ('pmid_vs_stmt.png', pmid_vs_statement_graph, "PMID vs Statement"),
     ]

@@ -16,34 +16,64 @@
       </div>
       
       <!-- Row 1: Stmt Types & Belief Scores -->
-      <div class="col-md-6 text-center mb-4">
+      <div class="col-md-4 text-center mb-4">
         <h5>Statement Type Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" class="img-fluid" alt="Statement Types">
+        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" 
+             class="img-fluid zoomable" 
+             style="cursor: pointer;"
+             alt="Statement Types"
+             onclick="showImage(this)">
       </div>
-      <div class="col-md-6 text-center mb-4">
+      
+      <div class="col-md-4 text-center mb-4">
         <h5>Belief Score Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" class="img-fluid" alt="Belief Scores">
+        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" 
+             class="img-fluid zoomable" 
+             style="cursor: pointer;"
+             alt="Belief Scores"
+             onclick="showImage(this)">
+      </div>
+
+      <div class="col-md-4 text-center mb-4">
+        <h5>Grounding Distribution</h5>
+        <img src="{{ url_for('static', filename='plots/grounding_dist.png') }}" 
+             class="img-fluid zoomable" 
+             style="cursor: pointer;"
+             alt="Grounding Distribution"
+             onclick="showImage(this)">
       </div>
     </div>
 
-    <!-- Row 2 & 3 Combined Layout -->
+    <!-- Row 2: Paper Trends & Evidence/PMID (Combined Layout) -->
     <div class="row mb-5 align-items-center">
-      <!-- Left Column: Paper Trends -->
+      <!-- Left Column: Paper Trends (Large) -->
       <div class="col-lg-7 text-center">
         <h5>Paper Trends (Abstracts vs Fulltext)</h5>
-        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" class="img-fluid" style="max-height: 500px;" alt="Paper Trends">
+        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" 
+             class="img-fluid zoomable" 
+             style="max-height: 500px; cursor: pointer;" 
+             alt="Paper Trends"
+             onclick="showImage(this)">
       </div>
 
-      <!-- Right Column: Evidence & PMIDs -->
+      <!-- Right Column: Evidence & PMIDs (Stacked, Smaller) -->
       <div class="col-lg-5">
         <div class="row">
             <div class="col-12 text-center mb-4">
                 <h5>Evidence vs Statement Count</h5>
-                <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" class="img-fluid" style="max-height: 250px;" alt="Evidence vs Stmt">
+                <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" 
+                     class="img-fluid zoomable" 
+                     style="max-height: 250px; cursor: pointer;"
+                     alt="Evidence vs Stmt"
+                     onclick="showImage(this)">
             </div>
             <div class="col-12 text-center">
                 <h5>PMID vs Statement Count</h5>
-                <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" class="img-fluid" style="max-height: 250px;" alt="PMID vs Stmt">
+                <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" 
+                     class="img-fluid zoomable" 
+                     style="max-height: 250px; cursor: pointer;"
+                     alt="PMID vs Stmt"
+                     onclick="showImage(this)">
             </div>
         </div>
       </div>
@@ -55,10 +85,13 @@
             <h3 class="border-bottom pb-2 mb-4">Gene-Disease MeSH Distributions</h3>
         </div>
         
-
         {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
         <div class="col-md-4 text-center mb-4">
-            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" class="img-fluid" alt="{{ gene }} MeSH">
+            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" 
+                 class="img-fluid zoomable" 
+                 style="cursor: pointer;"
+                 alt="{{ gene }} MeSH"
+                 onclick="showImage(this)">
         </div>
         {% endfor %}
     </div>
@@ -89,23 +122,48 @@
 
   </div>
 
+  <!-- Image Modal -->
+  <div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body text-center bg-light">
+          <img id="modalImage" src="" class="img-fluid" alt="Preview">
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
   <link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}" rel="stylesheet">
   
   <script>
+    // 1. Vue Initialization
     const app = Vue.createApp({});
-
-
     if (window.DataVis) {
         app.use(window.DataVis);
     } else {
         console.error("DataVis library failed to load.");
     }
-
     app.config.globalProperties.$time_view_url = "{{ url_for('serve_runtime') }}";
     app.config.globalProperties.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
-
     app.mount('#app');
+
+    // 2. Image Modal Logic
+    function showImage(imgElement) {
+        var modalImg = document.getElementById("modalImage");
+        var modalTitle = document.getElementById("imageModalLabel");
+        
+        modalImg.src = imgElement.src;
+        modalTitle.innerText = imgElement.alt || "Image Preview";
+        
+        $('#imageModal').modal('show');
+    }
   </script>
 
 {% endblock %}

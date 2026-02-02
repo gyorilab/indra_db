@@ -1,0 +1,199 @@
+{% extends "idbr_template.html" %}
+
+{% block styles %}
+    {{ super() }}
+    <style>
+        .stats-card {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+            border-radius: 8px;
+            background-color: #fff;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        }
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stats-label {
+            font-size: 1rem;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stats-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #3498db;
+        }
+    </style>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://unpkg.com/vue@3.0.11/dist/vue.global.js"></script>
+{% endblock %}
+
+{% block body %}
+  {{ super() }}
+  <div id="app" class="container-fluid">
+    
+    <!-- 0. Top Statistics Cards -->
+    <div class="row mb-5 mt-3">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-align-left stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.unique_statements.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Unique Statements</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-file-alt stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.abstracts.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Abstracts</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-file-pdf stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.full_texts.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Full Texts</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-check-circle stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.curations.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Curations</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. Database Statistics Section -->
+    <div class="row mb-5">
+      <div class="col-12">
+        <h2 class="border-bottom pb-2 mb-4">Database Statistics</h2>
+      </div>
+      
+      <div class="col-md-4 text-center mb-4">
+        <h5>Statement Type Distribution</h5>
+        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" 
+             class="img-fluid zoomable" style="cursor: pointer;" alt="Statement Types" onclick="showImage(this)">
+      </div>
+      <div class="col-md-4 text-center mb-4">
+        <h5>Belief Score Distribution</h5>
+        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" 
+             class="img-fluid zoomable" style="cursor: pointer;" alt="Belief Scores" onclick="showImage(this)">
+      </div>
+      <div class="col-md-4 text-center mb-4">
+        <h5>Grounding Distribution</h5>
+        <img src="{{ url_for('static', filename='plots/grounding_dist.png') }}" 
+             class="img-fluid zoomable" style="max-height: 200px; cursor: pointer;" alt="Grounding Distribution" onclick="showImage(this)">
+      </div>
+    </div>
+
+    <!-- Row 2 & 3 Combined Layout -->
+    <div class="row mb-5 align-items-center">
+      <div class="col-lg-7 text-center">
+        <h5>Paper Trends (Abstracts vs Fulltext)</h5>
+        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" 
+             class="img-fluid zoomable" style="max-height: 500px; cursor: pointer;" alt="Paper Trends" onclick="showImage(this)">
+      </div>
+      <div class="col-lg-5">
+        <div class="row">
+            <div class="col-12 text-center mb-4">
+                <h5>Evidence vs Statement Count</h5>
+                <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" 
+                     class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Evidence vs Stmt" onclick="showImage(this)">
+            </div>
+            <div class="col-12 text-center">
+                <h5>PMID vs Statement Count</h5>
+                <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" 
+                     class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="PMID vs Stmt" onclick="showImage(this)">
+            </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 2. Gene Specific MeSH Terms Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h3 class="border-bottom pb-2 mb-4">Gene-Disease MeSH Distributions</h3>
+        </div>
+        {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
+        <div class="col-md-4 text-center mb-4">
+            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" 
+                 class="img-fluid zoomable" style="cursor: pointer;" alt="{{ gene }} MeSH" onclick="showImage(this)">
+        </div>
+        {% endfor %}
+    </div>
+
+
+  </div>
+
+  <!-- Image Modal -->
+  <div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body text-center bg-light">
+          <img id="modalImage" src="" class="img-fluid" alt="Preview">
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const app = Vue.createApp({
+        data() {
+            return {
+                stats: { unique_statements: 0, abstracts: 0, full_texts: 0, curations: 0 },
+                animated: { unique_statements: 0, abstracts: 0, full_texts: 0, curations: 0 }
+            }
+        },
+        mounted() { this.fetchStats(); },
+        methods: {
+            async fetchStats() {
+                try {
+                    const response = await fetch("{{ url_for('serve_db_stats') }}");
+                    const data = await response.json();
+                    this.stats = data;
+                    this.animateNumbers();
+                } catch (error) { console.error("Failed to fetch stats:", error); }
+            },
+            animateNumbers() {
+                const duration = 1500; const steps = 60; const interval = duration / steps;
+                let currentStep = 0;
+                const timer = setInterval(() => {
+                    currentStep++;
+                    const progress = currentStep / steps;
+                    const ease = 1 - Math.pow(1 - progress, 3);
+                    for (const key in this.stats) { this.animated[key] = Math.floor(this.stats[key] * ease); }
+                    if (currentStep >= steps) { clearInterval(timer); this.animated = {...this.stats}; }
+                }, interval);
+            }
+        }
+    });
+    app.mount('#app');
+
+    function showImage(imgElement) {
+        var modalImg = document.getElementById("modalImage");
+        var modalTitle = document.getElementById("imageModalLabel");
+        modalImg.src = imgElement.src;
+        modalTitle.innerText = imgElement.alt || "Image Preview";
+        $('#imageModal').modal('show');
+    }
+  </script>
+{% endblock %}

@@ -7,26 +7,84 @@
 
 {% block body %}
   {{ super() }}
-  <div id="app">
-    <h3>Batch Job Runtimes</h3>
-    <time-view></time-view>
-
-    <h3>Output Measurements</h3>
-    <amount-view></amount-view>
-  </div>
-  <script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
-  <link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}"
-        rel="stylesheet">
-  <script>
-    // Vue 3 initialization
-    const app = Vue.createApp({});
+  <div id="app" class="container-fluid">
     
-    app.use(DataVis); 
+    <!-- 1. Database Statistics Section (Top) -->
+    <div class="row mb-5">
+      <div class="col-12">
+        <h2 class="border-bottom pb-2">Database Statistics</h2>
+      </div>
+      
+      <!-- Row 1: Stmt Types & Belief Scores -->
+      <div class="col-md-6 text-center mb-4">
+        <h4>Statement Type Distribution</h4>
+        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" class="img-fluid border" alt="Statement Types">
+      </div>
+      <div class="col-md-6 text-center mb-4">
+        <h4>Belief Score Distribution</h4>
+        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" class="img-fluid border" alt="Belief Scores">
+      </div>
 
-    // Set global properties
+      <!-- Row 2: Paper Trends -->
+      <div class="col-12 text-center mb-4">
+        <h4>Paper Trends (Abstracts vs Fulltext)</h4>
+        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" class="img-fluid border" alt="Paper Trends">
+      </div>
+
+      <!-- Row 3: Evidence & PMIDs -->
+      <div class="col-md-6 text-center mb-4">
+        <h4>Evidence vs Statement Count</h4>
+        <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" class="img-fluid border" alt="Evidence vs Stmt">
+      </div>
+      <div class="col-md-6 text-center mb-4">
+        <h4>PMID vs Statement Count</h4>
+        <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" class="img-fluid border" alt="PMID vs Stmt">
+      </div>
+    </div>
+    
+    <!-- 2. Gene Specific MeSH Terms Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h3 class="border-bottom pb-2">Gene-Disease MeSH Distributions</h3>
+        </div>
+        {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
+        <div class="col-md-6 text-center mb-4">
+            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" class="img-fluid border" alt="{{ gene }} MeSH">
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row">
+      <div class="col-12">
+        <h2 class="border-bottom pb-2">Batch Processing Monitor</h2>
+
+        <h3>Batch Job Runtimes</h3>
+        <time-view></time-view>
+
+        <h3>Output Measurements</h3>
+        <amount-view></amount-view>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
+  <link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}" rel="stylesheet">
+  
+  <script>
+    const app = Vue.createApp({});
+
+
+    if (window.DataVis) {
+        app.use(window.DataVis);
+    } else {
+        console.error("DataVis library failed to load.");
+    }
+
     app.config.globalProperties.$time_view_url = "{{ url_for('serve_runtime') }}";
     app.config.globalProperties.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
 
     app.mount('#app');
   </script>
+
 {% endblock %}

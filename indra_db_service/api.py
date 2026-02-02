@@ -268,10 +268,25 @@ if TESTING["status"] and not TESTING["deployment"]:
         with full_path.open(mode="rb") as f:
             return Response(f.read(), content_type=suf_ct_map.get(full_path.suffix))
 
+@app.route("/summary")
+def get_summary():
+    return render_my_template("summary.html", "DB Summary")
+
+@app.route("/summary/data/stats")
+def serve_db_stats():
+    """Serve database statistics for the monitor page."""
+    # Placeholder stats for now
+    stats = {
+        "unique_statements": 47956726,
+        "abstracts": 16000000,
+        "full_texts": 5000000,
+        "curations": 150000,
+    }
+    return jsonify(stats)
 
 @app.route("/monitor")
 def get_data_explorer():
-    return render_my_template("database_monitor.html", "Monitor")
+    return render_my_template("monitor.html", "Monitor")
 
 
 @app.route("/monitor/data/runtime")

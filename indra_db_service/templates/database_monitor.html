@@ -9,60 +9,81 @@
   {{ super() }}
   <div id="app" class="container-fluid">
     
-    <!-- 1. Database Statistics Section (Top) -->
+    <!-- 1. Database Statistics Section -->
     <div class="row mb-5">
       <div class="col-12">
-        <h2 class="border-bottom pb-2">Database Statistics</h2>
+        <h2 class="border-bottom pb-2 mb-4">Database Statistics</h2>
       </div>
       
       <!-- Row 1: Stmt Types & Belief Scores -->
       <div class="col-md-6 text-center mb-4">
-        <h4>Statement Type Distribution</h4>
+        <h5>Statement Type Distribution</h5>
         <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" class="img-fluid" alt="Statement Types">
       </div>
       <div class="col-md-6 text-center mb-4">
-        <h4>Belief Score Distribution</h4>
+        <h5>Belief Score Distribution</h5>
         <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" class="img-fluid" alt="Belief Scores">
       </div>
+    </div>
 
-      <!-- Row 2: Paper Trends -->
-      <div class="col-12 text-center mb-4">
-        <h4>Paper Trends (Abstracts vs Fulltext)</h4>
-        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" class="img-fluid" alt="Paper Trends">
+    <!-- Row 2 & 3 Combined Layout -->
+    <div class="row mb-5 align-items-center">
+      <!-- Left Column: Paper Trends -->
+      <div class="col-lg-7 text-center">
+        <h5>Paper Trends (Abstracts vs Fulltext)</h5>
+        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" class="img-fluid" style="max-height: 500px;" alt="Paper Trends">
       </div>
 
-      <!-- Row 3: Evidence & PMIDs -->
-      <div class="col-md-6 text-center mb-4">
-        <h4>Evidence vs Statement Count</h4>
-        <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" class="img-fluid" alt="Evidence vs Stmt">
-      </div>
-      <div class="col-md-6 text-center mb-4">
-        <h4>PMID vs Statement Count</h4>
-        <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" class="img-fluid" alt="PMID vs Stmt">
+      <!-- Right Column: Evidence & PMIDs -->
+      <div class="col-lg-5">
+        <div class="row">
+            <div class="col-12 text-center mb-4">
+                <h5>Evidence vs Statement Count</h5>
+                <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" class="img-fluid" style="max-height: 250px;" alt="Evidence vs Stmt">
+            </div>
+            <div class="col-12 text-center">
+                <h5>PMID vs Statement Count</h5>
+                <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" class="img-fluid" style="max-height: 250px;" alt="PMID vs Stmt">
+            </div>
+        </div>
       </div>
     </div>
     
     <!-- 2. Gene Specific MeSH Terms Section -->
     <div class="row mb-5">
         <div class="col-12">
-            <h3 class="border-bottom pb-2">Gene-Disease MeSH Distributions</h3>
+            <h3 class="border-bottom pb-2 mb-4">Gene-Disease MeSH Distributions</h3>
         </div>
+        
+
         {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
-        <div class="col-md-6 text-center mb-4">
+        <div class="col-md-4 text-center mb-4">
             <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" class="img-fluid" alt="{{ gene }} MeSH">
         </div>
         {% endfor %}
     </div>
 
-    <div class="row">
+    <div class="row mt-5">
       <div class="col-12">
-        <h2 class="border-bottom pb-2">Batch Processing Monitor</h2>
+        <h2 class="border-bottom pb-2 mb-4">Batch Processing Monitor</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Batch Job Runtimes</h5>
+            </div>
+            <div class="card-body">
+                <time-view></time-view>
+            </div>
+        </div>
 
-        <h3>Batch Job Runtimes</h3>
-        <time-view></time-view>
-
-        <h3>Output Measurements</h3>
-        <amount-view></amount-view>
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Output Measurements</h5>
+            </div>
+            <div class="card-body">
+                <amount-view></amount-view>
+            </div>
+        </div>
       </div>
     </div>
 

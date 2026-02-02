@@ -271,7 +271,7 @@ if TESTING["status"] and not TESTING["deployment"]:
 
 @app.route("/monitor")
 def get_data_explorer():
-    return render_my_template("daily_data.html", "Monitor")
+    return render_my_template("database_monitor.html", "Monitor")
 
 
 @app.route("/monitor/data/runtime")

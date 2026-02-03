@@ -1,8 +1,14 @@
 {% extends "idbr_template.html" %}
 
-{% block styles %}
-    {{ super() }}
-    <style>
+{% block scripts %}
+  {{ super() }}
+  <script src="https://unpkg.com/vue@3.0.11/dist/vue.global.js"></script>
+  <style>
+        #app { padding-top: 0; }
+        #toc.sticky-top { top: 90px; }
+        #database-statistics, #content-insights, #gene-mesh {
+          scroll-margin-top: 110px;
+        }
         .stats-card {
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             transition: transform 0.2s;
@@ -16,11 +22,7 @@
             transform: translateY(-5px);
             box-shadow: 0 10px 15px rgba(0,0,0,0.1);
         }
-        .stats-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #2c3e50;
-        }
+
         .stats-label {
             font-size: 1rem;
             color: #7f8c8d;
@@ -35,17 +37,27 @@
     </style>
 {% endblock %}
 
-{% block scripts %}
-  {{ super() }}
-  <script src="https://unpkg.com/vue@3.0.11/dist/vue.global.js"></script>
-{% endblock %}
 
 {% block body %}
   {{ super() }}
-  <div id="app" class="container-fluid">
-    
+  <div id="app" class="container-fluid ">
+      <div class="row">
+        <!-- Left TOC -->
+    <div class="col-sm-3 d-none d-sm-none d-md-block">
+      <nav id="toc" data-toggle="toc" class="sticky-top">
+        <ul class="nav navbar-nav">
+          <li><a class="nav-link active" href="#database-statistics">Database Statistics</a></li>
+          <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
+          <li>
+            <a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+          <div class="col-12 col-md-9">
+
     <!-- 0. Top Statistics Cards -->
-    <div class="row mb-5 mt-3">
+    <div class="row mb-5 mt-3" id="database-statistics">
 
         <div class="col-12">
          <h2 class="border-bottom pb-2 mb-4">Database Statistics</h2>
@@ -81,8 +93,8 @@
         </div>
     </div>
 
-    <!-- 1. Database Statistics Section -->
-    <div class="row mb-5">
+    <!-- 1. Database Content Section -->
+    <div class="row mb-5" id="content-insights">
 
       <div class="col-12">
          <h2 class="border-bottom pb-2 mb-4">Content Insights</h2>
@@ -90,17 +102,17 @@
 
       <div class="col-md-4 text-center mb-4">
         <h5>Statement Type Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" 
+        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}"
              class="img-fluid zoomable" style="cursor: pointer;" alt="Statement Types" onclick="showImage(this)">
       </div>
       <div class="col-md-4 text-center mb-4">
         <h5>Belief Score Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}" 
+        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}"
              class="img-fluid zoomable" style="cursor: pointer;" alt="Belief Scores" onclick="showImage(this)">
       </div>
       <div class="col-md-4 text-center mb-4">
         <h5>Grounding Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/grounding_dist.png') }}" 
+        <img src="{{ url_for('static', filename='plots/grounding_dist.png') }}"
              class="img-fluid zoomable" style="max-height: 200px; cursor: pointer;" alt="Grounding Distribution" onclick="showImage(this)">
       </div>
     </div>
@@ -109,38 +121,38 @@
     <div class="row mb-5 align-items-center">
       <div class="col-lg-7 text-center">
         <h5>Paper Trends (Abstracts vs Fulltext)</h5>
-        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}" 
+        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}"
              class="img-fluid zoomable" style="max-height: 500px; cursor: pointer;" alt="Paper Trends" onclick="showImage(this)">
       </div>
       <div class="col-lg-5">
         <div class="row">
             <div class="col-12 text-center mb-4">
                 <h5>Evidence vs Statement Count</h5>
-                <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}" 
+                <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}"
                      class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Evidence vs Stmt" onclick="showImage(this)">
             </div>
             <div class="col-12 text-center">
                 <h5>PMID vs Statement Count</h5>
-                <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}" 
+                <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}"
                      class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="PMID vs Stmt" onclick="showImage(this)">
             </div>
         </div>
       </div>
     </div>
-    
+
     <!-- 2. Gene Specific MeSH Terms Section -->
-    <div class="row mb-5">
+    <div class="row mb-5" id="gene-mesh">
         <div class="col-12">
             <h3 class="border-bottom pb-2 mb-4">Gene-Disease MeSH Distributions</h3>
         </div>
         {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
         <div class="col-md-4 text-center mb-4">
-            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}" 
+            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}"
                  class="img-fluid zoomable" style="cursor: pointer;" alt="{{ gene }} MeSH" onclick="showImage(this)">
         </div>
         {% endfor %}
-    </div>
-
+        </div>
+      </div>
 
   </div>
 
@@ -160,7 +172,7 @@
       </div>
     </div>
   </div>
-  
+
   <script>
     const app = Vue.createApp({
         data() {

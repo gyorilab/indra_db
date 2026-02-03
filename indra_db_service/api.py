@@ -275,13 +275,11 @@ def get_summary():
 @app.route("/summary/data/stats")
 def serve_db_stats():
     """Serve database statistics for the monitor page."""
-    # Placeholder stats for now
-    stats = {
-        "unique_statements": 47956726,
-        "abstracts": 16000000,
-        "full_texts": 5000000,
-        "curations": 150000,
-    }
+    stats_file = HERE / "static" / "data" / "db_stats.json"
+    if stats_file.exists():
+        with stats_file.open("r") as f:
+            stats = json.load(f)
+
     return jsonify(stats)
 
 @app.route("/monitor")

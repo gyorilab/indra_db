@@ -467,6 +467,31 @@ def pmid_vs_statement_graph():
     return fig
 
 
+def generate_db_stats(json_path):
+    """Generate db_stats.json with counts of text content types."""
+    db = get_db("primary")
+    sql = text("select count(*) as count, text_type from text_content "
+               "where text_type in ('abstract', 'fulltext', 'title') group by text_type;")
+
+    logger.info("Generating DB stats...")
+    stats = {}
+    with db._DatabaseManager__engine.connect() as connection:
+        result = connection.execute(sql)
+        for row in result:
+            stats[row[1]] = row[0]
+
+    with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
+        reader = csv.reader(file, delimiter='\t')
+        stats['unique_statement'] = 0
+        #estimate total to track time remaining
+        for _ in tqdm(reader, total=47_956_726):
+            stats['unique_statement'] += 1
+
+    with open(json_path, 'w') as f:
+        json.dump(stats, f, indent=2)
+    logger.info(f"Saved db stats to {json_path}")
+
+
 def generate_all_plots(output_dir, refresh=False):
     """Generate all static plots for the monitor page."""
     matplotlib.use('Agg')
@@ -553,3 +578,8 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     generate_all_plots(args.output_dir, refresh=args.refresh)
+
+    stats_dir = os.path.join(root_dir, 'indra_db_service', 'static', 'data')
+    if not os.path.exists(stats_dir):
+        os.makedirs(stats_dir)
+    generate_db_stats(os.path.join(stats_dir, 'db_stats.json'))

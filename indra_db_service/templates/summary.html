@@ -49,31 +49,25 @@
         <div class="col-md-3">
             <div class="stats-card">
                 <i class="fas fa-align-left stats-icon"></i>
-                <div class="stats-number">{% raw %}{{ animated.unique_statements.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-number">{% raw %}{{ animated.unique_statement.toLocaleString() }}{% endraw %}</div>
                 <div class="stats-label">Unique Statements</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stats-card">
                 <i class="fas fa-file-alt stats-icon"></i>
-                <div class="stats-number">{% raw %}{{ animated.abstracts.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-number">{% raw %}{{ animated.abstract.toLocaleString() }}{% endraw %}</div>
                 <div class="stats-label">Abstracts</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stats-card">
                 <i class="fas fa-file-pdf stats-icon"></i>
-                <div class="stats-number">{% raw %}{{ animated.full_texts.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-number">{% raw %}{{ animated.fulltext.toLocaleString() }}{% endraw %}</div>
                 <div class="stats-label">Full Texts</div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <i class="fas fa-check-circle stats-icon"></i>
-                <div class="stats-number">{% raw %}{{ animated.curations.toLocaleString() }}{% endraw %}</div>
-                <div class="stats-label">Curations</div>
-            </div>
-        </div>
+
     </div>
 
     <!-- 1. Database Statistics Section -->
@@ -159,8 +153,8 @@
     const app = Vue.createApp({
         data() {
             return {
-                stats: { unique_statements: 0, abstracts: 0, full_texts: 0, curations: 0 },
-                animated: { unique_statements: 0, abstracts: 0, full_texts: 0, curations: 0 }
+                stats: { unique_statement: 0, abstract: 0, fulltext: 0},
+                animated: { unique_statement: 0, abstract: 0, fulltext: 0}
             }
         },
         mounted() { this.fetchStats(); },

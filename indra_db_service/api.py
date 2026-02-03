@@ -270,7 +270,14 @@ if TESTING["status"] and not TESTING["deployment"]:
 
 @app.route("/summary")
 def get_summary():
-    return render_my_template("summary.html", "DB Summary")
+    return render_my_template(
+        "summary.html",
+        "DB Summary",
+        source_colors=DEFAULT_SOURCE_COLORS,
+        source_info=SOURCE_INFO,
+        reverse_source_mapping=rev_source_mapping
+    )
+
 
 @app.route("/summary/data/stats")
 def serve_db_stats():

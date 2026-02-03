@@ -46,6 +46,11 @@
     
     <!-- 0. Top Statistics Cards -->
     <div class="row mb-5 mt-3">
+
+        <div class="col-12">
+         <h2 class="border-bottom pb-2 mb-4">Database Statistics</h2>
+        </div>
+
         <div class="col-md-3">
             <div class="stats-card">
                 <i class="fas fa-align-left stats-icon"></i>
@@ -67,15 +72,22 @@
                 <div class="stats-label">Full Texts</div>
             </div>
         </div>
-
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-book stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.title.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Paper Titles</div>
+            </div>
+        </div>
     </div>
 
     <!-- 1. Database Statistics Section -->
     <div class="row mb-5">
+
       <div class="col-12">
-        <h2 class="border-bottom pb-2 mb-4">Database Statistics</h2>
+         <h2 class="border-bottom pb-2 mb-4">Content Insights</h2>
       </div>
-      
+
       <div class="col-md-4 text-center mb-4">
         <h5>Statement Type Distribution</h5>
         <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}" 
@@ -153,8 +165,8 @@
     const app = Vue.createApp({
         data() {
             return {
-                stats: { unique_statement: 0, abstract: 0, fulltext: 0},
-                animated: { unique_statement: 0, abstract: 0, fulltext: 0}
+                stats: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0 },
+                animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0 }
             }
         },
         mounted() { this.fetchStats(); },

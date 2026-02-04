@@ -94,51 +94,103 @@
     </div>
 
     <!-- 1. Database Content Section -->
-    <div class="row mb-5" id="content-insights">
+    <div class="container-fluid" id="content-insights">
 
-      <div class="col-12">
-         <h2 class="border-bottom pb-2 mb-4">Content Insights</h2>
+      <div class="row mb-4">
+         <div class="col-12">
+            <h2 class="border-bottom pb-2 mb-4">Content Insights</h2>
+         </div>
       </div>
 
-      <div class="col-md-4 text-center mb-4">
-        <h5>Statement Type Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}"
-             class="img-fluid zoomable" style="cursor: pointer;" alt="Statement Types" onclick="showImage(this)">
+      <!-- Item 1: Statement Type -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}"
+                 class="img-fluid zoomable" style="max-height: 400px; cursor: pointer;" alt="Statement Types" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Statement Type Distribution</h5>
+            <p class="text-justify">
+                The statement type distribution shows a diversity of statement relations across 45 distinct types (e.g. activation, phosphorylation).
+            </p>
+          </div>
       </div>
-      <div class="col-md-4 text-center mb-4">
-        <h5>Belief Score Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}"
-             class="img-fluid zoomable" style="cursor: pointer;" alt="Belief Scores" onclick="showImage(this)">
+
+      <!-- Item 2: Belief Score -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}"
+                 class="img-fluid zoomable" style="max-height: 400px; cursor: pointer;" alt="Belief Scores" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Belief Score Distribution</h5>
+            <p class="text-justify">
+                Belief scores are computed using INDRA’s HybridScorer, which combines a data-driven CountsScorer with a prior-based SimpleScorer.
+                For statements whose evidence sources were observed during training, the CountsScorer estimates reliability.
+                Support for more specific statements is propagated to their corresponding generalized statements, increasing the belief scores of the latter.
+            </p>
+          </div>
       </div>
-      <div class="col-md-4 text-center mb-4">
-        <h5>Grounding Distribution</h5>
-        <img src="{{ url_for('static', filename='plots/grounding_dist.png') }}"
-             class="img-fluid zoomable" style="max-height: 200px; cursor: pointer;" alt="Grounding Distribution" onclick="showImage(this)">
+
+      <!-- Item 3: Grounding -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/grounding_dist.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Grounding Distribution" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Grounding Distribution</h5>
+            <p class="text-justify">
+                After collecting and assembling all sources, the resulting corpus indexed by the database contains a total of 47,956,726 unique INDRA Statements.
+                Of these, nearly 65.2% referred to at least one ungrounded entity.
+                While statements about protein complexes can involve more than two entities, the vast majority 98.3% involved exactly two entities.
+            </p>
+          </div>
       </div>
+
+      <!-- Item 4: Paper Trends -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/paper_trends.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Paper Trends" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Paper Trends (Abstracts vs Fulltext)</h5>
+            <p class="text-justify">
+                A steady increase from year 1970 to 2024 exhibits a growing trend in the number of papers over time.
+                The lower bar in 2025 reflects content availability through May 2025.
+                Before 1970, starting 1780, there are 52,779 abstract and 226,925 full text records in the database.
+            </p>
+          </div>
+      </div>
+
+      <!-- Extra Items: Counts (Keep them vertical as requested, though no specific text provided in prompt for these) -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Evidence vs Stmt" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+             <h5>Evidence vs Statement Count</h5>
+             <p class="text-justify">The scatter plot shows a strong inverse relationship between the number of evidence and the number of statements on a log–log scale.
+                 Most statements are supported by only a small number of evidence, while a very small number of statements aggregate a disproportionately large amount of evidence, forming a clear long-tailed distribution. </p>
+          </div>
+      </div>
+
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="PMID vs Stmt" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+             <h5>PMID vs Statement Count</h5>
+             <p class="text-justify">The plot shows a strong inverse relationship between the number of unique PMIDs per statement and the number of statements on a log–log scale.
+                 The distribution is highly skewed, with most statements supported by only a few PMIDs, while a small fraction of statements accumulate evidence from hundreds to tens of thousands of publications.</p>
+          </div>
+      </div>
+
     </div>
 
-    <!-- Row 2 & 3 Combined Layout -->
-    <div class="row mb-5 align-items-center">
-      <div class="col-lg-7 text-center">
-        <h5>Paper Trends (Abstracts vs Fulltext)</h5>
-        <img src="{{ url_for('static', filename='plots/paper_trends.png') }}"
-             class="img-fluid zoomable" style="max-height: 500px; cursor: pointer;" alt="Paper Trends" onclick="showImage(this)">
-      </div>
-      <div class="col-lg-5">
-        <div class="row">
-            <div class="col-12 text-center mb-4">
-                <h5>Evidence vs Statement Count</h5>
-                <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}"
-                     class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Evidence vs Stmt" onclick="showImage(this)">
-            </div>
-            <div class="col-12 text-center">
-                <h5>PMID vs Statement Count</h5>
-                <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}"
-                     class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="PMID vs Stmt" onclick="showImage(this)">
-            </div>
-        </div>
-      </div>
-    </div>
 
     <!-- 2. Gene Specific MeSH Terms Section -->
     <div class="row mb-5" id="gene-mesh">

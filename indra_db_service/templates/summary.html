@@ -6,7 +6,7 @@
   <style>
         #app { padding-top: 0; }
         #toc.sticky-top { top: 90px; }
-        #database-statistics, #content-insights, #gene-mesh {
+        #database-statistics, #content-insights, #gene-mesh, #database-summary{
           scroll-margin-top: 110px;
         }
         .stats-card {
@@ -34,6 +34,27 @@
             margin-bottom: 1rem;
             color: #3498db;
         }
+        /* TOC base style */
+        #toc .nav-link{
+          color: #9aa0a6;
+          font-size: 0.95rem;
+          padding: .35rem .5rem .35rem 1rem;
+          position: relative;
+          border-left: 3px solid transparent;
+          text-decoration: none;
+        }
+
+        #toc .nav-link:hover{
+          color: #5f6368;
+        }
+
+        #toc .nav-link.active{
+          color: #202124;
+          font-weight: 600;
+          border-left-color: #202124;
+          background: rgba(0,0,0,0.03);
+          border-radius: 4px;
+        }
     </style>
 {% endblock %}
 
@@ -46,8 +67,8 @@
     <div class="col-sm-3 d-none d-sm-none d-md-block">
       <nav id="toc" data-toggle="toc" class="sticky-top">
         <ul class="nav navbar-nav">
-            <li><a class="nav-link active" href="#database-summary">INDRA Database</a></li>
-            <li><a class="nav-link active" href="#database-statistics">Database Statistics</a></li>
+            <li><a class="nav-link " href="#database-summary">INDRA Database</a></li>
+            <li><a class="nav-link " href="#database-statistics">Database Statistics</a></li>
             <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
             <li><a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a></li>
         </ul>
@@ -279,5 +300,67 @@
         modalTitle.innerText = imgElement.alt || "Image Preview";
         $('#imageModal').modal('show');
     }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const OFFSET = 110; // 和 scroll-margin-top 对齐
+      const tocLinks = [...document.querySelectorAll('#toc a[href^="#"]')];
+      const sections = tocLinks
+        .map(a => document.querySelector(a.getAttribute("href")))
+        .filter(Boolean);
+
+      const setActive = (id) => {
+        tocLinks.forEach(a =>
+          a.classList.toggle("active", a.getAttribute("href") === "#" + id)
+        );
+      };
+
+      let isAutoScrolling = false;
+      let scrollEndTimer = null;
+
+      const onScroll = () => {
+        if (isAutoScrolling) return;
+        let current = sections[0];
+        for (const s of sections) {
+          const top = s.getBoundingClientRect().top;
+          if (top - OFFSET <= 0) current = s;
+        }
+        if (current) setActive(current.id);
+      };
+
+      tocLinks.forEach(a => {
+        a.addEventListener("click", (e) => {
+          const el = document.querySelector(a.getAttribute("href"));
+          if (!el) return;
+          e.preventDefault();
+
+          isAutoScrolling = true;
+
+          window.scrollTo({
+            top: el.getBoundingClientRect().top + window.pageYOffset - OFFSET,
+            behavior: "smooth"
+          });
+          history.replaceState(null, "", "#" + el.id);
+
+          clearTimeout(scrollEndTimer);
+          scrollEndTimer = setTimeout(() => {
+            isAutoScrolling = false;
+            onScroll(); // 结束后统一算一次并高亮
+          }, 250);
+        });
+      });
+
+
+      window.addEventListener("scroll", () => {
+        if (!isAutoScrolling) return;
+        clearTimeout(scrollEndTimer);
+        scrollEndTimer = setTimeout(() => {
+          isAutoScrolling = false;
+          onScroll();
+        }, 250);
+      }, { passive: true });
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    });
   </script>
 {% endblock %}

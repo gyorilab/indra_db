@@ -46,15 +46,29 @@
     <div class="col-sm-3 d-none d-sm-none d-md-block">
       <nav id="toc" data-toggle="toc" class="sticky-top">
         <ul class="nav navbar-nav">
-          <li><a class="nav-link active" href="#database-statistics">Database Statistics</a></li>
-          <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
-          <li>
-            <a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a>
-          </li>
+            <li><a class="nav-link active" href="#database-summary">INDRA Database</a></li>
+            <li><a class="nav-link active" href="#database-statistics">Database Statistics</a></li>
+            <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
+            <li><a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a></li>
         </ul>
       </nav>
     </div>
           <div class="col-12 col-md-9">
+
+
+    <div class="row mb-5 mt-3" id="database-summary">
+
+     <div class="col-12">
+         <h2 class="border-bottom pb-2 mb-4">INDRA Database</h2>
+        </div>
+        <div class="col-12">
+            <p class="text-justify">
+                The INDRA (Integrated Network and Dynamical Reasoning Assembler) Database is a framework for creating, maintaining, and accessing a database of content, readings, and statements.
+                This implementation is currently designed to work primarily with Amazon Web Services RDS running Postrgres 9+.
+                Used as a backend to INDRA, the INDRA Database provides a systematic way of scaling the knowledge acquired from other databases, reading, and manual input, and puts that knowledge at your fingertips through a direct Python client and a REST api.
+            </p>
+          </div>
+     </div>
 
     <!-- 0. Top Statistics Cards -->
     <div class="row mb-5 mt-3" id="database-statistics">

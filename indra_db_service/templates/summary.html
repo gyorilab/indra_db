@@ -95,7 +95,7 @@
     <div class="row mb-5 mt-3" id="database-statistics">
 
         <div class="col-12">
-         <h2 class="border-bottom pb-2 mb-4">Database Statistics</h2>
+         <h2 class="border-bottom pb-2 mb-4">Database Statistics (As of May 2025)</h2>
         </div>
 
         <div class="col-md-3">
@@ -126,7 +126,59 @@
                 <div class="stats-label">Paper Titles</div>
             </div>
         </div>
+
+        <!-- Source Statistics Table -->
+        <div class="col-12 mt-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 text-center text-primary">
+                        <i class="fas fa-table mr-2"></i> Source Details
+                    </h5>
+                </div>
+                <div id="sourceStatsTable">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th scope="col" class="pl-4">Source Name</th>
+                                        <th scope="col">Type</th>
+                                        <th scope="col" class="text-right pr-4">Statement Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="source in sourceStats" :key="source.src_id">
+                                        <td class="pl-4">
+                                            <a v-if="source.link && source.link !== '#'" :href="source.link" target="_blank" class="font-weight-bold text-dark">
+                                                {% raw %}{{ source.name }}{% endraw %}
+                                                <i class="fas fa-external-link-alt fa-xs ml-1 text-muted" style="font-size: 0.7em;"></i>
+                                            </a>
+                                            <span v-else class="font-weight-bold text-dark">{% raw %}{{ source.name }}{% endraw %}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-pill"
+                                                  :class="source.type === 'reader' ? 'badge-info' : 'badge-success'">
+                                                {% raw %}{{ source.type }}{% endraw %}
+                                            </span>
+                                        </td>
+                                        <td class="text-right pr-4 font-monospace">
+                                            {% raw %}{{ source.count.toLocaleString() }}{% endraw %}
+                                        </td>
+                                    </tr>
+                                    <tr v-if="sourceStats.length === 0">
+                                        <td colspan="3" class="text-center py-3 text-muted">Loading statistics...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
+
+
 
     <!-- 1. Database Content Section -->
     <div class="container-fluid" id="content-insights">
@@ -261,14 +313,20 @@
   </div>
 
   <script>
+    const GLOBAL_SOURCE_INFO = {{ source_info|tojson }};
+    const REVERSE_MAPPING = {{ reverse_source_mapping|tojson }};
+
     const app = Vue.createApp({
         data() {
             return {
                 stats: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0 },
-                animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0 }
+                animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0 },
+                sourceStats: []
             }
         },
-        mounted() { this.fetchStats(); },
+        mounted() {
+            this.fetchStats();
+            this.fetchSourceStats();},
         methods: {
             async fetchStats() {
                 try {
@@ -278,6 +336,35 @@
                     this.animateNumbers();
                 } catch (error) { console.error("Failed to fetch stats:", error); }
             },
+            async fetchSourceStats() {
+                try {
+                    const response = await fetch("{{ url_for('static', filename='data/source_num.json') }}");
+                    if (response.ok) {
+                        const countsData = await response.json();
+
+                        this.sourceStats = countsData.map(item => {
+                            const srcId = item.src;
+
+                            let infoKey = srcId;
+                            if (REVERSE_MAPPING[srcId]) {
+                                infoKey = REVERSE_MAPPING[srcId];
+                            }
+
+                            let info = GLOBAL_SOURCE_INFO[infoKey] || GLOBAL_SOURCE_INFO[infoKey.toLowerCase()] || {};
+
+                            return {
+                                src_id: srcId,
+                                count: item.count,
+                                name: info.name || srcId.toUpperCase(),
+                                link: info.link || '#',
+                                type: info.type || 'unknown',
+                                domain: info.domain || 'general'
+                            };
+                        });
+                    }
+                } catch (error) { console.error("Error fetching source stats:", error); }
+            },
+
             animateNumbers() {
                 const duration = 1500; const steps = 60; const interval = duration / steps;
                 let currentStep = 0;
@@ -291,6 +378,9 @@
             }
         }
     });
+
+
+
     app.mount('#app');
 
     function showImage(imgElement) {

@@ -492,23 +492,60 @@ def generate_db_stats(json_path):
     logger.info(f"Saved db stats to {json_path}")
 
 
-def generate_all_plots(output_dir, refresh=False):
-    """Generate all static plots for the monitor page."""
+def generate_source_stats(output_dir):
+    """
+    Generate simple source statistics JSON file (src -> count).
+    """
+    db_stats = []
+
+    ro = get_ro("primary")
+    sql = text("""
+               SELECT COALESCE(f.src, r.src) AS src,
+                      COUNT(*) AS count
+               FROM readonly.fast_raw_pa_link AS f
+                   LEFT JOIN readonly.raw_stmt_src AS r
+               ON f.id = r.sid
+               GROUP BY COALESCE (f.src, r.src)
+               ORDER BY count DESC;
+               """)
+
+    logger.info("Querying source statistics...")
+    with ro._DatabaseManager__engine.connect() as connection:
+        result = connection.execute(sql)
+        for row in result:
+            db_stats.append({"src": row[0], "count": row[1]})
+    with open(output_dir, 'w') as f:
+        json.dump(db_stats, f, indent=2)
+    logger.info(f"Saved db stats to {output_dir}")
+
+
+def generate_all_plots(output_dir, refresh=False, stats_dir=None):
+
+    """Generate all static plots + stats json for the monitor page."""
     matplotlib.use('Agg')
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         logger.info(f"Created directory: {output_dir}")
 
-    logger.info(f"Saving plots to {output_dir} (Refresh={refresh})")
+    if stats_dir is None or stats_dir is None:
+        static_dir = os.path.dirname(output_dir)
+        stats_dir = os.path.join(static_dir, "data")
 
-    def should_skip(filename):
-        filepath = os.path.join(output_dir, filename)
+    if not os.path.exists(stats_dir):
+        os.makedirs(stats_dir)
+        logger.info(f"Created directory: {stats_dir}")
+
+    logger.info(f"Saving plots to {output_dir} (Refresh={refresh})")
+    logger.info(f"Saving stats to {stats_dir} (Refresh={refresh})")
+
+    def should_skip(filepath):
         if os.path.exists(filepath) and not refresh:
-            logger.info(f"Skipping {filename} (already exists).")
+            logger.info(f"Skipping {os.path.basename(filepath)} (already exists).")
             return True
         return False
 
+    # ---------- plots ----------
     tasks = [
         ('stmt_type_dist.png', statement_type_distribution_graph, "Statement Type Distribution"),
         ('belief_score_dist.png', belief_score_distribution_graph, "Belief Score Distribution"),
@@ -519,45 +556,56 @@ def generate_all_plots(output_dir, refresh=False):
     ]
 
     for filename, func, description in tasks:
-        if should_skip(filename):
+        save_path = os.path.join(output_dir, filename)
+        if should_skip(save_path):
             continue
-        
+
         logger.info(f"Generating {description}...")
         try:
             result = func()
-
-            if isinstance(result, tuple):
-                fig = result[0]
-            else:
-                fig = result
-            
-            save_path = os.path.join(output_dir, filename)
+            fig = result[0] if isinstance(result, tuple) else result
             fig.savefig(save_path, bbox_inches='tight')
             logger.info(f"Saved {save_path}")
             plt.close(fig)
-
         except Exception as e:
             logger.error(f"Error generating {description}: {e}")
 
-
+    # ---------- gene mesh plots ----------
     target_genes = ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF']
     logger.info(f"Generating MeSH distributions for genes: {target_genes}")
-    
+
     for gene in target_genes:
         filename = f'mesh_dist_{gene}.png'
-        if should_skip(filename):
+        save_path = os.path.join(output_dir, filename)
+        if should_skip(save_path):
             continue
-        
+
         logger.info(f"Processing {gene}...")
         try:
             df, fig = mesh_distribution_by_gene(gene, mesh_type="disease", plot=True)
-            save_path = os.path.join(output_dir, filename)
             fig.savefig(save_path, bbox_inches='tight')
             logger.info(f"Saved {save_path}")
             plt.close(fig)
         except Exception as e:
             logger.error(f"Error generating MeSH plot for {gene}: {e}")
 
+    # ---------- stats json ----------
+    stats_tasks = [
+        ("db_stats.json", generate_db_stats, "DB Stats"),
+        ("source_num.json", generate_source_stats, "Source Stats"),
+    ]
+
+    for filename, func, description in stats_tasks:
+        save_path = os.path.join(stats_dir, filename)
+        if should_skip(save_path):
+            continue
+
+        logger.info(f"Generating {description}...")
+        try:
+            func(save_path)
+            logger.info(f"Saved {save_path}")
+        except Exception as e:
+            logger.error(f"Error generating {description}: {e}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Generate plots for INDRA DB Monitor")
@@ -578,8 +626,3 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     generate_all_plots(args.output_dir, refresh=args.refresh)
-
-    stats_dir = os.path.join(root_dir, 'indra_db_service', 'static', 'data')
-    if not os.path.exists(stats_dir):
-        os.makedirs(stats_dir)
-    generate_db_stats(os.path.join(stats_dir, 'db_stats.json'))

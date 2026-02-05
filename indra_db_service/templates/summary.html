@@ -55,6 +55,9 @@
           background: rgba(0,0,0,0.03);
           border-radius: 4px;
         }
+        .source-stats-table tbody td {
+          font-size: 0.85rem;
+        }
     </style>
 {% endblock %}
 
@@ -138,7 +141,7 @@
                 <div id="sourceStatsTable">
                     <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover table-striped mb-0">
+                            <table class="table table-hover table-striped mb-0 source-stats-table">
                                 <thead class="thead-light">
                                     <tr>
                                         <th scope="col" class="pl-4">Source Name</th>
@@ -251,7 +254,6 @@
           </div>
       </div>
 
-      <!-- Extra Items: Counts (Keep them vertical as requested, though no specific text provided in prompt for these) -->
       <div class="row mb-5 align-items-center">
           <div class="col-md-7 text-center">
             <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}"
@@ -281,18 +283,20 @@
 
     <!-- 2. Gene Specific MeSH Terms Section -->
     <div class="row mb-5" id="gene-mesh">
-        <div class="col-12">
+          <div class="col-12">
             <h3 class="border-bottom pb-2 mb-4">Gene-Disease MeSH Distributions</h3>
-        </div>
-        {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
-        <div class="col-md-4 text-center mb-4">
+          </div>
+
+          {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
+          <div class="col-md-6 text-center mb-4">
             <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}"
                  class="img-fluid zoomable" style="cursor: pointer;" alt="{{ gene }} MeSH" onclick="showImage(this)">
-        </div>
-        {% endfor %}
-        </div>
-      </div>
+          </div>
+          {% endfor %}
+    </div>
 
+
+      </div>
   </div>
 
   <!-- Image Modal -->

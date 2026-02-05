@@ -438,7 +438,7 @@
           clearTimeout(scrollEndTimer);
           scrollEndTimer = setTimeout(() => {
             isAutoScrolling = false;
-            onScroll(); // 结束后统一算一次并高亮
+            onScroll();
           }, 250);
         });
       });

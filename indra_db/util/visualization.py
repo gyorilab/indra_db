@@ -311,73 +311,75 @@ def mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int 
 
     return df, None
 
+def compute_unique_stmt_stats():
+    """Scan unique statements and return counts for total + grounding."""
+    counts = {
+        "unique_statement": 0,
+        "grounding_full": 0,
+        "grounding_partial": 0,
+        "grounding_ungrounded": 0,
+    }
 
-def grounding_distribution_graph():
-    """
-    Generate a pie chart showing the distribution of grounding status
-    (Fully Grounded, Ungrounded, Partially Grounded) for unique statements.
-    """
-    stmt_count = defaultdict(int)
+    logger.info("Scanning unique statements for total + grounding stats...")
+    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as file:
+        reader = csv.reader(file, delimiter="\t")
+        for _, stmt_json_str in tqdm(reader, total=47_956_726, desc="Unique stmts"):
+            counts["unique_statement"] += 1
 
-    logger.info("Reading unique statements to calculate grounding distribution...")
-    with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
-        reader = csv.reader(file, delimiter='\t')
-        for _, stmt_json_str in tqdm(reader, total=47_956_726, desc="Checking Grounding"):
             stmt = stmt_from_json(clean_json_loads(stmt_json_str))
-            
             real_agents = stmt.real_agent_list()
-            # Skip statements with no agents if any
             if not real_agents:
                 continue
 
-            # An agent is considered grounded if it has db_refs other than TEXT/TEXT_NORM
-            is_grounded_list = [
-                bool(set(a.db_refs.keys()) - {"TEXT", "TEXT_NORM"}) 
+            grounded_flags = [
+                bool(set(a.db_refs.keys()) - {"TEXT", "TEXT_NORM"})
                 for a in real_agents
             ]
-            
-            num_grounded = sum(is_grounded_list)
+            num_grounded = sum(grounded_flags)
             num_agents = len(real_agents)
 
             if num_grounded == num_agents:
-                stmt_count["full"] += 1
+                counts["grounding_full"] += 1
             elif num_grounded == 0:
-                stmt_count[0] += 1
+                counts["grounding_ungrounded"] += 1
             else:
-                stmt_count["partial"] += 1
+                counts["grounding_partial"] += 1
 
-    fully_grounded = stmt_count["full"]
-    ungrounded = stmt_count[0]
-    partially_grounded = stmt_count["partial"]
+    return counts
 
-    total = fully_grounded + ungrounded + partially_grounded
+def grounding_distribution_graph(stats=None):
+    """
+    Plot grounding distribution using precomputed stats.
+    stats can be a dict with grounding_full/partial/ungrounded.
+    """
+    if stats is None:
+        raise ValueError("grounding_distribution_graph requires stats dict now.")
+
+    full = stats.get("grounding_full", 0)
+    ungrounded = stats.get("grounding_ungrounded", 0)
+    partial = stats.get("grounding_partial", 0)
+
+    total = full + ungrounded + partial
     if total == 0:
         logger.warning("No statements found for grounding distribution.")
         return None
 
-    pct_full = fully_grounded / total * 100
-    pct_un = ungrounded / total * 100
-    pct_part = partially_grounded / total * 100
-
-    logger.info(f"Fully grounded: {pct_full:.1f}%")
-    logger.info(f"Ungrounded: {pct_un:.1f}%")
-    logger.info(f"Partially grounded: {pct_part:.1f}%")
-
-    # Plot
-    labels = ['Fully Grounded', 'Ungrounded', 'Partially Grounded']
-    sizes = [pct_full, pct_un, pct_part]
-    colors = ['#66c2a5', '#fc8d62', '#8da0cb']
+    sizes = [full / total * 100, ungrounded / total * 100, partial / total * 100]
+    labels = ["Fully Grounded", "Ungrounded", "Partially Grounded"]
 
     fig, ax = plt.subplots(figsize=(6, 6), dpi=120)
-    wedges, texts, autotexts = ax.pie(
-        sizes, labels=labels, autopct='%1.1f%%',
-        startangle=90, colors=colors, textprops={'fontsize': 10}
+    ax.pie(
+        sizes,
+        labels=labels,
+        autopct="%1.1f%%",
+        startangle=90,
+        textprops={"fontsize": 10},
     )
-
     ax.set_title("Grounding Distribution", fontsize=12)
     plt.tight_layout()
-
     return fig
+
+
 
 
 def evidence_vs_statement_graph():
@@ -418,7 +420,6 @@ def evidence_vs_statement_graph():
     plt.xlabel("Number of Evidence")
     plt.ylabel("Number of statements")
     plt.tight_layout()
-    plt.show()
     return fig
 
 
@@ -466,31 +467,44 @@ def pmid_vs_statement_graph():
     plt.show()
     return fig
 
+def compute_total_evidence():
+    with open(source_counts_fpath.as_posix(), "rb") as f:
+        source_count = pickle.load(f)
+    return sum(sum(v.values()) for v in source_count.values())
 
 def generate_db_stats(json_path):
-    """Generate db_stats.json with counts of text content types."""
+    """Generate db_stats.json with counts of text content types + unique stmt stats."""
     db = get_db("primary")
-    sql = text("select count(*) as count, text_type from text_content "
-               "where text_type in ('abstract', 'fulltext', 'title') group by text_type;")
+    sql = text(
+        "select count(*) as count, text_type from text_content "
+        "where text_type in ('abstract', 'fulltext', 'title') group by text_type;"
+    )
 
     logger.info("Generating DB stats...")
     stats = {}
+
     with db._DatabaseManager__engine.connect() as connection:
         result = connection.execute(sql)
         for row in result:
-            stats[row[1]] = row[0]
+            stats[row[1]] = int(row[0])
 
-    with gzip.open(unique_stmts_fpath.as_posix(), 'rt') as file:
-        reader = csv.reader(file, delimiter='\t')
-        stats['unique_statement'] = 0
-        #estimate total to track time remaining
-        for _ in tqdm(reader, total=47_956_726):
-            stats['unique_statement'] += 1
+    unique_counts = compute_unique_stmt_stats()
+    stats.update(unique_counts)
+    stats["total_evidence"] = compute_total_evidence()
 
-    with open(json_path, 'w') as f:
+    denom = (
+                    stats["grounding_full"]
+                    + stats["grounding_partial"]
+                    + stats["grounding_ungrounded"]
+            ) or 1
+    stats["grounding_full_pct"] = stats["grounding_full"] / denom * 100
+    stats["grounding_partial_pct"] = stats["grounding_partial"] / denom * 100
+    stats["grounding_ungrounded_pct"] = stats["grounding_ungrounded"] / denom * 100
+
+    with open(json_path, "w") as f:
         json.dump(stats, f, indent=2)
-    logger.info(f"Saved db stats to {json_path}")
 
+    logger.info(f"Saved db stats to {json_path}")
 
 def generate_source_stats(output_dir):
     """
@@ -545,12 +559,18 @@ def generate_all_plots(output_dir, refresh=False, stats_dir=None):
             return True
         return False
 
+    db_stats_path = os.path.join(stats_dir, "db_stats.json")
+    if not should_skip(db_stats_path):
+        generate_db_stats(db_stats_path)
+    with open(db_stats_path, "r") as f:
+        db_stats = json.load(f)
+
     # ---------- plots ----------
     tasks = [
         ('stmt_type_dist.png', statement_type_distribution_graph, "Statement Type Distribution"),
         ('belief_score_dist.png', belief_score_distribution_graph, "Belief Score Distribution"),
         ('paper_trends.png', abstract_fulltext_trends_by_year_graph, "Paper Trends"),
-        ('grounding_dist.png', grounding_distribution_graph, "Grounding Distribution"),
+        ('grounding_dist.png', lambda: grounding_distribution_graph(db_stats), "Grounding Distribution"),
         ('evidence_vs_stmt.png', evidence_vs_statement_graph, "Evidence vs Statement"),
         ('pmid_vs_stmt.png', pmid_vs_statement_graph, "PMID vs Statement"),
     ]
@@ -591,7 +611,6 @@ def generate_all_plots(output_dir, refresh=False, stats_dir=None):
 
     # ---------- stats json ----------
     stats_tasks = [
-        ("db_stats.json", generate_db_stats, "DB Stats"),
         ("source_num.json", generate_source_stats, "Source Stats"),
     ]
 

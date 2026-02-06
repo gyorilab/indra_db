@@ -88,7 +88,7 @@
         <div class="col-12">
             <p class="text-justify">
                 The INDRA (Integrated Network and Dynamical Reasoning Assembler) Database is a framework for creating, maintaining, and accessing a database of content, readings, and statements.
-                This implementation is currently designed to work primarily with Amazon Web Services RDS running Postrgres 9+.
+                This implementation is currently designed to work primarily with Amazon Web Services RDS running Postrgres 14+.
                 Used as a backend to INDRA, the INDRA Database provides a systematic way of scaling the knowledge acquired from other databases, reading, and manual input, and puts that knowledge at your fingertips through a direct Python client and a REST api.
             </p>
           </div>
@@ -127,6 +127,21 @@
                 <i class="fas fa-book stats-icon"></i>
                 <div class="stats-number">{% raw %}{{ animated.title.toLocaleString() }}{% endraw %}</div>
                 <div class="stats-label">Paper Titles</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-bars stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.grounding_full.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Fully Grounded Statements</div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-receipt stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.total_evidence.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Evidence</div>
             </div>
         </div>
 
@@ -323,8 +338,8 @@
     const app = Vue.createApp({
         data() {
             return {
-                stats: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0 },
-                animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0 },
+                stats: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0, grounding_full: 0, total_evidence: 0 },
+                animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0, grounding_full: 0, total_evidence: 0 },
                 sourceStats: []
             }
         },

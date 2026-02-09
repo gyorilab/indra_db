@@ -6,7 +6,7 @@
   <style>
         #app { padding-top: 0; }
         #toc.sticky-top { top: 90px; }
-        #database-statistics, #content-insights, #gene-mesh, #database-summary{
+        #database-statistics, #sources, #content-insights, #gene-mesh, #database-summary{
           scroll-margin-top: 110px;
         }
         .stats-card {
@@ -72,6 +72,7 @@
         <ul class="nav navbar-nav">
             <li><a class="nav-link " href="#database-summary">INDRA Database</a></li>
             <li><a class="nav-link " href="#database-statistics">Database Statistics</a></li>
+            <li><a class="nav-link" href="#sources">Sources</a></li>
             <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
             <li><a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a></li>
         </ul>
@@ -145,7 +146,19 @@
             </div>
         </div>
 
+
         <!-- Source Statistics Table -->
+
+        <div class="row mb-5 mt-3"id="sources">
+            <div class="col-12">
+                <h2 class="border-bottom pb-2 mb-4">Sources</h2>
+            </div>
+            <div class="col-12">
+            <p class="text-justify">
+                The INDRA Database currently integrates and distills knowledge from several different sources,
+                both biology-focused natural language processing systems and other pre-existing databases
+            </p>
+            </div>
         <div class="col-12 mt-4">
             <div class="card shadow-sm">
                 <div class="card-header bg-white">
@@ -193,6 +206,7 @@
                 </div>
             </div>
         </div>
+     </div>
 
     </div>
 

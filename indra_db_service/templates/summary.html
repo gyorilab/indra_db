@@ -6,9 +6,14 @@
   <style>
         #app { padding-top: 0; }
         #toc.sticky-top { top: 90px; }
-        #database-statistics, #sources, #content-insights, #gene-mesh, #database-summary{
+        #database-statistics, #sources, #entity-interactions #content-insights, #gene-mesh, #database-summary{
           scroll-margin-top: 110px;
         }
+          main.container {
+            max-width: none !important;
+            width: auto !important;
+            margin-right: 20em;
+          }
         .stats-card {
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             transition: transform 0.2s;
@@ -65,13 +70,14 @@
 {% block body %}
   {{ super() }}
   <div id="app" class="container-fluid ">
-      <div class="row">
+      <div class="row ">
         <!-- Left TOC -->
     <div class="col-sm-3 d-none d-sm-none d-md-block">
       <nav id="toc" data-toggle="toc" class="sticky-top">
         <ul class="nav navbar-nav">
             <li><a class="nav-link " href="#database-summary">INDRA Database</a></li>
             <li><a class="nav-link " href="#database-statistics">Database Statistics</a></li>
+            <li><a class="nav-link" href="#entity-interactions">Statements by Entity Type</a></li>
             <li><a class="nav-link" href="#sources">Sources</a></li>
             <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
             <li><a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a></li>
@@ -87,6 +93,7 @@
          <h2 class="border-bottom pb-2 mb-4">INDRA Database</h2>
         </div>
         <div class="col-12">
+            <img align="left" src="https://s3.amazonaws.com/bigmech/indra-db/indra_db_logo.png" width="480" height="200">
             <p class="text-justify">
                 The INDRA (Integrated Network and Dynamical Reasoning Assembler) Database is a framework for creating, maintaining, and accessing a database of content, readings, and statements.
                 This implementation is currently designed to work primarily with Amazon Web Services RDS running Postrgres 14+.
@@ -145,6 +152,79 @@
                 <div class="stats-label">Evidence</div>
             </div>
         </div>
+
+     <!-- Entity Interactions Section -->
+    <div class="row mb-4" id="entity-interactions">
+         <div class="col-12">
+             <div class="row align-items-center">
+                <div class="col-md-8 text-center">
+                   <svg width="500" height="500" viewBox="-350 -350 700 700" v-if="entityPairs.length > 0"
+                        @mouseenter="stopAutoRotation" @mouseleave="startAutoRotation">
+                    <defs>
+                    </defs>
+                    <!-- Links -->
+                    <g>
+                        <path v-for="(link, index) in graphLinks" :key="'path-'+index"
+                              :d="link.path"
+                              :stroke-width="link.width"
+                              stroke="#6c757d"
+                              :stroke-opacity="getLinkOpacity(link)"
+                              fill="none"
+                              style="transition: stroke-opacity 0.3s ease;">
+                            <title>{% raw %}{{ link.source }} - {{ link.target }}: {{ link.value.toLocaleString() }}{% endraw %}</title>
+                        </path>
+                    </g>
+                    <!-- Link Labels -->
+                     <g>
+                        <text v-for="(link, index) in graphLinks" :key="'label-'+index"
+                              :x="link.labelX" :y="link.labelY"
+                              text-anchor="middle" alignment-baseline="middle"
+                              fill="#495057" font-size="17px" font-weight="bold"
+                              :style="{
+                                opacity: isLinkActive(link) ? 1 : 0,
+                                transition: 'opacity 0.3s ease',
+                                textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff',
+                                pointerEvents: 'none'
+                              }">
+                            {% raw %}{{ formatNumber(link.value) }}{% endraw %}
+                        </text>
+                    </g>
+                    <!-- Nodes -->
+                    <g v-for="(node, index) in graphNodes" :key="'node-'+index"
+                       @mouseover="hoveredNode = node.id" @mouseleave="hoveredNode = null"
+                       style="cursor: pointer;">
+                        <circle :cx="node.x" :cy="node.y" r="50"
+                                :fill="hoveredNode === node.id || activeNode === node.id ? '#2980b9' : '#3498db'"
+                                stroke="#fff" stroke-width="2"
+                                style="transition: fill 0.3s ease;"></circle>
+                        <text :x="node.x" :y="node.y" text-anchor="middle" fill="white" font-size="14px" font-weight="bold" style="pointer-events: none;">
+                             <tspan v-for="(line, li) in node.labelLines" :x="node.x" :dy="li === 0 ? (node.labelLines.length > 1 ? '-0.3em' : '0.3em') : '1.1em'">
+                                {% raw %}{{ line }}{% endraw %}
+                            </tspan>
+                        </text>
+                    </g>
+                </svg>
+                <div v-else class="py-5 text-muted">Loading interaction data...</div>
+                </div>
+                <div class="col-md-4  px-0">
+                    <h5>Statements by Entity Type</h5>
+                    <p class="text-justify">
+                        This diagram visualizes the interaction landscape within the INDRA database by showing how often different types of entities appear together in statements.
+                        The eight categories represent high-level groupings of biological entities.
+                        <br><br>
+                        Top interactions include:
+                        <ul style="padding-left: -1 rem; margin-left: 0;">
+                            <li>Human Molecular Entities ↔ Human Molecular Entities</li>
+                            <li>Human Molecular Entities ↔ Small Molecules</li>
+                            <li>Group Entities ↔ Human Molecular Entities</li>
+                        </ul>
+                    </p>
+                </div>
+             </div>
+        </div>
+
+    </div>
+
 
 
         <!-- Source Statistics Table -->
@@ -354,13 +434,155 @@
             return {
                 stats: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0, grounding_full: 0, total_evidence: 0 },
                 animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0, grounding_full: 0, total_evidence: 0 },
-                sourceStats: []
+                sourceStats: [],
+                entityPairs: [],
+                hoveredNode: null,
+                activeNode: null,
+                autoRotationTimer: null,
+
+                categories: [
+                    "human molecular entities",
+                    "nonhuman molecular entities",
+                    "small molecule",
+                    "group entities",
+                    "biological_process",
+                    "disease",
+                    "organism/anatomy/location",
+                    "experimental factor"
+                ],
+                labelMap: {
+                    "human molecular entities": ["Human", "Molecular"],
+                    "nonhuman molecular entities": ["Non-human", "Molecular"],
+                    "small molecule": ["Small", "Molecule"],
+                    "group entities": ["Group", "Entities"],
+                    "biological_process": ["Biological", "Process"],
+                    "disease": ["Disease"],
+                    "organism/anatomy/location": ["Organism/", "Location"],
+                    "experimental factor": ["Experimental", "Factor"]
+                }
             }
         },
         mounted() {
             this.fetchStats();
-            this.fetchSourceStats();},
+            this.fetchSourceStats();
+            this.fetchEntityPairs();
+            this.startAutoRotation();
+
+        },
+        beforeUnmount() {
+            this.stopAutoRotation();
+        },
+
+        computed: {
+             graphNodes() {
+                const R = 240;
+                return this.categories.map((cat, i) => {
+                    // Start from top (-PI/2) and go clockwise
+                    const angle = (i * 2 * Math.PI) / this.categories.length - Math.PI / 2;
+                    return {
+                        id: cat,
+                        x: R * Math.cos(angle),
+                        y: R * Math.sin(angle),
+                        labelLines: this.labelMap[cat] || [cat]
+                    };
+                });
+            },
+           graphLinks() {
+                if (!this.entityPairs.length) return [];
+                const maxVal = Math.max(...this.entityPairs.map(p => p.value));
+
+                return this.entityPairs.filter(p => p.value > 0).map(p => {
+                    const sourceNode = this.graphNodes.find(n => n.id === p.source);
+                    const targetNode = this.graphNodes.find(n => n.id === p.target);
+                    if (!sourceNode || !targetNode) return null;
+
+                    let path = "";
+                    let labelX = 0;
+                    let labelY = 0;
+
+                    if (p.source === p.target) {
+                        // Self loop
+                        const nx = sourceNode.x;
+                        const ny = sourceNode.y;
+                        const len = Math.sqrt(nx*nx + ny*ny);
+                        const ux = nx / len;
+                        const uy = ny / len;
+
+                        const cp1x = nx + ux * 80 + uy * 40;
+                        const cp1y = ny + uy * 80 - ux * 40;
+                        const cp2x = nx + ux * 80 - uy * 40;
+                        const cp2y = ny + uy * 80 + ux * 40;
+
+                        path = `M ${nx},${ny} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${nx},${ny}`;
+
+                        // Approx midpoint for label (t=0.5)
+                        labelX = 0.25*nx + 0.375*(cp1x + cp2x) + 0.125*nx;
+                        labelY = 0.25*ny + 0.375*(cp1y + cp2y) + 0.125*ny;
+                    } else {
+                        path = `M ${sourceNode.x},${sourceNode.y} L ${targetNode.x},${targetNode.y}`;
+                        labelX = (sourceNode.x + targetNode.x) / 2;
+                        labelY = (sourceNode.y + targetNode.y) / 2;
+                    }
+
+                    // Width scaling
+                    const width = 4;
+
+                    return {
+                        source: p.source,
+                        target: p.target,
+                        value: p.value,
+                        path: path,
+                        width: Math.max(1, width),
+                        labelX: labelX,
+                        labelY: labelY
+                    };
+                }).filter(l => l);
+
+            }
+        },
+
         methods: {
+            formatNumber(num) {
+                if (num >= 1000000) {
+                    return (num / 1000000).toFixed(1) + 'M';
+                }
+                if (num >= 1000) {
+                    return (num / 1000).toFixed(0) + 'k';
+                }
+                return num.toString();
+            },
+            isLinkActive(link) {
+                const targetId = this.hoveredNode || this.activeNode;
+                if (!targetId) return false;
+                return link.source === targetId || link.target === targetId;
+            },
+            getLinkOpacity(link) {
+                if (this.hoveredNode) {
+                    return this.isLinkActive(link) ? 0.8 : 0.1;
+                }
+                if (this.activeNode) {
+                    return this.isLinkActive(link) ? 0.8 : 0.1;
+                }
+                return 0.3; // Default opacity when nothing is selected
+            },
+            startAutoRotation() {
+                if (this.autoRotationTimer) return;
+                let index = 0;
+                this.activeNode = this.categories[0];
+                this.autoRotationTimer = setInterval(() => {
+                    index = (index + 1) % this.categories.length;
+                    this.activeNode = this.categories[index];
+                }, 2000);
+            },
+            stopAutoRotation() {
+                if (this.autoRotationTimer) {
+                    clearInterval(this.autoRotationTimer);
+                    this.autoRotationTimer = null;
+                    this.activeNode = null;
+                }
+            },
+
+
             async fetchStats() {
                 try {
                     const response = await fetch("{{ url_for('serve_db_stats') }}");
@@ -369,6 +591,15 @@
                     this.animateNumbers();
                 } catch (error) { console.error("Failed to fetch stats:", error); }
             },
+            async fetchEntityPairs() {
+                try {
+                    const response = await fetch("{{ url_for('static', filename='data/entity_pairs.json') }}");
+                    if (response.ok) {
+                        this.entityPairs = await response.json();
+                    }
+                } catch (error) { console.error("Error fetching entity pairs:", error); }
+            },
+
             async fetchSourceStats() {
                 try {
                     const response = await fetch("{{ url_for('static', filename='data/source_num.json') }}");

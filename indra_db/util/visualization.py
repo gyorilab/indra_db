@@ -6,6 +6,7 @@ import gzip
 import json
 import os
 import pickle
+from itertools import combinations
 from collections import Counter, defaultdict
 
 import numpy as np
@@ -20,8 +21,42 @@ from indra_db.readonly_dumping.locations import *
 from indra_db.readonly_dumping.util import clean_json_loads
 from indra.databases.mesh_client import get_mesh_name, is_disease
 from indra.statements import stmt_from_json
+from indra.ontology.bio import bio_ontology
 
 logger = logging.getLogger(__name__)
+
+
+GROUP_MAP = {
+    # 1) Human gene/protein/RNA
+    "human_gene_protein": "human molecular entities",
+    "human_rna": "human molecular entities",
+    "human_gene_other": "human molecular entities",
+    "human_gene_protein_fragment": "human molecular entities",
+
+    # 2) Non-human gene/protein
+    "nonhuman_gene_protein": "nonhuman molecular entities",
+    "nonhuman_gene_protein_fragment": "nonhuman molecular entities",
+
+    # 3) Small molecules
+    "small_molecule": "small molecule",
+
+    # 4) Complex / Family
+    "protein_family_complex": "group entities",
+
+    # 5) Biological processes
+    "biological_process": "biological_process",
+
+    # 6) Disease / phenotype
+    "disease": "disease",
+
+    # 7) Organism / anatomy / location
+    "organism": "organism/anatomy/location",
+    "anatomical_region": "organism/anatomy/location",
+    "cellular_location": "organism/anatomy/location",
+
+    # 8) Experimental
+    "experimental_factor": "experimental factor",
+}
 
 
 def statement_type_distribution_graph():
@@ -310,6 +345,61 @@ def mesh_distribution_by_gene(gene: str, mesh_type: str = "disease", top_n: int 
         return df, fig
 
     return df, None
+
+def generate_entity_pair_stats(output_path):
+    """Generate entity pair statistics from unique statements."""
+    type_pair_counter = Counter()
+
+    logger.info("Counting entity pairs...")
+    with gzip.open(unique_stmts_fpath.as_posix(), "rt") as fi:
+        reader = csv.reader(fi, delimiter="\t")
+        for _, sjs in tqdm(reader, total=47_956_726, desc="Entity Pairs"):
+            try:
+                stmt_json = clean_json_loads(sjs)
+                stmt = stmt_from_json(stmt_json)
+            except Exception:
+                continue
+
+            type_counts = Counter()
+            for agent in stmt.agent_list():
+                if agent is None:
+                    continue
+                ns, _id = agent.get_grounding()
+                if not (ns and _id):
+                    continue
+                t = bio_ontology.get_type(ns, _id) or "ungrounded_or_unknown"
+                type_counts[t] += 1
+
+            types = sorted(type_counts.keys())
+
+            for a, b in combinations(types, 2):
+                type_pair_counter[(a, b)] += 1
+            # a-a  pair
+            for t, n in type_counts.items():
+                if n >= 2:
+                    type_pair_counter[(t, t)] += 1
+
+    def group_of(t):
+        return GROUP_MAP.get(t)
+
+    collapsed = Counter()
+
+    for (t1, t2), c in type_pair_counter.items():
+        g1 = group_of(t1)
+        g2 = group_of(t2)
+        if g1 is None or g2 is None:
+            continue
+        a, b = sorted((g1, g2))
+        collapsed[(a, b)] += c
+
+    data = []
+    for (a, b), c in collapsed.most_common():
+        data.append({"source": a, "target": b, "value": c})
+
+    with open(output_path, "w") as f:
+        json.dump(data, f, indent=2)
+    logger.info(f"Saved entity pair stats to {output_path}")
+
 
 def compute_unique_stmt_stats():
     """Scan unique statements and return counts for total + grounding."""
@@ -612,6 +702,7 @@ def generate_all_plots(output_dir, refresh=False, stats_dir=None):
     # ---------- stats json ----------
     stats_tasks = [
         ("source_num.json", generate_source_stats, "Source Stats"),
+        ("entity_pairs.json", generate_entity_pair_stats, "Entity Pair Stats"),
     ]
 
     for filename, func, description in stats_tasks:

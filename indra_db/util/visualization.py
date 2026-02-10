@@ -728,3 +728,15 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     generate_all_plots(args.output_dir, refresh=args.refresh)
+
+    #clean up
+    file_names = [
+        belief_scores_pkl_fpath,
+        unique_stmts_fpath,
+        source_counts_fpath,
+    ]
+    for f in file_names:
+        if os.path.exists(f.absolute().as_posix()):
+            os.remove(f.absolute().as_posix())
+        else:
+            print(f"{f.absolute().as_posix()} does not exist.")

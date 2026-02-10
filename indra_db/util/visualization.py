@@ -28,34 +28,26 @@ logger = logging.getLogger(__name__)
 
 GROUP_MAP = {
     # 1) Human gene/protein/RNA
-    "human_gene_protein": "human molecular entities",
-    "human_rna": "human molecular entities",
-    "human_gene_other": "human molecular entities",
-    "human_gene_protein_fragment": "human molecular entities",
-
+    "human_gene_protein": "human gene/protein",
+    "human_rna": "human gene/protein",
+    "human_gene_other": "human gene/protein",
+    "human_gene_protein_fragment": "human gene/protein",
+    "protein_family_complex": "human gene/protein",
     # 2) Non-human gene/protein
-    "nonhuman_gene_protein": "nonhuman molecular entities",
-    "nonhuman_gene_protein_fragment": "nonhuman molecular entities",
-
+    "nonhuman_gene_protein": "nonhuman gene/protein",
+    "nonhuman_gene_protein_fragment": "nonhuman gene/protein",
     # 3) Small molecules
     "small_molecule": "small molecule",
-
-    # 4) Complex / Family
-    "protein_family_complex": "group entities",
-
-    # 5) Biological processes
-    "biological_process": "biological_process",
-
-    # 6) Disease / phenotype
-    "disease": "disease",
-
-    # 7) Organism / anatomy / location
-    "organism": "organism/anatomy/location",
-    "anatomical_region": "organism/anatomy/location",
-    "cellular_location": "organism/anatomy/location",
-
-    # 8) Experimental
+    # 4) Biological processes
+    "biological_process": "biological process",
+    # 5) Disease / phenotype
+    "disease": "disease or phenotype",
+    # 6) Experimental factor
     "experimental_factor": "experimental factor",
+    # 7) Other
+    "organism": "other",
+    "anatomical_region": "other",
+    "cellular_location": "other"
 }
 
 

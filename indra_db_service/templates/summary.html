@@ -209,14 +209,15 @@
                 <div class="col-md-4  px-0">
                     <h5>Statements by Entity Type</h5>
                     <p class="text-justify">
-                        This diagram visualizes the interaction landscape within the INDRA database by showing how often different types of entities appear together in statements.
-                        The eight categories represent high-level groupings of biological entities.
+                        This diagram shows how often different types of entities appear together in INDRA statements,
+                        providing a high-level view of the interaction landscape in the database.
+                        “Other” includes organisms, anatomical regions, and cellular locations.
                         <br><br>
                         Top interactions include:
                         <ul style="padding-left: -1 rem; margin-left: 0;">
-                            <li>Human Molecular Entities ↔ Human Molecular Entities</li>
-                            <li>Human Molecular Entities ↔ Small Molecules</li>
-                            <li>Group Entities ↔ Human Molecular Entities</li>
+                            <li>Human Gene/Protein  ↔ Human Gene/Protein</li>
+                            <li>Human Gene/Protein ↔ Small Molecules</li>
+                            <li>Small Molecules ↔ Human Gene/Protein</li>
                         </ul>
                     </p>
                 </div>
@@ -400,6 +401,7 @@
           <div class="col-md-6 text-center mb-4">
             <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}"
                  class="img-fluid zoomable" style="cursor: pointer;" alt="{{ gene }} MeSH" onclick="showImage(this)">
+              <h5 class="mt-2 text-center ml-2">{{ gene }}</h5>
           </div>
           {% endfor %}
     </div>
@@ -441,24 +443,23 @@
                 autoRotationTimer: null,
 
                 categories: [
-                    "human molecular entities",
-                    "nonhuman molecular entities",
-                    "small molecule",
-                    "group entities",
-                    "biological_process",
-                    "disease",
-                    "organism/anatomy/location",
-                    "experimental factor"
+                  "human gene/protein",
+                  "nonhuman gene/protein",
+                  "small molecule",
+                  "biological process",
+                  "disease or phenotype",
+                  "other",
+                  "experimental factor",
+
                 ],
                 labelMap: {
-                    "human molecular entities": ["Human", "Molecular"],
-                    "nonhuman molecular entities": ["Non-human", "Molecular"],
-                    "small molecule": ["Small", "Molecule"],
-                    "group entities": ["Group", "Entities"],
-                    "biological_process": ["Biological", "Process"],
-                    "disease": ["Disease"],
-                    "organism/anatomy/location": ["Organism/", "Location"],
-                    "experimental factor": ["Experimental", "Factor"]
+                  "human gene/protein": ["Human", "Gene/Protein"],
+                  "nonhuman gene/protein": ["Non-human", "Gene/Protein"],
+                  "small molecule": ["Small", "Molecule"],
+                  "biological process": ["Biological", "Process"],
+                  "disease or phenotype": ["Disease/", "Phenotype"],
+                  "experimental factor": ["Experimental", "Factor"],
+                  "other": ["Other"]
                 }
             }
         },

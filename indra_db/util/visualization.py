@@ -20,7 +20,7 @@ from indra_db import get_db, get_ro
 from indra_db.readonly_dumping.locations import *
 from indra_db.readonly_dumping.util import clean_json_loads
 from indra.databases.mesh_client import get_mesh_name, is_disease
-from indra.statements import stmt_from_json
+from indra.statements import stmt_from_json, Complex
 from indra.ontology.bio import bio_ontology
 
 logger = logging.getLogger(__name__)
@@ -347,12 +347,11 @@ def generate_entity_pair_stats(output_path):
         reader = csv.reader(fi, delimiter="\t")
         for _, sjs in tqdm(reader, total=47_956_726, desc="Entity Pairs"):
             try:
-                stmt_json = clean_json_loads(sjs)
-                stmt = stmt_from_json(stmt_json)
+                stmt = stmt_from_json(clean_json_loads(sjs))
             except Exception:
                 continue
 
-            type_counts = Counter()
+            agent_types = []
             for agent in stmt.agent_list():
                 if agent is None:
                     continue
@@ -360,37 +359,42 @@ def generate_entity_pair_stats(output_path):
                 if not (ns and _id):
                     continue
                 t = bio_ontology.get_type(ns, _id) or "ungrounded_or_unknown"
-                type_counts[t] += 1
+                agent_types.append(t)
 
-            types = sorted(type_counts.keys())
+            n = len(agent_types)
+            if n < 2:
+                continue
 
-            for a, b in combinations(types, 2):
-                type_pair_counter[(a, b)] += 1
-            # a-a  pair
-            for t, n in type_counts.items():
-                if n >= 2:
-                    type_pair_counter[(t, t)] += 1
+            if isinstance(stmt, Complex) or n > 2:
+                uniq = sorted(set(agent_types))
+                for a, b in combinations(uniq, 2):
+                    type_pair_counter[(a, b)] += 1
+                    type_pair_counter[(b, a)] += 1
+                counts = Counter(agent_types)
+                for t, k in counts.items():
+                    if k >= 2:
+                        type_pair_counter[(t, t)] += 1
+
+            else:
+                type_pair_counter[(agent_types[0], agent_types[1])] += 1
 
     def group_of(t):
         return GROUP_MAP.get(t)
 
-    collapsed = Counter()
-
+    directed = Counter()
     for (t1, t2), c in type_pair_counter.items():
-        g1 = group_of(t1)
-        g2 = group_of(t2)
+        g1, g2 = group_of(t1), group_of(t2)
         if g1 is None or g2 is None:
             continue
-        a, b = sorted((g1, g2))
-        collapsed[(a, b)] += c
+        directed[(g1, g2)] += c
 
-    data = []
-    for (a, b), c in collapsed.most_common():
-        data.append({"source": a, "target": b, "value": c})
+    data = [{"source": a, "target": b, "value": c}
+            for (a, b), c in directed.most_common()]
 
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
-    logger.info(f"Saved entity pair stats to {output_path}")
+
+    logger.info(f"Saved directed entity pair stats to {output_path}")
 
 
 def compute_unique_stmt_stats():

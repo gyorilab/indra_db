@@ -214,12 +214,26 @@
                         “Other” includes organisms, anatomical regions, and cellular locations.
                         <br><br>
                         Top interactions include:
-                        <ul style="padding-left: -1 rem; margin-left: 0;">
-                            <li>Human Gene/Protein  ↔ Human Gene/Protein</li>
-                            <li>Human Gene/Protein ↔ Small Molecules</li>
-                            <li>Small Molecules ↔ Human Gene/Protein</li>
-                        </ul>
-                    </p>
+                        <table class="table table-sm mb-0 small">
+                        <thead>
+                          <tr>
+                            <th>Interaction</th>
+                            <th class="text-end">Count</th>
+                          </tr>
+                        </thead>
+                          <tbody>
+                            <tr v-for="(p, i) in topDirectedPairs" :key="'topdir-'+i">
+                              <td>
+                                {% raw %}{{ labelMap[p.source]?.join(' ') || p.source }}{% endraw %}
+                                →
+                                {% raw %}{{ labelMap[p.target]?.join(' ') || p.target }}{% endraw %}
+                              </td>
+                              <td class="text-end">
+                                {% raw %}{{ formatNumber(p.value) }}{% endraw %}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                 </div>
              </div>
         </div>
@@ -445,6 +459,8 @@
                 animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0, grounding_full: 0, total_evidence: 0 },
                 sourceStats: [],
                 entityPairs: [],
+                directedPairs: [],
+                topDirectedPairs: [],
                 hoveredNode: null,
                 activeNode: null,
                 autoRotationTimer: null,
@@ -600,12 +616,35 @@
                 } catch (error) { console.error("Failed to fetch stats:", error); }
             },
             async fetchEntityPairs() {
-                try {
-                    const response = await fetch("{{ url_for('static', filename='data/entity_pairs.json') }}");
-                    if (response.ok) {
-                        this.entityPairs = await response.json();
-                    }
-                } catch (error) { console.error("Error fetching entity pairs:", error); }
+              try {
+                const response = await fetch("{{ url_for('static', filename='data/entity_pairs.json') }}");
+                if (!response.ok) return;
+
+                const directed = await response.json();
+                this.directedPairs = directed;
+
+                this.topDirectedPairs = [...directed]
+                  .sort((a, b) => (b.value || 0) - (a.value || 0))
+                  .slice(0, 6);
+
+                const collapsed = new Map();
+                for (const p of directed) {
+                  const a = p.source;
+                  const b = p.target;
+                  const key = a <= b ? `${a}|||${b}` : `${b}|||${a}`;
+                  collapsed.set(key, (collapsed.get(key) || 0) + (p.value || 0));
+                }
+
+                this.entityPairs = Array.from(collapsed.entries())
+                  .map(([key, value]) => {
+                    const [source, target] = key.split("|||");
+                    return { source, target, value };
+                  })
+                  .sort((x, y) => y.value - x.value);
+
+              } catch (error) {
+                console.error("Error fetching entity pairs:", error);
+              }
             },
 
             async fetchSourceStats() {

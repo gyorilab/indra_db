@@ -250,7 +250,6 @@ def serve_data_vis(file_path):
         return Response(f.read(), content_type=suf_ct_map.get(full_path.suffix))
 
 
-
 if TESTING["status"] and not TESTING["deployment"]:
     assert VUE_ROOT and VUE_ROOT.exists(), (
         "Local Vue package needs to be specified if no S3 deployment is used. Set "

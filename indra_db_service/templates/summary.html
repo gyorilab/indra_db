@@ -255,7 +255,7 @@
                                     <tr>
                                         <th scope="col" class="pl-4">Source Name</th>
                                         <th scope="col">Type</th>
-                                        <th scope="col" class="text-right pr-4">Statement Count</th>
+                                        <th scope="col" class="text-right pr-4">Evidence Count</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -396,7 +396,14 @@
           <div class="col-12">
             <h3 class="border-bottom pb-2 mb-4">Gene-Disease MeSH Distributions</h3>
           </div>
-
+            <p class="text-justify">
+              These plots show what
+              <a href="https://meshb.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">
+                Medical Subject Headings
+              </a>
+              disease terms are associated with publications from which statements about a given gene are described.
+              For instance, INDRA Statements about EGFR are most commonly extracted from lung cancer and breast cancer publications. In contrast, Statements on SNCA are primarily from Parkinson's disease literature.
+            </p>
           {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
           <div class="col-md-6 text-center mb-4">
             <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}"

@@ -1,0 +1,55 @@
+{% extends "idbr_template.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://unpkg.com/vue@3.0.11/dist/vue.global.js"></script>
+{% endblock %}
+
+{% block body %}
+  {{ super() }}
+  <div id="app" class="container-fluid">
+    
+    <div class="row mt-5">
+      <div class="col-12">
+        <h2 class="border-bottom pb-2 mb-4">Batch Processing Monitor</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Batch Job Runtimes</h5>
+            </div>
+            <div class="card-body">
+                <time-view></time-view>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Output Measurements</h5>
+            </div>
+            <div class="card-body">
+                <amount-view></amount-view>
+            </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="{{ url_for('serve_data_vis', file_path='DataVis.umd.js') }}"></script>
+  <link href="{{ url_for('serve_data_vis', file_path='DataVis.css') }}" rel="stylesheet">
+  
+  <script>
+    const app = Vue.createApp({});
+    
+    if (window.DataVis) {
+        app.use(window.DataVis);
+    } else {
+        console.error("DataVis library failed to load.");
+    }
+
+    app.config.globalProperties.$time_view_url = "{{ url_for('serve_runtime') }}";
+    app.config.globalProperties.$amount_view_url = "{{ url_for('serve_stages', stage='') }}";
+
+    app.mount('#app');
+  </script>
+{% endblock %}

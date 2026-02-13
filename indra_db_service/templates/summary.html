@@ -1,0 +1,810 @@
+{% extends "idbr_template.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://unpkg.com/vue@3.0.11/dist/vue.global.js"></script>
+  <style>
+        #app { padding-top: 0; }
+        #toc.sticky-top { top: 90px; }
+        #database-statistics, #sources, #entity-interactions #content-insights, #gene-mesh, #database-summary{
+          scroll-margin-top: 110px;
+        }
+          main.container {
+            max-width: none !important;
+            width: auto !important;
+            margin-right: 20em;
+          }
+        .stats-card {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+            border-radius: 8px;
+            background-color: #fff;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        }
+
+        .stats-label {
+            font-size: 1rem;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stats-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #3498db;
+        }
+        /* TOC base style */
+        #toc .nav-link{
+          color: #9aa0a6;
+          font-size: 0.95rem;
+          padding: .35rem .5rem .35rem 1rem;
+          position: relative;
+          border-left: 3px solid transparent;
+          text-decoration: none;
+        }
+
+        #toc .nav-link:hover{
+          color: #5f6368;
+        }
+
+        #toc .nav-link.active{
+          color: #202124;
+          font-weight: 600;
+          border-left-color: #202124;
+          background: rgba(0,0,0,0.03);
+          border-radius: 4px;
+        }
+        .source-stats-table tbody td {
+          font-size: 0.85rem;
+        }
+    </style>
+{% endblock %}
+
+
+{% block body %}
+  {{ super() }}
+  <div id="app" class="container-fluid ">
+      <div class="row ">
+        <!-- Left TOC -->
+    <div class="col-sm-3 d-none d-sm-none d-md-block">
+      <nav id="toc" data-toggle="toc" class="sticky-top">
+        <ul class="nav navbar-nav">
+            <li><a class="nav-link " href="#database-summary">INDRA Database</a></li>
+            <li><a class="nav-link " href="#database-statistics">Database Statistics</a></li>
+            <li><a class="nav-link" href="#entity-interactions">Statements by Entity Type</a></li>
+            <li><a class="nav-link" href="#sources">Sources</a></li>
+            <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
+            <li><a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a></li>
+        </ul>
+      </nav>
+    </div>
+          <div class="col-12 col-md-9">
+
+
+    <div class="row mb-5 mt-3" id="database-summary">
+
+     <div class="col-12">
+         <h2 class="border-bottom pb-2 mb-4">INDRA Database</h2>
+        </div>
+        <div class="col-12">
+            <img align="left" src="https://s3.amazonaws.com/bigmech/indra-db/indra_db_logo.png" width="480" height="200">
+            <p class="text-justify">
+                The INDRA (Integrated Network and Dynamical Reasoning Assembler) Database is a framework for creating, maintaining, and accessing a database of content, readings, and statements.
+                This implementation is currently designed to work primarily with Amazon Web Services RDS running Postrgres 14+.
+                Used as a backend to INDRA, the INDRA Database provides a systematic way of scaling the knowledge acquired from other databases, reading, and manual input, and puts that knowledge at your fingertips through a direct Python client and a REST api.
+            </p>
+          </div>
+     </div>
+
+    <!-- 0. Top Statistics Cards -->
+    <div class="row mb-5 mt-3" id="database-statistics">
+
+        <div class="col-12">
+         <h2 class="border-bottom pb-2 mb-4">Database Statistics (As of May 2025)</h2>
+        </div>
+
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-align-left stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.unique_statement.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Unique Statements</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-file-alt stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.abstract.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Abstracts</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-file-pdf stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.fulltext.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Full Texts</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-book stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.title.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Paper Titles</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-bars stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.grounding_full.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Fully Grounded Statements</div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-receipt stats-icon"></i>
+                <div class="stats-number">{% raw %}{{ animated.total_evidence.toLocaleString() }}{% endraw %}</div>
+                <div class="stats-label">Evidence</div>
+            </div>
+        </div>
+
+     <!-- Entity Interactions Section -->
+    <div class="row mb-4" id="entity-interactions">
+         <div class="col-12">
+             <div class="row align-items-center">
+                <div class="col-md-8 text-center">
+                   <svg width="500" height="500" viewBox="-350 -350 700 700" v-if="entityPairs.length > 0"
+                        @mouseenter="stopAutoRotation" @mouseleave="startAutoRotation">
+                    <defs>
+                    </defs>
+                    <!-- Links -->
+                    <g>
+                        <path v-for="(link, index) in graphLinks" :key="'path-'+index"
+                              :d="link.path"
+                              :stroke-width="link.width"
+                              stroke="#6c757d"
+                              :stroke-opacity="getLinkOpacity(link)"
+                              fill="none"
+                              style="transition: stroke-opacity 0.3s ease;">
+                            <title>{% raw %}{{ link.source }} - {{ link.target }}: {{ link.value.toLocaleString() }}{% endraw %}</title>
+                        </path>
+                    </g>
+                    <!-- Link Labels -->
+                     <g>
+                        <text v-for="(link, index) in graphLinks" :key="'label-'+index"
+                              :x="link.labelX" :y="link.labelY"
+                              text-anchor="middle" alignment-baseline="middle"
+                              fill="#495057" :font-size="`${link.labelFontSize}px`" font-weight="bold"
+                              :style="{
+                                opacity: isLinkActive(link) ? 1 : 0,
+                                transition: 'opacity 0.3s ease',
+                                textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff',
+                                pointerEvents: 'none'
+                              }">
+                            {% raw %}{{ formatNumber(link.value) }}{% endraw %}
+                        </text>
+                    </g>
+                    <!-- Nodes -->
+                    <g v-for="(node, index) in graphNodes" :key="'node-'+index"
+                       @mouseover="hoveredNode = node.id" @mouseleave="hoveredNode = null"
+                       style="cursor: pointer;">
+                        <circle :cx="node.x" :cy="node.y" :r="node.r"
+                                :fill="hoveredNode === node.id || activeNode === node.id ? '#2980b9' : '#3498db'"
+                                stroke="#fff" stroke-width="2"
+                                style="transition: fill 0.3s ease;"></circle>
+                        <text :x="node.x" :y="node.y" text-anchor="middle" fill="white" font-size="14px" font-weight="bold" style="pointer-events: none;">
+                             <tspan v-for="(line, li) in node.labelLines" :x="node.x" :dy="li === 0 ? (node.labelLines.length > 1 ? '-0.3em' : '0.3em') : '1.1em'">
+                                {% raw %}{{ line }}{% endraw %}
+                            </tspan>
+                        </text>
+                    </g>
+                </svg>
+                <div v-else class="py-5 text-muted">Loading interaction data...</div>
+                </div>
+                <div class="col-md-4  px-0">
+                    <h5>Statements by Entity Type</h5>
+                    <p class="text-justify">
+                        This diagram shows how often different types of entities appear together in INDRA statements,
+                        providing a high-level view of the interaction landscape in the database.
+                        “Other” includes organisms, anatomical regions, and cellular locations.
+                        <br><br>
+                        Top interactions include:
+                        <table class="table table-sm mb-0 small">
+                        <thead>
+                          <tr>
+                            <th>Interaction</th>
+                            <th class="text-end">Count</th>
+                          </tr>
+                        </thead>
+                          <tbody>
+                            <tr v-for="(p, i) in topDirectedPairs" :key="'topdir-'+i">
+                              <td>
+                                {% raw %}{{ labelMap[p.source]?.join(' ') || p.source }}{% endraw %}
+                                →
+                                {% raw %}{{ labelMap[p.target]?.join(' ') || p.target }}{% endraw %}
+                              </td>
+                              <td class="text-end">
+                                {% raw %}{{ formatNumber(p.value) }}{% endraw %}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                </div>
+             </div>
+        </div>
+
+    </div>
+
+
+
+        <!-- Source Statistics Table -->
+
+        <div class="row mb-5 mt-3"id="sources">
+            <div class="col-12">
+                <h2 class="border-bottom pb-2 mb-4">Sources</h2>
+            </div>
+            <div class="col-12">
+            <p class="text-justify">
+                The INDRA Database currently integrates and distills knowledge from several different sources,
+                both biology-focused natural language processing systems and other pre-existing databases
+            </p>
+            </div>
+        <div class="col-12 mt-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 text-center text-primary">
+                        <i class="fas fa-table mr-2"></i> Source Details
+                    </h5>
+                </div>
+                <div id="sourceStatsTable">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped mb-0 source-stats-table">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th scope="col" class="pl-4">Source Name</th>
+                                        <th scope="col">Type</th>
+                                        <th scope="col" class="text-right pr-4">Evidence Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="source in sourceStats" :key="source.src_id">
+                                        <td class="pl-4">
+                                            <a v-if="source.link && source.link !== '#'" :href="source.link" target="_blank" class="font-weight-bold text-dark">
+                                                {% raw %}{{ source.name }}{% endraw %}
+                                                <i class="fas fa-external-link-alt fa-xs ml-1 text-muted" style="font-size: 0.7em;"></i>
+                                            </a>
+                                            <span v-else class="font-weight-bold text-dark">{% raw %}{{ source.name }}{% endraw %}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-pill"
+                                                  :class="source.type === 'reader' ? 'badge-info' : 'badge-success'">
+                                                {% raw %}{{ source.type }}{% endraw %}
+                                            </span>
+                                        </td>
+                                        <td class="text-right pr-4 font-monospace">
+                                            {% raw %}{{ source.count.toLocaleString() }}{% endraw %}
+                                        </td>
+                                    </tr>
+                                    <tr v-if="sourceStats.length === 0">
+                                        <td colspan="3" class="text-center py-3 text-muted">Loading statistics...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+     </div>
+
+    </div>
+
+
+
+    <!-- 1. Database Content Section -->
+    <div class="container-fluid" id="content-insights">
+
+      <div class="row mb-4">
+         <div class="col-12">
+            <h2 class="border-bottom pb-2 mb-4">Content Insights</h2>
+         </div>
+      </div>
+
+      <!-- Item 1: Statement Type -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/stmt_type_dist.png') }}"
+                 class="img-fluid zoomable" style="max-height: 400px; cursor: pointer;" alt="Statement Types" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Statement Type Distribution</h5>
+            <p class="text-justify">
+                The statement type distribution shows a diversity of statement relations across 45 distinct types (e.g. activation, phosphorylation).
+            </p>
+          </div>
+      </div>
+
+      <!-- Item 2: Belief Score -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/belief_score_dist.png') }}"
+                 class="img-fluid zoomable" style="max-height: 400px; cursor: pointer;" alt="Belief Scores" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Belief Score Distribution</h5>
+            <p class="text-justify">
+                Belief scores are computed using INDRA’s HybridScorer, which combines a data-driven CountsScorer with a prior-based SimpleScorer.
+                For statements whose evidence sources were observed during training, the CountsScorer estimates reliability.
+                Support for more specific statements is propagated to their corresponding generalized statements, increasing the belief scores of the latter.
+            </p>
+          </div>
+      </div>
+
+      <!-- Item 3: Grounding -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/grounding_dist.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Grounding Distribution" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Grounding Distribution</h5>
+            <p class="text-justify">
+                After collecting and assembling all sources, the resulting corpus indexed by the database contains a total of 47,956,726 unique INDRA Statements.
+                Of these, nearly 65.2% referred to at least one ungrounded entity.
+                While statements about protein complexes can involve more than two entities, the vast majority 98.3% involved exactly two entities.
+            </p>
+          </div>
+      </div>
+
+      <!-- Item 4: Paper Trends -->
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/paper_trends.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Paper Trends" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+            <h5>Paper Trends (Abstracts vs Fulltext)</h5>
+            <p class="text-justify">
+                A steady increase from year 1970 to 2024 exhibits a growing trend in the number of papers over time.
+                The lower bar in 2025 reflects content availability through May 2025.
+                Before 1970, starting 1780, there are 52,779 abstract and 226,925 full text records in the database.
+            </p>
+          </div>
+      </div>
+
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/evidence_vs_stmt.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Evidence vs Stmt" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+             <h5>Evidence vs Statement Count</h5>
+             <p class="text-justify">The scatter plot shows a strong inverse relationship between the number of evidence and the number of statements on a log–log scale.
+                 Most statements are supported by only a small number of evidence, while a very small number of statements aggregate a disproportionately large amount of evidence, forming a clear long-tailed distribution. </p>
+          </div>
+      </div>
+
+      <div class="row mb-5 align-items-center">
+          <div class="col-md-7 text-center">
+            <img src="{{ url_for('static', filename='plots/pmid_vs_stmt.png') }}"
+                 class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="PMID vs Stmt" onclick="showImage(this)">
+          </div>
+          <div class="col-md-5">
+             <h5>PMID vs Statement Count</h5>
+             <p class="text-justify">The plot shows a strong inverse relationship between the number of unique PMIDs per statement and the number of statements on a log–log scale.
+                 The distribution is highly skewed, with most statements supported by only a few PMIDs, while a small fraction of statements accumulate evidence from hundreds to tens of thousands of publications.</p>
+          </div>
+      </div>
+
+    </div>
+
+
+    <!-- 2. Gene Specific MeSH Terms Section -->
+    <div class="row mb-5" id="gene-mesh">
+          <div class="col-12">
+            <h3 class="border-bottom pb-2 mb-4">Gene-Disease MeSH Distributions</h3>
+          </div>
+            <p class="text-justify">
+              These plots show what
+              <a href="https://meshb.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">
+                Medical Subject Headings
+              </a>
+              disease terms are associated with publications from which statements about a given gene are described.
+              For instance, INDRA Statements about EGFR are most commonly extracted from lung cancer and breast cancer publications. In contrast, Statements on SNCA are primarily from Parkinson's disease literature.
+            </p>
+          {% for gene in ['EGFR', 'TP53', 'MAPT', 'SNCA', 'BRCA1', 'BRAF'] %}
+          <div class="col-md-6 text-center mb-4">
+            <img src="{{ url_for('static', filename='plots/mesh_dist_' + gene + '.png') }}"
+                 class="img-fluid zoomable" style="cursor: pointer;" alt="{{ gene }} MeSH" onclick="showImage(this)">
+              <h5 class="mt-2 text-center ml-2">{{ gene }}</h5>
+          </div>
+          {% endfor %}
+    </div>
+
+
+      </div>
+  </div>
+
+  <!-- Image Modal -->
+  <div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body text-center bg-light">
+          <img id="modalImage" src="" class="img-fluid" alt="Preview">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GLOBAL_SOURCE_INFO = {{ source_info|tojson }};
+    const REVERSE_MAPPING = {{ reverse_source_mapping|tojson }};
+
+    const app = Vue.createApp({
+        data() {
+            return {
+                stats: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0, grounding_full: 0, total_evidence: 0 },
+                animated: { unique_statement: 0, abstract: 0, fulltext: 0, title: 0, grounding_full: 0, total_evidence: 0 },
+                sourceStats: [],
+                entityPairs: [],
+                directedPairs: [],
+                topDirectedPairs: [],
+                hoveredNode: null,
+                activeNode: null,
+                autoRotationTimer: null,
+
+                categories: [
+                  "human gene/protein",
+                  "nonhuman gene/protein",
+                  "small molecule",
+                  "biological process",
+                  "disease or phenotype",
+                  "other",
+                  "experimental factor",
+
+                ],
+                labelMap: {
+                  "human gene/protein": ["Human", "Gene/Protein"],
+                  "nonhuman gene/protein": ["Non-human", "Gene/Protein"],
+                  "small molecule": ["Small", "Molecule"],
+                  "biological process": ["Biological", "Process"],
+                  "disease or phenotype": ["Disease/", "Phenotype"],
+                  "experimental factor": ["Experimental", "Factor"],
+                  "other": ["Other"]
+                }
+            }
+        },
+        mounted() {
+            this.fetchStats();
+            this.fetchSourceStats();
+            this.fetchEntityPairs();
+            this.startAutoRotation();
+
+        },
+        beforeUnmount() {
+            this.stopAutoRotation();
+        },
+
+        computed: {
+            nodeFlowTotals() {
+                const totals = Object.fromEntries(this.categories.map(cat => [cat, 0]));
+                for (const p of this.directedPairs) {
+                    const value = p.value || 0;
+                    if (totals[p.source] !== undefined) totals[p.source] += value;
+                    if (totals[p.target] !== undefined) totals[p.target] += value;
+                }
+                return totals;
+            },
+             graphNodes() {
+                const R = 230;
+                const values = Object.values(this.nodeFlowTotals);
+                const minFlow = values.length ? Math.min(...values) : 0;
+                const maxFlow = values.length ? Math.max(...values) : 0;
+                const minR = 49;
+                const maxR = 65;
+                return this.categories.map((cat, i) => {
+                    // Start from top (-PI/2) and go clockwise
+                    const angle = (i * 2 * Math.PI) / this.categories.length - Math.PI / 2;
+                    const flow = this.nodeFlowTotals[cat] || 0;
+                    let radius = minR;
+                    if (maxFlow > minFlow) {
+                        const t = (Math.sqrt(flow) - Math.sqrt(minFlow)) /
+                                  (Math.sqrt(maxFlow) - Math.sqrt(minFlow));
+                        radius = minR + t * (maxR - minR);
+                    }
+                    return {
+                        id: cat,
+                        x: R * Math.cos(angle),
+                        y: R * Math.sin(angle),
+                        labelLines: this.labelMap[cat] || [cat],
+                        r: radius
+                    };
+                });
+            },
+           graphLinks() {
+                if (!this.entityPairs.length) return [];
+                const values = this.entityPairs.map(p => p.value || 0);
+                const minVal = values.length ? Math.min(...values) : 0;
+                const maxVal = values.length ? Math.max(...values) : 0;
+                const minLabelSize = 15;
+                const maxLabelSize = 19;
+
+                return this.entityPairs.filter(p => p.value > 0).map(p => {
+                    const sourceNode = this.graphNodes.find(n => n.id === p.source);
+                    const targetNode = this.graphNodes.find(n => n.id === p.target);
+                    if (!sourceNode || !targetNode) return null;
+
+                    let path = "";
+                    let labelX = 0;
+                    let labelY = 0;
+
+                    if (p.source === p.target) {
+                        // Self loop
+                        const nx = sourceNode.x;
+                        const ny = sourceNode.y;
+                        const nr = sourceNode.r || 50;
+                        const len = Math.sqrt(nx*nx + ny*ny);
+                        const ux = nx / len;
+                        const uy = ny / len;
+                        const tx = -uy;
+                        const ty = ux;
+
+                        // Draw the loop from the node boundary, bending outward.
+                        const startX = nx + ux * nr + tx * (nr * 0.3);
+                        const startY = ny + uy * nr + ty * (nr * 0.3);
+                        const endX = nx + ux * nr - tx * (nr * 0.3);
+                        const endY = ny + uy * nr - ty * (nr * 0.3);
+
+                        const loopOut = 24;
+                        const cp1x = nx + ux * (nr + loopOut) + tx * (nr * 0.7);
+                        const cp1y = ny + uy * (nr + loopOut) + ty * (nr * 0.7);
+                        const cp2x = nx + ux * (nr + loopOut) - tx * (nr * 0.7);
+                        const cp2y = ny + uy * (nr + loopOut) - ty * (nr * 0.7);
+
+                        path = `M ${startX},${startY} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${endX},${endY}`;
+
+                        // Keep the label outside the node to avoid overlap.
+                        labelX = nx + ux * (nr + loopOut + 20);
+                        labelY = ny + uy * (nr + loopOut + 20);
+                    } else {
+                        path = `M ${sourceNode.x},${sourceNode.y} L ${targetNode.x},${targetNode.y}`;
+                        labelX = (sourceNode.x + targetNode.x) / 2;
+                        labelY = (sourceNode.y + targetNode.y) / 2;
+                    }
+
+                    // Width scaling
+                    const width = 4;
+                    let labelFontSize = 17;
+                    if (maxVal > minVal) {
+                        const t = (Math.sqrt(p.value) - Math.sqrt(minVal)) /
+                                  (Math.sqrt(maxVal) - Math.sqrt(minVal));
+                        labelFontSize = minLabelSize + t * (maxLabelSize - minLabelSize);
+                    }
+
+                    return {
+                        source: p.source,
+                        target: p.target,
+                        value: p.value,
+                        path: path,
+                        width: Math.max(1, width),
+                        labelX: labelX,
+                        labelY: labelY,
+                        labelFontSize: labelFontSize
+                    };
+                }).filter(l => l);
+
+            }
+        },
+
+        methods: {
+            formatNumber(num) {
+                if (num >= 1000000) {
+                    return (num / 1000000).toFixed(1) + 'M';
+                }
+                if (num >= 1000) {
+                    return (num / 1000).toFixed(0) + 'k';
+                }
+                return num.toString();
+            },
+            isLinkActive(link) {
+                const targetId = this.hoveredNode || this.activeNode;
+                if (!targetId) return false;
+                return link.source === targetId || link.target === targetId;
+            },
+            getLinkOpacity(link) {
+                if (this.hoveredNode) {
+                    return this.isLinkActive(link) ? 0.8 : 0.1;
+                }
+                if (this.activeNode) {
+                    return this.isLinkActive(link) ? 0.8 : 0.1;
+                }
+                return 0.3; // Default opacity when nothing is selected
+            },
+            startAutoRotation() {
+                if (this.autoRotationTimer) return;
+                let index = 0;
+                this.activeNode = this.categories[0];
+                this.autoRotationTimer = setInterval(() => {
+                    index = (index + 1) % this.categories.length;
+                    this.activeNode = this.categories[index];
+                }, 2000);
+            },
+            stopAutoRotation() {
+                if (this.autoRotationTimer) {
+                    clearInterval(this.autoRotationTimer);
+                    this.autoRotationTimer = null;
+                    this.activeNode = null;
+                }
+            },
+
+
+            async fetchStats() {
+                try {
+                    const response = await fetch("{{ url_for('serve_db_stats') }}");
+                    const data = await response.json();
+                    this.stats = data;
+                    this.animateNumbers();
+                } catch (error) { console.error("Failed to fetch stats:", error); }
+            },
+            async fetchEntityPairs() {
+              try {
+                const response = await fetch("{{ url_for('static', filename='data/entity_pairs.json') }}");
+                if (!response.ok) return;
+
+                const directed = await response.json();
+                this.directedPairs = directed;
+
+                this.topDirectedPairs = [...directed]
+                  .sort((a, b) => (b.value || 0) - (a.value || 0))
+                  .slice(0, 6);
+
+                const collapsed = new Map();
+                for (const p of directed) {
+                  const a = p.source;
+                  const b = p.target;
+                  const key = a <= b ? `${a}|||${b}` : `${b}|||${a}`;
+                  collapsed.set(key, (collapsed.get(key) || 0) + (p.value || 0));
+                }
+
+                this.entityPairs = Array.from(collapsed.entries())
+                  .map(([key, value]) => {
+                    const [source, target] = key.split("|||");
+                    return { source, target, value };
+                  })
+                  .sort((x, y) => y.value - x.value);
+
+              } catch (error) {
+                console.error("Error fetching entity pairs:", error);
+              }
+            },
+
+            async fetchSourceStats() {
+                try {
+                    const response = await fetch("{{ url_for('static', filename='data/source_num.json') }}");
+                    if (response.ok) {
+                        const countsData = await response.json();
+
+                        this.sourceStats = countsData.map(item => {
+                            const srcId = item.src;
+
+                            let infoKey = srcId;
+                            if (REVERSE_MAPPING[srcId]) {
+                                infoKey = REVERSE_MAPPING[srcId];
+                            }
+
+                            let info = GLOBAL_SOURCE_INFO[infoKey] || GLOBAL_SOURCE_INFO[infoKey.toLowerCase()] || {};
+
+                            return {
+                                src_id: srcId,
+                                count: item.count,
+                                name: info.name || srcId.toUpperCase(),
+                                link: info.link || '#',
+                                type: info.type || 'unknown',
+                                domain: info.domain || 'general'
+                            };
+                        });
+                    }
+                } catch (error) { console.error("Error fetching source stats:", error); }
+            },
+
+            animateNumbers() {
+                const duration = 1500; const steps = 60; const interval = duration / steps;
+                let currentStep = 0;
+                const timer = setInterval(() => {
+                    currentStep++;
+                    const progress = currentStep / steps;
+                    const ease = 1 - Math.pow(1 - progress, 3);
+                    for (const key in this.stats) { this.animated[key] = Math.floor(this.stats[key] * ease); }
+                    if (currentStep >= steps) { clearInterval(timer); this.animated = {...this.stats}; }
+                }, interval);
+            }
+        }
+    });
+
+
+
+    app.mount('#app');
+
+    function showImage(imgElement) {
+        var modalImg = document.getElementById("modalImage");
+        var modalTitle = document.getElementById("imageModalLabel");
+        modalImg.src = imgElement.src;
+        modalTitle.innerText = imgElement.alt || "Image Preview";
+        $('#imageModal').modal('show');
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const OFFSET = 110; // 和 scroll-margin-top 对齐
+      const tocLinks = [...document.querySelectorAll('#toc a[href^="#"]')];
+      const sections = tocLinks
+        .map(a => document.querySelector(a.getAttribute("href")))
+        .filter(Boolean);
+
+      const setActive = (id) => {
+        tocLinks.forEach(a =>
+          a.classList.toggle("active", a.getAttribute("href") === "#" + id)
+        );
+      };
+
+      let isAutoScrolling = false;
+      let scrollEndTimer = null;
+
+      const onScroll = () => {
+        if (isAutoScrolling) return;
+        let current = sections[0];
+        for (const s of sections) {
+          const top = s.getBoundingClientRect().top;
+          if (top - OFFSET <= 0) current = s;
+        }
+        if (current) setActive(current.id);
+      };
+
+      tocLinks.forEach(a => {
+        a.addEventListener("click", (e) => {
+          const el = document.querySelector(a.getAttribute("href"));
+          if (!el) return;
+          e.preventDefault();
+
+          isAutoScrolling = true;
+
+          window.scrollTo({
+            top: el.getBoundingClientRect().top + window.pageYOffset - OFFSET,
+            behavior: "smooth"
+          });
+          history.replaceState(null, "", "#" + el.id);
+
+          clearTimeout(scrollEndTimer);
+          scrollEndTimer = setTimeout(() => {
+            isAutoScrolling = false;
+            onScroll();
+          }, 250);
+        });
+      });
+
+
+      window.addEventListener("scroll", () => {
+        if (!isAutoScrolling) return;
+        clearTimeout(scrollEndTimer);
+        scrollEndTimer = setTimeout(() => {
+          isAutoScrolling = false;
+          onScroll();
+        }, 250);
+      }, { passive: true });
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    });
+  </script>
+{% endblock %}

@@ -243,7 +243,7 @@ suf_ct_map = {".js": "application/javascript", ".css": "text/css"}
 @app.route("/data-vis/<path:file_path>")
 def serve_data_vis(file_path):
     full_path = HERE / "data-vis" / "dist" / file_path
-    logger.info("data-vis: " + full_path)
+    logger.info("data-vis: " + str(full_path))
     if not full_path.exists():
         return abort(404)
     with full_path.open("rb") as f:
@@ -267,10 +267,30 @@ if TESTING["status"] and not TESTING["deployment"]:
         with full_path.open(mode="rb") as f:
             return Response(f.read(), content_type=suf_ct_map.get(full_path.suffix))
 
+@app.route("/summary")
+def get_summary():
+    return render_my_template(
+        "summary.html",
+        "DB Summary",
+        source_colors=DEFAULT_SOURCE_COLORS,
+        source_info=SOURCE_INFO,
+        reverse_source_mapping=rev_source_mapping
+    )
+
+
+@app.route("/summary/data/stats")
+def serve_db_stats():
+    """Serve database statistics for the monitor page."""
+    stats_file = HERE / "static" / "data" / "db_stats.json"
+    if stats_file.exists():
+        with stats_file.open("r") as f:
+            stats = json.load(f)
+
+    return jsonify(stats)
 
 @app.route("/monitor")
 def get_data_explorer():
-    return render_my_template("daily_data.html", "Monitor")
+    return render_my_template("monitor.html", "Monitor")
 
 
 @app.route("/monitor/data/runtime")

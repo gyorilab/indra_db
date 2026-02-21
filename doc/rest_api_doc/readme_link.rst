@@ -1,2 +1,1 @@
-.. mdinclude:: ../../indra_db_service/README.md
-
+.. include:: ../../indra_db_service/README.rst

@@ -1,1 +1,1 @@
-.. mdinclude:: ../../indra_db_service/search_introduction.md
+.. include:: ../../indra_db_service/search_introduction.rst

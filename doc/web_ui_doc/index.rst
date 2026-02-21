@@ -1,1 +1,1 @@
-.. include:: ../../indra_db_service/search_introduction.rst
+.. include:: search_introduction.rst

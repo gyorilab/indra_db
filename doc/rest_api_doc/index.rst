@@ -1,1 +1,1 @@
-.. include:: README.rst
+.. include:: rest_api.rst

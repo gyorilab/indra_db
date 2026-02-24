@@ -2,7 +2,7 @@
 INDRA Database REST API
 =========================
 
-The INDRA Database software has been developed to create and maintain a
+The INDRA Database software is designed to create and maintain a
 database of text references, content, reading results, and ultimately INDRA
 Statements extracted from those reading results. The software also manages
 the generation and update process of cleaning, deduplicating, and finding
@@ -27,7 +27,7 @@ following endpoints for getting Statements:
 You will optionally need the following information to access a running web service:
 
 - An API key which needs to be sent in the header of each request to the
-  service, or
+  service for restricted endpoints, or
 - Login credentials to access the web interface, which is required to curate
   statements in the HTML interface.
 
@@ -35,7 +35,7 @@ You can create an account at https://db.indra.bio/search by clicking the "Login"
 button in the top right corner, and then clicking "Register". To obtain an API key,
 please contact the `Gyorilab <https://gyorilab.github.io>`_.
 
-The code to support the REST service can be found
+The code for the REST service can be found
 `here <https://github.com/gyorilab/indra_db/blob/master/indra_db_service/api.py>`_.
 
 The Statement Endpoints
@@ -71,8 +71,7 @@ The output format is controlled by the **format** option described above,
 with options to return JSON or HTML.
 
 **JSON:** The default value, intended for programmatic use, is "json". The
-JSON
-that is returned is of the following form (with many made-up but reasonable
+JSON that is returned is of the following form (with many made-up but reasonable
 numbers filled in):
 
 .. code-block:: python
@@ -111,8 +110,8 @@ Documentation for the html output (produced by INDRA's HTML assembler) can be fo
 
 .. _from-agents:
 
-Get Statements by agents (and type)
------------------------------------
+Get Statements by agents and type
+---------------------------------
 
 ``GET https://db.indra.bio/statements/from_agents``
 
@@ -138,11 +137,10 @@ the type of Statement. The query parameters are as follows:
   **Note**: You can include as many ``agent*`` queries as you like, however you
   will only get Statements that include all agents you query, in addition to
   those queried for ``subject`` and ``object``. Furthermore, to include multiple
-  agents on our particular implementation, which uses the AWS API Gateway,
-  you must include a suffix to each agent key, such as ``agent0`` and ``agent1``,
-  or else all but one agent will be stripped out. Note that you need not use
-  integers, you can add any suffix you like, e.g. ``agentOfDestruction=TP53``
-  would be entirely valid.
+  agents on our particular implementation, you must include a suffix to each agent
+  key, such as ``agent0`` and ``agent1``, or else all but one agent will be
+  stripped out. Note that you need not use integers, you can add any suffix you
+  like, e.g. ``agentOfDestruction=TP53`` would be entirely valid.
 
   - Example 1: To obtain Statements that involve SMAD2 in any role, add
     ``agent=SMAD2`` to the query.
@@ -196,10 +194,9 @@ Get Statements from many hashes
 ``POST https://db.indra.bio/statements/from_hashes``
 
 Like the previous endpoint, this endpoint uses hashes to retrieve Statements,
-however instead of only being allowed one at a time, a bach of
-hashes may be sent as json data. Because data is sent, this is a POST request,
-even though you are in practice "getting" information. There are no special
-parameters for this endpoint. The json data should be formatted as:
+however instead of only being allowed one at a time, a batch of hashes may be
+sent as json data. There are no special parameters for this endpoint. The json
+data for the POST request should be formatted as:
 
 .. code-block:: json
 
@@ -215,10 +212,9 @@ Get Statements from paper ids
 ``POST https://db.indra.bio/statements/from_papers``
 
 Using this endpoint, you can pretend you have a fleet of text extraction tools
-that run in seconds! Specifically, you can get the INDRA Statements with
-evidence from a given list of papers by passing one of the ids of those papers.
-As with the above method, the fact that data (paper ids) is send requires
-this to be a POST request. The papers ids should be formatted as:
+that run in seconds! Specifically, you can get the INDRA Statements with evidence from
+a given list of papers by passing one of the ids of those papers as JSON data in a POST
+request. The papers ids should be formatted as:
 
 .. code-block:: json
 
@@ -236,7 +232,7 @@ Curation
 Because the mechanisms represented by our Statements come in large part from
 automatic extractions, there can often be errors. For this reason, we always
 provide the sentences from which a Statement was extracted (if we extracted
-it, some of our content comes from other curated databases), as well as
+it as some of our content comes from other curated databases), as well as
 provenance to lead back to the content (abstract, full text, etc.) that was
 read, which allows you to use your own judgement regarding the validity of
 a Statement.
@@ -268,10 +264,11 @@ sentence supports a given Statement. This is the "level" of your curation:
   other words stating that an automatic reader made an error. Even more
   explicitly, you can judge whether the sentence supports the extracted
   Statement. For example the (hypothetical) sentence "KRAS was found to actively
-  inhibit BRAF" does not support the Statement "KRAS activates BRAF". As another
-  example (here a grounding error), would be that the sentence "IR causes cell
-  death", where IR is Ionizing Radiation does not support the extraction
-  "'Insulin Receptor' causes cell death".
+  inhibit BRAF" does not support the Statement "KRAS activates BRAF". Another
+  example would be that the sentence "IR causes cell death", where IR refers to
+  Ionizing Radiation does not support the extraction "'Insulin Receptor' causes cell
+  death". In this case, the reader made an error in extracting "IR" as "Insulin
+  Receptor" rather than "Ionizing Radiation".
 
 The two different levels also have different hashes. At the *pa* level, the
 hashes discussed :ref:`above <from-hash>` are used, as they are calculated from the
@@ -323,7 +320,7 @@ Using ``curl`` to query Statements about "MAP2K1 phosphorylates MAPK1":
 
 .. code-block:: bash
 
-   curl -X GET "https://db.indra.bio/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation&api_key=12345"
+   curl -X GET "https://db.indra.bio/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation"
 
 .. admonition:: returns the following JSON:
 
@@ -388,8 +385,8 @@ Using ``curl`` to query Statements about "MAP2K1 phosphorylates MAPK1":
       }
 
 Python is another convenient way to use this web API, and has the important
-advantage that Statements returned from the service can directly be used
-directly with INDRA tools.
+advantage that Statements returned from the service can be used directly with
+INDRA tools.
 
 You can use python to get JSON Statements for the same query:
 
@@ -399,8 +396,7 @@ You can use python to get JSON Statements for the same query:
    resp = requests.get('https://db.indra.bio/statements/from_agents',
                        params={'subject': 'MAP2K1',
                                'object': 'MAPK1',
-                               'type': 'phosphorylation',
-                               'api_key': 12345})
+                               'type': 'phosphorylation')
    resp_json = resp.json()
 
 which can now be turned into INDRA Statement objects using ``stmts_from_json``:
@@ -424,8 +420,8 @@ however using that client, the above query is simply:
    processor = idbr.get_statements(subject='MAP2K1', object='MAPK1', stmt_type='phosphorylation')
    stmts = processor.statements
 
-Where the URL and API key are located n a config file. A key advantage of this
-client is that queries that return more than 1000 statement are paged behind
+Where the URL and, optionally, API key are located in a config file. A key advantage of
+this client is that queries that return more than 1000 statement are paged behind
 the scenes, so that all the statements which match the query are retrieved with
 a single command.
 
@@ -439,15 +435,12 @@ BRCA1 is subject and BRCA2 is object:
 
 .. code-block:: text
 
-   https://db.indra.bio/statements/from_agents?subject=BRCA1&object=BRCA2&api_key=12345&format=html
+   https://db.indra.bio/statements/from_agents?subject=BRCA1&object=BRCA2&format=html
 
-The interface is restricted to users with login access. If you are not logged
-in, you will be prompted to so before you can view the loaded statements.
-Once logged in, the queried statements will be loaded and you will be
-able to curate statements on the level of individual evidences. Links to
-various source databases (depending on availability) are available for each
-piece of evidence to facilitate accurate curation. Find out more about the
-HTML interface in the
+The queried statements will be loaded and you will be able to curate statements on the
+level of individual evidences. Links to various source databases (depending on
+availability) are available for each piece of evidence to facilitate accurate curation.
+Find out more about the HTML interface in the
 `HTML assembler documentation <https://indra.readthedocs.io/en/latest/modules/assemblers/html_assembler.html>`_.
 For instructions on how to use it and more about the login restriction, see
 the
@@ -461,7 +454,7 @@ returning at most 10 statements with 3 evidence each:
 
 .. code-block:: bash
 
-   curl -X GET "https://db.indra.bio/statements/from_agents?agent0=SMURF2&agent1=SMAD2&api_key=12345&limit=10&ev_limit=3"
+   curl -X GET "https://db.indra.bio/statements/from_agents?agent0=SMURF2&agent1=SMAD2&limit=10&ev_limit=3"
 
 As above, in python this could be handled using the ``requests`` module, or with
 the client:
@@ -492,7 +485,7 @@ the agent to query for things that inhibit MEK, using curl:
 
 .. code-block:: bash
 
-   curl -X GET "https://db.indra.bio/statements/from_agents?object=MEK@FPLX&type=inhibition&api_key=12345"
+   curl -X GET "https://db.indra.bio/statements/from_agents?object=MEK@FPLX&type=inhibition"
 
 Python requests:
 
@@ -516,7 +509,7 @@ evidence, using curl:
 
 .. code-block:: bash
 
-   curl -X GET "https://db.indra.bio/statements/from_hash/-1072112758478440?api_key=12345&ev_limit=1000"
+   curl -X GET "https://db.indra.bio/statements/from_hash/-1072112758478440?ev_limit=1000"
 
 or INDRA's client:
 
@@ -547,7 +540,7 @@ and post it to the REST API with curl:
 
 .. code-block:: bash
 
-   curl -X POST "https://db.indra.bio/statements/from_papers?api_key=12345" -d @papers.json -H "Content-Type: application/json"
+   curl -X POST "https://db.indra.bio/statements/from_papers" -d @papers.json -H "Content-Type: application/json"
 
 or just use INDRA's client:
 
@@ -571,3 +564,7 @@ or INDRA's client:
 .. code-block:: python
 
    idbr.submit_curation(-1072112758478440, 'correct', 'This Statement is OK.', 'Alice')
+
+Note that submitting curations requires authentication, so the API key must be included
+in the request. The client handles this for you, as long as you have the API key in
+your config file.

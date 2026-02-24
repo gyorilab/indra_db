@@ -43,6 +43,7 @@ extensions = [
     'citations',
     'sphinx_mdinclude',
     'sphinx_click',
+    'sphinxcontrib.openapi',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

@@ -38,6 +38,10 @@ please contact the `Gyorilab <https://gyorilab.github.io>`_.
 The code for the REST service can be found
 `here <https://github.com/gyorilab/indra_db/blob/master/indra_db_service/api.py>`_.
 
+Below is a summary of the API endpoints and their parameters. For more detailed documentation, see the OpenAPI specification.
+
+.. openapi:: openapi.yaml
+
 The Statement Endpoints
 =======================
 

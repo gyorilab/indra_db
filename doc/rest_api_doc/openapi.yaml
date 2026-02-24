@@ -1,0 +1,374 @@
+openapi: 3.0.3
+info:
+  title: INDRA Database REST API
+  description: |
+    REST service for accessing pre-assembled INDRA Statements in the database.
+    Supports querying by agents, statement type, statement hash, paper ids, and
+    submitting curations. Deployments may serve the API under a path prefix
+    (e.g. /production/statements/...); the base URL below has no prefix.
+  version: 1.0.0
+  contact:
+    name: Gyorilab
+    url: https://gyorilab.github.io
+
+servers:
+  - url: https://db.indra.bio
+    description: Production INDRA Database API (no path prefix; deployments may use one)
+
+paths:
+  /statements/from_agents:
+    get:
+      summary: Get statements by agents and type
+      description: |
+        Get statements filtering by subject/object or other agents and optionally
+        by statement type (e.g. Phosphorylation, Activation, Complex). Use subject
+        and object for directed relations; use agent0, agent1, etc. when role is
+        irrelevant or for multi-agent statements. Agent ids may include a namespace
+        suffix, e.g. MAP2K1@HGNC or MEK@FPLX.
+      operationId: getStatementsFromAgents
+      parameters:
+        - $ref: '#/components/parameters/SubjectParam'
+        - $ref: '#/components/parameters/ObjectParam'
+        - name: type
+          in: query
+          description: Statement type (e.g. Phosphorylation, Activation, Complex). Case-insensitive.
+          schema:
+            type: string
+            example: phosphorylation
+        - name: agent0
+          in: query
+          description: Agent id (any role). Use agent1, agent2, ... for multiple agents; suffix distinguishes keys.
+          schema:
+            type: string
+            example: SMAD2
+        - name: agent1
+          in: query
+          description: Second agent when querying multiple agents.
+          schema:
+            type: string
+            example: MEK@FPLX
+        - $ref: '#/components/parameters/FormatParam'
+        - $ref: '#/components/parameters/MaxStmtsParam'
+        - $ref: '#/components/parameters/EvLimitParam'
+        - $ref: '#/components/parameters/BestFirstParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/ApiKeyParam'
+      responses:
+        '200':
+          description: Statements (JSON or HTML depending on format parameter)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatementsResponse'
+            text/html:
+              schema:
+                type: string
+                description: HTML document with statement viewer/curation UI
+
+  /statements/from_hash/{hash}:
+    get:
+      summary: Get one statement by hash
+      description: |
+        Retrieve a single statement by its shallow (pre-assembly) hash. The shallow
+        hash is based on statement meaning (agents, type, etc.) and is used for
+        deduplication. Default evidence limit is generous; use ev_limit to control
+        evidence returned.
+      operationId: getStatementFromHash
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          description: Shallow statement hash (from Statement.get_hash in INDRA). String or integer.
+          schema:
+            type: string
+            example: "-1072112758478440"
+        - $ref: '#/components/parameters/FormatParam'
+        - $ref: '#/components/parameters/MaxStmtsParam'
+        - $ref: '#/components/parameters/EvLimitParam'
+        - $ref: '#/components/parameters/BestFirstParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/ApiKeyParam'
+      responses:
+        '200':
+          description: Single statement (or statements envelope)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatementsResponse'
+            text/html:
+              schema:
+                type: string
+                description: HTML document with statement viewer/curation UI
+
+  /statements/from_hashes:
+    post:
+      summary: Get statements by list of hashes
+      description: |
+        Retrieve statements for a batch of shallow statement hashes. Send up to
+        1000 hashes in the request body.
+      operationId: getStatementsFromHashes
+      parameters:
+        - $ref: '#/components/parameters/FormatParam'
+        - $ref: '#/components/parameters/EvLimitParam'
+        - $ref: '#/components/parameters/BestFirstParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/ApiKeyParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FromHashesRequest'
+      responses:
+        '200':
+          description: Statements keyed by hash
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatementsResponse'
+
+  /statements/from_papers:
+    post:
+      summary: Get statements from paper ids
+      description: |
+        Retrieve INDRA statements with evidence from the given papers. Provide
+        a list of paper identifiers (pmid, pmcid, doi, tcid, etc.).
+      operationId: getStatementsFromPapers
+      parameters:
+        - $ref: '#/components/parameters/FormatParam'
+        - $ref: '#/components/parameters/MaxStmtsParam'
+        - $ref: '#/components/parameters/EvLimitParam'
+        - $ref: '#/components/parameters/BestFirstParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/ApiKeyParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FromPapersRequest'
+      responses:
+        '200':
+          description: Statements from the given papers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatementsResponse'
+
+  /curation/submit/{hash_val}:
+    post:
+      summary: Submit a curation
+      description: |
+        Submit a curation for a statement (pre-assembly level) or for a specific
+        evidence (raw level; use ev_hash for source_hash). Authentication is
+        required (API key in query or login). Use tag to categorize (e.g. grounding,
+        correct), text for a brief description, and curator (or email when using
+        API key) to identify yourself.
+      operationId: submitCuration
+      parameters:
+        - name: hash_val
+          in: path
+          required: true
+          description: Pre-assembly statement hash (pa level) or use ev_hash in body for raw-level curation.
+          schema:
+            type: string
+            example: "-1072112758478440"
+        - $ref: '#/components/parameters/ApiKeyParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurationSubmitRequest'
+      responses:
+        '200':
+          description: Curation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurationSubmitResponse'
+
+components:
+  parameters:
+    FormatParam:
+      name: format
+      in: query
+      description: Response format; "json" (default) or "html" (for browser UI).
+      schema:
+        type: string
+        enum: [json, html]
+        default: json
+    MaxStmtsParam:
+      name: max_stmts
+      in: query
+      description: Maximum number of statements to return. API cap is 1000.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 1000
+    EvLimitParam:
+      name: ev_limit
+      in: query
+      description: Maximum evidence items per statement. Default varies by endpoint; high values may time out.
+      schema:
+        type: integer
+        minimum: 1
+    BestFirstParam:
+      name: best_first
+      in: query
+      description: If true, return statements with most evidence first (default).
+      schema:
+        type: boolean
+        default: true
+    OffsetParam:
+      name: offset
+      in: query
+      description: Offset for pagination of results.
+      schema:
+        type: integer
+        minimum: 0
+    ApiKeyParam:
+      name: api_key
+      in: query
+      description: API key for restricted endpoints (when not using login).
+      required: false
+      schema:
+        type: string
+    SubjectParam:
+      name: subject
+      in: query
+      description: HGNC gene symbol (or agent id with @namespace) for the subject of the statement.
+      schema:
+        type: string
+        example: MAP2K1
+    ObjectParam:
+      name: object
+      in: query
+      description: HGNC gene symbol (or agent id with @namespace) for the object of the statement.
+      schema:
+        type: string
+        example: MAPK1
+
+  schemas:
+    StatementsResponse:
+      type: object
+      description: Envelope for statement query results (JSON format).
+      properties:
+        statements:
+          type: object
+          additionalProperties: true
+          description: Dict of INDRA Statement JSONs keyed by shallow statement hash. See INDRA statement schema for structure.
+        offset:
+          type: integer
+          nullable: true
+          description: Offset of the SQL query.
+        evidence_limit:
+          description: Evidence limit applied per statement.
+          oneOf:
+            - type: integer
+            - type: string
+        statement_limit:
+          type: integer
+          description: REST API statement limit (e.g. 1000).
+        evidence_totals:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Available evidence count per statement hash.
+        total_evidence:
+          type: integer
+          description: Total evidence available for returned statements.
+        evidence_returned:
+          type: integer
+          description: Total evidence items returned.
+
+    FromHashesRequest:
+      type: object
+      required:
+        - hashes
+      properties:
+        hashes:
+          type: array
+          items:
+            type: integer
+          maxItems: 1000
+          description: List of shallow statement hashes (up to 1000).
+      example:
+        hashes: [12345, 246810]
+
+    FromPapersRequest:
+      type: object
+      required:
+        - ids
+      properties:
+        ids:
+          type: array
+          items:
+            type: object
+            required: [id, type]
+            properties:
+              id:
+                type: string
+                example: "22174878"
+              type:
+                type: string
+                example: pmid
+                description: One of pmid, pmcid, doi, tcid, etc.
+        mesh_ids:
+          type: array
+          items:
+            type: string
+          description: Optional MeSH IDs to filter evidence.
+      example:
+        ids:
+          - { id: "12345", type: "pmid" }
+          - { id: "PMC23423", type: "pmcid" }
+
+    CurationSubmitRequest:
+      type: object
+      required:
+        - tag
+        - text
+      properties:
+        tag:
+          type: string
+          description: Short category for the curation (e.g. grounding, correct).
+          example: correct
+        text:
+          type: string
+          description: Brief description of what is wrong or correct.
+          example: This Statement is OK.
+        curator:
+          type: string
+          description: Your name, initials, or identifier. Use consistently.
+          example: Alice
+        email:
+          type: string
+          description: Required when authenticating with API key instead of login.
+        ev_hash:
+          type: integer
+          description: Source hash for raw-level curation (specific evidence).
+        source:
+          type: string
+          description: Source of the curation submission (default DB REST API).
+        pa_json:
+          type: object
+          description: Optional pre-assembly statement JSON.
+        ev_json:
+          type: object
+          description: Optional evidence JSON.
+
+    CurationSubmitResponse:
+      type: object
+      properties:
+        result:
+          type: string
+          example: success
+        ref:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+              description: Database id of the submitted curation.

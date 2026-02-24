@@ -7,7 +7,7 @@ future
 psycopg2
 sphinx-click
 requests
-m2r2
+sphinx-mdinclude
 termcolor
 cachetools
 git+https://github.com/sorgerlab/indra.git

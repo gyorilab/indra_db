@@ -3,8 +3,8 @@ INDRA DB Search Interface
 =============================
 
 On the landing page of the INDRA DB web interface at https://db.indra.bio, you can
-search for interactions between entities extracted and assembled by INDRA represented
-as agents in
+search for interactions between entities, represented as agents, extracted and
+assembled by INDRA into
 `INDRA Statements <https://indra.readthedocs.io/en/latest/modules/Statements.html>`_.
 The search interface allows you to filter the results by the interactions' INDRA
 Statement type, the MeSH terms associated with the publication from which the
@@ -17,8 +17,9 @@ Search Options
 
 The search options are as follows:
 
-- Agent/Entity: enter one or, optionally, two agents. For each agent you can enter
-  either its identifier directly or enter its name and use the "Find identifier" button to
+- Agent: enter one or, optionally, two agents. The agents represent the entities that
+  are part of the extracted interaction. For each agent you can enter either its
+  identifier directly or enter its name and use the "Find identifier" button to
   do a search for an identifier by the entity name. You can enter any type of agent
   that INDRA recognizes, such as a gene, a small molecule, a biological process, etc.
 - Agent role:

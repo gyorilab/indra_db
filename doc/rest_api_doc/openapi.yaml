@@ -20,24 +20,27 @@ paths:
     get:
       summary: Get statements by agents and type
       description: |
-        Get statements filtering by subject/object or other agents and optionally
-        by statement type (e.g. Phosphorylation, Activation, Complex). Use subject
-        and object for directed relations; use agent0, agent1, etc. when role is
-        irrelevant or for multi-agent statements. Agent ids may include a namespace
-        suffix, e.g. MAP2K1@HGNC or MEK@FPLX.
+        Get statements filtered by the agents involved and optionally by statement
+        type (e.g. Phosphorylation, Activation, Complex). For directed relations, 
+        use subject and object; use agent0, agent1, etc. when role is irrelevant.
+        Agent ids may include a namespace suffix, e.g. MAP2K1@HGNC or MEK@FPLX.
       operationId: getStatementsFromAgents
       parameters:
         - $ref: '#/components/parameters/SubjectParam'
         - $ref: '#/components/parameters/ObjectParam'
         - name: type
           in: query
-          description: Statement type (e.g. Phosphorylation, Activation, Complex). Case-insensitive.
+          description: |
+            Statement type (e.g. Phosphorylation, Activation, Complex). 
+            Case-insensitive.
           schema:
             type: string
             example: phosphorylation
         - name: agent0
           in: query
-          description: Agent id (any role). Use agent1, agent2, ... for multiple agents; suffix distinguishes keys.
+          description: |
+            Agent id (any role). Use agent1, agent2, ... for multiple agents; 
+            suffix distinguishes keys.
           schema:
             type: string
             example: SMAD2
@@ -54,7 +57,7 @@ paths:
         - $ref: '#/components/parameters/OffsetParam'
       responses:
         '200':
-          description: Statements (JSON or HTML depending on format parameter)
+          description: Statements as JSON or HTML depending on format parameter.
           content:
             application/json:
               schema:
@@ -62,7 +65,9 @@ paths:
             text/html:
               schema:
                 type: string
-                description: HTML document with statement viewer/curation UI
+                description: |
+                  HTML document with statement information displayed with the 
+                  possibility to curate each statement at the evidence level.
 
   /statements/from_hash/{hash}:
     get:
@@ -96,7 +101,9 @@ paths:
             text/html:
               schema:
                 type: string
-                description: HTML document with statement viewer/curation UI
+                description: |
+                  HTML document with statement information displayed with the 
+                  possibility to curate each statement at the evidence level.
 
   /statements/from_hashes:
     post:
@@ -156,10 +163,10 @@ paths:
       summary: Submit a curation
       description: |
         Submit a curation for a statement (pre-assembly level) or for a specific
-        evidence (raw level; use ev_hash for source_hash). Authentication is
-        required (API key in query or login). Use tag to categorize (e.g. grounding,
-        correct), text for a brief description, and curator (or email when using
-        API key) to identify yourself.
+        evidence (raw level; use ev_hash for source_hash). Authentication with API key 
+        in query or login in the web interface is required. Use the tag to categorize
+        the curation (e.g. grounding, correct), text for a brief description, and 
+        curator to identify yourself with an email.
       operationId: submitCuration
       parameters:
         - name: hash_val
@@ -333,12 +340,10 @@ components:
           example: correct
         text:
           type: string
-          description: Brief description of what is wrong or correct.
+          description: |
+            Brief description of what is wrong or correct. This is optional except when
+            tag is "other" and should be concise.
           example: This Statement is OK.
-        curator:
-          type: string
-          description: Your name, initials, or identifier. Use consistently.
-          example: Alice
         email:
           type: string
           description: Required when authenticating with API key instead of login.

@@ -52,7 +52,6 @@ paths:
         - $ref: '#/components/parameters/EvLimitParam'
         - $ref: '#/components/parameters/BestFirstParam'
         - $ref: '#/components/parameters/OffsetParam'
-        - $ref: '#/components/parameters/ApiKeyParam'
       responses:
         '200':
           description: Statements (JSON or HTML depending on format parameter)
@@ -87,7 +86,6 @@ paths:
         - $ref: '#/components/parameters/EvLimitParam'
         - $ref: '#/components/parameters/BestFirstParam'
         - $ref: '#/components/parameters/OffsetParam'
-        - $ref: '#/components/parameters/ApiKeyParam'
       responses:
         '200':
           description: Single statement (or statements envelope)
@@ -112,7 +110,6 @@ paths:
         - $ref: '#/components/parameters/EvLimitParam'
         - $ref: '#/components/parameters/BestFirstParam'
         - $ref: '#/components/parameters/OffsetParam'
-        - $ref: '#/components/parameters/ApiKeyParam'
       requestBody:
         required: true
         content:
@@ -140,7 +137,6 @@ paths:
         - $ref: '#/components/parameters/EvLimitParam'
         - $ref: '#/components/parameters/BestFirstParam'
         - $ref: '#/components/parameters/OffsetParam'
-        - $ref: '#/components/parameters/ApiKeyParam'
       requestBody:
         required: true
         content:

@@ -103,7 +103,7 @@ numbers filled in):
 where the ``"statements"`` element contains a dictionary of INDRA Statement
 JSONs keyed by a shallow statement hash (see :ref:`here <from-hash>` for more
 details on these hashes). You can look at the
-`JSON schema <https://github.com/sorgerlab/indra/blob/master/indra/resources/statements_schema.json>`_
+`JSON schema <https://github.com/gyorilab/indra/blob/master/indra/resources/statements_schema.json>`_
 on github for details on the Statement JSON. To learn more about INDRA
 Statements, you can read the
 `documentation <https://indra.readthedocs.io/en/latest/modules/statements.html>`_.
@@ -121,7 +121,7 @@ Documentation for the html output (produced by INDRA's HTML assembler) can be fo
 Get Statements by agents and type
 ---------------------------------
 
-.. openapi:: openapi.yaml
+.. openapi:: ../../indra_db_service/static/openapi.yaml
    :paths: /statements/from_agents
 
 This endpoint allows you to get statements filtering by their agents and
@@ -175,7 +175,7 @@ the type of Statement. The query parameters are as follows:
 Get a Statement by hash
 -----------------------
 
-.. openapi:: openapi.yaml
+.. openapi:: ../../indra_db_service/static/openapi.yaml
    :paths: /statements/from_hash/{hash}
 
 INDRA Statement objects have a method, ``get_hash``, which produces hash from
@@ -201,7 +201,7 @@ limit can also be raised, at the risk of a timed out request.
 Get Statements from many hashes
 -------------------------------
 
-.. openapi:: openapi.yaml
+.. openapi:: ../../indra_db_service/static/openapi.yaml
    :paths: /statements/from_hashes
 
 Like the previous endpoint, this endpoint uses hashes to retrieve Statements,
@@ -220,7 +220,7 @@ with up to 1,000 hashes given in the list.
 Get Statements from paper ids
 -----------------------------
 
-.. openapi:: openapi.yaml
+.. openapi:: ../../indra_db_service/static/openapi.yaml
    :paths: /statements/from_papers
 
 Using this endpoint, you can pretend you have a fleet of text extraction tools
@@ -262,7 +262,7 @@ Further instruction on curation best practices can be found
 Curate statements
 -----------------
 
-.. openapi:: openapi.yaml
+.. openapi:: ../../indra_db_service/static/openapi.yaml
    :paths: /curation/submit/{hash_val}
 
 If you wish to curate a Statement, you must first decide whether you are

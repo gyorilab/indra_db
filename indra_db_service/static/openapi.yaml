@@ -260,7 +260,7 @@ components:
         statements:
           type: object
           additionalProperties: true
-          description: Dict of INDRA Statement JSONs keyed by shallow statement hash. See INDRA statement schema for structure.
+          description: Dict of INDRA Statement JSONs keyed by shallow statement hash. See INDRA statement schema for structure at https://github.com/gyorilab/indra/blob/master/indra/resources/statements_schema.json
         offset:
           type: integer
           nullable: true

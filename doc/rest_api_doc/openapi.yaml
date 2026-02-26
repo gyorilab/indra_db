@@ -4,8 +4,7 @@ info:
   description: |
     REST service for accessing pre-assembled INDRA Statements in the database.
     Supports querying by agents, statement type, statement hash, paper ids, and
-    submitting curations. Deployments may serve the API under a path prefix
-    (e.g. /production/statements/...); the base URL below has no prefix.
+    submitting curations.
   version: 1.0.0
   contact:
     name: Gyorilab
@@ -13,7 +12,7 @@ info:
 
 servers:
   - url: https://db.indra.bio
-    description: Production INDRA Database API (no path prefix; deployments may use one)
+    description: INDRA Database API
 
 paths:
   /statements/from_agents:

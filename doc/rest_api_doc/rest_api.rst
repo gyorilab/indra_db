@@ -15,14 +15,16 @@ allows access to the pre-assembled Statements in a database. The API supports th
 following endpoints for getting Statements:
 
 - :ref:`statements/from_agents <from-agents>`, getting Statements by agents, using
-  various ids or names, by statement type (e.g. Phosphorylation), or
+  various ids or names, by statement type (e.g. Phosphorylation)
 - :ref:`statements/from_hash <from-hash>` and
   :ref:`statements/from_hashes <from-hashes>`, getting Statements by Statement
-  hash, either singly or in batches, and
+  hash, either singly or in batches
 - :ref:`statements/from_papers <from-papers>`, getting Statements using the paper
-  ids from which they were extracted, and
-- :ref:`curation endpoint <curation>` you can also curate Statements,
-  helping us improve the quality and accuracy of our content.
+  ids from which they were extracted
+
+The API also supports curating Statements via the
+:ref:`curation endpoint <curation>`, helping us improve the quality and accuracy
+of our content.
 
 You will optionally need the following information to access a running web service:
 
@@ -38,9 +40,9 @@ please contact the `Gyorilab <https://gyorilab.github.io>`_.
 The code for the REST service can be found
 `here <https://github.com/gyorilab/indra_db/blob/master/indra_db_service/api.py>`_.
 
-Below is a summary of the API endpoints and their parameters. For more detailed documentation, see the OpenAPI specification.
 
 .. openapi:: openapi.yaml
+For technical details of the rest API, see the OpenAPI specification:
 
 The Statement Endpoints
 =======================
@@ -158,7 +160,7 @@ the type of Statement. The query parameters are as follows:
     give exactly the same result.
 
 - **type**: This parameter can be used to specify what type of Statement
-  of interest (e.g. Phosphorylation, Activation, Complex).
+  (e.g. Phosphorylation, Activation, Complex) to query for.
 
   - Example: To answer the question "Does MAP2K1 phosphorylate MAPK1?"
     the parameter ``type=Phosphorylation`` can be included in your query.
@@ -287,7 +289,7 @@ JSON, which includes an entry for "source_hash":
    {"evidence": [{"source_hash": 98687578576598, ...}, ...], ...}
 
 Once you know the level, and you have the correct hash(es) (the shallow
-pre-assembly hash and/or the source hash), you can curate a statement by
+pre-assembly hash and, optionally, the source hash), you can curate a statement by
 POSTing a request with JSON data to the endpoint, as shown in the heading. The
 JSON data should contain the following fields:
 

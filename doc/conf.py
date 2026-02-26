@@ -44,6 +44,7 @@ extensions = [
     'sphinx_mdinclude',
     'sphinx_click',
     'sphinxcontrib.openapi',
+    'sphinx_design',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

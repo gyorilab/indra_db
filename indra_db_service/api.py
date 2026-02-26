@@ -144,7 +144,7 @@ CORS(app)
 
 # The directory path to this location (works in any file system).
 HERE = Path(__file__).parent.absolute()
-OPENAPI_PATH = HERE.parent / "doc" / "rest_api_doc" / "openapi.yaml"
+OPENAPI_PATH = HERE / "static" / "openapi.yaml"
 
 # Instantiate a jinja2 env.
 env = Environment(

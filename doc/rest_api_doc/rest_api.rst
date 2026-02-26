@@ -40,7 +40,11 @@ please contact the `Gyorilab <https://gyorilab.github.io>`_.
 The code for the REST service can be found
 `here <https://github.com/gyorilab/indra_db/blob/master/indra_db_service/api.py>`_.
 
-For technical details of the rest API, see the OpenAPI specification:
+See the OpenAPI specification at:
+https://db.indra.bio/openapi.yaml
+
+or the Swagger UI at:
+https://db.indra.bio/api-docs
 
 The Statement Endpoints
 =======================
@@ -329,69 +333,233 @@ Using ``curl`` to query Statements about "MAP2K1 phosphorylates MAPK1":
 
 .. code-block:: bash
 
-   curl -X GET "https://db.indra.bio/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation"
+   curl -X GET "https://db.indra.bio/statements/from_agents?subject=MAP2K1&object=MAPK1&type=phosphorylation&limit=1&ev_limit=1"
 
 .. admonition:: returns the following JSON:
 
    .. code-block:: json
 
-      {
-        "statements": {
-          "-1072112758478440": {
-            "id": "5c3dff5f-6660-4494-96d2-0142076e9b2f",
-            "enz": {
-              "name": "MAP2K1",
-              "db_refs": {
-                "UP": "Q02750",
-                "HGNC": "6840"
-              },
-              "sbo": "http://identifiers.org/sbo/SBO:0000460"
-            },
-            "sbo": "http://identifiers.org/sbo/SBO:0000216",
-            "evidence": [
-              {
-                "source_api": "reach",
-                "epistemics": {
-                  "section_type": null,
-                  "direct": true
-                },
-                "text": "Thus, free non visual arrestins moderately facilitate the phosphorylation of ERK2 by MEK1.",
-                "pmid": "22174878",
-                "annotations": {
-                  "agents": {
-                    "raw_text": [
-                      "MEK1",
-                      "ERK2"
-                    ]
-                  },
-                  "content_source": "pmc_oa",
-                  "prior_uuids": [
-                    "55afb6fc-5649-4315-94bc-3ce0651fc1d3"
-                  ],
-                  "found_by": "Phosphorylation_syntax_1a_noun"
-                }
-              }
-            ],
-            "type": "Phosphorylation",
-            "sub": {
-              "name": "MAPK1",
-              "db_refs": {
-                "UP": "P28482",
-                "HGNC": "6871"
-              },
-              "sbo": "http://identifiers.org/sbo/SBO:0000015"
-            }
+  {
+    "results": {
+      "-10700327527421433": {
+        "type": "Phosphorylation",
+        "enz": {
+          "name": "MAP2K1",
+          "db_refs": {
+            "UP": "Q02750",
+            "HGNC": "6840",
+            "EGID": "5604"
           }
         },
-        "offset": null,
-        "total_evidence": 106,
-        "evidence_totals": {
-          "-1072112758478440": 106
+        "sub": {
+          "name": "MAPK1",
+          "db_refs": {
+            "UP": "P28482",
+            "EGID": "5594",
+            "HGNC": "6871"
+          }
         },
-        "evidence_returned": 1,
-        "evidence_limit": "1",
-        "statement_limit": 1000
+        "belief": 0.9181686,
+        "evidence": [
+          {
+            "source_api": "reach",
+            "text": "MEK1 and MEK2 are dual specificity kinases and responsible for the phosphorylation and activation of the ERK1 and ERK2.",
+            "annotations": {
+              "found_by": "Phosphorylation_syntax_8_noun",
+              "agents": {
+                "raw_text": [
+                  "MEK1",
+                  "ERK2"
+                ]
+              },
+              "prior_uuids": [
+                "596bd319-e794-427c-b010-5bf36eeb4566"
+              ],
+              "content_source": "elsevier"
+            },
+            "epistemics": {
+              "direct": true,
+              "raw_sections": []
+            },
+            "text_refs": {
+              "PMID": "30954694",
+              "TRID": 30073993,
+              "PMID_NUM": 30954694,
+              "DOI": "10.1016/J.JINORGBIO.2019.03.022",
+              "DOI_NS": 1016,
+              "DOI_ID": "J.JINORGBIO.2019.03.022",
+              "PII": "S0162-0134(18)30676-7",
+              "TCID": 88199895,
+              "SOURCE": "elsevier",
+              "RID": 10300088199895,
+              "READER": "REACH"
+            },
+            "source_hash": 5040129478119479862,
+            "pmid": "30954694"
+          }
+        ],
+        "id": "80b49514-b402-4c76-8fac-281453a81d98",
+        "matches_hash": "-10700327527421433"
       }
+    },
+    "limit": 1,
+    "offset": null,
+    "next_offset": 1,
+    "query_json": {
+      "class": "Intersection",
+      "constraint": {
+        "query_list": [
+          {
+            "class": "HasAgent",
+            "constraint": {
+              "agent_id": "MAPK1",
+              "namespace": "NAME",
+              "_regularized_id": "MAPK1",
+              "role": "OBJECT",
+              "agent_num": null
+            },
+            "inverted": false
+          },
+          {
+            "class": "HasType",
+            "constraint": {
+              "stmt_types": [
+                "Phosphorylation"
+              ]
+            },
+            "inverted": false
+          },
+          {
+            "class": "HasAgent",
+            "constraint": {
+              "agent_id": "MAP2K1",
+              "namespace": "NAME",
+              "_regularized_id": "MAP2K1",
+              "role": "SUBJECT",
+              "agent_num": null
+            },
+            "inverted": false
+          }
+        ]
+      },
+      "inverted": false
+    },
+    "evidence_counts": {
+      "-10700327527421433": 180
+    },
+    "belief_scores": {
+      "-10700327527421433": 0.9181686
+    },
+    "source_counts": {
+      "-10700327527421433": {
+        "creeds": 0,
+        "bel_lc": 0,
+        "sparser": 60,
+        "acsn": 0,
+        "hprd": 0,
+        "ubibrowser": 0,
+        "crog": 0,
+        "conib": 0,
+        "geneways": 0,
+        "vhn": 0,
+        "medscan": 2,
+        "pe": 0,
+        "tees": 0,
+        "signor": 2,
+        "dgi": 0,
+        "semrep": 0,
+        "wormbase": 0,
+        "cbn": 0,
+        "isi": 0,
+        "rlimsp": 31,
+        "ctd": 0,
+        "eidos": 0,
+        "pc": 5,
+        "minerva": 0,
+        "drugbank": 0,
+        "trips": 0,
+        "trrust": 0,
+        "omnipath": 0,
+        "reach": 80,
+        "tas": 0,
+        "psp": 0,
+        "biogrid": 0,
+        "tkg": 0,
+        "gnbr": 0
+      }
+    },
+    "total_evidence": 180,
+    "result_type": "statements",
+    "offset_comp": 1,
+    "returned_evidence": 1,
+    "statement_limit": 500,
+    "statements_returned": 1,
+    "end_of_statements": true,
+    "statements_removed": 0,
+    "evidence_returned": 1,
+    "statements": {
+      "-10700327527421433": {
+        "type": "Phosphorylation",
+        "enz": {
+          "name": "MAP2K1",
+          "db_refs": {
+            "UP": "Q02750",
+            "HGNC": "6840",
+            "EGID": "5604"
+          }
+        },
+        "sub": {
+          "name": "MAPK1",
+          "db_refs": {
+            "UP": "P28482",
+            "EGID": "5594",
+            "HGNC": "6871"
+          }
+        },
+        "belief": 0.9181686,
+        "evidence": [
+          {
+            "source_api": "reach",
+            "text": "MEK1 and MEK2 are dual specificity kinases and responsible for the phosphorylation and activation of the ERK1 and ERK2.",
+            "annotations": {
+              "found_by": "Phosphorylation_syntax_8_noun",
+              "agents": {
+                "raw_text": [
+                  "MEK1",
+                  "ERK2"
+                ]
+              },
+              "prior_uuids": [
+                "596bd319-e794-427c-b010-5bf36eeb4566"
+              ],
+              "content_source": "elsevier"
+            },
+            "epistemics": {
+              "direct": true,
+              "raw_sections": []
+            },
+            "text_refs": {
+              "PMID": "30954694",
+              "TRID": 30073993,
+              "PMID_NUM": 30954694,
+              "DOI": "10.1016/J.JINORGBIO.2019.03.022",
+              "DOI_NS": 1016,
+              "DOI_ID": "J.JINORGBIO.2019.03.022",
+              "PII": "S0162-0134(18)30676-7",
+              "TCID": 88199895,
+              "SOURCE": "elsevier",
+              "RID": 10300088199895,
+              "READER": "REACH"
+            },
+            "source_hash": 5.04012947811948e+18,
+            "pmid": "30954694"
+          }
+        ],
+        "id": "80b49514-b402-4c76-8fac-281453a81d98",
+        "matches_hash": "-10700327527421433"
+      }
+    }
+  }
 
 Python is another convenient way to use this web API, and has the important
 advantage that Statements returned from the service can be used directly with

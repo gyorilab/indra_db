@@ -190,6 +190,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/CurationSubmitResponse'
 
+  /curation/list:
+    get:
+      summary: List all curations
+      description: |
+        This authenticated endpoint returns all curations in the database. Curator
+        names are anonymized if the caller does not have the correct permissions.
+        Authentication is done via an API key in the query parameters.
+      operationId: listAllCurations
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyParam'
+      responses:
+        '200':
+          description: List of all curations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CurationListEntry'
+
+  /curation/list/{stmt_hash}:
+    get:
+      summary: List curations for a statement
+      description: |
+        Public endpoint. Returns curations for the given pre-assembly statement hash.
+        Authentication is not required for this endpoint.
+      operationId: listCurationsForStatement
+      parameters:
+        - name: stmt_hash
+          in: path
+          required: true
+          description: Pre-assembly statement hash (pa level).
+          schema:
+            type: string
+            example: "-1072112758478440"
+      responses:
+        '200':
+          description: List of curations for the statement
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CurationListEntry'
+
+  /curation/list/{stmt_hash}/{src_hash}:
+    get:
+      summary: List curations for a statement and evidence
+      description: |
+        Public endpoint. Returns curations filtered by both statement hash and
+        source (evidence) hash. Authentication is not required for this endpoint.
+      operationId: listCurationsForStatementAndSource
+      parameters:
+        - name: stmt_hash
+          in: path
+          required: true
+          description: Pre-assembly statement hash (pa level).
+          schema:
+            type: string
+            example: "-1072112758478440"
+        - name: src_hash
+          in: path
+          required: true
+          description: Source (evidence) hash for raw-level curations.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of curations for the statement and evidence
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CurationListEntry'
+
 components:
   parameters:
     FormatParam:
@@ -372,3 +448,38 @@ components:
             id:
               type: integer
               description: Database id of the submitted curation.
+
+    CurationListEntry:
+      type: object
+      description: A single curation record as returned by the list endpoints.
+      properties:
+        curator:
+          type: string
+          description: Curator email (may be anonymized if caller lacks get_curations permission).
+        date:
+          type: string
+          description: Timestamp in HTTP date format (e.g. Thu, 29 Nov 2018 18:00:08 GMT).
+        ev_json:
+          type: string
+          description: Optional evidence JSON (serialized).
+        id:
+          type: integer
+          description: id of the curation.
+        pa_hash:
+          type: integer
+          description: Pre-assembly statement hash.
+        pa_json:
+          type: string
+          description: Optional pre-assembly statement JSON (serialized).
+        source:
+          type: string
+          description: Source of the curation submission (e.g. DB REST API).
+        source_hash:
+          type: integer
+          description: Source (evidence) hash for raw-level curations.
+        tag:
+          type: string
+          description: Short category for the curation (e.g. grounding, correct).
+        text:
+          type: string
+          description: Optional brief description of the curation.

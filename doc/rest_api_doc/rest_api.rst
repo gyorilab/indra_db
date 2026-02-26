@@ -24,7 +24,8 @@ following endpoints for getting Statements:
 
 The API also supports curating Statements via the
 :ref:`curation endpoint <curation>`, helping us improve the quality and accuracy
-of our content.
+of our content. You can also list curations (all, or by statement or evidence)
+via the :ref:`curation list endpoints <curation-list-all>`.
 
 You will optionally need the following information to access a running web service:
 
@@ -306,10 +307,45 @@ JSON data should contain the following fields:
 - **curator**: Your name, initials, email, or other way to identify yourself.
   Whichever you choose, please be consistent.
 
-Note that you can also indicate that a Statement is _correct_. In particular,
+Note that you can also indicate that a Statement is *correct*. In particular,
 if you find that a Statement has some evidence that supports the Statement and
 some that does not, curating examples of both is valuable. In general, flagging
 correct Statements can be just as valuable as flagging incorrect Statements.
+
+.. _curation-list-all:
+
+List all curations
+------------------
+
+.. openapi:: ../../indra_db_service/static/openapi.yaml
+   :paths: /curation/list
+
+This authenticated endpoint returns all curations in the database. Curator
+names are anonymized if the caller does not have the correct permissions.
+Authentication is done via an API key in the query parameters.
+
+.. _curation-list-stmt:
+
+List curations for a statement
+------------------------------
+
+.. openapi:: ../../indra_db_service/static/openapi.yaml
+   :paths: /curation/list/{stmt_hash}
+
+This public endpoint returns curations for the given pre-assembly statement
+hash. Authentication is not required for this endpoint.
+
+.. _curation-list-stmt-src:
+
+List curations for a statement and evidence
+-------------------------------------------
+
+.. openapi:: ../../indra_db_service/static/openapi.yaml
+   :paths: /curation/list/{stmt_hash}/{src_hash}
+
+This public endpoint returns all curations for a given statement and evidence. 
+The curations are filtered by both the statement hash and the source (evidence) hash.
+Authentication is not required for this endpoint.
 
 Usage examples
 ==============

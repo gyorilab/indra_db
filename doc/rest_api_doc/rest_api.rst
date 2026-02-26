@@ -40,8 +40,6 @@ please contact the `Gyorilab <https://gyorilab.github.io>`_.
 The code for the REST service can be found
 `here <https://github.com/gyorilab/indra_db/blob/master/indra_db_service/api.py>`_.
 
-
-.. openapi:: openapi.yaml
 For technical details of the rest API, see the OpenAPI specification:
 
 The Statement Endpoints
@@ -119,7 +117,8 @@ Documentation for the html output (produced by INDRA's HTML assembler) can be fo
 Get Statements by agents and type
 ---------------------------------
 
-``GET https://db.indra.bio/statements/from_agents``
+.. openapi:: openapi.yaml
+   :paths: /statements/from_agents
 
 This endpoint allows you to get statements filtering by their agents and
 the type of Statement. The query parameters are as follows:
@@ -172,7 +171,8 @@ the type of Statement. The query parameters are as follows:
 Get a Statement by hash
 -----------------------
 
-``GET https://db.indra.bio/statements/from_hash/<hash>``
+.. openapi:: openapi.yaml
+   :paths: /statements/from_hash/{hash}
 
 INDRA Statement objects have a method, ``get_hash``, which produces hash from
 the content of the Statement. A shallow hash only considers the meaning of
@@ -197,7 +197,8 @@ limit can also be raised, at the risk of a timed out request.
 Get Statements from many hashes
 -------------------------------
 
-``POST https://db.indra.bio/statements/from_hashes``
+.. openapi:: openapi.yaml
+   :paths: /statements/from_hashes
 
 Like the previous endpoint, this endpoint uses hashes to retrieve Statements,
 however instead of only being allowed one at a time, a batch of hashes may be
@@ -215,7 +216,8 @@ with up to 1,000 hashes given in the list.
 Get Statements from paper ids
 -----------------------------
 
-``POST https://db.indra.bio/statements/from_papers``
+.. openapi:: openapi.yaml
+   :paths: /statements/from_papers
 
 Using this endpoint, you can pretend you have a fleet of text extraction tools
 that run in seconds! Specifically, you can get the INDRA Statements with evidence from
@@ -256,7 +258,8 @@ Further instruction on curation best practices can be found
 Curate statements
 -----------------
 
-``POST https://db.indra.bio/curation/submit/<hash>``
+.. openapi:: openapi.yaml
+   :paths: /curation/submit/{hash_val}
 
 If you wish to curate a Statement, you must first decide whether you are
 curating the Statement as generally incorrect, or whether a particular

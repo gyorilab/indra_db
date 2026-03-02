@@ -15,7 +15,7 @@ INDRA Database REST Service
 .. toctree::
    :maxdepth: 3
 
-   rest_api_doc/readme_link.rst
+   rest_api_doc/index.rst
 
 INDRA Database Web UI
 =====================

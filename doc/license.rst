@@ -14,7 +14,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You may find a copy of the GNU General Public License
-`here<https://www.gnu.org/licenses/>`_.
+`here <https://www.gnu.org/licenses/>`_.
 
 The INDRA was developed with funding from ARO grant W911NF-14-1-0397,
 "Programmatic modelling for reasoning across complex mechanisms" under

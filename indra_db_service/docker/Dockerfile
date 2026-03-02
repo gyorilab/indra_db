@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Set working folder
 ENV DIRPATH /sw
@@ -9,7 +9,7 @@ RUN apt-get update && \
     apt-get install -y openjdk-8-jdk && \
     # jnius-indra requires cython which requires gcc
     apt-get install -y git wget zip unzip bzip2 gcc graphviz graphviz-dev \
-        pkg-config python3-pip cmake libxml2-dev swig && \
+        pkg-config python3 python3-pip python3.12-venv && \
     ln -s /usr/bin/python3 /usr/bin/python
 
 RUN apt-get install -y locales && \
@@ -19,15 +19,21 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
+# Create virtual environment (required for ubuntu 24.04)
+ENV VENV_PATH=$DIRPATH/venv
+RUN python3 -m venv $VENV_PATH
+ENV PATH="$VENV_PATH/bin:$PATH"
+
 RUN mkdir -p /root/.config/indra && \
     echo "[indra]" > /root/.config/indra/config.ini && \
     # Install Python dependencies
     pip install --upgrade pip && \
     # Install cython first for pyjnius
-    pip install "cython<3" && \
+    pip install "cython<3.0" setuptools setuptools_scm wheel && \
     pip install "pyjnius==1.1.4" --no-build-isolation && \
     pip install --prefer-binary python-libsbml || true && \
-    pip install git+https://github.com/gyorilab/indra.git#egg=indra[all] && \
+    pip install "pysb>=1.17.0" && \
+    pip install "indra[all] @ git+https://github.com/gyorilab/indra.git" && \
     pip uninstall -y enum34 && \
     # Install gilda
     pip install git+https://github.com/gyorilab/gilda.git && \
@@ -54,16 +60,15 @@ RUN \
     python -m gilda.resources.sqlite_adapter
 
 # INDRA DB Service setup
-RUN git clone https://github.com/gyorilab/indra_db.git && \
-    cd indra_db && \
-    pip install -e .[service] && \
-    cd ..
+
+COPY . /sw/indra_db
+RUN cd /sw/indra_db && pip install -e .[service]
 
 RUN mkdir /app
 WORKDIR /app
 
 # Copy startup script that dynamically sets GILDA_TERMS based on installed version
-COPY docker_startup.sh /app/docker_startup.sh
+COPY indra_db_service/docker/docker_startup.sh /app/docker_startup.sh
 RUN chmod +x /app/docker_startup.sh
 
 ENTRYPOINT ["/app/docker_startup.sh"]

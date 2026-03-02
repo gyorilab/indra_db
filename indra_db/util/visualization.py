@@ -158,13 +158,13 @@ def abstract_fulltext_trends_by_year_graph():
         ax.set_xticklabels(years, rotation=45)
         ax.tick_params(axis="x", labelbottom=True)
 
-    year_2025_idx = np.where(years == 2025)[0]
-    if len(year_2025_idx) > 0:
-        idx = year_2025_idx[0]
+    if len(years) > 0:
+        last_year = int(years[-1])
+        idx = len(years) - 1
 
         axes[0].text(
             idx,
-            pivot.loc[2025, "abstract"] * 1.05,
+            pivot.loc[last_year, "abstract"] * 1.05,
             "*",
             ha="center",
             va="bottom",
@@ -172,20 +172,13 @@ def abstract_fulltext_trends_by_year_graph():
         )
         axes[1].text(
             idx,
-            pivot.loc[2025, "fulltext"] * 1.05,
+            pivot.loc[last_year, "fulltext"] * 1.05,
             "*",
             ha="center",
             va="bottom",
             fontsize=14
         )
     plt.tight_layout()
-    fig.text(
-        0.5,
-        -0.08,
-        "* Data for 2025 reflect content by May 2025 and do not represent a complete calendar year.",
-        ha="center",
-        fontsize=12
-    )
 
     return fig, axes, df, pivot
 

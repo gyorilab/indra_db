@@ -1,8 +1,8 @@
-__all__ = ['TasManager', 'CBNManager', 'HPRDManager', 'SignorManager',
-           'BiogridManager', 'BelLcManager', 'PathwayCommonsManager',
-           'RlimspManager', 'TrrustManager', 'PhosphositeManager',
-           'CTDManager', 'VirHostNetManager', 'PhosphoElmManager',
-           'DrugBankManager']
+__all__ = ['TasManager', 'ExtriManager', 'CBNManager', 'HPRDManager',
+           'SignorManager', 'BiogridManager', 'BelLcManager',
+           'PathwayCommonsManager', 'RlimspManager', 'TrrustManager',
+           'PhosphositeManager', 'CTDManager', 'VirHostNetManager',
+           'PhosphoElmManager', 'DrugBankManager']
 
 import csv
 import gzip
@@ -152,6 +152,43 @@ class TasManager(KnowledgebaseManager):
         # So the version can be directly used
         from indra.sources.tas.api import tas_resource_md5
         return tas_resource_md5
+
+
+class ExtriManager(KnowledgebaseManager):
+    """This manager handles retrieval and processing of ExTRI data."""
+    name = 'ExTRI'
+    short_name = 'extri'
+    source = 'extri'
+
+    _sentence_file = '1-s2.0-S1874939921000961-mmc6.xlsx'
+    _pairs_file = '1-s2.0-S1874939921000961-mmc7.xlsx'
+
+    def get_statements(self):
+        from indra.sources import extri
+
+        sentence_xlsx = knowledgebase_source_data_fpath.joinpath(self._sentence_file)
+        pairs_xlsx = knowledgebase_source_data_fpath.joinpath(self._pairs_file)
+
+        logger.info('Processing ExTRI from local XLSX files')
+        ep = extri.process_from_file(
+            sentence_coverage_file=sentence_xlsx,
+            pairs_file=pairs_xlsx,
+            require_text=True,
+            require_extri_present=True,
+        )
+        logger.info('Expanding evidences and deduplicating')
+        filtered_stmts = [s for s in _expanded(ep.statements)]
+        unique_stmts, _ = extract_duplicates(filtered_stmts,
+                                             KeyFunc.mk_and_one_ev_src)
+        return unique_stmts
+
+    def get_source_version(self):
+        md5_hash = hashlib.md5()
+        for fname in (self._sentence_file, self._pairs_file):
+            with open(knowledgebase_source_data_fpath.joinpath(fname), 'rb') as file:
+                for chunk in iter(lambda: file.read(4096), b''):
+                    md5_hash.update(chunk)
+        return md5_hash.hexdigest()
 
 
 class SignorManager(KnowledgebaseManager):

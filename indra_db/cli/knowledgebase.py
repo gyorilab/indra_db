@@ -166,8 +166,12 @@ class ExtriManager(KnowledgebaseManager):
     def get_statements(self):
         from indra.sources import extri
 
-        sentence_xlsx = knowledgebase_source_data_fpath.joinpath(self._sentence_file)
-        pairs_xlsx = knowledgebase_source_data_fpath.joinpath(self._pairs_file)
+        sentence_xlsx = knowledgebase_source_data_fpath.joinpath(
+            self._sentence_file
+        )
+        pairs_xlsx = knowledgebase_source_data_fpath.joinpath(
+            self._pairs_file
+        )
 
         logger.info('Processing ExTRI from local XLSX files')
         ep = extri.process_from_file(
@@ -185,7 +189,10 @@ class ExtriManager(KnowledgebaseManager):
     def get_source_version(self):
         md5_hash = hashlib.md5()
         for fname in (self._sentence_file, self._pairs_file):
-            with open(knowledgebase_source_data_fpath.joinpath(fname), 'rb') as file:
+            with open(
+                knowledgebase_source_data_fpath.joinpath(fname),
+                'rb',
+            ) as file:
                 for chunk in iter(lambda: file.read(4096), b''):
                     md5_hash.update(chunk)
         return md5_hash.hexdigest()

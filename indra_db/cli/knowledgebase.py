@@ -177,8 +177,6 @@ class ExtriManager(KnowledgebaseManager):
         ep = extri.process_from_file(
             sentence_coverage_file=sentence_xlsx,
             pairs_file=pairs_xlsx,
-            require_text=True,
-            require_extri_present=True,
         )
         logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(ep.statements)]

@@ -1,8 +1,8 @@
-__all__ = ['TasManager', 'ExtriManager', 'CBNManager', 'HPRDManager',
+__all__ = ['TasManager', 'CBNManager', 'HPRDManager',
            'SignorManager', 'BiogridManager', 'BelLcManager',
            'PathwayCommonsManager', 'RlimspManager', 'TrrustManager',
            'PhosphositeManager', 'CTDManager', 'VirHostNetManager',
-           'PhosphoElmManager', 'DrugBankManager']
+           'PhosphoElmManager', 'DrugBankManager', 'ExtriManager']
 
 import csv
 import gzip

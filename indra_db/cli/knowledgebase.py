@@ -160,24 +160,17 @@ class ExtriManager(KnowledgebaseManager):
     short_name = 'extri'
     source = 'extri'
 
-    _sentence_file = '1-s2.0-S1874939921000961-mmc6.xlsx'
-    _pairs_file = '1-s2.0-S1874939921000961-mmc7.xlsx'
+    data_file_name = '1-s2.0-S1874939921000961-mmc6.xlsx'
 
     def get_statements(self):
         from indra.sources import extri
 
-        sentence_xlsx = knowledgebase_source_data_fpath.joinpath(
-            self._sentence_file
-        )
-        pairs_xlsx = knowledgebase_source_data_fpath.joinpath(
-            self._pairs_file
+        data_file = knowledgebase_source_data_fpath.joinpath(
+            self.data_file_name
         )
 
         logger.info('Processing ExTRI from local XLSX files')
-        ep = extri.process_from_file(
-            sentence_coverage_file=sentence_xlsx,
-            pairs_file=pairs_xlsx,
-        )
+        ep = extri.process_from_file(data_file=data_file)
         logger.info('Expanding evidences and deduplicating')
         filtered_stmts = [s for s in _expanded(ep.statements)]
         unique_stmts, _ = extract_duplicates(filtered_stmts,
@@ -186,13 +179,14 @@ class ExtriManager(KnowledgebaseManager):
 
     def get_source_version(self):
         md5_hash = hashlib.md5()
-        for fname in (self._sentence_file, self._pairs_file):
-            with open(
-                knowledgebase_source_data_fpath.joinpath(fname),
-                'rb',
-            ) as file:
-                for chunk in iter(lambda: file.read(4096), b''):
-                    md5_hash.update(chunk)
+
+        file_path = knowledgebase_source_data_fpath.joinpath(
+            self.data_file_name
+        )
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                md5_hash.update(chunk)
+
         return md5_hash.hexdigest()
 
 

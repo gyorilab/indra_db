@@ -23,7 +23,7 @@ def main():
           packages=packages,
           include_package_data=True,
           install_requires=['sqlalchemy<2', 'psycopg2-binary', 'cachetools',
-                            'termcolor', 'bs4', 'pyyaml'],
+                            'termcolor', 'bs4', 'pyyaml', 'openpyxl'],
           extras_require=extras_require,
           entry_points="""
           [console_scripts]

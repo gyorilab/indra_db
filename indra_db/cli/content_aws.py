@@ -266,10 +266,10 @@ class _NihAwsClient(object):
 
         Each row is returned as:
             {
-                'bucket': ...,
-                'key': ...,
-                'last_modified': ...,
-                'etag': ...
+                'bucket': ..., e.g pmc-oa-opendata
+                'key': ..., e.g metadata/PMC2000230.1.json
+                'last_modified': ..., e.g 2026-02-12T02:59:59.000Z
+                'etag': ... e.g dc97f78385423933f1cf04ad8c4df6e3
             }
         """
         csv_key = self._clean_key(csv_key)
@@ -300,6 +300,7 @@ class _NihAwsClient(object):
 
     def iter_latest_inventory_rows(self):
         """Iterate over rows from the latest inventory."""
+        # the csv files contain all the pmc ids
         csv_keys = self.get_inventory_csv_keys()
         for csv_key in csv_keys:
             for row in self.iter_inventory_rows(csv_key):

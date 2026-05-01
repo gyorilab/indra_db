@@ -1385,7 +1385,7 @@ class PmcOA(PmcManager):
 
     For further details on the API, see the parent class: PmcManager.
     """
-    my_path = 'pub/pmc'
+    my_path = 'pub/pmc/deprecated'
     my_source = 'pmc_oa'
 
     def __init__(self, *args, **kwargs):

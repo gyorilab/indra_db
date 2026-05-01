@@ -1,9 +1,3 @@
-import csv
-import gzip
-import json
-from pathlib import Path
-
-from indra_db.cli.content_aws import _NihAwsClient
 from indra_db.cli.content_aws import PMC
 from indra_db.databases import texttypes
 
@@ -49,7 +43,6 @@ def test_nih_aws_client_pmcid():
     assert metadata["pmcid"] == "PMC5443623"
     assert metadata["version"] == 1
     assert "<article" in xml_str[:1000]
-
 
 
 @pytest.mark.slow

@@ -1,39 +1,25 @@
-import ftplib
 import gzip
 import os
-import random
 import re
 import csv
-import tarfile
-from itertools import islice
-import click
-import zlib
+
 import logging
 import pickle
 import xml.etree.ElementTree as ET
-from collections import defaultdict
 
-from io import BytesIO
-from ftplib import FTP
-from functools import wraps
-from datetime import datetime, timedelta
+
+
 from os import path, remove, rename, listdir
-from typing import Tuple
 
-from tqdm import tqdm
-
-from indra.literature.elsevier_client import has_full_text
-from indra.util import zip_string, batch_iter
+from indra.util import zip_string
 from indra.util import UnicodeXMLTreeBuilder as UTB
 
 from indra_db.databases import texttypes, formats
-from indra_db.databases import sql_expressions as sql_exp
 from indra_db.util.data_gatherer import DataGatherer, DGContext
-from sqlalchemy import exists, and_, literal
+from sqlalchemy import exists, and_
 from sqlalchemy.orm import aliased
 
 from .content import ContentManager
-from .util import format_date
 import json
 import boto3
 from botocore import UNSIGNED
@@ -50,7 +36,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-ftp_blocksize = 33554432  # Chunk size recommended by NCBI
 THIS_DIR = path.dirname(path.abspath(__file__))
 
 
@@ -347,7 +332,7 @@ class _NihAwsClient(object):
         return '%s/%s.xml' % (article_prefix, article_prefix)
 
     def get_text_key(self, article_prefix):
-        """Get TXT key from article prefix."""
+        """Get TXT key from article prefix. May use in later case"""
         article_prefix = article_prefix.rstrip('/')
         return '%s/%s.txt' % (article_prefix, article_prefix)
 

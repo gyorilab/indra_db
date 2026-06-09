@@ -17,7 +17,8 @@ from indralab_auth_tools.auth import resolve_auth
 from indra.ontology.bio import bio_ontology
 from indra.statements import stmts_from_json, Complex, make_statement_camel
 from indra.assemblers.html.assembler import HtmlAssembler, _format_stmt_text, \
-    _format_evidence_text, DEFAULT_SOURCE_COLORS
+    _format_evidence_text, DEFAULT_SOURCE_COLORS, \
+    _load_agent_pair_consensus_cache, _make_agent_pair_consensus_summary
 
 from indra_db.client.readonly import *
 from indra_db.client.principal.curation import *
@@ -34,6 +35,22 @@ logger = logging.getLogger('call_handlers')
 
 
 rev_source_mapping = {v: k for k, v in internal_source_mappings.items()}
+
+
+def _add_agent_pair_consensus(entry):
+    if entry.get('type') is not None:
+        return
+    agents = entry.get('agents') or {}
+    if len(agents) != 2:
+        return
+    agent_names = [str(name) for name in agents.values()]
+    pair_key = '|'.join(agent_names)
+    record = _load_agent_pair_consensus_cache().get(pair_key)
+    if not record:
+        return
+    summary = _make_agent_pair_consensus_summary(record)
+    if summary:
+        entry['affect_summary'] = summary
 
 
 def pop_request_bool(args, key, default):
@@ -270,6 +287,8 @@ class ApiCall:
                         logger.warning(f"English not formed for {key}:\n"
                                        f"{entry}")
                     entry['english'] = eng
+                    if result.result_type in {'agents', 'relations'}:
+                        _add_agent_pair_consensus(entry)
 
                 # Filter out medscan if user does not have medscan privileges.
                 if not self.has['medscan']:

@@ -26,7 +26,7 @@ from pyspark.sql.types import StructType, IntegerType, StructField, LongType, Fl
     BooleanType, BinaryType
 from tqdm import tqdm
 from pyspark.sql import SparkSession
-from indra.literature.pubmed_client import _get_annotations
+from indra.literature import pubmed_client
 from indra.statements import stmt_from_json, ActiveForm
 from indra.util.statement_presentation import db_sources, reader_sources
 from indra_db import get_db
@@ -1799,12 +1799,14 @@ def ensure_pubmed_mesh_data():
             medline_citation = article.find("MedlineCitation")
             pubmed_id = medline_citation.find("PMID").text
 
-            mesh_ann = _get_annotations(medline_citation)
+            mesh_ann = pubmed_client._get_annotations(medline_citation)
             yield pubmed_id, mesh_ann["mesh_annotations"]
 
-    num_files = ensure_pubmed_xml_files(xml_dir=pubmed_xml_gz_dir)
-    if num_files == 0:
-        raise FileNotFoundError("No PubMed XML files found")
+    pubmed_client.ensure_xml_files(
+        xml_path=pubmed_xml_gz_dir,
+        raise_http_error=True,
+        raise_checksum_error=True,
+    )
 
     # Get the raw statement id -> stmt hash mapping
     hash_to_raw_stmt_id = pickle.load(stmt_hash_to_raw_stmt_ids_fpath.open("rb"))
@@ -1902,7 +1904,6 @@ def ensure_pubmed_mesh_data():
                             ]
                             if not is_concept:
                                 terms_meta_writer.writerow(meta_row)
-
 
                 # If the pmid is already in pmid_mesh_mapping, update the
                 # mesh concepts and terms

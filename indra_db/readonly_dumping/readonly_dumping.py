@@ -1806,6 +1806,7 @@ def ensure_pubmed_mesh_data():
         xml_path=pubmed_xml_gz_dir,
         raise_http_error=True,
         raise_checksum_error=True,
+        max_workers=4,
     )
 
     # Get the raw statement id -> stmt hash mapping

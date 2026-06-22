@@ -1,3 +1,5 @@
+# Build from the repository root with:
+# docker build -t indra_db_service:latest -f indra_db_service/docker/Dockerfile .
 FROM ubuntu:24.04
 
 # Set working folder

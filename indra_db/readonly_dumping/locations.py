@@ -166,8 +166,6 @@ export_benchmark = TEMP_DIR.join(name='export_benchmark_times.txt')
 table_benchmark = TEMP_DIR.join(name='table_benchmark_times.txt')
 
 
-
-
 if __name__ == "__main__":
     # Print the requested path to stdout if there is a match
     import sys

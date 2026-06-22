@@ -318,7 +318,7 @@ def mesh_term_ref_counts(local_ro_mngr: ReadonlyDatabaseManager):
     os.remove(pmid_mesh_concept_counts_fpath.absolute().as_posix())
 
 
-#Belief
+# Belief
 def belief(local_ro_mngr: ReadonlyDatabaseManager):
     """Dump belief scores into the belief table on the local readonly db
 

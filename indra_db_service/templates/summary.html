@@ -80,7 +80,7 @@
             <li><a class="nav-link" href="#entity-interactions">Statements by Entity Type</a></li>
             <li><a class="nav-link" href="#sources">Sources</a></li>
             <li><a class="nav-link" href="#content-insights">Content Insights</a></li>
-            <li><a class="nav-link" href="#temporal-characteristics">Temporal characteristics of biomedical knowledge.</a></li>
+            <li><a class="nav-link" href="#temporal-characteristics">Temporal characteristics</a></li>
             <li><a class="nav-link" href="#gene-mesh">Gene-Disease MeSH Distributions</a></li>
         </ul>
       </nav>
@@ -410,7 +410,7 @@
 
       <div class="row mb-4">
          <div class="col-12">
-            <h2 class="border-bottom pb-2 mb-4">Temporal characteristics of biomedical knowledge.</h2>
+            <h2 class="border-bottom pb-2 mb-4">Temporal characteristics of biomedical knowledge</h2>
          </div>
       </div>
 
@@ -420,7 +420,12 @@
                  class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Discovery Year Distribution" onclick="showImage(this)">
           </div>
           <div class="col-md-5">
-             <p class="text-justify">Distribution of earliest publication years across all statement</p>
+             <h5>Discovery Year Distribution</h5>
+                <p class="text-justify">
+                   This figure shows the earliest publication year associated with each statement.
+                   Most statements come from recent decades, with a strong increase after 2000 and a peak around 2020–2025.
+                   This reflects the rapid growth of biomedical literature and newly reported biological mechanisms.
+                </p>
           </div>
       </div>
 
@@ -430,8 +435,12 @@
                  class="img-fluid zoomable" style="max-height: 300px; cursor: pointer;" alt="Lifespan by Discovery Year" onclick="showImage(this)">
           </div>
           <div class="col-md-5">
-             <p class="text-justify">Mean lifespan and lifespan percentiles as a function of discovery year together with
-statement production.</p>
+             <h5>Lifespan by Discovery Year</h5>
+                <p class="text-justify">
+                   This figure shows how statement lifespan changes by discovery year.
+                   The lines show mean lifespan and selected percentiles, while the grey bars show the number of newly appearing statements on a log scale.
+                   Overall, statement production increases over time, while statement longevity decreases.
+                </p>
           </div>
       </div>
 

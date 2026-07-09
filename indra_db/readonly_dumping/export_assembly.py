@@ -35,7 +35,6 @@ from indra.util import batch_iter
 from indra.tools import assemble_corpus as ac
 
 from indra_db.cli.knowledgebase import KnowledgebaseManager, local_update
-from indra_db.readonly_dumping.locations import knowledgebase_source_data_fpath
 
 from indra_db.readonly_dumping.util import clean_json_loads, \
     validate_statement_semantics, record_time, \

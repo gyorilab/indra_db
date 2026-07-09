@@ -4,7 +4,9 @@ __all__ = ['ApiCall', 'FromAgentsApiCall', 'FromHashApiCall',
 
 import sys
 import json
+import gzip
 import logging
+from os.path import dirname, exists, join
 from datetime import datetime
 from collections import defaultdict
 
@@ -17,7 +19,9 @@ from indralab_auth_tools.auth import resolve_auth
 from indra.ontology.bio import bio_ontology
 from indra.statements import stmts_from_json, Complex, make_statement_camel
 from indra.assemblers.html.assembler import HtmlAssembler, _format_stmt_text, \
-    _format_evidence_text, DEFAULT_SOURCE_COLORS
+    _format_evidence_text, DEFAULT_SOURCE_COLORS, \
+    _load_agent_pair_consensus_cache, _make_agent_pair_consensus_summary, \
+    AGENT_PAIR_CONSENSUS_CACHE
 
 from indra_db.client.readonly import *
 from indra_db.client.principal.curation import *
@@ -34,6 +38,49 @@ logger = logging.getLogger('call_handlers')
 
 
 rev_source_mapping = {v: k for k, v in internal_source_mappings.items()}
+
+
+HASH_TO_PAIR_KEYS_CACHE = join(
+    dirname(AGENT_PAIR_CONSENSUS_CACHE), 'hash_to_pair_keys.json.gz'
+)
+
+_hash_to_pair_keys_cache = None
+
+
+def _load_hash_to_pair_keys_cache():
+    global _hash_to_pair_keys_cache
+    if _hash_to_pair_keys_cache is not None:
+        return _hash_to_pair_keys_cache
+    with gzip.open(HASH_TO_PAIR_KEYS_CACHE, 'rt') as fh:
+        _hash_to_pair_keys_cache = json.load(fh)
+    return _hash_to_pair_keys_cache
+
+
+def _add_agent_pair_consensus(entry):
+    if entry.get('type') is not None:
+        return
+    agents = entry.get('agents') or {}
+    if len(agents) != 2:
+        return
+    agent_names = [str(name) for name in agents.values()]
+    pair_key = '|'.join(agent_names)
+    consensus_cache = _load_agent_pair_consensus_cache()
+    record = consensus_cache.get(pair_key)
+    # hash to pair look up to map synonyms to one standard text pair
+    if not record:
+        hash_to_pair_keys = _load_hash_to_pair_keys_cache()
+        for stmt_hash in entry.get('hashes') or {}:
+            for pair_key in hash_to_pair_keys.get(str(stmt_hash), []):
+                record = consensus_cache.get(pair_key)
+                if record:
+                    break
+            if record:
+                break
+    if not record:
+        return
+    summary = _make_agent_pair_consensus_summary(record)
+    if summary:
+        entry['affect_summary'] = summary
 
 
 def pop_request_bool(args, key, default):
@@ -270,6 +317,8 @@ class ApiCall:
                         logger.warning(f"English not formed for {key}:\n"
                                        f"{entry}")
                     entry['english'] = eng
+                    if result.result_type in {'agents', 'relations'}:
+                        _add_agent_pair_consensus(entry)
 
                 # Filter out medscan if user does not have medscan privileges.
                 if not self.has['medscan']:

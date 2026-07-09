@@ -41,8 +41,10 @@ extensions = [
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
     'citations',
-    'm2r2',
-    'sphinx_click'
+    'sphinx_mdinclude',
+    'sphinx_click',
+    'sphinxcontrib.openapi',
+    'sphinx_design',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -78,7 +80,7 @@ release = '1.0.0'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:

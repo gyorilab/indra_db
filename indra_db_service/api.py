@@ -11,7 +11,7 @@ from flask_compress import Compress
 from flask import url_for as base_url_for
 from jinja2 import Environment, ChoiceLoader
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
-from flask import Flask, request, abort, Response, redirect, jsonify
+from flask import Flask, request, abort, Response, redirect, jsonify, render_template
 
 from indra.statements import get_all_descendants, Statement, Event, Influence, Association, Unresolved
 from indra.assemblers.html.assembler import (
@@ -144,6 +144,7 @@ CORS(app)
 
 # The directory path to this location (works in any file system).
 HERE = Path(__file__).parent.absolute()
+OPENAPI_PATH = HERE / "static" / "openapi.yaml"
 
 # Instantiate a jinja2 env.
 env = Environment(
@@ -194,6 +195,24 @@ def root():
 @app.route("/healthcheck", methods=["GET"])
 def i_am_alive():
     return jsonify({"status": "testing" if TESTING["status"] else "healthy"})
+
+
+@app.route("/openapi.yaml", methods=["GET"])
+def openapi_spec():
+    """Serve the OpenAPI spec for self-hosting and Swagger UI."""
+    if not OPENAPI_PATH.exists():
+        return abort(404)
+    with OPENAPI_PATH.open("rb") as f:
+        return Response(f.read(), content_type="application/x-yaml")
+
+
+@app.route("/api-docs", methods=["GET"])
+def swagger_ui():
+    """Serve the Swagger UI page that loads the self-hosted OpenAPI spec."""
+    return env.get_template("swagger.html").render(
+        title="API Docs",
+        spec_url=url_for("openapi_spec"),
+    )
 
 
 @app.route("/ground", methods=["GET"])

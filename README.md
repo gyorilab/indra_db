@@ -10,23 +10,23 @@ to INDRA, the INDRA Database provides a systematic way of scaling the knowledge
 acquired from other databases, reading, and manual input, and puts that
 knowledge at your fingertips through a direct Python client and a REST api.
 
-### REST API
+## REST API
 
 The INDRA DB is available via a web UI at: https://db.indra.bio
 
 At the same URL, a REST service is also available which allows for programmatic usage
-as documented here: https://github.com/gyorilab/indra_db/blob/master/indra_db_service/README.md
+as documented here: https://github.com/gyorilab/indra_db/blob/master/indra_db_service/README.rst
 
 A convenient way to query the INDRA DB is via INDRA's built-in client towards INDRA DB
 which is documented here: https://indra.readthedocs.io/en/latest/modules/sources/indra_db_rest/index.html.
 
-### Knowledge sources
+## Knowledge sources
 
 The INDRA Database currently integrates and distills knowledge from several
 different sources, both biology-focused natural language processing systems and
 other pre-existing databases
 
-#### Daily Readers
+### Daily Readers
 We have read all available content, and every day we run the following readers:
 - [REACH](https://github.com/clulab/reach)
 - [Sparser](https://github.com/ddmcdonald/sparser)
@@ -46,11 +46,11 @@ on the latest content drawn from:
 - [Elsevier](https://www.elsevier.com/) - ~0.7 million fulltext 
 (requires special access)
 
-#### Other Readers
+### Other Readers
 We also include more or less static content extracted from the following readers:
 - [RLIMS-P](https://research.bioinformatics.udel.edu/rlimsp/)
 
-#### Other Databases
+### Other Databases
 We include the information from these pre-existing databases:
 - [Pathway Commons database](http://pathwaycommons.org/)
 - [BEL Large Corpus](https://github.com/OpenBEL/)
@@ -72,7 +72,7 @@ These databases are retrieved primarily using the tools in `indra.sources`. The
 statements extracted from all of these sources are stored and updated in the
 database.
 
-### Knowledge Assembly
+## Knowledge Assembly
 
 The INDRA Database uses the powerful internal assembly tools available in INDRA
 but implemented for large-scale incremental assembly. The resulting corpus of
@@ -82,7 +82,7 @@ the primary product of the database.
 For more details on the internal assembly process of INDRA, see the
 [INDRA documentation](http://indra.readthedocs.io/en/latest/modules/preassembler).
 
-### Access
+## Access
 
 The content in the database can be accessed by those that created it using the
 `indra_db.client` submodule. This repo also implements a REST API which can be

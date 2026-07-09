@@ -546,6 +546,142 @@ def pmid_vs_statement_graph():
     plt.show()
     return fig
 
+
+def discovery_year_distribution_graph(pmid_years_types_fpath, hash_to_pmid_fpath):
+    """Generate the discovery year distribution from PMID/year inputs.
+    Expected input formats:
+
+    pmid_year_types:
+        A gzipped TSV file with one row per PMID:
+        PMID<TAB>YEAR<TAB>TYPE
+
+    hash_to_pmid:
+        A gzipped JSON object mapping each statement hash to its supporting PMIDs:
+        {
+            "stmt_hash": ["pmid1", "pmid2", ...]
+        }
+    """
+    pmid_to_year = {}
+    with gzip.open(pmid_years_types_fpath, "rt") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2:
+                continue
+            try:
+                pmid_to_year[parts[0]] = int(parts[1])
+            except ValueError:
+                continue
+
+    earliest_years = []
+    with gzip.open(hash_to_pmid_fpath, "rt") as f:
+        hash_to_pmids = json.load(f)
+
+    for _, pmids in hash_to_pmids.items():
+        years = []
+        for pmid in pmids:
+            year = pmid_to_year.get(str(pmid))
+            if year is not None:
+                years.append(year)
+        if years:
+            earliest_year = min(years)
+            if earliest_year >= 1799:
+                earliest_years.append(earliest_year)
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    ax.hist(earliest_years, bins=75)
+    ax.set_title("Distribution of Earliest Publication Year per Statement (1799-2026)")
+    ax.set_xlabel("Earliest Publication Year")
+    ax.set_ylabel("Number of Statements")
+    fig.tight_layout()
+
+    df = pd.DataFrame({"earliest_year": earliest_years})
+    return fig, ax, df
+
+
+def lifespan_by_discovery_year_graph(pmid_years_types_fpath, hash_to_pmid_fpath):
+    """Generate lifespan statistics by discovery year from PMID/year inputs.
+    Expected input formats:
+
+    pmid_year_types:
+        A gzipped TSV file with one row per PMID:
+        PMID<TAB>YEAR<TAB>TYPE
+
+    hash_to_pmid:
+        A gzipped JSON object mapping each statement hash to its supporting PMIDs:
+        {
+            "stmt_hash": ["pmid1", "pmid2", ...]
+        }
+    """
+    pmid_to_year = {}
+    with gzip.open(pmid_years_types_fpath, "rt") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2:
+                continue
+            try:
+                pmid_to_year[parts[0]] = int(parts[1])
+            except ValueError:
+                continue
+
+    lifespans_by_year = defaultdict(list)
+    with gzip.open(hash_to_pmid_fpath, "rt") as f:
+        hash_to_pmids = json.load(f)
+
+    for _, pmids in hash_to_pmids.items():
+        years = []
+        for pmid in pmids:
+            year = pmid_to_year.get(str(pmid))
+            if year is not None:
+                years.append(year)
+        if years:
+            earliest_year = min(years)
+            lifespans_by_year[earliest_year].append(max(years) - earliest_year)
+
+    rows = []
+    for year, lifespans in sorted(lifespans_by_year.items()):
+        if len(lifespans) < 100:
+            continue
+        values = np.array(lifespans)
+        rows.append({
+            "earliest_year": year,
+            "statement_count": len(values),
+            "mean_lifespan": values.mean(),
+            "p50": np.quantile(values, 0.50),
+            "p75": np.quantile(values, 0.75),
+            "p90": np.quantile(values, 0.90),
+            "p99": np.quantile(values, 0.99),
+        })
+
+    year_stats = pd.DataFrame(
+        rows,
+        columns=[
+            "earliest_year", "statement_count", "mean_lifespan",
+            "p50", "p75", "p90", "p99"
+        ]
+    ).set_index("earliest_year")
+
+    fig, ax1 = plt.subplots(figsize=(16, 7))
+    ax1.plot(year_stats.index, year_stats["mean_lifespan"], linewidth=3, label="Mean")
+    ax1.plot(year_stats.index, year_stats["p50"], linewidth=2, label="P50")
+    ax1.plot(year_stats.index, year_stats["p75"], linewidth=2, label="P75")
+    ax1.plot(year_stats.index, year_stats["p90"], linewidth=2, label="P90")
+    ax1.plot(year_stats.index, year_stats["p99"], linewidth=2, label="P99")
+    ax1.set_xlabel("Earliest Publication Year")
+    ax1.set_ylabel("Lifespan (years)")
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(loc="upper right")
+
+    ax2 = ax1.twinx()
+    ax2.set_yscale("log")
+    ax2.bar(year_stats.index, year_stats["statement_count"], alpha=0.25, color="gray")
+    ax2.set_ylabel("Number of Statements")
+
+    ax1.set_title("Statement Lifespan and Statement Production by Discovery Year")
+    fig.tight_layout()
+
+    return fig, (ax1, ax2), year_stats
+
+
 def compute_total_evidence():
     with open(source_counts_fpath.as_posix(), "rb") as f:
         source_count = pickle.load(f)
@@ -725,4 +861,3 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     generate_all_plots(args.output_dir, refresh=args.refresh)
-

@@ -171,7 +171,7 @@ def get_llm_verifications(statement_hashes, include_explanations=False,
 
 def add_llm_relation_correctness(results,
                                  database_path=LLM_CURATION_DB_PATH):
-    """Attach evidence-weighted correctness to grouped relations."""
+    """Attach the highest child correctness level to grouped relations."""
     if not database_path.is_file():
         return
 
@@ -194,14 +194,17 @@ def add_llm_relation_correctness(results,
             scores = _get_llm_statement_scores(connection, all_hashes)
 
         for key, hashes in relation_hashes.items():
-            correct_count = sum(scores[h][0] for h in hashes if h in scores)
-            total_count = sum(scores[h][1] for h in hashes if h in scores)
-            if total_count:
-                results[key]['llm_correctness'] = {
-                    'correct_count': correct_count,
-                    'total_count': total_count,
-                    'percent': round(100 * correct_count / total_count, 2),
-                }
+            child_scores = [scores[h] for h in hashes if h in scores]
+            if not child_scores:
+                continue
+            if any(score[2] > 66.66 and score[1] >= 3
+                   for score in child_scores):
+                level = 'strong'
+            elif any(score[2] > 33.33 for score in child_scores):
+                level = 'medium'
+            else:
+                level = 'weak'
+            results[key]['llm_correctness'] = {'level': level}
     except sqlite3.Error as error:
         logger.warning("Could not read LLM statement scores: %s", error)
 

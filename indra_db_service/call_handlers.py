@@ -92,6 +92,7 @@ def add_llm_verifications(results, database_path=LLM_CURATION_DB_PATH):
                         SELECT judgment, error_category, explanation
                         FROM llm_evidence_curation
                         WHERE statement_hash = ? AND source_hash = ?
+                          AND evidence_text != ''
                         """,
                         (int(statement_hash), int(evidence['source_hash'])),
                     ).fetchone()
@@ -143,6 +144,7 @@ def get_llm_verifications(statement_hashes, include_explanations=False,
                     SELECT {fields}
                     FROM llm_evidence_curation
                     WHERE statement_hash IN ({placeholders})
+                      AND evidence_text != ''
                     ORDER BY statement_hash, source_hash
                     """,
                     batch,

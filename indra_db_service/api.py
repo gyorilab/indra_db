@@ -37,6 +37,10 @@ from indra_db_service.errors import (
 
 from indra_db_service.config import *
 from indra_db_service.call_handlers import *
+from indra_db_service.llm import (
+    add_llm_relation_correctness,
+    get_llm_verifications,
+)
 from indra_db_service.util import (
     sec_since,
     get_s3_client,

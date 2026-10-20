@@ -372,15 +372,9 @@ def llm_verifications():
     if len(values) > 100:
         return Response("At most 100 statement hashes are allowed.", 400)
 
-    try:
-        statement_hashes = [int(value) for value in values]
-    except ValueError:
-        return Response("Statement hashes must be integers.", 400)
+    statement_hashes = [int(value) for value in values]
 
     explanation = request.args.get("explanation", "false").lower()
-    if explanation not in {"true", "false"}:
-        return Response("explanation must be true or false.", 400)
-
     result = get_llm_verifications(
         statement_hashes,
         include_explanations=explanation == "true",

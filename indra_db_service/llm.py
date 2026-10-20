@@ -1,22 +1,14 @@
 import logging
 import sqlite3
-from os import environ
-from pathlib import Path
+
+import pystow
 
 
 logger = logging.getLogger('llm')
 
-configured_path = environ.get('INDRA_DB_API_LLM_CURATION_DB')
-if configured_path:
-    LLM_CURATION_DB_PATH = Path(configured_path).expanduser()
-else:
-    LLM_CURATION_DB_PATH = Path(
-        '/data/indra_db/evidence_llm_20261005.sqlite'
-    )
-    if not LLM_CURATION_DB_PATH.is_file():
-        LLM_CURATION_DB_PATH = (
-            Path.home() / 'Downloads' / 'evidence_llm_20261005.sqlite'
-        )
+LLM_CURATION_DB_PATH = pystow.join(
+    'indra_db', name='evidence_llm_20261005.sqlite'
+)
 
 
 def _get_llm_statement_scores(connection, statement_hashes):

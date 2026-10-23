@@ -37,6 +37,10 @@ from indra_db_service.errors import (
 
 from indra_db_service.config import *
 from indra_db_service.call_handlers import *
+from indra_db_service.llm import (
+    add_llm_relation_correctness,
+    get_llm_verifications,
+)
 from indra_db_service.util import (
     sec_since,
     get_s3_client,
@@ -356,6 +360,30 @@ def old_search():
         reverse_source_mapping=rev_source_mapping,
     )
 
+
+@app.route("/llm/verifications", methods=["GET"])
+@user_log_endpoint
+def llm_verifications():
+    raw_statements = request.args.getlist("statement")
+    values = [value.strip() for item in raw_statements
+              for value in item.split(",") if value.strip()]
+    if not values:
+        return Response("At least one statement hash is required.", 400)
+    if len(values) > 100:
+        return Response("At most 100 statement hashes are allowed.", 400)
+
+    statement_hashes = [int(value) for value in values]
+
+    explanation = request.args.get("explanation", "false").lower()
+    result = get_llm_verifications(
+        statement_hashes,
+        include_explanations=explanation == "true",
+    )
+    if result is None:
+        return Response("LLM verification database is unavailable.", 503)
+    return jsonify(result)
+
+
 @app.route("/<result_type>/<path:method>", methods=["GET", "POST"])
 @app.route("/metadata/<result_type>/<path:method>", methods=["GET", "POST"])
 @user_log_endpoint
@@ -499,6 +527,8 @@ def expand_meta_row():
         for cur in curations:
             for entry in entry_hash_lookup[cur["pa_hash"]]:
                 entry["cur_count"] += 1
+
+    add_llm_relation_correctness(result.results)
 
     res_json = result.json()
     res_json["relations"] = list(res_json["results"].values())

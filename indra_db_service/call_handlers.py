@@ -26,6 +26,8 @@ from indralab_auth_tools.log import note_in_log, is_log_running
 from indra_db_service.config import MAX_STMTS, REDACT_MESSAGE, TITLE, TESTING, \
     jwt_nontest_optional, MAX_LIST_LEN, BASE_URL
 from indra_db_service.errors import HttpUserError, ResultTypeError
+from indra_db_service.llm import add_llm_relation_correctness, \
+    add_llm_verifications
 from indra_db_service.util import LogTracker, sec_since, get_source,\
     process_agent,  process_mesh_term, DbAPIError, iter_free_agents, \
     _make_english_from_meta
@@ -355,6 +357,7 @@ class StatementApiCall(ApiCall):
 
     def produce_response(self, result):
         if result.result_type == 'statements':
+            add_llm_verifications(result.results)
             res_json = result.json()
 
             # Add derived values to the res_json.
@@ -415,6 +418,9 @@ class StatementApiCall(ApiCall):
                            sys.getsizeof(resp.data) / 1e6,
                            sec_since(self.start_time)))
         elif result.result_type != 'hashes':
+            if result.result_type in {'agents', 'relations'}:
+                add_llm_relation_correctness(result.results)
+
             # Look up curations, if result with_curations was set.
             if self.w_cur_counts:
                 rel_hash_lookup = defaultdict(list)

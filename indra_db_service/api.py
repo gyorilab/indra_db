@@ -12,6 +12,7 @@ from flask import url_for as base_url_for
 from jinja2 import Environment, ChoiceLoader
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from flask import Flask, request, abort, Response, redirect, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from indra.statements import get_all_descendants, Statement, Event, Influence, Association, Unresolved
 from indra.assemblers.html.assembler import (
@@ -132,6 +133,7 @@ if DEPLOYMENT is not None:
 
 # Initialize the flask application (with modified static path).
 app = MyFlask(__name__, static_url_path=static_url_path)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 
 # Register the auth application, and config it if we are not testing.

@@ -133,7 +133,22 @@ if DEPLOYMENT is not None:
 
 # Initialize the flask application (with modified static path).
 app = MyFlask(__name__, static_url_path=static_url_path)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+# Allow the app to trust one proxy in front of it (e.g., nginx) for the
+# X-Forwarded-* headers. The '1' means trusting one proxy (the first one in the
+# chain) rather than
+if BEHIND_PROXY:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    logger.info(
+        "Upstream proxy is set: the app will trust one proxy in front of it "
+        "and will use the X-Forwarded-* headers."
+    )
+else:
+    logger.warning(
+        "Upstream proxy trust is not set. This may cause issues if the app is "
+        "running behind a proxy (e.g. nginx) that sets the X-Forwarded-* "
+        "headers. Set INDRA_DB_API_BEHIND_PROXY=1 in the environment to turn "
+        "this on."
+    )
 
 
 # Register the auth application, and config it if we are not testing.

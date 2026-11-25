@@ -1,4 +1,5 @@
 __all__ = [
+    "BEHIND_PROXY",
     "TITLE",
     "DEPLOYMENT",
     "BASE_URL",
@@ -15,6 +16,13 @@ from os import environ
 from pathlib import Path
 from flask_jwt_extended import jwt_required
 
+BEHIND_PROXY = environ.get("INDRA_DB_API_BEHIND_PROXY", "0").lower() in {
+    "1",
+    "true",
+    "yes",
+    "t",
+    "y",
+}
 TITLE = "The INDRA Database"
 DEPLOYMENT = environ.get("INDRA_DB_API_DEPLOYMENT")
 BASE_URL = environ.get("INDRA_DB_API_BASE_URL")

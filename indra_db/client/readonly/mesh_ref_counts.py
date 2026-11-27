@@ -67,7 +67,6 @@ def get_mesh_ref_counts(mesh_terms, require_all=False, ro=None):
                 result[mk_hash]['total'] = pmid_count
             else:
                 result[mk_hash].update(count_dict)
-                result[mk_hash]['total'] += sum(counts)
 
     # Little sloppy, but delete any that don't meet the require_all constraint.
     if require_all:
